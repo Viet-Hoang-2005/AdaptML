@@ -4,14 +4,14 @@ mlops-weather-system/
 │   ├── ci_cd_pipeline.yml      # Tự động build Docker image và push lên Amazon ECR
 │   └── retrain_pipeline.yml    # Pipeline chạy khi có cảnh báo Data Drift
 │
-├── infra/             # Infrastructure as Code (Terraform hoặc AWS CDK)
+├── infra/                      # Infrastructure as Code (Terraform hoặc AWS CDK)
 │   ├── main.tf                 # Định nghĩa các tài nguyên AWS (S3, ECR, Lambda, SageMaker...)
 │   └── variables.tf
 │
 ├── src/
 │   ├── api/                    # Dịch vụ Inference (API dự đoán)
 │   │   ├── Dockerfile
-│   │   ├── api.py              # Flask API
+│   │   ├── index.py              # Flask API
 │   │   └── requirements.txt
 │   │
 │   ├── drift_detection/        # Service kiểm tra Data Drift
@@ -30,7 +30,7 @@ mlops-weather-system/
 │
 ├── models/                     # Map với S3 Bucket chứa model artifacts (Model Registry)
 │   ├── label_encoder.pkl
-│   └── xgboost_color_glcm_best.pkl
+│   └── xgb_best_model.pkl
 │
 ├── .dockerignore
 ├── .gitignore
