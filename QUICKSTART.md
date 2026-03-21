@@ -1,29 +1,27 @@
 # Quick Start Guide
 
-Get up and running with the MLOps Weather Classification System in 5 minutes.
+Get up and running in 5 minutes.
 
 ---
 
 ## Option 1: Docker (Fastest)
 
 ```bash
-# Clone and start
 git clone https://github.com/Viet-Hoang-2005/MLOps-weather-system.git
 cd MLOps-weather-system
 
-# Start all services
 docker-compose up --build
-
-# Access:
-# - API: http://localhost:5000
-# - Gradio Demo: http://localhost:7860
 ```
+
+Access:
+- API: http://localhost:5000
+- Gradio Demo: http://localhost:7860
 
 ---
 
 ## Option 2: Local Development
 
-### Step 1: Install Dependencies
+### Step 1: Clone and Install
 
 ```bash
 git clone https://github.com/Viet-Hoang-2005/MLOps-weather-system.git
@@ -38,7 +36,6 @@ pip install -r src/requirements.txt
 ### Step 2: Prepare Dataset
 
 ```bash
-# Create folders
 mkdir -p data/raw_images/{haze,rain,shine}
 
 # Copy images into folders, then:
@@ -48,21 +45,18 @@ python src/extract_reference_data.py
 ### Step 3: Start API
 
 ```bash
-# Terminal 1: Start API
-cd src
-python api/index.py
+# Terminal 1: API
+python src/api/index.py
 
-# Terminal 2: Test prediction
+# Terminal 2: Test
 curl -X POST http://localhost:5000/predict -F "image=@your_image.jpg"
 ```
 
 ### Step 4: Start Demo (Optional)
 
 ```bash
-# Terminal 3: Start Gradio
 python src/app.py
-
-# Open browser: http://localhost:7860
+# Open: http://localhost:7860
 ```
 
 ---
@@ -74,9 +68,8 @@ python src/app.py
 curl -sfL https://get.k3s.io | sh -
 
 # Deploy
+kubectl create namespace mlops
 kubectl apply -f infra/k8s/
-
-# Check status
 kubectl get pods -n mlops
 ```
 
@@ -86,10 +79,9 @@ kubectl get pods -n mlops
 
 | Task | Guide |
 |------|-------|
-| Understand the system | [README.md](README.md) |
 | Full installation | [INSTALL.md](INSTALL.md) |
-| Development setup | [SETUP.md](SETUP.md) |
-| System architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Development workflow | [SETUP.md](SETUP.md) |
+| Architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Contribute | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ---
@@ -97,26 +89,25 @@ kubectl get pods -n mlops
 ## Common Commands
 
 ```bash
-# Start API
+# API
 python src/api/index.py
 
-# Start Gradio demo
+# Gradio Demo
 python src/app.py
 
-# Run drift detection
+# Drift Detection
 python src/drift_detection/detect_drift.py
 
-# Train model
+# Training
 python src/training/train.py
 
-# Docker: start all
-docker-compose up -d
+# Docker
+docker-compose up -d    # Start
+docker-compose logs -f  # Logs
+docker-compose down     # Stop
 
-# Docker: view logs
-docker-compose logs -f
-
-# Docker: stop
-docker-compose down
+# Tests
+pytest tests/
 ```
 
 ---
@@ -129,6 +120,4 @@ docker-compose down
 | Module not found | `pip install -r src/requirements.txt` |
 | Dataset not found | Check `data/raw_images/{haze,rain,shine}/` |
 
----
-
-For more help, see [INSTALL.md](INSTALL.md#troubleshooting).
+For detailed troubleshooting, see [INSTALL.md](INSTALL.md#troubleshooting).
