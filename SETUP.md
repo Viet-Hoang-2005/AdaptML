@@ -1,144 +1,67 @@
 # Development Setup Guide
 
-Local development environment setup for the MLOps Weather Classification System.
+Development workflow for contributing to the project.
+See [INSTALL.md](INSTALL.md) for initial installation.
 
 ---
 
-## Overview
+## Starting Development
 
-This guide covers setting up a local development environment for contributing to the project.
-
----
-
-## Quick Start
-
-### 1. Clone and Install
+### Start API
 
 ```bash
-git clone https://github.com/Viet-Hoang-2005/MLOps-weather-system.git
-cd MLOps-weather-system
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-# venv\Scripts\activate   # Windows
-
-# Install dependencies
-pip install -r src/requirements.txt
+cd src
+python api/index.py
+# Access: http://localhost:5000
 ```
 
-### 2. Verify Installation
+### Start Gradio Demo
 
 ```bash
-# Check Python version
-python --version
-
-# Verify all packages installed
-pip list
-```
-
-### 3. Start Development
-
-```bash
-# Start API server
-python src/api/index.py
-
-# In another terminal, start Gradio demo
 python src/app.py
+# Access: http://localhost:7860
 ```
 
----
-
-## Project Directory Structure
-
-### Main Directories
-
-| Directory | Purpose |
-|-----------|---------|
-| `src/` | Source code for all components |
-| `src/api/` | Flask REST API |
-| `src/training/` | Model training pipeline |
-| `src/drift_detection/` | Drift detection service |
-| `data/` | Dataset storage |
-| `models/` | Trained model files |
-| `tests/` | Unit and integration tests |
-
-### Working with Each Component
-
-#### API Development
+### Start MLflow
 
 ```bash
-cd src/api
-
-# Run in development mode with auto-reload
-python index.py
-
-# Run with Flask debug mode
-FLASK_DEBUG=1 python index.py
-```
-
-#### Training Development
-
-```bash
-cd src/training
-
-# Run training with local data
-DATA_DIR=../../data/raw_images python train.py
-
-# Run with MLflow tracking
-mlflow server --backend-store-uri sqlite:///mlflow.db
-```
-
-#### Drift Detection Development
-
-```bash
-cd src/drift_detection
-
-# Test drift detection locally
-python detect_drift.py
+mlflow server \
+    --backend-store-uri sqlite:///mlflow.db \
+    --default-artifact-root ./mlartifacts \
+    --host 0.0.0.0 --port 5000
 ```
 
 ---
 
 ## Git Workflow
 
-### 1. Create Feature Branch
+### Create Branch
 
 ```bash
-# Update main branch
-git checkout main
-git pull origin main
-
-# Create feature branch
+git checkout main && git pull
 git checkout -b feature/your-feature-name
 ```
 
-### 2. Make Changes
+### Commit
 
 ```bash
-# Make your changes
-# Write tests
-# Update documentation
-```
-
-### 3. Commit Changes
-
-```bash
-# Stage files
 git add .
+git commit -m "feat(scope): description
 
-# Commit with descriptive message
-git commit -m "feat(component): description of change"
+- Bullet point 1
+- Bullet point 2
+
+Closes #123"
 ```
 
-### 4. Push and Create PR
+### Push and PR
 
 ```bash
-# Push branch
-git push origin feature/your-feature-name
-
-# Create Pull Request on GitHub
+git push -u origin feature/your-feature-name
+# Create PR on GitHub
 ```
+
+See [.github/WORKFLOW.md](.github/WORKFLOW.md) for complete workflow guide.
 
 ---
 
@@ -147,95 +70,56 @@ git push origin feature/your-feature-name
 ### Run All Tests
 
 ```bash
-# From project root
 pytest tests/
-
-# With coverage
-pytest tests/ --cov=src --cov-report=html
 ```
 
 ### Run Specific Tests
 
 ```bash
-# Test API
 pytest tests/test_api.py -v
-
-# Test features
 pytest tests/test_features.py -v
-
-# Test drift detection
-pytest tests/test_drift.py -v
 ```
 
-### Write New Tests
+### With Coverage
 
-Create test files in `tests/` directory:
-
-```python
-# tests/test_example.py
-import pytest
-
-def test_example():
-    assert True
+```bash
+pytest tests/ --cov=src --cov-report=html
 ```
 
 ---
 
 ## Docker Development
 
-### Build Images
+### Build
 
 ```bash
-# Build all images
-docker-compose build
-
-# Build specific service
 docker-compose build api
 docker-compose build training
 docker-compose build drift
 ```
 
-### Run Services
+### Run
 
 ```bash
-# Run all services
-docker-compose up
-
-# Run specific service
 docker-compose up api
-
-# Run in background
-docker-compose up -d
+docker-compose up -d  # Background
 ```
 
-### View Logs
+### Logs
 
 ```bash
-# All services
-docker-compose logs -f
-
-# Specific service
 docker-compose logs -f api
-```
-
-### Shell Access
-
-```bash
-# Access API container shell
 docker-compose exec api /bin/bash
 ```
 
 ---
 
-## Database Development
+## Database
 
-### PostgreSQL Setup
+### PostgreSQL
 
 ```bash
-# Start PostgreSQL
 docker-compose up -d postgres
-
-# Connect to database
 psql postgresql://weather:weather@localhost:5432/weather_db
 ```
 
@@ -260,69 +144,19 @@ CREATE TABLE drift_logs (
 
 ---
 
-## MLflow Development
-
-### Start MLflow Server
-
-```bash
-# Start MLflow UI
-mlflow server \
-    --backend-store-uri sqlite:///mlflow.db \
-    --default-artifact-root ./mlartifacts \
-    --host 0.0.0.0 \
-    --port 5000
-
-# Access at http://localhost:5000
-```
-
-### Track Experiments
-
-```python
-import mlflow
-
-mlflow.set_experiment("weather-classification")
-
-with mlflow.start_run():
-    mlflow.log_param("n_estimators", 100)
-    mlflow.log_metric("f1_score", 0.95)
-    mlflow.xgboost.log_model(model, "model")
-```
-
----
-
 ## Code Quality
 
-### Format Code
+### Format
 
 ```bash
-# Format with black
 black src/
-
-# Format with isort
 isort src/
 ```
 
-### Lint Code
+### Lint
 
 ```bash
-# Run flake8
 flake8 src/
-
-# Run pylint
-pylint src/
-```
-
-### Pre-commit Hooks
-
-```bash
-# Install pre-commit
-pip install pre-commit
-
-# Install hooks
-pre-commit install
-
-# Run manually
-pre-commit run --all-files
 ```
 
 ---
@@ -332,90 +166,25 @@ pre-commit run --all-files
 ### Port Conflicts
 
 ```bash
-# Check port usage
 lsof -i :5000
 lsof -i :7860
-lsof -i :5432
-
-# Kill process
 kill -9 <PID>
 ```
 
-### Virtual Environment Issues
+### Reset Environment
 
 ```bash
-# Remove and recreate
 rm -rf venv
 python -m venv venv
 pip install -r src/requirements.txt
 ```
 
-### Docker Issues
+### Docker Reset
 
 ```bash
-# Clean up containers
 docker-compose down -v
-
-# Remove all containers
-docker container prune -f
-
-# Rebuild from scratch
-docker-compose down --rmi all --volumes
+docker builder prune
 docker-compose build --no-cache
-```
-
----
-
-## Environment Variables
-
-Create `.env` file for local development:
-
-```bash
-# Database
-DATABASE_URL=postgresql://weather:weather@localhost:5432/weather_db
-
-# MLflow
-MLFLOW_TRACKING_URI=http://localhost:5000
-
-# Paths
-DATA_DIR=./data/raw_images
-MODEL_DIR=./models
-
-# AWS (optional)
-AWS_ACCESS_KEY_ID=your_key
-AWS_SECRET_ACCESS_KEY=your_secret
-```
-
----
-
-## VS Code Setup
-
-Recommended extensions:
-
-```json
-{
-  "recommendations": [
-    "ms-python.python",
-    "ms-python.vscode-pylance",
-    "ms-azuretools.vscode-docker",
-    "github.copilot"
-  ]
-}
-```
-
-VS Code settings (`.vscode/settings.json`):
-
-```json
-{
-  "python.linting.enabled": true,
-  "python.linting.pylintEnabled": true,
-  "python.formatting.provider": "black",
-  "python.testing.pytestEnabled": true,
-  "files.exclude": {
-    "**/__pycache__": true,
-    "**/*.pyc": true
-  }
-}
 ```
 
 ---
