@@ -21,43 +21,139 @@ An end-to-end MLOps pipeline for detecting Data Drift and automated Retraining o
 
 ---
 
-## Quick Start (5 minutes)
+## Project Structure
 
-See [QUICKSTART.md](QUICKSTART.md) for detailed 5-minute setup.
-
-**TL;DR:**
-```bash
-git clone https://github.com/Viet-Hoang-2005/MLOps-weather-system.git
-cd MLOps-weather-system
-
-# Option 1: Docker (Fastest)
-docker-compose up --build
-
-# Option 2: Local
-python -m venv venv && source venv/bin/activate
-pip install -r src/requirements.txt
-python src/extract_reference_data.py
-python src/api/index.py
+```
+└───MLOps-weather-system
+    │   .dockerignore
+    │   .gitignore
+    │   ARCHITECTURE.md
+    │   CHANGELOG.md
+    │   CONTRIBUTING.md
+    │   docker-compose.yml
+    │   INSTALL.md
+    │   LICENSE
+    │   QUICKSTART.md
+    │   README.md
+    │   SETUP.md
+    │
+    ├───.github
+    │   │   PULL_REQUEST_TEMPLATE.md
+    │   │   WORKFLOW.md
+    │   │
+    │   ├───ISSUE_TEMPLATE
+    │   │       ISSUE_BUG.md
+    │   │       ISSUE_FEATURE.md
+    │   │
+    │   └───workflows
+    │           ci_cd_pipeline.yml
+    │           retrain_pipeline.yml
+    │
+    ├───.vscode
+    │       settings.json
+    │
+    ├───data
+    │       reference_data.csv
+    │       xgb_smart_tuning_results.csv
+    │
+    ├───infra
+    │       main.tf
+    │       variables.tf
+    │
+    ├───models
+    │       label_encoder.pkl
+    │       xgb_best_model.pkl
+    │
+    ├───notebooks
+    │       MinhHoa.ipynb
+    │       XGB.ipynb
+    │       XGB_GridSearchHOG.ipynb
+    │
+    └───src
+        │   app.py
+        │   extract_reference_data.py
+        │   requirements.txt
+        │
+        ├───api
+        │       Dockerfile
+        │       index.py
+        │       requirements.txt
+        │
+        ├───drift_detection
+        │       detect_drift.py
+        │       requirements.txt
+        │
+        └───training
+                Dockerfile
+                requirements.txt
+                train.py
 ```
 
 ---
 
-## Project Structure
+## Component Descriptions
 
-```
-MLOps-weather-system/
-|
-|-- src/
-|   |-- api/              # Flask REST API
-|   |-- training/         # XGBoost training
-|   |-- drift_detection/ # Evidently AI drift detection
-|   |-- app.py           # Gradio demo
-|
-|-- .github/workflows/   # CI/CD pipelines
-|-- data/                # Reference data
-|-- models/              # Trained models
-|-- infra/               # Terraform IaC
-```
+### .github/
+
+| File/Folder | Description |
+|-------------|-------------|
+| `PULL_REQUEST_TEMPLATE.md` | Standard Pull Request template |
+| `WORKFLOW.md` | Git workflow guide with Mermaid diagrams |
+| `ISSUE_TEMPLATE/ISSUE_BUG.md` | Bug report template |
+| `ISSUE_TEMPLATE/ISSUE_FEATURE.md` | Feature request template |
+| `workflows/ci_cd_pipeline.yml` | CI/CD: test -> build Docker -> push to ECR -> deploy |
+| `workflows/retrain_pipeline.yml` | Auto-retrain when drift detected (PSI > 0.2) |
+
+### .vscode/
+
+| File | Description |
+|------|-------------|
+| `settings.json` | VS Code settings for Python, Docker |
+
+### data/
+
+| File | Description |
+|------|-------------|
+| `reference_data.csv` | Baseline features from original images (17 columns) |
+| `xgb_smart_tuning_results.csv` | Results of all Optuna experiments |
+
+### infra/
+
+| File | Description |
+|------|-------------|
+| `main.tf` | AWS resources definition (S3, ECR, Lambda, SageMaker) |
+| `variables.tf` | Terraform variables |
+
+### models/
+
+| File | Description |
+|------|-------------|
+| `label_encoder.pkl` | Encode labels: haze=0, rain=1, shine=2 |
+| `xgb_best_model.pkl` | Trained XGBoost model (F1 ~95.56%) |
+
+### notebooks/
+
+| File | Description |
+|------|-------------|
+| `MinhHoa.ipynb` | Compare best vs worst model predictions |
+| `XGB.ipynb` | XGBoost experiments with 31 feature combinations |
+| `XGB_GridSearchHOG.ipynb` | XGBoost with HOG GridSearch |
+
+### src/
+
+| File/Folder | Description |
+|-------------|-------------|
+| `app.py` | Gradio web interface for direct model testing |
+| `extract_reference_data.py` | Extract 17 features from original dataset |
+| `requirements.txt` | Main Python dependencies |
+| `api/index.py` | Flask API: receive image, extract features, return prediction |
+| `api/Dockerfile` | Docker image for API service |
+| `api/requirements.txt` | API dependencies |
+| `drift_detection/detect_drift.py` | Compare production vs reference features, calculate PSI |
+| `drift_detection/requirements.txt` | Evidently AI dependencies |
+| `training/train.py` | Train XGBoost with Optuna hyperparameter tuning |
+| `training/Dockerfile` | Docker image for training service |
+| `training/requirements.txt` | Training dependencies |
 
 ---
 
@@ -66,32 +162,20 @@ MLOps-weather-system/
 | Type | Features | Count |
 |------|----------|-------|
 | Color Moments (HSV) | Mean, Std of H, S, V | 6 |
-| HOG | Mean, Std, Max | 3 |
-| GLCM | Contrast, Correlation, Energy, Homogeneity | 8 |
+| HOG | Mean, Std, Max of HOG vector | 3 |
+| GLCM | Contrast, Correlation, Energy, Homogeneity (2 angles) | 8 |
 | **Total** | | **17 features** |
 
 ---
 
 ## Drift Detection Thresholds
 
-| PSI Range | Status | Action |
-|-----------|--------|--------|
+| PSI | Status | Action |
+|-----|--------|--------|
 | < 0.1 | Stable | Continue monitoring |
-| 0.1 - 0.2 | Warning | Investigate |
+| 0.1 - 0.2 | Mild shift | Investigate |
 | > 0.2 | Drift | Trigger retraining |
-
----
-
-## Documentation
-
-| File | Description |
-|------|-------------|
-| [QUICKSTART.md](QUICKSTART.md) | 5-minute quick start guide |
-| [INSTALL.md](INSTALL.md) | Detailed installation instructions |
-| [SETUP.md](SETUP.md) | Development workflow (Git, Test, Docker, MLflow) |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture with Mermaid diagrams |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
-| [WORKFLOW.md](.github/WORKFLOW.md) | Git workflow guide |
+| > 0.5 | Severe | Immediate action |
 
 ---
 
@@ -102,30 +186,22 @@ MLOps-weather-system/
 | ML Model | XGBoost |
 | Features | OpenCV, scikit-image |
 | API | Flask |
-| Monitoring | Evidently AI |
-| Orchestration | K3s |
+| Drift Detection | Evidently AI (PSI-based) |
+| Orchestration | K3s (Lightweight Kubernetes) |
 | CI/CD | GitHub Actions |
 | Container | Docker |
 
 ---
 
-## Performance Targets
+## Documentation
 
-| Metric | Target |
-|--------|--------|
-| API Latency (P95) | < 500ms |
-| Throughput | 100 req/sec |
-| MTTR | < 30 min |
-| Zero Downtime | 100% |
-
----
-
-## References
-
-- [Evidently AI](https://docs.evidentlyai.com/)
-- [XGBoost](https://xgboost.readthedocs.io/)
-- [Flask](https://flask.palletsprojects.com/)
-- [scikit-image GLCM](https://scikit-image.org/docs/stable/api/skimage.feature.html)
+| File | Description |
+|------|-------------|
+| [QUICKSTART.md](QUICKSTART.md) | 5-minute quick start |
+| [INSTALL.md](INSTALL.md) | Detailed installation |
+| [SETUP.md](SETUP.md) | Development setup |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture with Mermaid |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
 
 ---
 
