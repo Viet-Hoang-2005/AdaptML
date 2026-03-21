@@ -1,12 +1,10 @@
 # Installation Guide
 
-Complete setup instructions for the MLOps Weather Classification System.
+Detailed installation instructions for the MLOps Weather Classification System.
 
 ---
 
 ## Prerequisites
-
-### System Requirements
 
 | Requirement | Minimum | Recommended |
 |-------------|---------|-------------|
@@ -19,21 +17,21 @@ Complete setup instructions for the MLOps Weather Classification System.
 
 - [Python 3.10+](https://www.python.org/downloads/)
 - [Git](https://git-scm.com/downloads)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (optional)
-- [Kaggle Account](https://www.kaggle.com/) (for dataset)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Kaggle Account](https://www.kaggle.com/)
 
 ---
 
-## Step-by-Step Installation
-
-### Step 1: Clone the Repository
+## Step 1: Clone Repository
 
 ```bash
 git clone https://github.com/Viet-Hoang-2005/MLOps-weather-system.git
 cd MLOps-weather-system
 ```
 
-### Step 2: Create Virtual Environment
+---
+
+## Step 2: Virtual Environment
 
 **Linux/macOS:**
 ```bash
@@ -47,58 +45,51 @@ python -m venv venv
 venv\Scripts\activate
 ```
 
-### Step 3: Install Dependencies
+---
+
+## Step 3: Install Dependencies
 
 ```bash
-# Install all dependencies
 pip install -r src/requirements.txt
-
-# Or install in editable mode
-pip install -e .
 ```
 
-### Step 4: Download Dataset
+---
 
-The system uses weather images from Kaggle.
+## Step 4: Dataset
 
-**Option A: Kaggle API (Recommended)**
+### Option A: Kaggle API (Recommended)
 
 ```bash
 # Install Kaggle CLI
 pip install kaggle
 
-# Create Kaggle API token
+# Create API token
 # 1. Go to https://www.kaggle.com/account
-# 2. Click "Create New API Token"
+# 2. Create New API Token
 # 3. Save kaggle.json to ~/.kaggle/
 
 # Download datasets
-kaggle datasets download -d paultimothymooney/kermany2018
 kaggle datasets download -d jehanbhathena/weather-dataset
+unzip weather-dataset.zip -d data/raw_images/
 ```
 
-**Option B: Manual Download**
+### Option B: Manual Download
 
-1. Go to [Weather Dataset](https://www.kaggle.com/datasets/jehanbhathena/weather-dataset)
-2. Download and extract to `data/raw_images/`
+1. Download from [Kaggle Weather Dataset](https://www.kaggle.com/datasets/jehanbhathena/weather-dataset)
+2. Extract to `data/raw_images/`
 
-### Step 5: Organize Dataset
+### Folder Structure
 
 ```
-data/
-raw_images/
-    haze/           <- Images from fogsmog folder
-        img1.jpg
-        img2.jpg
-    rain/           <- Images from rain folder
-        img1.jpg
-        img2.jpg
-    shine/          <- Images from Shine folder
-        img1.jpg
-        img2.jpg
+data/raw_images/
+    haze/           # Images from fogsmog folder
+    rain/           # Images from rain folder
+    shine/          # Images from Shine folder
 ```
 
-### Step 6: Generate Reference Dataset
+---
+
+## Step 5: Generate Reference Dataset
 
 ```bash
 python src/extract_reference_data.py
@@ -106,48 +97,49 @@ python src/extract_reference_data.py
 
 Expected output:
 ```
-[*] Scanning directory: data/raw_images
-[*] Processing label: haze...
-[#################################] 100%
-[*] Processing label: rain...
-[#################################] 100%
-[*] Processing label: shine...
-[#################################] 100%
-[+] Total images extracted: 300
-[*] Exporting to CSV...
+[*] Processing: haze...
+[+] Total images: 300
 SUCCESS! Reference Dataset saved to: data/reference_data.csv
+```
+
+---
+
+## Step 6: Verify Installation
+
+```bash
+# Test feature extraction
+python -c "
+from src.api.index import extract_features
+import numpy as np
+img = np.zeros((256, 256, 3), dtype=np.uint8)
+features = extract_features(img)
+print(f'Feature shape: {features.shape}')  # Should be (17,)
+"
+
+# Test API
+python src/api/index.py &
+curl http://localhost:5000/health
 ```
 
 ---
 
 ## Docker Installation
 
-### Option A: Docker Compose (Recommended)
+### Docker Compose (Recommended)
 
 ```bash
-# Build and start all services
 docker-compose up --build
-
-# Run in background
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
+docker-compose up -d      # Background
+docker-compose logs -f   # View logs
+docker-compose down      # Stop
 ```
 
-### Option B: Manual Docker Build
+### Manual Docker Build
 
 ```bash
-# Build API image
+# Build images
 docker build -t weather-api -f src/api/Dockerfile .
-
-# Build training image
 docker build -t weather-training -f src/training/Dockerfile .
-
-# Build drift detection image
 docker build -t weather-drift -f src/drift_detection/Dockerfile .
 
 # Run API
@@ -171,107 +163,54 @@ brew install k3d
 k3d cluster create weather-cluster
 ```
 
-### Deploy Application
+### Deploy
 
 ```bash
-# Create namespace
 kubectl create namespace mlops
-
-# Apply configurations
 kubectl apply -f infra/k8s/
-
-# Check status
 kubectl get pods -n mlops
-
-# View logs
-kubectl logs -l app=weather-classifier -n mlops
 ```
 
 ---
 
-## Verification
+## Environment Variables
 
-### Test Feature Extraction
-
-```bash
-python -c "
-from src.api.index import extract_features
-import numpy as np
-import cv2
-
-# Create dummy image
-img = np.zeros((256, 256, 3), dtype=np.uint8)
-features = extract_features(img)
-print(f'Feature shape: {features.shape}')
-print(f'Expected: (17,)')
-"
-```
-
-### Test API
+Create `.env` file:
 
 ```bash
-# Start API
-python src/api/index.py &
+# Database
+DATABASE_URL=postgresql://weather:weather@localhost:5432/weather_db
 
-# Test health endpoint
-curl http://localhost:5000/health
+# MLflow
+MLFLOW_TRACKING_URI=http://localhost:5000
 
-# Test prediction
-curl -X POST http://localhost:5000/predict \
-     -F "image=@data/raw_images/haze/test_image.jpg"
-```
-
-### Test Drift Detection
-
-```bash
-python src/drift_detection/detect_drift.py
-```
-
-Expected output:
-```
-[*] Loading reference data...
-[*] Loading production data...
-[*] Calculating PSI scores...
-[+] Drift check complete
-[+] Status: Stable (PSI < 0.2)
+# Paths
+DATA_DIR=./data/raw_images
+MODEL_DIR=./models
 ```
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+### ModuleNotFoundError
 
-#### Issue: ModuleNotFoundError
-
-**Problem:** Python modules not found
-
-**Solution:**
 ```bash
 pip install -r src/requirements.txt
 ```
 
-#### Issue: Port Already in Use
+### Port Already in Use
 
-**Problem:** Port 5000 or 7860 already occupied
-
-**Solution:**
 ```bash
-# Find process using port
+# Find process
 lsof -i :5000
 
-# Kill process
+# Kill
 kill -9 <PID>
-
-# Or use different port
-python src/api/index.py --port 5001
 ```
 
-#### Issue: Permission Denied
+### Permission Denied
 
-**Problem:** Cannot create directories or files
-
-**Solution:**
 ```bash
 # Linux/macOS
 sudo chmod -R 755 .
@@ -279,52 +218,29 @@ sudo chmod -R 755 .
 # Windows (run as administrator)
 ```
 
-#### Issue: Dataset Not Found
+### Dataset Not Found
 
-**Problem:** Raw images not in correct directory
-
-**Solution:**
 ```bash
-# Verify directory structure
 ls -la data/raw_images/
-
 # Should show: haze/ rain/ shine/
 ```
 
-#### Issue: Docker Build Fails
+### Docker Build Fails
 
-**Problem:** Docker build errors
-
-**Solution:**
 ```bash
-# Clean Docker cache
 docker builder prune
-
-# Rebuild without cache
 docker build --no-cache -t weather-api -f src/api/Dockerfile .
 ```
 
 ---
 
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATA_DIR` | `/opt/ml/input/data/training` | Training data directory |
-| `MODEL_DIR` | `/opt/ml/model` | Model output directory |
-| `DATABASE_URL` | `postgresql://user:pass@localhost:5432/weather` | Database connection |
-| `MLFLOW_TRACKING_URI` | `http://localhost:5000` | MLflow server URI |
-| `AWS_ACCESS_KEY_ID` | - | AWS credentials |
-| `AWS_SECRET_ACCESS_KEY` | - | AWS credentials |
-
----
-
 ## Next Steps
 
-After installation, see:
-- [README.md](README.md) - Usage instructions
-- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Development guide
+| Task | Guide |
+|------|-------|
+| Development workflow | [SETUP.md](SETUP.md) |
+| Architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Git workflow | [.github/WORKFLOW.md](.github/WORKFLOW.md) |
 
 ---
 
