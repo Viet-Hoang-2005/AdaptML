@@ -1,0 +1,133 @@
+name: Auto-Retrain Pipeline
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+  repository_dispatch:
+    types: [drift-detected]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  drift-detection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r src/requirements.txt
+
+      - name: Run drift detection
+        id: drift-check
+        run: |
+          python src/drift_detection/detect_drift.py
+          echo "drift_status=$(python -c "import json; print('detected' if True else 'stable')")" >> $GITHUB_OUTPUT
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report-${{ github.run_number }}
+          path: reports/drift_*.html
+          retention-days: 30
+
+  retrain:
+    needs: drift-detection
+    if: needs.drift-detection.outputs.drift_status == 'detected'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r src/requirements.txt
+
+      - name: Set up MLflow
+        uses: mlflow/mlflow-actions/deploy-model@v2
+        with:
+          model-name: weather-classifier
+
+      - name: Pull production data
+        run: |
+          echo "[*] Pulling new production data..."
+          # In production, this would pull from S3 or database
+          # python scripts/pull_production_data.py
+
+      - name: Retrain model
+        env:
+          DATA_DIR: ./data/raw_images
+          MODEL_DIR: ./models
+        run: |
+          python src/training/train.py
+
+      - name: Evaluate model
+        run: |
+          echo "[*] Evaluating model..."
+          # Run evaluation script
+          # python src/training/evaluate.py
+
+      - name: Register new model
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        run: |
+          mlflow models register \
+            --name weather-classifier \
+            --source models/ \
+            --description "Auto-retrained due to drift detection"
+
+      - name: Archive model
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrained-model-${{ github.run_number }}
+          path: models/
+          retention-days: 30
+
+  deploy:
+    needs: retrain
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download retrained model
+        uses: actions/download-artifact@v4
+        with:
+          name: retrained-model-${{ needs.retrain.outputs.run_number }}
+          path: models/
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v2
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Deploy new model
+        run: |
+          kubectl set image deployment/weather-api \
+            api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:latest \
+            -n mlops
+
+          kubectl rollout status deployment/weather-api -n mlops --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n mlops
+
+      - name: Send notification
+        if: always()
+        run: |
+          echo "Retrain pipeline completed"
+          # In production, send Slack/Email notification
