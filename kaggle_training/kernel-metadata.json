@@ -1,0 +1,14 @@
+{
+  "id": "hongtrnnguynvit/mlops-weather-system-retrain",
+  "title": "MLOps Weather System Retrain",
+  "code_file": "retrain.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": "true",
+  "enable_gpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": [
+    "jehanbhathena/weather-dataset",
+    "pratik2901/multiclass-weather-dataset"
+  ]
+}
