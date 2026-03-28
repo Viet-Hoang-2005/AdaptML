@@ -4,7 +4,7 @@ services:
   # 1. Dịch vụ cơ sở dữ liệu (PostgreSQL)
   postgres:
     image: postgres:15-alpine
-    container_name: mlops_weather_postgres
+    container_name: mlops_nids_postgres
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -13,7 +13,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - weather_pgdata:/var/lib/postgresql/data
+      - nids_pgdata:/var/lib/postgresql/data
     networks:
       - mlops_network
 
@@ -22,7 +22,7 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-    container_name: mlops_weather_api
+    container_name: mlops_nids_api
     restart: always
     ports:
       - "5000:5000"
@@ -35,6 +35,8 @@ services:
       DB_HOST: postgres
     volumes:
       - ./models:/models
+      - ./api:/app
+    command: uvicorn src.index:app --host 0.0.0.0 --port 5000 --reload
     depends_on:
       - postgres
     networks:
@@ -47,6 +49,6 @@ networks:
 
 # 4. Volume để lưu trữ dữ liệu của PostgreSQL
 volumes:
-  weather_pgdata:
+  nids_pgdata:
     external: false
       

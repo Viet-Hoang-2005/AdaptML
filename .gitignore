@@ -28,9 +28,8 @@ build/
 *.ipynb
 
 # Data
-data/raw_images/
-data/production_data.csv
-*.csv
+data/cicids2017_cleaned.csv
+data/test_data.csv
 
 # Models
 models/*.pkl

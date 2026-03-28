@@ -6,11 +6,12 @@ from sqlalchemy import create_engine
 # 1. NẠP BIẾN MÔI TRƯỜNG
 load_dotenv()
 
+# Cập nhật tên DB mặc định sang nids_mlops_db
 DB_USER = os.getenv("DB_USER", "admin")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "secret")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "mlops_weather_db")
+DB_NAME = os.getenv("DB_NAME", "nids_mlops_db")
 
 # 2. KHỞI TẠO KẾT NỐI (ENGINE)
 def get_db_engine():
@@ -33,8 +34,8 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str):
     try:
         print(f"[+] Attempting to save {len(df)} records to table '{table_name}'...")
         
-        # Dùng hàm to_sql của Pandas để đẩy dữ liệu vào PostgreSQL
-        df.to_sql(table_name, engine, if_exists='append', index=False)
+        # Tránh lỗi "Out of Memory" hoặc sập DB khi đẩy hàng chục ngàn dòng NIDS cùng lúc
+        df.to_sql(table_name, engine, if_exists='append', index=False, chunksize=1000)
         
         print(f"✅ Data successfully saved to table '{table_name}'.")
         return True
@@ -52,7 +53,7 @@ if __name__ == "__main__":
         print(f"[+] Reading Reference Data from: {CSV_PATH}")
         sample_df = pd.read_csv(CSV_PATH)
         
-        # Gọi hàm lưu vào bảng tên là 'reference_features'
-        save_dataframe_to_db(sample_df, "reference_features")
+        # Đổi tên bảng thành nids_reference_data cho phù hợp với ngữ cảnh
+        save_dataframe_to_db(sample_df, "nids_reference_data")
     else:
         print("[-] Test CSV file not found. Please check the path.")
