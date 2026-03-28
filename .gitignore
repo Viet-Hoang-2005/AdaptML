@@ -28,8 +28,8 @@ build/
 *.ipynb
 
 # Data
-data/cicids2017_cleaned.csv
-data/test_data.csv
+data/
+*.csv
 
 # Models
 models/*.pkl
