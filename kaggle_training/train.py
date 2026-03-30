@@ -20,7 +20,7 @@ print("Scanning /kaggle/input/ directory to find the CSV file...")
 
 for dirname, _, filenames in os.walk('/kaggle/input'):
     for filename in filenames:
-        if filename == 'train_2_classes.csv':
+        if filename == 'train_3_classes.csv':
             csv_file_path = os.path.join(dirname, filename)
             print(f"[FOUND] Data located at: {csv_file_path}")
             break
@@ -109,8 +109,8 @@ print(f"F1-Score ({average_method.capitalize()}): {f1_score(y_test, y_pred, aver
 # --- 7. SAVE ARTIFACTS ---
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-encoder_path = os.path.join(OUTPUT_DIR, 'label_nids_encoder.pkl')
-model_path = os.path.join(OUTPUT_DIR, 'xgb_nids_model.pkl')
+encoder_path = os.path.join(OUTPUT_DIR, 'label_nids_encoder_v2.pkl')
+model_path = os.path.join(OUTPUT_DIR, 'xgb_nids_model_v2.pkl')
 
 joblib.dump(le, encoder_path)
 joblib.dump(best_xgb, model_path)
