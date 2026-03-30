@@ -2,9 +2,9 @@
 
 Dự án này là một quy trình MLOps hoàn chỉnh end-to-end (End-to-End MLOps Pipeline) thiết kế chuyên biệt cho hệ thống Phát hiện Xâm nhập Mạng (Network Intrusion Detection System - NIDS). Đặc điểm nổi bật của hệ thống là khả năng **tự động phát hiện hiện tượng trôi dạt dữ liệu (Data Drift)** khi mạng hứng chịu các kiểu tấn công mới hoặc hành vi tấn công biến đổi, từ đó **tự động kích hoạt luồng tái huấn luyện (Retraining)** và tự động **triển khai mô hình mới không gây downtime (Zero-Downtime Deployment)**.
 
-**Tên Đề tài:** *"An End-to-End MLOps Architecture for Data Drift Monitoring and Continuous Retraining in Network Intrusion Detection Systems"*
-**Học phần:** *"NT114: Đồ án Chuyên ngành - Khoa Mạng máy tính và Truyền thông dữ liệu UIT"*
-**Thành viên:** *Trần Nguyễn Việt Hoàng (23520541@gm.uit.edu.vn), Bùi Ngọc Thái (23521412@gm.uit.edu.vn)*
+**Tên Đề tài:** An End-to-End MLOps Architecture for Data Drift Monitoring and Continuous Retraining in Network Intrusion Detection Systems <br>
+**Học phần:** NT114: Đồ án Chuyên ngành - Khoa Mạng máy tính và Truyền thông dữ liệu UIT <br>
+**Thành viên:** Trần Nguyễn Việt Hoàng (23520541@gm.uit.edu.vn), Bùi Ngọc Thái (23521412@gm.uit.edu.vn)
 
 ---
 
