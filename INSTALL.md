@@ -158,6 +158,17 @@ python monitoring/detect_drift.py
 
 Nếu logs hiển thị `[+] Webhook gọi MLOps Retraining THÀNH CÔNG.` thì tức là CI/CD đã thông luồng.
 
+
+### Xóa dữ liệu trong PostgreSQL:
+
+```bash
+docker exec -it mlops_nids_postgres  psql -U admin -d mlops_nids_db
+drop cascades to table nids_production_data
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO admin;
+GRANT ALL ON SCHEMA public TO public;
+\q
+```
 ---
 
 ## Xử lý Sự cố Cơ bản

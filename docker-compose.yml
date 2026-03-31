@@ -13,9 +13,9 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - nids_pgdata:/var/lib/postgresql/data
+      - mlops_nids_pgdata:/var/lib/postgresql/data
     networks:
-      - mlops_network
+      - mlops_nids_network
 
   # 2. Dịch vụ API (FastAPI)
   api:
@@ -40,15 +40,15 @@ services:
     depends_on:
       - postgres
     networks:
-      - mlops_network
+      - mlops_nids_network
 
 # 3. Mạng nội bộ cho các container
 networks:
-  mlops_network:
+  mlops_nids_network:
     driver: bridge
 
 # 4. Volume để lưu trữ dữ liệu của PostgreSQL
 volumes:
-  nids_pgdata:
+  mlops_nids_pgdata:
     external: false
       
