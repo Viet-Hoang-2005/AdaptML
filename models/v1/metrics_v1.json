@@ -1,0 +1,19 @@
+{
+    "model_version": "v1",
+    "timestamp": "2026-03-30T15:26:56.443758",
+    "num_classes": 2,
+    "objective": "binary:logistic",
+    "evaluation_metrics": {
+        "accuracy": 0.9999,
+        "precision": 0.9998,
+        "recall": 0.9999,
+        "f1_score": 0.9999
+    },
+    "best_hyperparameters": {
+        "colsample_bytree": 0.8404460046972835,
+        "learning_rate": 0.1516145155592091,
+        "max_depth": 7,
+        "n_estimators": 101,
+        "subsample": 0.8887995089067299
+    }
+}
