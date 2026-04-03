@@ -1,3 +1,4 @@
+# test_api.py: Kiểm thử độ chính xác của mô hình trả về từ API
 import os
 import pandas as pd
 import requests
@@ -10,15 +11,15 @@ TEST_CSV_PATH = os.path.join(ROOT_DIR, 'data', 'test_data.csv')
 API_URL = "http://localhost:5000/predict"
 
 def api_test_continuous(samples_per_class=1):
-    print(f"🚀 BẮT ĐẦU TEST API INFERENCE LIÊN TỤC...")
+    print(f"🚀 STARTING CONTINUOUS API INFERENCE TEST...")
     
     # 2. NẠP DỮ LIỆU TEST
     if not os.path.exists(TEST_CSV_PATH):
-        print(f"🔎 Không tìm thấy file {TEST_CSV_PATH}. Vui lòng kiểm tra lại đường dẫn!")
+        print(f"🔎 Could not find file {TEST_CSV_PATH}. Please check the path!")
         return
 
     df = pd.read_csv(TEST_CSV_PATH)
-    print(f"[+] Đã nạp tập dữ liệu test với {len(df)} dòng.\n")
+    print(f"[+] Loaded test dataset with {len(df)} rows.\n")
 
     try:
         # 3. VÒNG LẶP VÔ HẠN
@@ -42,7 +43,7 @@ def api_test_continuous(samples_per_class=1):
                     "features": features
                 }
 
-                print(f"📦 Đang gửi gói tin mạng (Nhãn thực tế: {actual_label})...")
+                print(f"📦 Sending network packet (Actual label: {actual_label})...")
                 
                 try:
                     # Đo thời gian từ lúc gửi request đến khi nhận được phản hồi để tính độ trễ (latency)
@@ -60,21 +61,21 @@ def api_test_continuous(samples_per_class=1):
                         confidence = result.get('confidence')
                         
                         # So sánh dự đoán với nhãn thực tế để đánh giá đúng/sai
-                        status_icon = "✅ ĐÚNG" if predicted_label == actual_label else "❌ SAI"
+                        status_icon = "✅ CORRECT" if predicted_label == actual_label else "❌ WRONG"
                         
-                        print(f"{status_icon} | Dự đoán: {predicted_label} (Tự tin: {confidence}%) | Độ trễ: {latency}ms")
-                        print(f"📊 Chi tiết xác suất: {result.get('probabilities')}")
+                        print(f"{status_icon} | Predicted: {predicted_label} (Confidence: {confidence}%) | Latency: {latency}ms")
+                        print(f"📊 Probability details: {result.get('probabilities')}")
                     else:
-                        print(f"⚠️ API báo lỗi (Status {response.status_code}): {response.text}")
+                        print(f"⚠️ API Error (Status {response.status_code}): {response.text}")
 
                 except requests.exceptions.ConnectionError:
-                    print("⚠️ Lỗi kết nối: API chưa được bật!")
+                    print("⚠️ Connection Error: API is not running!")
                     return
                     
-                time.sleep(2) # Nghỉ 2 giây giữa các lần bắn request
+                time.sleep(2) # Chờ 2s giữa các lần bắn request
 
     except KeyboardInterrupt:
-        print("\nKẾT THÚC LUỒNG TEST API!")
+        print("\nEND OF API TEST THREAD!")
 
 if __name__ == "__main__":
     api_test_continuous(samples_per_class=1)

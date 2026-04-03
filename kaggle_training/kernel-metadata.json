@@ -9,5 +9,11 @@
   "enable_internet": "true",
   "dataset_sources": [
     "hongtrnnguynvit/nids-reference-data"
-  ]
+  ],
+  "environment_variables": {
+    "MODEL_VERSION": "v2",
+    "TARGET_CSV": "train_3_classes.csv",
+    "AWS_BUCKET_NAME": "mlops-nids-models-bucket",
+    "S3_TRAINING_DATA_PREFIX": "training-data/"
+  }
 }

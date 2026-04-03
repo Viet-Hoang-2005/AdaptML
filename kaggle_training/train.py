@@ -1,5 +1,10 @@
+# train.py: Script huấn luyện model XGBoost trên tập dữ liệu CICIDS2017
+# Cài đặt các thư viện cần thiết trên Kaggle
 import os
 os.system("pip install mlflow --quiet")
+os.system("pip install boto3 --quiet")
+
+# Thiết lập phiên bản model và file CSV mục tiêu từ biến môi trường
 os.environ["MODEL_VERSION"] = "v2"
 os.environ["TARGET_CSV"] = "train_3_classes.csv"
 
@@ -10,6 +15,7 @@ import joblib
 import warnings
 import json
 import mlflow
+import boto3
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -22,6 +28,21 @@ from scipy.stats import uniform, randint
 from xgboost import XGBClassifier
 
 # --- 0. CẤU HÌNH BIẾN MÔI TRƯỜNG & MLFLOW ---
+# Nạp AWS Credentials từ Kaggle Secret
+try:
+    from kaggle_secrets import UserSecretsClient
+    user_secrets = UserSecretsClient()
+    
+    # Mở két sắt của Kaggle và nạp tạm thời vào hệ điều hành
+    os.environ["AWS_ACCESS_KEY_ID"] = user_secrets.get_secret("AWS_ACCESS_KEY_ID")
+    os.environ["AWS_SECRET_ACCESS_KEY"] = user_secrets.get_secret("AWS_SECRET_ACCESS_KEY")
+    os.environ["AWS_DEFAULT_REGION"] = user_secrets.get_secret("AWS_DEFAULT_REGION")
+
+    print("🔒 Securely loaded AWS credentials from Kaggle Secrets!")
+
+except Exception as e:
+    print(f"❌ Error loading Kaggle Secrets: {e}")
+
 # Thiết lập phiên bản model và file CSV mục tiêu từ biến môi trường
 MODEL_VERSION = os.environ.get('MODEL_VERSION', 'v1')
 TARGET_CSV = os.environ.get('TARGET_CSV', 'train_2_classes.csv')
@@ -34,28 +55,44 @@ mlflow.set_experiment("MLOps_NIDS_Training")
 
 # Khởi tạo MLflow Context ngay từ đầu để theo dõi toàn bộ tiến trình
 with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
+    # --- 1. LOAD DATA ---
     mlflow.log_param("model_version", MODEL_VERSION)
     mlflow.log_param("target_csv", TARGET_CSV)
 
-    # --- 1. LOAD DATA ---
-    # Tìm và load file CSV chứa dữ liệu training từ thư mục /kaggle/input
-    csv_file_path = None
-    print(f"Scanning /kaggle/input/ directory to find {TARGET_CSV}...")
+    local_csv_path = None
+    
+    # PHƯƠNG ÁN A: Ưu tiên tải dữ liệu từ AWS S3
+    AWS_BUCKET = os.environ.get("AWS_BUCKET_NAME", "mlops-nids-models-bucket")
+    S3_PREFIX = os.environ.get("S3_TRAINING_DATA_PREFIX", "training-data/")
+    s3_download_path = os.path.join('/kaggle/working', TARGET_CSV)
 
-    for dirname, _, filenames in os.walk('/kaggle/input'):
-        for filename in filenames:
-            if filename == TARGET_CSV:
-                csv_file_path = os.path.join(dirname, filename)
-                print(f"[FOUND] Data located at: {csv_file_path}")
+    print(f"☁️ Attempting to connect to AWS S3 to download dataset...")
+    try:
+        s3_client = boto3.client('s3')
+        s3_client.download_file(AWS_BUCKET, f"{S3_PREFIX}{TARGET_CSV}", s3_download_path)
+        print(f"Downloaded dataset from S3: {s3_download_path}")
+        local_csv_path = s3_download_path
+        
+    except Exception as e:
+        print(f"⚠️ Failed to download from S3 (Error: {e}).")
+
+    # PHƯƠNG ÁN B: Tìm kiếm cục bộ trong thư mục /kaggle/input/
+    if local_csv_path is None:
+        print(f"🔍 Searching for {TARGET_CSV} in /kaggle/input/...")
+        for dirname, _, filenames in os.walk('/kaggle/input'):
+            for filename in filenames:
+                if filename == TARGET_CSV:
+                    local_csv_path = os.path.join(dirname, filename)
+                    print(f"Found local dataset: {local_csv_path}")
+                    break
+            if local_csv_path:
                 break
-        if csv_file_path:
-            break
 
-    if not csv_file_path:
-        raise FileNotFoundError(f"Could not find {TARGET_CSV} in /kaggle/input")
+    if not local_csv_path:
+        raise FileNotFoundError(f"❌ Could not find {TARGET_CSV} in S3 or local /kaggle/input/")
 
     # Đọc dữ liệu vào DataFrame, tách features (X) và labels (y)
-    df = pd.read_csv(csv_file_path)
+    df = pd.read_csv(local_csv_path)
     X = df.drop(columns=['Label'])
     y_raw = df['Label']
 
@@ -65,7 +102,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     y = le.fit_transform(y_raw)
     num_classes = len(le.classes_)
 
-    print(f"Detected attack classes: {le.classes_}")
+    print(f"🏷️ Detected attack classes: {le.classes_}")
     print(f"Total classes (num_classes): {num_classes}")
     mlflow.log_param("num_classes", num_classes)
 
@@ -135,7 +172,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
         fit_params['sample_weight'] = train_sample_weight
 
     search.fit(X_train, y_train, **fit_params)
-    print(f"Best hyperparameters: {search.best_params_}")
+    print(f"🎯 Best hyperparameters: {search.best_params_}")
     mlflow.log_params(search.best_params_)
 
     # --- 5. FINAL MODEL TRAINING ---
@@ -188,7 +225,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     model_path = os.path.join(OUTPUT_DIR, f'xgb_nids_model_{MODEL_VERSION}.pkl')
     joblib.dump(best_xgb, model_path)
 
-    # Tạo scorecard với thông tin chi tiết về model, hyperparameters và metrics
+    # Tạo scorecard 
     metrics_scorecard = {
         "model_version": MODEL_VERSION,
         "timestamp": datetime.now().isoformat(),
@@ -211,4 +248,4 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     # Đẩy toàn bộ thư mục output lên MLflow làm bản sao lưu nội bộ
     mlflow.log_artifacts(OUTPUT_DIR, artifact_path="deployment_exports")
     
-    print(f"\n[SUCCESS] Artifacts & Scorecard exported to {OUTPUT_DIR} for CI/CD.")
+    print(f"\n✅ Success! Artifacts & Scorecard exported to {OUTPUT_DIR} for CI/CD.")

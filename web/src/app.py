@@ -1,3 +1,4 @@
+# app.py: Hiện tại chưa sử dụng
 import gradio as gr
 import requests
 import json
