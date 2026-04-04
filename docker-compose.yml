@@ -1,0 +1,54 @@
+version:  '3.8'
+
+services:
+  # 1. Dịch vụ cơ sở dữ liệu (PostgreSQL)
+  postgres:
+    image: postgres:15-alpine
+    container_name: mlops_nids_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - mlops_nids_pgdata:/var/lib/postgresql/data
+    networks:
+      - mlops_nids_network
+
+  # 2. Dịch vụ API (FastAPI)
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: mlops_nids_api
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_HOST: postgres
+    volumes:
+      - ./models:/models
+      - ./api:/app
+    command: uvicorn src.index:app --host 0.0.0.0 --port 5000 --reload
+    depends_on:
+      - postgres
+    networks:
+      - mlops_nids_network
+
+# 3. Mạng nội bộ cho các container
+networks:
+  mlops_nids_network:
+    driver: bridge
+
+# 4. Volume để lưu trữ dữ liệu của PostgreSQL
+volumes:
+  mlops_nids_pgdata:
+    external: false
+      

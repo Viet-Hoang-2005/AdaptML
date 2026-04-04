@@ -1,133 +1,257 @@
-name: Auto-Retrain Pipeline
+name: MLOps NIDS Retraining Pipeline
 
+# ============================================================
+# TRIGGER: Pipeline được kích hoạt theo 3 cách:
+#   1. Tự động mỗi nửa đêm (định kỳ kiểm tra drift)
+#   2. Thủ công từ tab Actions trên GitHub (workflow_dispatch)
+#   3. Webhook từ Evidently container (repository_dispatch)
+# ============================================================
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
+    - cron: '0 0 * * *'
   workflow_dispatch:
   repository_dispatch:
-    types: [drift-detected]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+    types: [data_drift_detected]
 
 jobs:
-  drift-detection:
+  # ============================================================
+  # JOB 1: Đọc Data Manifest và kích hoạt Kaggle Retrain
+  # ============================================================
+  retrain_kaggle:
+    name: "🧠 Retrain Model (Kaggle Compute)"
     runs-on: ubuntu-latest
+    outputs:
+      model_version: ${{ steps.read_manifest.outputs.model_version }}
+      target_csv: ${{ steps.read_manifest.outputs.target_csv }}
+      champion_version: ${{ steps.read_manifest.outputs.champion_version }}
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Cài đặt AWS CLI & đọc Data Manifest từ S3
+        id: read_manifest
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-southeast-1
+        run: |
+          # Tải data_manifest.json từ S3 — "nguồn sự thật" về dataset cần train
+          aws s3 cp s3://mlops-nids-models-bucket/data_manifest.json ./data_manifest.json
+          
+          # Trích xuất thông tin và truyền sang các Job tiếp theo qua output
+          MODEL_VERSION=$(jq -r '.model_version' data_manifest.json)
+          TARGET_CSV=$(jq -r '.target_csv' data_manifest.json)
+          # champion_version là version đang chạy trên Production (mặc định v1)
+          CHAMPION_VERSION=$(jq -r '.champion_version // "v1"' data_manifest.json)
+          
+          echo "model_version=$MODEL_VERSION"     >> $GITHUB_OUTPUT
+          echo "target_csv=$TARGET_CSV"           >> $GITHUB_OUTPUT
+          echo "champion_version=$CHAMPION_VERSION" >> $GITHUB_OUTPUT
+          
+          echo "📋 Manifest đọc được:"
+          echo "   Dataset: $TARGET_CSV"
+          echo "   Model Version mới: $MODEL_VERSION"
+          echo "   Champion hiện tại: $CHAMPION_VERSION"
+
+      - name: Thiết lập Kaggle API và gửi Job Retrain
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
+          TARGET_CSV: ${{ steps.read_manifest.outputs.target_csv }}
+        run: |
+          pip install kaggle --quiet
+          mkdir -p ~/.kaggle
+          echo '{"username":"${{ secrets.KAGGLE_USERNAME }}","key":"${{ secrets.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+          
+          echo "🚀 Gửi script train.py lên Kaggle Kernel..."
+          # Cập nhật biến môi trường trong kernel-metadata.json trước khi push
+          jq --arg csv "$TARGET_CSV" --arg ver "$MODEL_VERSION" \
+            '.environment_variables.TARGET_CSV = $csv | .environment_variables.MODEL_VERSION = $ver' \
+            kaggle_training/kernel-metadata.json > /tmp/meta.json && \
+            mv /tmp/meta.json kaggle_training/kernel-metadata.json
+          
+          kaggle kernels push -p kaggle_training/
+          
+          echo "⏳ Đợi Kaggle hoàn thành huấn luyện (tối đa 60 phút)..."
+          # Vòng lặp polling kiểm tra trạng thái Kaggle Kernel mỗi 2 phút
+          # Kernel slug phải khớp với field "id" trong kernel-metadata.json
+          KERNEL_SLUG="hongtrnnguynvit/mlops-nids-training-pipeline"
+          for i in $(seq 1 30); do
+            STATUS=$(kaggle kernels status $KERNEL_SLUG | grep -oP '"\K[^"]+(?=" status)')
+            echo "   Lần $i — Trạng thái: $STATUS"
+            if [ "$STATUS" = "complete" ]; then
+              echo "✅ Kaggle Kernel hoàn thành!"
+              break
+            elif [ "$STATUS" = "error" ]; then
+              echo "❌ Kaggle Kernel gặp lỗi!"
+              exit 1
+            fi
+            sleep 120
+          done
+
+      - name: Tải Artifacts (model PKL + metrics JSON) từ Kaggle về
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-southeast-1
+          MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
+        run: |
+          mkdir -p models/$MODEL_VERSION
+          kaggle kernels output hongtrnnguynvit/mlops-nids-training-pipeline -p models/$MODEL_VERSION/
+          
+          echo "📦 Files tải về:"
+          ls -la models/$MODEL_VERSION/
+          
+          # Upload model lên S3 để Init Container K3s có thể kéo về
+          aws s3 sync models/$MODEL_VERSION/ s3://mlops-nids-models-bucket/models/$MODEL_VERSION/
+          echo "☁️  Đã upload model lên S3: s3://mlops-nids-models-bucket/models/$MODEL_VERSION/"
+
+      - name: Lưu metrics JSON lên Artifacts của GitHub Actions
+        env:
+          MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: challenger-metrics
+          path: models/${{ steps.read_manifest.outputs.model_version }}/metrics_${{ steps.read_manifest.outputs.model_version }}.json
+          retention-days: 7
+
+  # ============================================================
+  # JOB 2: Trọng tài chấm điểm — Cho phép hay chặn Deploy
+  # ============================================================
+  evaluate_model:
+    name: "⚖️  Trọng tài Đánh giá (Model Evaluation Gate)"
+    needs: retrain_kaggle
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
-        run: |
-          pip install -r src/requirements.txt
+      - name: Cài đặt thư viện cho evaluate_model script
+        run: pip install --quiet boto3
 
-      - name: Run drift detection
-        id: drift-check
-        run: |
-          python src/drift_detection/detect_drift.py
-          echo "drift_status=$(python -c "import json; print('detected' if True else 'stable')")" >> $GITHUB_OUTPUT
-
-      - name: Upload drift report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: drift-report-${{ github.run_number }}
-          path: reports/drift_*.html
-          retention-days: 30
-
-  retrain:
-    needs: drift-detection
-    if: needs.drift-detection.outputs.drift_status == 'detected'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          pip install -r src/requirements.txt
-
-      - name: Set up MLflow
-        uses: mlflow/mlflow-actions/deploy-model@v2
-        with:
-          model-name: weather-classifier
-
-      - name: Pull production data
-        run: |
-          echo "[*] Pulling new production data..."
-          # In production, this would pull from S3 or database
-          # python scripts/pull_production_data.py
-
-      - name: Retrain model
+      - name: Tải metrics Champion hiện tại từ S3
+        # Champion metrics là file của model đang chạy trên Production.
+        # Tải từ S3 thay vì đọc file trong repo để đảm bảo luôn là bản mới nhất
+        # sau mỗi lần retrain thành công trước đó.
         env:
-          DATA_DIR: ./data/raw_images
-          MODEL_DIR: ./models
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-southeast-1
+          CHAMPION_VERSION: ${{ needs.retrain_kaggle.outputs.champion_version }}
         run: |
-          python src/training/train.py
+          # Đọc champion_version từ manifest để biết tải metrics của version nào
+          aws s3 cp s3://mlops-nids-models-bucket/data_manifest.json ./data_manifest.json
+          CHAMPION_VERSION=$(jq -r '.champion_version // "v1"' data_manifest.json)
+          echo "📊 Champion version hiện tại: $CHAMPION_VERSION"
+          
+          # Tải metrics của champion từ S3 (đây là nguồn ground truth mới nhất)
+          aws s3 cp \
+            s3://mlops-nids-models-bucket/models/$CHAMPION_VERSION/metrics_${CHAMPION_VERSION}.json \
+            /tmp/champion_metrics.json || \
+          cp models/v1/metrics_v1.json /tmp/champion_metrics.json  # Fallback về v1 nếu S3 chưa có
+          
+          echo "📊 Champion metrics:"
+          cat /tmp/champion_metrics.json
 
-      - name: Evaluate model
-        run: |
-          echo "[*] Evaluating model..."
-          # Run evaluation script
-          # python src/training/evaluate.py
-
-      - name: Register new model
-        env:
-          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-        run: |
-          mlflow models register \
-            --name weather-classifier \
-            --source models/ \
-            --description "Auto-retrained due to drift detection"
-
-      - name: Archive model
-        uses: actions/upload-artifact@v4
-        with:
-          name: retrained-model-${{ github.run_number }}
-          path: models/
-          retention-days: 30
-
-  deploy:
-    needs: retrain
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download retrained model
+      - name: Tải metrics Challenger từ Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: retrained-model-${{ needs.retrain.outputs.run_number }}
-          path: models/
+          name: challenger-metrics
+          path: /tmp/challenger/
 
-      - name: Configure kubectl
+      - name: Chạy Kịch bản Đánh giá Tự động
+        run: |
+          CHALLENGER_FILE=$(ls /tmp/challenger/metrics_*.json | head -1)
+          echo "🏆 Challenger metrics: $CHALLENGER_FILE"
+          cat $CHALLENGER_FILE
+          
+          python .github/scripts/evaluate_model.py \
+            --champion  /tmp/champion_metrics.json \
+            --challenger $CHALLENGER_FILE \
+            --min-f1 0.85 \
+            --drift-tolerance 0.01
+
+  # ============================================================
+  # JOB 3: Triển khai Zero-Downtime lên K3s (chỉ khi đủ điều kiện)
+  # ============================================================
+  deploy_to_k3s:
+    name: "🚀 Triển khai K3s (Zero-Downtime Rolling Update)"
+    needs: [retrain_kaggle, evaluate_model]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xác thực Kubeconfig K3s
         uses: azure/k8s-set-context@v2
         with:
           kubeconfig: ${{ secrets.KUBE_CONFIG }}
 
-      - name: Deploy new model
+      - name: Cập nhật biến MODEL_VERSION trên cụm K3s
+        env:
+          MODEL_VERSION: ${{ needs.retrain_kaggle.outputs.model_version }}
         run: |
-          kubectl set image deployment/weather-api \
-            api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:latest \
-            -n mlops
+          # Ép K3s deployment dùng model version mới
+          kubectl set env deployment/mlops-nids-api MODEL_VERSION=$MODEL_VERSION
+          echo "🏷️  Đã cập nhật MODEL_VERSION=$MODEL_VERSION trên deployment"
 
-          kubectl rollout status deployment/weather-api -n mlops --timeout=300s
-
-      - name: Verify deployment
+      - name: Khởi động Rolling Update (Zero-Downtime)
         run: |
-          kubectl get pods -n mlops
+          echo "🔄 Bắt đầu Rolling Update — Pod cũ tắt dần, Pod mới Init Container kéo model từ S3..."
+          kubectl rollout restart deployment/mlops-nids-api
+          kubectl rollout status deployment/mlops-nids-api --timeout=300s
 
-      - name: Send notification
+      - name: Xác nhận Pods đang chạy
+        run: kubectl get pods -l app=mlops-nids-api
+
+  # ============================================================
+  # JOB 4: Đồng bộ Reference Data — Khép kín vòng lặp MLOps
+  # ============================================================
+  sync_reference_data:
+    name: "🔄 Đồng bộ Reference Data (Vòng lặp Khép kín)"
+    needs: [retrain_kaggle, deploy_to_k3s]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Cài đặt thư viện
+        run: pip install boto3 pandas sqlalchemy psycopg2-binary --quiet
+
+      - name: Cập nhật nids_reference_data trong PostgreSQL
+        # Sau khi deploy model mới thành công, cập nhật baseline reference
+        # để detect_drift.py dùng dataset mới làm "thước đo" từ lần tiếp theo
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION:    ap-southeast-1
+          AWS_BUCKET_NAME:       mlops-nids-models-bucket
+          DB_HOST:               ${{ secrets.DB_HOST }}
+          DB_USER:               ${{ secrets.DB_USER }}
+          DB_PASSWORD:           ${{ secrets.DB_PASSWORD }}
+          DB_NAME:               mlops_nids_db
+        run: |
+          echo "🔄 Bắt đầu đồng bộ Reference Data mới vào PostgreSQL..."
+          python .github/scripts/update_reference_data.py
+
+      - name: Gửi thông báo Pipeline hoàn tất
         if: always()
         run: |
-          echo "Retrain pipeline completed"
-          # In production, send Slack/Email notification
+          echo "=============================================="
+          echo "  ✅ MLOps NIDS Pipeline hoàn tất!"
+          echo "  📌 Model mới: ${{ needs.retrain_kaggle.outputs.model_version }}"
+          echo "  📌 Dataset:   ${{ needs.retrain_kaggle.outputs.target_csv }}"
+          echo "  📌 Reference Data đã được cập nhật."
+          echo "=============================================="

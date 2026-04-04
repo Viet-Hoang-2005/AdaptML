@@ -1,508 +1,172 @@
-# System Architecture
+# Thiết kế Kiến trúc Hệ thống (System Architecture)
 
-Detailed architecture documentation for the MLOps Weather Classification System.
+Tài liệu này đặc tả chi tiết kiến trúc của Hệ thống MLOps Phát hiện Trôi Dữ liệu và Tái huấn luyện tự động cho Mô hình Phát hiện Tấn công Mạng (NIDS).
 
 ---
 
-## High-Level Architecture
+## 1. Kiến trúc Tổng thể (High-Level Architecture)
 
 ```mermaid
 flowchart TB
-    subgraph INPUT["Input Layer"]
-        IMG[Weather Image]
+    subgraph INPUT["Môi trường Khách (Client)"]
+        USER[Người Dùng Cuối]
+        LOCUST[Locust Load Testing<br/>Giả lập Tấn Công]
     end
 
-    subgraph SERVICES["Services"]
-        GRADIO[Gradio Demo<br/>Port 7860]
-        API[Flask API<br/>Port 5000]
-        DRIFT[Drift Detection<br/>Evidently AI]
-        TRAIN[Training<br/>XGBoost]
+    subgraph PROD["K3s Production Cluster"]
+        API[FastAPI Server<br/>Inference API]
+        PG[(PostgreSQL<br/>Lưu vết Dữ liệu)]
+        EVIDENTLY[Evidently AI<br/>CronJob Monitor]
     end
 
-    subgraph STORAGE["Storage Layer"]
-        PG[(PostgreSQL<br/>Logs)]
-        MLF[(MLflow<br/>Model Registry)]
-        S3[(AWS S3<br/>Data & Artifacts)]
-        REF[Reference<br/>Data CSV]
+    subgraph CLOUD["Cloud & CI/CD"]
+        GH[GitHub Actions<br/>Orchestrator]
+        KAGGLE[Kaggle API<br/>Compute Engine]
+        S3[(AWS S3<br/>Model Registry)]
     end
 
-    subgraph DEPLOY["Deployment"]
-        K8S[K3s<br/>Kubernetes]
-        REGISTRY[Docker<br/>Registry]
-        GH[GitHub<br/>Actions]
-    end
-
-    IMG --> GRADIO
-    IMG --> API
-    API <--> PG
-    API <--> MLF
-    DRIFT --> REF
-    DRIFT <--> PG
-    DRIFT --> GH
-    GH --> TRAIN
-    TRAIN --> MLF
-    TRAIN --> REGISTRY
-    REGISTRY --> K8S
+    USER -->|Gửi NetFlow| API
+    LOCUST -->|DDoS/PortScan| API
+    API <-->|Lưu Async Logs| PG
+    EVIDENTLY -->|Truy xuất DB 24h| PG
+    EVIDENTLY -->|Webhook: drift_detected| GH
+    GH -->|Lệnh Retrain| KAGGLE
+    KAGGLE -->|Upload model mới| S3
+    GH -->|Lệnh Rollout Restart| PROD
+    PROD <-->|Init Container kéo Model| S3
 ```
 
 ---
 
-## Component Architecture
+## 2. Thiết kế Mạch Thành phần (Component Diagram)
 
-### 1. API Layer
+### 2.1. Lớp Suy diễn và Ghi log (API & Inference Layer)
 
 ```mermaid
 flowchart LR
-    subgraph INPUT["Image Input"]
-        IMG[Weather Image]
+    subgraph REQUEST["Request"]
+        JSON[JSON Payload<br/>Network Features]
     end
 
-    subgraph PREPROCESS["Preprocessing"]
-        RESIZE[Resize 256x256]
+    subgraph FASTAPI["FastAPI App (Container)"]
+        PARSER[Pydantic Validation]
+        MODEL[XGBoost Model<br/>& Label Encoder]
+        PRED[Prediction<br/>Multi-class]
+        BT[Background Task]
     end
 
-    subgraph FEATURES["Feature Extraction"]
-        HSV[HSV Color]
-        GRAY[Grayscale]
-        HOG[HOG Vector]
-        GLCM[GLCM Matrix]
+    subgraph DATABASE["Persistent Storage"]
+        DB[(PostgreSQL)]
     end
 
-    subgraph STATS["Statistics"]
-        CM[Color Moments<br/>6 features]
-        HS[HOG Stats<br/>3 features]
-        GS[GLCM Stats<br/>8 features]
-    end
-
-    subgraph MODEL["Prediction"]
-        FEAT[17 Features]
-        XGB[XGBoost]
-        PRED[Prediction]
-    end
-
-    IMG --> RESIZE
-    RESIZE --> HSV
-    RESIZE --> GRAY
-    HSV --> CM
-    GRAY --> HOG
-    GRAY --> GLCM
-    HOG --> HS
-    GLCM --> GS
-    CM --> FEAT
-    HS --> FEAT
-    GS --> FEAT
-    FEAT --> XGB
-    XGB --> PRED
+    JSON --> PARSER
+    PARSER --> MODEL
+    MODEL --> PRED
+    PRED --> BT
+    BT -->|Async Insert| DB
 ```
 
----
-
-### 2. Training Pipeline
+### 2.2. Lớp Giám sát và Cảnh báo (Monitoring Layer)
 
 ```mermaid
 flowchart TB
-    subgraph DATA["Data Pipeline"]
-        RAW[Raw Images]
-        FE[Feature Extraction]
-        REF[Reference Data]
-        PROD[Production Data]
+    subgraph DATA["Nguồn Dữ liệu"]
+        PROD_DB[(PostgreSQL<br/>Dữ liệu thực tế)]
+        REF_CSV[Reference Data CSV<br/>Dữ liệu huấn luyện cũ]
     end
 
-    subgraph TRAINING["Training Pipeline"]
-        SPLIT[Train/Test Split]
-        TRAIN[XGBoost Training]
-        EVAL[Evaluation]
+    subgraph EVIDENTLY["Evidently AI CronJob (00:00 hằng ngày)"]
+        LOAD[Tải dữ liệu 24h qua]
+        COMPARE[DataDriftPreset<br/>Phân tích Khoảng cách Phân phối]
+        EVAL{Drift Score >= 0.5?}
     end
 
-    subgraph OUTPUT["Artifacts"]
-        MODEL[XGBoost Model]
-        ENCODER[Label Encoder]
+    subgraph ACTION["Hành động"]
+        HTML[Lưu Report tĩnh HTML]
+        WEBHOOK[POST Webhook tới Github API]
     end
 
-    subgraph REGISTRY["Model Registry"]
-        MLFLOW[MLflow]
-        DOCKER[Docker Registry]
-    end
-
-    RAW --> FE
-    FE --> SPLIT
-    SPLIT --> TRAIN
-    TRAIN --> EVAL
-    EVAL --> MODEL
-    EVAL --> ENCODER
-    MODEL --> MLFLOW
-    ENCODER --> MLFLOW
-    MLFLOW --> DOCKER
+    PROD_DB --> LOAD
+    REF_CSV --> COMPARE
+    LOAD --> COMPARE
+    COMPARE --> EVAL
+    EVAL -->|Sai lệch Cao| WEBHOOK
+    EVAL -->|Mở rộng| HTML
 ```
 
----
-
-### 3. Drift Detection
+### 2.3. Lớp K3s Deployment - Zero Downtime Updates
 
 ```mermaid
 flowchart TB
-    subgraph INPUT["Data Sources"]
-        PROD_FEAT[Production Features<br/>from API logs]
-        REF[Reference Data<br/>baseline_features.csv]
+    subgraph API_POD["API Pod (Kubernetes)"]
+        subgraph VOL["Volume (RAM emptyDir)"]
+            PKL[xgb_model.pkl]
+        end
+
+        INIT[Init Container<br/>amazon/aws-cli]
+        APP[App Container<br/>fastapi-server]
     end
 
-    subgraph ANALYSIS["Drift Analysis"]
-        COMP[Compare Distributions]
-        PSI[Calculate PSI Score]
-        THRESH[Threshold Check]
-    end
+    S3[(AWS S3 Bucket<br/>Version Mới Nhất)]
 
-    subgraph OUTPUT["Actions"]
-        LOG[Log Result]
-        TRIGGER[Trigger Retrain]
-        ALERT[Send Alert]
-    end
-
-    PROD_FEAT --> COMP
-    REF --> COMP
-    COMP --> PSI
-    PSI --> THRESH
-
-    THRESH -->|PSI > 0.2| TRIGGER
-    THRESH -->|PSI < 0.2| LOG
-    THRESH -->|PSI 0.1-0.2| ALERT
+    INIT -->|1. aws s3 cp| S3
+    S3 -->|2. Tải về Volume| PKL
+    INIT -->|3. Hoàn tất| APP
+    APP -->|4. Khởi động & Load| PKL
 ```
+*(Cơ chế:* Khi nhận lệnh cập nhật từ Github Actions, K3s tạo Pod mới. Pod mới sẽ chạy Init Container trước. Init Container kết nối đến S3, tải file model nặng thả vào RAM ảo, sau đó App Container mới khởi động và lấy file đó để phục vụ. *Zero-downtime)*
 
 ---
 
-## Data Flow
+## 3. Bản đồ Thiết kế Cơ sở Dữ liệu (Database Schema)
 
-### Prediction Flow
+Thu thập thông tin Log bằng tính năng Background Tasks để không làm tăng thời gian phản hồi (latency) của API:
+
+```mermaid
+erDiagram
+    NIDS_PRODUCTION_DATA {
+        int id PK "Tự động tăng"
+        float feature_1 "Flow Duration"
+        float feature_2 "Destination Port"
+        float feature_n "Bwd Packet Length Max"
+        string Predicted_Label "BENIGN / DDoS / PortScan"
+        float Confidence_Score "Độ tin cậy của thuật toán %"
+    }
+```
+*Lưu ý: Bàn NIDS_PRODUCTION_DATA chứa toàn bộ các cặp Key-Value payload mà Client gửi tới cộng với Nhãn dự đoán. Lược đồ động phụ thuộc vào số lượng Feature sinh ra trong quá trình Tiền Xử Lý dữ liệu CIC-IDS2017.*
+
+---
+
+## 4. Luồng Xử lý CI/CD/CT (Continuous Pipelines)
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant API as Flask API
-    participant DB as PostgreSQL
-    participant Model as XGBoost
+    participant E as Evidently CronJob
+    participant G as Github Actions
+    participant K as Kaggle Compute
+    participant S as AWS S3
+    participant P as K3s Production
 
-    User->>API: Upload Image
-    API->>API: Extract Features (17)
-    API->>Model: Predict
-    Model-->>API: Prediction Result
-    API->>DB: Log Features + Prediction
-    DB-->>API: Confirm
-    API-->>User: Return Prediction
-```
-
-### Retraining Flow
-
-```mermaid
-flowchart TB
-    A[Scheduled Drift Check<br/>Every 6 hours] --> B[Load Production Features]
-    B --> C[Compare with Reference Data]
-    C --> D[Calculate PSI Scores]
-
-    D --> E{PSI > 0.2?}
-
-    E -->|Yes| F[Trigger Retrain Pipeline]
-    F --> G[Pull New Data]
-    G --> H[Retrain XGBoost]
-    H --> I[Evaluate Model]
-    I --> J{F1 >= 95%?}
-
-    J -->|Yes| K[Register to MLflow]
-    K --> L[Deploy to K3s]
-    L --> M[Zero-Downtime Update]
-
-    J -->|No| N[Alert: Model Quality Check]
-    N --> O[Manual Review Required]
-
-    E -->|No| P[Log: Stable]
-    P --> Q[Continue Monitoring]
+    E->>G: 1. Webhook: event_type=data_drift_detected
+    G->>G: 2. Nhận tín hiệu, Trigger Retrain Pipeline
+    G->>K: 3. Gửi lệnh huấn luyện bằng Kaggle API
+    K-->>K: 4. Chạy tệp train.py với Dữ liệu mới sinh
+    K->>G: 5. Trả kết quả Model F1-score > Cũ
+    G->>S: 6. Upload xgb_nids_model_v2.pkl
+    G->>P: 7. Lệnh ssh: kubectl rollout restart deployment
+    P-->>P: 8. Rolling Update: Init Container lấy v2 và khởi chạy
 ```
 
 ---
 
-## Database Schema
+## Mục tiêu Hiệu năng (Performance SLA)
 
-### Predictions Table
-
-```mermaid
-erDiagram
-    PREDICTIONS {
-        int id PK
-        timestamp timestamp
-        string image_hash
-        string predicted_class
-        float confidence
-        json features
-        float processing_time_ms
-        string model_version
-    }
-```
-
-### Drift Logs Table
-
-```mermaid
-erDiagram
-    DRIFT_LOGS {
-        int id PK
-        timestamp timestamp
-        string feature_name
-        float psi_score
-        string status
-        string action_taken
-        json details
-    }
-```
+| Hệ quy chiếu | Target MLOps |
+|--------|--------|
+| **Độ trễ API Inference** | < 100ms (Đạt được nhờ cache model vào RAM) |
+| **Bảo toàn Dữ liệu** | Lưu vết 100% Request với Async Background Task |
+| **Gián đoạn Dịch vụ (Downtime)** | 0% (Rolling update + K3s Init container) |
+| **Tự động thay đổi Trọng số** | < 2 giờ (Kể từ khi kích hoạt chạy Kaggle Training đến lúc cập nhật k8s) |
 
 ---
-
-## Kubernetes Deployment
-
-```mermaid
-flowchart TB
-    subgraph CLUSTER["K3s Cluster"]
-        subgraph API_DEPLOY["API Deployment"]
-            POD1[API Pod 1]
-            POD2[API Pod 2]
-            POD3[API Pod 3]
-        end
-
-        subgraph SERVICE["Service Layer"]
-            SVC[ClusterIP Service]
-            ING[Ingress]
-        end
-
-        subgraph STORAGE["Storage"]
-            PG[(PostgreSQL)]
-            MLF[(MLflow)]
-        end
-    end
-
-    SVC --> POD1
-    SVC --> POD2
-    SVC --> POD3
-    ING --> SVC
-    POD1 --> PG
-    POD2 --> PG
-    POD3 --> PG
-```
-
-### Rolling Update Strategy
-
-```mermaid
-flowchart TB
-    subgraph STEP1["Step 1: Initial State"]
-        V1A[v1 Pod - Active]
-        V1B[v1 Pod - Active]
-    end
-
-    subgraph STEP2["Step 2: Deploy v2"]
-        V1C[v1 Pod - Active]
-        V2A[v2 Pod - Starting]
-    end
-
-    subgraph STEP3["Step 3: Route Traffic"]
-        V1D[v1 Pod - Draining]
-        V2B[v2 Pod - Active]
-    end
-
-    subgraph STEP4["Step 4: Complete"]
-        V2C[v2 Pod - Active]
-        V2D[v2 Pod - Active]
-    end
-
-    STEP1 -->|kubectl set image| STEP2
-    STEP2 -->|Readiness Probe OK| STEP3
-    STEP3 -->|Terminate v1| STEP4
-
-    style V2C fill:#90EE90
-    style V2D fill:#90EE90
-    style V2B fill:#90EE90
-```
-
----
-
-## CI/CD Pipeline
-
-```mermaid
-flowchart LR
-    subgraph TRIGGER["Triggers"]
-        PUSH[Push to Main]
-        SCHEDULE[Schedule]
-        MANUAL[Manual Dispatch]
-    end
-
-    subgraph CI["CI Pipeline"]
-        TEST[Test]
-        BUILD[Build Docker]
-        PUSH_REG[Push to Registry]
-    end
-
-    subgraph CD["CD Pipeline"]
-        DEPLOY[Deploy to K3s]
-        HEALTH[Health Check]
-    end
-
-    subgraph MONITOR["Monitoring"]
-        DRIFT[Drift Detection]
-        RETRAIN[Auto Retrain]
-    end
-
-    PUSH --> TEST
-    SCHEDULE --> DRIFT
-    MANUAL --> TEST
-    MANUAL --> DRIFT
-
-    TEST --> BUILD
-    BUILD --> PUSH_REG
-    PUSH_REG --> DEPLOY
-    DEPLOY --> HEALTH
-
-    DRIFT -->|PSI > 0.2| RETRAIN
-    RETRAIN --> DEPLOY
-```
-
----
-
-## Infrastructure
-
-### AWS Resources
-
-```mermaid
-flowchart TB
-    subgraph AWS["AWS Cloud"]
-        subgraph COMPUTE["Compute"]
-            LAMBDA[Lambda]
-            SAGEMAKER[SageMaker]
-        end
-
-        subgraph STORAGE["Storage"]
-            S3_REF[S3 Bucket<br/>Reference Data]
-            S3_PROD[S3 Bucket<br/>Production Data]
-        end
-
-        subgraph REGISTRY["Registry"]
-            ECR[ECR<br/>Docker Images]
-        end
-
-        subgraph DATABASE["Database"]
-            RDS[(RDS<br/>PostgreSQL)]
-        end
-    end
-
-    LAMBDA --> S3_PROD
-    SAGEMAKER --> S3_REF
-    SAGEMAKER --> ECR
-    SAGEMAKER --> RDS
-    ECR --> LAMBDA
-```
-
----
-
-## Monitoring Stack
-
-```mermaid
-flowchart TB
-    subgraph METRICS["Metrics Collection"]
-        API[Flask API]
-        EXPORT[Prometheus Exporter]
-        PROM[Prometheus]
-    end
-
-    subgraph VISUALIZATION["Visualization"]
-        GRAFANA[Grafana]
-        EVidently[Evidently AI<br/>Drift Reports]
-        MLFLOW[MLflow UI]
-    end
-
-    subgraph ALERTING["Alerting"]
-        ALERT[Alert Manager]
-        SLACK[Slack]
-        EMAIL[Email]
-    end
-
-    API --> EXPORT
-    EXPORT --> PROM
-    PROM --> GRAFANA
-    PROM --> ALERT
-    API --> EVidently
-    EVidently --> ALERT
-    MLFLOW --> GRAFANA
-    ALERT --> SLACK
-    ALERT --> EMAIL
-```
-
----
-
-## Security
-
-### Secrets Management
-
-```mermaid
-flowchart TB
-    subgraph SECRETS["Secrets"]
-        DB_URL[DATABASE_URL]
-        AWS_KEY[AWS Access Key]
-        MLFLOW_URI[MLFLOW_TRACKING_URI]
-    end
-
-    subgraph STORAGE["Secret Storage"]
-        GH[GitHub Secrets]
-        K8S[Kubernetes Secrets]
-        AWS_SM[AWS Secrets Manager]
-    end
-
-    subgraph CONSUMERS["Consumers"]
-        CI[GitHub Actions]
-        K8S_POD[Kubernetes Pods]
-        APP[Application]
-    end
-
-    DB_URL --> GH
-    AWS_KEY --> AWS_SM
-    MLFLOW_URI --> K8S
-
-    GH --> CI
-    K8S --> K8S_POD
-    K8S_POD --> APP
-```
-
----
-
-## Scalability
-
-### Horizontal Pod Autoscaling
-
-```mermaid
-flowchart TB
-    subgraph SCALE["Auto Scaling Rules"]
-        CPU[CPU > 80%]
-        MEM[Memory > 80%]
-        REQ[Requests > 100/s]
-    end
-
-    subgraph ACTION["Scale Action"]
-        UP[Scale Up<br/>Max 10 pods]
-        DOWN[Scale Down<br/>Min 1 pod]
-    end
-
-    CPU -->|OR| ACTION
-    MEM -->|OR| ACTION
-    REQ -->|OR| ACTION
-```
-
----
-
-## Performance Targets
-
-| Metric | Target | Current |
-|--------|--------|---------|
-| API Latency (P95) | < 500ms | - |
-| Throughput | 100 req/sec | - |
-| Model Load Time | < 5s | - |
-| Drift Detection | < 60s | - |
-| MTTR | < 30 min | - |
-| Zero Downtime | 100% | - |
-
----
-
-Created for NT114 - MLOps Architecture Project
-Department: Computer Networks and Data Communications
+*Created for MLOps NIDS System Project*

@@ -12,6 +12,8 @@
 
 # Python
 __pycache__/
+.mypy_cache/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -28,8 +30,7 @@ build/
 *.ipynb
 
 # Data
-data/raw_images/
-data/production_data.csv
+data/
 *.csv
 
 # Models

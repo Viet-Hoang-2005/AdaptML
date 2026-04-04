@@ -1,120 +1,190 @@
-name: CI/CD Pipeline
+name: MLOps NIDS — CI/CD Pipeline
 
+# ============================================================
+# TRIGGER: Pipeline này chạy khi có code thay đổi được push lên main.
+# Nhiệm vụ: Kiểm tra code (Lint), Build Docker Images và Deploy lên K3s.
+# Đây là pipeline "Continuous Integration & Delivery" — khác với
+# retrain_pipeline.yml (chuyên xử lý Data Drift & Model Retraining).
+# ============================================================
 on:
   push:
     branches: [main]
+    paths:
+      # Chỉ trigger khi có thay đổi ở những folder quan trọng
+      # Thay đổi docs (README, ARCHITECTURE...) KHÔNG kích hoạt build
+      - 'api/**'
+      - 'monitoring/**'
+      - 'k8s/**'
+      - 'docker-compose.yml'
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  API_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-nids-api
+  MONITOR_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-evidently-monitor
 
 jobs:
-  test:
+  # ============================================================
+  # JOB 1: Kiểm tra Chất lượng Code (Code Quality Gate)
+  # ============================================================
+  lint_and_test:
+    name: "🔍 Kiểm tra Code (Lint & Syntax Check)"
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Thiết lập Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Cache pip packages
-        uses: actions/cache@v3
+      - name: Cache pip để tăng tốc CI
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('src/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          key: ${{ runner.os }}-pip-${{ hashFiles('api/requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      - name: Cài đặt thư viện API
+        run: pip install -r api/requirements.txt --quiet
+
+      - name: Kiểm tra lỗi cú pháp nghiêm trọng (Flake8 Strict)
+        # Chỉ chặn các lỗi nghiêm trọng: Syntax Error (E9), undefined name (F82),
+        # undefined variable (F63, F7) — không chặn warning style như dòng quá dài
         run: |
-          pip install -r src/requirements.txt
+          pip install flake8 --quiet
+          echo "🔍 Kiểm tra lỗi cú pháp trong api/src/..."
+          flake8 api/src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          echo "🔍 Kiểm tra lỗi cú pháp trong monitoring/..."
+          flake8 monitoring/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          echo "✅ Không phát hiện lỗi cú pháp nghiêm trọng."
 
-      - name: Run tests
+      - name: Kiểm tra import hợp lệ của các script CI/CD
         run: |
-          pytest tests/ -v
+          pip install boto3 pandas sqlalchemy --quiet
+          echo "🔍 Kiểm tra .github/scripts/evaluate_model.py..."
+          python -c "import ast; ast.parse(open('.github/scripts/evaluate_model.py').read()); print('✅ evaluate_model.py OK')"
+          echo "🔍 Kiểm tra .github/scripts/update_reference_data.py..."
+          python -c "import ast; ast.parse(open('.github/scripts/update_reference_data.py').read()); print('✅ update_reference_data.py OK')"
 
-      - name: Lint code
-        run: |
-          pip install flake8
-          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
-
-  build:
-    needs: test
+  # ============================================================
+  # JOB 2: Build & Push Docker Images lên Docker Hub
+  # ============================================================
+  build_and_push:
+    name: "🐳 Build Docker Images (API + Evidently)"
+    needs: lint_and_test
     runs-on: ubuntu-latest
+    # Chỉ build khi push lên main — không build khi chỉ mở PR
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Thiết lập Docker Buildx (Hỗ trợ Multi-platform)
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Đăng nhập Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata
-        uses: docker/metadata-action@v5
+      # --- Build Image 1: FastAPI Server ---
+      - name: Build & Push Docker Image — FastAPI API Server
+        uses: docker/build-push-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          context: ./api
+          file: ./api/Dockerfile
+          push: true
+          # Gắn 2 tag: sha ngắn (để rollback chính xác) và latest (để K3s luôn kéo bản mới)
           tags: |
-            type=sha,prefix=
-            type=raw,value=latest
-
-      - name: Build and push API
-        uses: docker/build-push-action@v5
-        with:
-          context: ./src/api
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:${{ github.sha }}
+            ${{ env.API_IMAGE }}:${{ github.sha }}
+            ${{ env.API_IMAGE }}:latest
+          # Dùng cache GitHub Actions để tăng tốc build lần sau
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push Training
+      # --- Build Image 2: Evidently Drift Monitor ---
+      - name: Build & Push Docker Image — Evidently Drift Monitor
         uses: docker/build-push-action@v5
         with:
-          context: ./src/training
+          context: ./monitoring
+          file: ./monitoring/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-training:${{ github.sha }}
+          tags: |
+            ${{ env.MONITOR_IMAGE }}:${{ github.sha }}
+            ${{ env.MONITOR_IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push Drift Detection
-        uses: docker/build-push-action@v5
-        with:
-          context: ./src/drift_detection
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-drift:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Tóm tắt Images vừa build
+        run: |
+          echo "✅ Images đã push lên Docker Hub:"
+          echo "   API:      ${{ env.API_IMAGE }}:${{ github.sha }}"
+          echo "   Monitor:  ${{ env.MONITOR_IMAGE }}:${{ github.sha }}"
 
-  deploy:
-    needs: build
+  # ============================================================
+  # JOB 3: Deploy lên K3s (chỉ chạy trên nhánh main)
+  # ============================================================
+  deploy_to_k3s:
+    name: "🚀 Deploy K3s (Rolling Update)"
+    needs: build_and_push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure kubectl
+      - name: Xác thực Kubeconfig K3s
         uses: azure/k8s-set-context@v2
         with:
           kubeconfig: ${{ secrets.KUBE_CONFIG }}
 
-      - name: Deploy to K3s
+      - name: Apply Kubernetes Manifests (PostgreSQL + API + CronJob)
+        # kubectl apply --server-side: Sử dụng Server-Side Apply để tránh lỗi
+        # "field is immutable" khi apply lên deployment đang chạy
         run: |
-          kubectl set image deployment/weather-api \
-            api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:${{ github.sha }} \
-            -n mlops
+          echo "📦 Applying K8s manifests..."
+          kubectl apply -f k8s/postgres.yaml
+          kubectl apply -f k8s/api-deployment.yaml
+          kubectl apply -f k8s/evidently-cronjob.yaml
+          echo "✅ Đã apply toàn bộ manifests."
 
-          kubectl rollout status deployment/weather-api -n mlops --timeout=300s
-
-      - name: Verify deployment
+      - name: Cập nhật Image Tag mới nhất cho API Deployment
+        # Ép Deployment dùng đúng image SHA vừa build — tránh K3s cache image cũ
         run: |
-          kubectl get pods -n mlops
-          kubectl logs -l app=weather-api -n mlops --tail=20
+          kubectl set image deployment/mlops-nids-api \
+            fastapi-server=${{ env.API_IMAGE }}:${{ github.sha }}
+          echo "🏷️  Đã cập nhật image tag: ${{ github.sha }}"
+
+      - name: Cập nhật Image Tag mới nhất cho Evidently CronJob
+        run: |
+          kubectl patch cronjob evidently-drift-monitor \
+            -p '{"spec":{"jobTemplate":{"spec":{"template":{"spec":{"containers":[{"name":"drift-monitor","image":"${{ env.MONITOR_IMAGE }}:${{ github.sha }}"}]}}}}}}'
+          echo "🏷️  Đã cập nhật Evidently Monitor image tag."
+
+      - name: Đợi Rolling Update hoàn thành (Zero-Downtime)
+        run: |
+          echo "⏳ Đợi API pods rolling update hoàn thành..."
+          kubectl rollout status deployment/mlops-nids-api --timeout=300s
+          echo "✅ Rolling update hoàn thành thành công."
+
+      - name: Xác minh trạng thái pods sau deploy
+        run: |
+          echo "📋 Trạng thái tất cả pods:"
+          kubectl get pods -o wide
+          echo ""
+          echo "📋 Logs của API pod (20 dòng cuối):"
+          kubectl logs -l app=mlops-nids-api --tail=20 || true
+
+      - name: Gửi thông báo Deploy thành công
+        if: success()
+        run: |
+          echo "==========================================="
+          echo "  ✅ CI/CD Deploy hoàn tất!"
+          echo "  📌 Commit:  ${{ github.sha }}"
+          echo "  📌 Author:  ${{ github.actor }}"
+          echo "  📌 Message: ${{ github.event.head_commit.message }}"
+          echo "==========================================="

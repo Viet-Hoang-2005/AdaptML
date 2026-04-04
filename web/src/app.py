@@ -1,3 +1,4 @@
+# app.py: Hiện tại chưa sử dụng
 import gradio as gr
 import requests
 import json
@@ -29,7 +30,12 @@ def predict_weather(image_path):
             else:
                 return f"API Error: {data.get('error')}"
         else:
-            return f"Server Error (Status code: {response.status_code})"
+            try:
+                # FastAPI sử dụng key "detail" cho các HTTPException
+                error_detail = response.json().get("detail", "Unknown error from server")
+                return f"Server Error {response.status_code}: {error_detail}"
+            except ValueError:
+                return f"Server Error (Status code: {response.status_code})"
             
     except Exception as e:
         return f"An unknown Error: {str(e)}"

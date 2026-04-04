@@ -1,248 +1,177 @@
-# Installation Guide
+# Hướng dẫn Cài đặt (Installation Guide)
 
-Detailed installation instructions for the MLOps Weather Classification System.
+Tài liệu này cung cấp hướng dẫn chi tiết để thiết lập và chạy Hệ thống MLOps Phát hiện Xâm nhập Mạng (NIDS).
 
 ---
 
-## Prerequisites
+## Yêu cầu Hệ thống (Prerequisites)
 
-| Requirement | Minimum | Recommended |
-|-------------|---------|-------------|
-| Python | 3.10+ | 3.11 |
-| RAM | 4 GB | 8 GB |
-| Storage | 10 GB | 20 GB |
-| OS | Windows 10+ | Ubuntu 22.04+ |
+| Thành phần | Tối thiểu           | Khuyến nghị   |
+| ---------- | ------------------- | ------------- |
+| Python     | 3.9+                | 3.12          |
+| RAM        | 4 GB                | 8 GB          |
+| Lưu trữ    | 10 GB               | 20 GB         |
+| HĐH        | Windows 10+ / Linux | Ubuntu 22.04+ |
 
-### Required Software
+### Phần mềm Bắt buộc
 
-- [Python 3.10+](https://www.python.org/downloads/)
+- [Python 3.12](https://www.python.org/downloads/)
 - [Git](https://git-scm.com/downloads)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- [Kaggle Account](https://www.kaggle.com/)
+- [Docker & Docker Compose](https://www.docker.com/products/docker-desktop/)
+- [K3s](https://k3s.io/)
 
 ---
 
-## Step 1: Clone Repository
+## Bước 1: Clone Repository
 
 ```bash
-git clone https://github.com/Viet-Hoang-2005/MLOps-weather-system.git
-cd MLOps-weather-system
+git clone https://github.com/Viet-Hoang-2005/mlops-nids-system.git
+cd mlops-nids-system
 ```
 
 ---
 
-## Step 2: Virtual Environment
+## Bước 2: Khởi tạo Virtual Environment & Cài đặt Thư viện
+
+Tạo môi trường Python ảo tách biệt:
 
 **Linux/macOS:**
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
 **Windows:**
+
 ```cmd
 python -m venv venv
 venv\Scripts\activate
 ```
 
----
-
-## Step 3: Install Dependencies
+Sau khi kích hoạt, tiến hành cài đặt các gói phụ thuộc (cho API và cho hệ thống giám sát):
 
 ```bash
-pip install -r src/requirements.txt
-```
-
----
-
-## Step 4: Dataset
-
-### Option A: Kaggle API (Recommended)
-
-```bash
-# Install Kaggle CLI
-pip install kaggle
-
-# Create API token
-# 1. Go to https://www.kaggle.com/account
-# 2. Create New API Token
-# 3. Save kaggle.json to ~/.kaggle/
-
-# Download datasets
-kaggle datasets download -d jehanbhathena/weather-dataset
-unzip weather-dataset.zip -d data/raw_images/
-```
-
-### Option B: Manual Download
-
-1. Download from [Kaggle Weather Dataset](https://www.kaggle.com/datasets/jehanbhathena/weather-dataset)
-2. Extract to `data/raw_images/`
-
-### Folder Structure
-
-```
-data/raw_images/
-    haze/           # Images from fogsmog folder
-    rain/           # Images from rain folder
-    shine/          # Images from Shine folder
+pip install -r api/requirements.txt
+pip install -r monitoring/requirements.txt
+pip install locust # Khuyến nghị cài thêm để chạy giả lập tấn công
 ```
 
 ---
 
-## Step 5: Generate Reference Dataset
+## Bước 3: Cấu hình Biến môi trường (.env)
+
+Hệ thống cung cấp sẵn file `.env.example`. Hãy copy thành `.env` ở thư mục gốc:
 
 ```bash
-python src/extract_reference_data.py
+cp .env.example .env
 ```
 
-Expected output:
-```
-[*] Processing: haze...
-[+] Total images: 300
-SUCCESS! Reference Dataset saved to: data/reference_data.csv
+**Nội dung cơ bản:**
+
+```ini
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=nids_db
+DB_PORT=5432
+DB_HOST=localhost
+
+# Cấu hình cho Evidently AI / Github Action
+GITHUB_REPO=Viet-Hoang-2005/mlops-nids-system
+GITHUB_TOKEN=your_personal_access_token_here
+DRIFT_THRESHOLD=0.5
 ```
 
 ---
 
-## Step 6: Verify Installation
+## Bước 4: Môi trường Chạy Thử nghiệm (Docker Compose)
+
+Đây là cách nhanh nhất để khởi chạy PostgreSQL và FastAPI Container nội bộ (Local).
 
 ```bash
-# Test feature extraction
-python -c "
-from src.api.index import extract_features
-import numpy as np
-img = np.zeros((256, 256, 3), dtype=np.uint8)
-features = extract_features(img)
-print(f'Feature shape: {features.shape}')  # Should be (17,)
-"
+# Xây dựng và khởi chạy ở chế độ ngầm (Background)
+docker-compose up --build -d
 
-# Test API
-python src/api/index.py &
-curl http://localhost:5000/health
+# Xem log hoạt động của API
+docker-compose logs -f api
+
+# Dừng hệ thống
+docker-compose down
 ```
+
+Ứng dụng API sẽ trực tiếp khả dụng tại: `http://localhost:5000/predict`
 
 ---
 
-## Docker Installation
+## Bước 5: Triển khai K3s (Production Setup)
 
-### Docker Compose (Recommended)
+Sử dụng môi trường K3s siêu nhẹ (Lightweight Kubernetes) với các Manifest files được cung cấp.
 
-```bash
-docker-compose up --build
-docker-compose up -d      # Background
-docker-compose logs -f   # View logs
-docker-compose down      # Stop
-```
+### 5.1. Cài đặt K3s (Linux)
 
-### Manual Docker Build
-
-```bash
-# Build images
-docker build -t weather-api -f src/api/Dockerfile .
-docker build -t weather-training -f src/training/Dockerfile .
-docker build -t weather-drift -f src/drift_detection/Dockerfile .
-
-# Run API
-docker run -p 5000:5000 weather-api
-```
-
----
-
-## Kubernetes Installation
-
-### Install K3s
-
-**Linux:**
 ```bash
 curl -sfL https://get.k3s.io | sh -
 ```
 
-**macOS:**
+### 5.2. Áp dụng Manifests
+
+Sau khi cluster sẵn sàng, áp dụng các tệp cấu hình triển khai để sinh ra Pod:
+
 ```bash
-brew install k3d
-k3d cluster create weather-cluster
+# 1. Khởi động PostgreSQL DB
+kubectl apply -f k8s/postgres.yaml
+
+# 2. Khởi động API (có kẹp Init container kéo tệp S3)
+kubectl apply -f k8s/api-deployment.yaml
+
+# 3. Kích hoạt CronJob giám sát Data Drift qua đêm
+kubectl apply -f k8s/evidently-cronjob.yaml
 ```
 
-### Deploy
+Kiểm tra trạng thái các Pod xem đã "Running" chưa:
 
 ```bash
-kubectl create namespace mlops
-kubectl apply -f infra/k8s/
-kubectl get pods -n mlops
-```
-
----
-
-## Environment Variables
-
-Create `.env` file:
-
-```bash
-# Database
-DATABASE_URL=postgresql://weather:weather@localhost:5432/weather_db
-
-# MLflow
-MLFLOW_TRACKING_URI=http://localhost:5000
-
-# Paths
-DATA_DIR=./data/raw_images
-MODEL_DIR=./models
+kubectl get pods
 ```
 
 ---
 
-## Troubleshooting
+## Bước 6: Kiểm thử (Troubleshooting / Testing)
 
-### ModuleNotFoundError
+### Load Testing sinh tập Tấn công (DDoS / PortScan):
 
-```bash
-pip install -r src/requirements.txt
-```
-
-### Port Already in Use
+Dùng công cụ mã nguồn mở **Locust** để tạo ra lượng traffic mô phỏng gói tin độc hại:
 
 ```bash
-# Find process
-lsof -i :5000
-
-# Kill
-kill -9 <PID>
+locust -f load_testing/locustfile.py --host=http://localhost:5000
 ```
 
-### Permission Denied
+_(Mở trình duyệt ở `http://localhost:8089` để ấn Start Swarming)_
+
+### Xác minh cơ chế Webhook (Data Drift Alert):
+
+Kiểm tra xem hàm tự tính Drift có chạy thành công không bằng dòng lệnh chay:
 
 ```bash
-# Linux/macOS
-sudo chmod -R 755 .
-
-# Windows (run as administrator)
+python monitoring/detect_drift.py
 ```
 
-### Dataset Not Found
+Nếu logs hiển thị `[+] Webhook gọi MLOps Retraining THÀNH CÔNG.` thì tức là CI/CD đã thông luồng.
+
+
+### Xóa dữ liệu trong PostgreSQL:
 
 ```bash
-ls -la data/raw_images/
-# Should show: haze/ rain/ shine/
+docker exec -it mlops_nids_postgres  psql -U admin -d mlops_nids_db
+drop cascades to table nids_production_data
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO admin;
+GRANT ALL ON SCHEMA public TO public;
+\q
 ```
-
-### Docker Build Fails
-
-```bash
-docker builder prune
-docker build --no-cache -t weather-api -f src/api/Dockerfile .
-```
-
 ---
 
-## Next Steps
+## Xử lý Sự cố Cơ bản
 
-| Task | Guide |
-|------|-------|
-| Development workflow | [SETUP.md](SETUP.md) |
-| Architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Git workflow | [.github/WORKFLOW.md](.github/WORKFLOW.md) |
-
----
-
-Created for NT114 - MLOps Architecture Project
-Department: Computer Networks and Data Communications
+- **Cổng 5000 / 5432 bị chiếm**: Đảm bảo tắt Postgresql đang chạy ngầm trên máy chủ trước khi chạy `docker-compose`.
+- **Lỗi không kết nối DB (`psycopg2.OperationalError`)**: Kiểm tra lại file `.env` mục `DB_HOST`. Khi chạy localhost không qua Docker, để là `localhost`. Khi chạy Pod K3s, nó sẽ dùng DNS Service của Kĩ sư cấu hình là `postgres-service`.

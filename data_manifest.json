@@ -1,0 +1,9 @@
+{
+  "target_csv": "train_2_classes.csv",
+  "model_version": "v1",
+  "num_classes": 2,
+  "s3_training_data_prefix": "training-data/",
+  "updated_by": "admin",
+  "updated_at": "2026-03-30",
+  "note": "This file is stored on S3. Engineers update target_csv and model_version when they want to retrain with a new dataset."
+}

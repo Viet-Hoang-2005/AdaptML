@@ -1,98 +1,100 @@
-# Contributing Guide
+# Hướng dẫn Đóng góp (Contributing Guide)
 
-Guidelines for contributing to the MLOps Weather Classification System.
-
----
-
-## Team
-
-| Name | Email | Role |
-|------|-------|------|
-| Viet Hoang | 23520541@gm.uit.edu.vn | API, Drift Detection |
-| Thai | 23521412@gm.uit.edu.vn | DevOps, Infrastructure |
+Tài liệu này cung cấp các nguyên tắc và hướng dẫn để tham gia đóng góp mã nguồn vào dự án **Hệ thống MLOps Phát hiện Xâm nhập Mạng (NIDS)**.
 
 ---
 
-## Getting Started
+## Nhóm Tác giả (Team)
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make your changes
-4. Run tests: `pytest tests/`
-5. Commit: `git commit -m "feat(scope): description"`
-6. Push: `git push -u origin feature/your-feature`
-7. Create Pull Request
+| Họ Tên                 | Email                  | Phụ trách chính                                             |
+| ---------------------- | ---------------------- | ----------------------------------------------------------- |
+| Trần Nguyễn Việt Hoàng | 23520541@gm.uit.edu.vn | MLOps Architecture, FastAPI, Drift Detection (Evidently AI) |
+| Bùi Ngọc Thái          | 23521412@gm.uit.edu.vn | K3s Operations, Infrastructure (Terraform, AWS), CI/CD      |
 
 ---
 
-## Branch Naming
+## Bắt đầu Đóng góp (Getting Started)
 
-```
-feature/add-drift-detection
-fix/api-timeout-error
+1. Fork kho lưu trữ (repository) này
+2. Tạo một nhánh tính năng (feature branch): `git checkout -b feature/new-function`
+3. Thực hiện và lưu lại các thay đổi (commit)
+4. Chạy kiểm thử nội bộ: (Sử dụng công cụ Unit Test hoặc Locust nếu liên quan đến API)
+5. Ghi nhận thay đổi bằng Commit Message: `git commit -m "feat(scope): description of the change"`
+6. Đẩy nhánh lên Remote: `git push -u origin feature/new-function`
+7. Tạo Yêu cầu Kéo (Pull Request - PR) trên Github
+
+---
+
+## Tiêu chuẩn Đặt tên Nhánh (Branch Naming)
+
+```text
+feature/add-locust-script
+fix/error-connect-postgresql
 docs/update-readme
-chore/update-dependencies
+chore/upgrade-library-version
 ```
 
 ---
 
-## Commit Messages
+## Tiêu chuẩn Commit Messages
 
-```
-feat(api): add prediction logging
+```text
+feat(api): them tinh nang luu log du doan
 
-- Log timestamp, features, prediction
-- Store features as JSONB
+- Ghi nhan timestamp, feature mang, nhan du doan
+- Đang luu xuong PostgreSQL bang BackgroundTasks
 
 Closes #42
 ```
 
-Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+Các loại tiền tố (Types): `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 
 ---
 
-## Pull Request Checklist
+## Danh sách Kiểm tra trước khi Pull Request (PR Checklist)
 
-- [ ] Code follows style guidelines
-- [ ] Tests pass locally
-- [ ] Branch is up to date with main
-- [ ] Related issue linked
+- [ ] Code tuân thủ các nguyên tắc thiết kế chung của PEP 8.
+- [ ] Môi trường Docker / K3s có thể khởi chạy bình thường.
+- [ ] Nhánh tính năng đã được đồng bộ với nhánh `main`.
+- [ ] Bổ sung/Cập nhật tài liệu (nếu có tính năng mới).
 
-See [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md) for PR template.
-
----
-
-## Code Standards
-
-- Follow PEP 8
-- Add type hints where applicable
-- Write docstrings for functions
-- No `console.log` or debug statements
+_Vui lòng xem file mẫu [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md)._
 
 ---
 
-## Testing
+## Tiêu chuẩn Mã nguồn (Code Standards)
+
+- Tuân thủ chuẩn lập trình **PEP 8** đối với Python.
+- Thêm **Type hints** (vd: `payload: Dict[str, float]`) để code dễ dự đoán.
+- Viết **docstrings** đầy đủ cho các khối hàm phức tạp (vd: `detect_drift.py`).
+- Xoá hoặc vô hiệu hoá các lệnh in log thừa (như `print()` hay `console.log`) trước khi lên Production.
+
+---
+
+## Kiểm thử (Testing)
+
+Khi đóng góp mã nguồn mới liên quan đến Model hay kiến trúc, khuyến nghị chạy giả lập mạng:
 
 ```bash
-pytest tests/                    # All tests
-pytest tests/test_api.py -v     # Specific test
-pytest tests/ --cov=src        # With coverage
+# Gửi gói tin thử nghiệm
+locust -f load_testing/locustfile.py --host=http://localhost:5000
 ```
 
----
-
-## Issues
-
-Bug reports: [.github/ISSUE_TEMPLATE/ISSUE_BUG.md](.github/ISSUE_TEMPLATE/ISSUE_BUG.md)
-Feature requests: [.github/ISSUE_TEMPLATE/ISSUE_FEATURE.md](.github/ISSUE_TEMPLATE/ISSUE_FEATURE.md)
+Đảm bảo API không bị tràn bộ nhớ hoặc rớt kết nối.
 
 ---
 
-## Questions
+## Báo lỗi & Yêu cầu Tính năng (Issues)
 
-Email: 23520541@gm.uit.edu.vn or 23521412@gm.uit.edu.vn
+- Báo cáo Bug: [.github/ISSUE_TEMPLATE/ISSUE_BUG.md](.github/ISSUE_TEMPLATE/ISSUE_BUG.md)
+- Yêu cầu chức năng: [.github/ISSUE_TEMPLATE/ISSUE_FEATURE.md](.github/ISSUE_TEMPLATE/ISSUE_FEATURE.md)
 
 ---
 
-Created for NT114 - MLOps Architecture Project
-Department: Computer Networks and Data Communications
+## Câu hỏi & Trao đổi
+
+Liên hệ trực tiếp qua Email: **23520541@gm.uit.edu.vn** hoặc **23521412@gm.uit.edu.vn**
+
+---
+
+*Created for MLOps NIDS System Project*

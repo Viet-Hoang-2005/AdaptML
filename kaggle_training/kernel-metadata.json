@@ -1,0 +1,19 @@
+{
+  "id": "hongtrnnguynvit/mlops-nids-training-pipeline",
+  "title": "MLOps NIDS Training Pipeline",
+  "code_file": "train.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": "true",
+  "enable_gpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": [
+    "hongtrnnguynvit/nids-reference-data"
+  ],
+  "environment_variables": {
+    "MODEL_VERSION": "v2",
+    "TARGET_CSV": "train_3_classes.csv",
+    "AWS_BUCKET_NAME": "mlops-nids-models-bucket",
+    "S3_TRAINING_DATA_PREFIX": "training-data/"
+  }
+}
