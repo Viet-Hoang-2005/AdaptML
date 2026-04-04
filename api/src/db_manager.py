@@ -67,7 +67,6 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str):
             print(f"✅ Successfully inserted {record_count} records into '{table_name}'")
         return True
     except Exception as e:
-        # Bắt và in lỗi khi ghi dữ liệu
         print(f"❌ Error saving data to database: {e}")
         return False
 

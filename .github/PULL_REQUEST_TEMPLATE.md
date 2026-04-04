@@ -2,21 +2,21 @@
 
 ## Description
 
-<!-- What does this PR do? -->
-<!-- Briefly describe the changes made -->
-
--
+- Optimize the performance of the XGBoost algorithm and balance data flow in model training.
+- Develop a script to detect data drift by comparing reference data and production data in PostgreSQL.
+- Develop a script to compare model versions during updates and new version deployments.
+- Rebuild the CI/CD pipeline.
 
 ## Type of Change
 
 <!-- Mark the appropriate box with an [x] -->
 
-- [ ] `feat` - New feature
+- [x] `feat` - New feature
 - [ ] `fix` - Bug fix
-- [ ] `docs` - Documentation changes
+- [x] `docs` - Documentation changes
 - [ ] `refactor` - Code refactoring (no functional change)
-- [ ] `test` - Adding or updating tests
-- [ ] `chore` - Maintenance tasks (deps, config, CI/CD)
+- [x] `test` - Adding or updating tests
+- [x] `chore` - Maintenance tasks (deps, config, CI/CD)
 
 ## Related Issue
 
@@ -28,25 +28,26 @@ Closes #
 
 <!-- Describe testing performed -->
 
-- [ ] Unit tests added/updated
-- [ ] Integration tests added/updated
-- [ ] Manual testing performed
+- [x] Unit tests added/updated
+- [x] Integration tests added/updated
+- [x] Manual testing performed
 
 **Testing steps:**
-1.
-2.
-3.
+
+1. API + PostgreSQL: docker-compose up --build
+2. Load Testing: locust -f web/src/locustfile.py --host=http://localhost:5000
+3. Data Drift: python monitoring/detect_drift.py
 
 ## Checklist
 
 <!-- Make sure all applicable items are checked -->
 
-- [ ] Code follows project style guidelines
-- [ ] Self-review completed
-- [ ] Code commented where necessary
-- [ ] Documentation updated (if applicable)
+- [x] Code follows project style guidelines
+- [x] Self-review completed
+- [x] Code commented where necessary
+- [x] Documentation updated (if applicable)
 - [ ] No console.log or debug statements left
-- [ ] Branch is up to date with main
+- [x] Branch is up to date with main
 
 ## Screenshots (if applicable)
 
@@ -56,21 +57,20 @@ Closes #
 
 <!-- Any other information reviewers should know -->
 
--
-
 ## Reviewer Checklist
 
 <!-- For reviewers only -->
 
-- [ ] Code is well-structured and readable
-- [ ] Tests are adequate and passing
+- [x] Code is well-structured and readable
+- [x] Tests are adequate and passing
 - [ ] Documentation is accurate
 - [ ] No breaking changes without justification
-- [ ] Changes align with project architecture
+- [x] Changes align with project architecture
 
 ---
 
 **PR Info:**
-- Branch:
-- Author:
-- Created:
+
+- Branch: feature/workflow-for-nids-model
+- Author: Viet-Hoang-2005
+- Created: 19-03-2026

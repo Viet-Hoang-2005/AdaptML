@@ -76,6 +76,12 @@ def save_to_database(features_dict: dict, predicted_label: str, confidence: floa
         print(f"❌ Error in background task while saving to database: {e}")
 
 # 5. API ENDPOINT
+# Endpoint kiểm tra sức khỏe của API, trả về trạng thái và version của model đang chạy.
+@app.get("/")
+async def health_check():
+    return {"status": "healthy", "model_version": MODEL_VERSION}
+
+# Endpoint chính để nhận dữ liệu mạng, dự đoán và trả về kết quả dự đoán cùng xác suất cho từng lớp.
 @app.post("/predict")
 async def predict_intrusion(payload: NetworkTraffic, background_tasks: BackgroundTasks):
     if model is None or LABEL_CLASSES is None or EXPECTED_FEATURES is None:
