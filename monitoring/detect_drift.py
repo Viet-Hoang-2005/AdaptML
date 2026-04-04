@@ -7,8 +7,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset
+from evidently import Report
+from evidently.presets import DataDriftPreset
 from evidently.metrics import DatasetDriftMetric
 
 # 1. NẠP CẤU HÌNH TỪ BIẾN MÔI TRƯỜNG
@@ -76,7 +76,7 @@ def run_drift_analysis(reference_df: pd.DataFrame, production_df: pd.DataFrame) 
 
     Trả về dictionary chứa:
     - share_drifted_features: Tỷ lệ feature bị drift (0.0 ~ 1.0)
-    - dataset_drift: True/False — cờ kết luận tổng thể của Evidently
+    - dataset_drift: True/False - cờ kết luận tổng thể của Evidently
     - number_of_drifted_features: Số lượng feature bị drift
     """
     print("🔬 [2/4] Running Data Drift analysis using Evidently AI...")
@@ -85,7 +85,7 @@ def run_drift_analysis(reference_df: pd.DataFrame, production_df: pd.DataFrame) 
     prod_clean = preprocess(production_df)
 
     # Chỉ giữ lại các cột xuất hiện trong cả 2 tập để tránh lỗi schema mismatch
-    common_cols = list(set(ref_clean.columns) & set(prod_clean.columns))
+    common_cols = [col for col in ref_clean.columns if col in prod_clean.columns]
     ref_clean  = ref_clean[common_cols]
     prod_clean = prod_clean[common_cols]
 
