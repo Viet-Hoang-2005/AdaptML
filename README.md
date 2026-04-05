@@ -15,8 +15,8 @@
 
 | Thành viên             | Email                  | Phụ trách                                                       |
 | ---------------------- | ---------------------- | --------------------------------------------------------------- |
-| Trần Nguyễn Việt Hoàng | 23520541@gm.uit.edu.vn | MLOps Architecture · FastAPI · Evidently AI · Training Pipeline |
-| Bùi Ngọc Thái          | 23521412@gm.uit.edu.vn | K3s Operations · Terraform/AWS · CI/CD · CloudNativePG          |
+| Trần Nguyễn Việt Hoàng | 23520541@gm.uit.edu.vn | MLOps Architecture + FastAPI + Evidently AI + Training Pipeline |
+| Bùi Ngọc Thái          | 23521412@gm.uit.edu.vn | K3s Operations + Terraform/AWS + CI/CD + CloudNativePG          |
 
 </div>
 
@@ -44,15 +44,15 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 
 | #   | Tính năng                                                                    | Công nghệ                    |
 | --- | ---------------------------------------------------------------------------- | ---------------------------- |
-| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%            | XGBoost · CIC-IDS2017        |
-| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                         | FastAPI · Uvicorn            |
-| 3   | **Async logging** mọi request vào DB mà không tăng latency                   | BackgroundTasks · PostgreSQL |
-| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                     | CloudNativePG · K3s          |
-| 5   | **Daily drift detection** 0h UTC, phân tích phân phối 70+ features           | Evidently AI · CronJob       |
-| 6   | **Automated retraining** khi drift ≥ 50%, không cần can thiệp thủ công       | Kaggle API · GitHub Actions  |
-| 7   | **Model quality gate** — chỉ promote model mới khi vượt Champion             | evaluate_model.py            |
-| 8   | **Zero-downtime deployment** Rolling update + Init Container kéo model từ S3 | K3s · AWS S3                 |
-| 9   | **Closed-loop feedback** — baseline tự cập nhật sau mỗi lần retrain          | update_reference_data.py     |
+| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%            | XGBoost + CIC-IDS2017        |
+| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                         | FastAPI + Uvicorn            |
+| 3   | **Async logging** mọi request vào DB mà không tăng latency                   | BackgroundTasks + PostgreSQL |
+| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                     | CloudNativePG + K3s          |
+| 5   | **Daily drift detection** 0h UTC, phân tích phân phối 70+ features           | Evidently AI + CronJob       |
+| 6   | **Automated retraining** khi drift ≥ 50%, không cần can thiệp thủ công       | Kaggle API + GitHub Actions  |
+| 7   | **Model quality gate** - chỉ promote model mới khi vượt Champion             | evaluate_model.py            |
+| 8   | **Zero-downtime deployment** Rolling update + Init Container kéo model từ S3 | K3s + AWS S3                 |
+| 9   | **Closed-loop feedback** - baseline tự cập nhật sau mỗi lần retrain          | update_reference_data.py     |
 | 10  | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời        | Locust                       |
 
 ---
@@ -103,17 +103,17 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 
 | Layer                  | Technology                                   |
 | ---------------------- | -------------------------------------------- |
-| **Machine Learning**   | XGBoost · Scikit-learn · Pandas · MLflow     |
-| **Model Serving**      | FastAPI · Uvicorn · Python 3.10              |
-| **Database (HA)**      | PostgreSQL 15 · CloudNativePG · SQLAlchemy   |
-| **Drift Monitoring**   | Evidently AI · DataDriftPreset · K8s CronJob |
+| **Machine Learning**   | XGBoost + Scikit-learn + Pandas + MLflow     |
+| **Model Serving**      | FastAPI + Uvicorn + Python 3.10              |
+| **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy   |
+| **Drift Monitoring**   | Evidently AI + DataDriftPreset + K8s CronJob |
 | **Load Testing**       | Locust                                       |
 | **Compute Engine**     | Kaggle Kernels API                           |
 | **CI/CD/CT**           | GitHub Actions                               |
-| **Container Registry** | Docker Hub (`tnvhoang/`)                     |
-| **Model Registry**     | AWS S3 (`mlops-nids-artifacts`)              |
+| **Container Registry** | Docker Hub                                   |
+| **Model Registry**     | AWS S3                                       |
 | **Orchestration**      | K3s (Kubernetes)                             |
-| **Infrastructure**     | Terraform · AWS (VPC · EC2 · ALB · S3)       |
+| **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)       |
 
 ---
 
@@ -212,7 +212,7 @@ terraform plan
 terraform apply
 ```
 
-Terraform sẽ tạo: VPC · 3 EC2 (1 Master + 2 Workers) · ALB · S3 Bucket
+Terraform sẽ tạo: VPC + 3 EC2 (1 Master + 2 Workers) + ALB + S3 Bucket
 
 #### Bước 2 — Cài đặt K3s lên các EC2
 
@@ -365,10 +365,10 @@ mlops-nids-system/
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── kaggle_training/
-│   ├── train.py                    # XGBoost · MLflow · Hyperparameter Tuning
+│   ├── train.py                    # XGBoost + MLflow + Hyperparameter Tuning
 │   └── kernel-metadata.json
 ├── k8s/
-│   ├── api-deployment.yaml         # FastAPI · Init Container · NodePort 30080
+│   ├── api-deployment.yaml         # FastAPI + Init Container + NodePort 30080
 │   ├── postgres-cluster.yaml       # CloudNativePG Primary + Standby
 │   └── evidently-cronjob.yaml      # CronJob 0h UTC hằng ngày
 ├── infra/
