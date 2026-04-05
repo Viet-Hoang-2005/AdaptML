@@ -60,7 +60,7 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 ## 🏗️ Kiến trúc Hệ thống
 
 ```
-                        ┌─────────────────────────────────────────┐
+                        ┌──────────────────────────────────────────┐
                         │           AWS ap-southeast-1             │
                         │                                          │
   Users / Locust ──────►│  ALB (Public)                            │
@@ -71,19 +71,19 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
                         │  │  FastAPI Pods (x2, NodePort 30080) │  │
                         │  │    Init Container: S3 → model.pkl  │  │
                         │  └──────────┬─────────────────────────┘  │
-                        │             │ INSERT (async)              │
-                        │             ▼                             │
-                        │  ┌──────────────────────────┐            │
-                        │  │  CloudNativePG PostgreSQL │            │
-                        │  │  Primary ←→ Standby (HA) │            │
-                        │  └──────────┬───────────────┘            │
-                        │             │ SELECT (daily)              │
-                        │             ▼                             │
-                        │  ┌──────────────────────────┐            │
-                        │  │  Evidently CronJob        │            │
-                        │  │  0h UTC · Drift Analysis  │            │
-                        │  └──────────┬───────────────┘            │
-                        │             │ Webhook                     │
+                        │             │ INSERT (async)             │
+                        │             ▼                            │
+                        │  ┌───────────────────────────┐           │
+                        │  │  CloudNativePG PostgreSQL │           │
+                        │  │  Primary ←→ Standby (HA)  │           │
+                        │  └──────────┬────────────────┘           │
+                        │             │ SELECT (daily)             │
+                        │             ▼                            │
+                        │  ┌───────────────────────────┐           │
+                        │  │  Evidently CronJob        │           │
+                        │  │  0h UTC · Drift Analysis  │           │
+                        │  └──────────┬────────────────┘           │
+                        │             │ Webhook                    │
                         └─────────────│───────────────────── S3 ───┘
                                       │                      ▲
                                       ▼                      │
