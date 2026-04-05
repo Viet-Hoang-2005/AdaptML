@@ -69,3 +69,6 @@ htmlcov/
 *.tfstate
 *.tfstate.*
 .terraform/
+.terraform.tfstate
+.terraform.lock.hcl
+.ssh/

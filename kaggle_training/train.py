@@ -62,7 +62,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     local_csv_path = None
     
     # PHƯƠNG ÁN A: Ưu tiên tải dữ liệu từ AWS S3
-    AWS_BUCKET = os.environ.get("AWS_BUCKET_NAME", "mlops-nids-models-bucket")
+    AWS_BUCKET = os.environ.get("AWS_BUCKET_NAME", "mlops-nids-artifacts")
     S3_PREFIX = os.environ.get("S3_TRAINING_DATA_PREFIX", "training-data/")
     s3_download_path = os.path.join('/kaggle/working', TARGET_CSV)
 
