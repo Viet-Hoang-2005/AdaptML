@@ -13,52 +13,60 @@ provider "aws" {
 }
 
 # 1. NETWORKING (VPC, Subnets, IGW, NAT GW)
+# VPC
 resource "aws_vpc" "mlops_vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags = { Name = "mlops-vpc" }
+  tags                 = { Name = "mlops-vpc" }
 }
 
+# Subnet Public
 resource "aws_subnet" "public_1a" {
   vpc_id                  = aws_vpc.mlops_vpc.id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "ap-southeast-1a"
   map_public_ip_on_launch = true
-  tags = { Name = "mlops-subnet-public" }
+  tags                    = { Name = "mlops-subnet-public" }
 }
 
+# Subnet Public Backup
 resource "aws_subnet" "public_1b" {
   vpc_id                  = aws_vpc.mlops_vpc.id
   cidr_block              = "10.0.3.0/24"
   availability_zone       = "ap-southeast-1b"
   map_public_ip_on_launch = true
-  tags = { Name = "mlops-subnet-public-backup" }
+  tags                    = { Name = "mlops-subnet-public-backup" }
 }
 
+# Subnet Private
 resource "aws_subnet" "private_1a" {
   vpc_id            = aws_vpc.mlops_vpc.id
   cidr_block        = "10.0.2.0/24"
   availability_zone = "ap-southeast-1a"
-  tags = { Name = "mlops-subnet-private" }
+  tags              = { Name = "mlops-subnet-private" }
 }
 
+# Internet Gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.mlops_vpc.id
-  tags = { Name = "mlops-igw" }
+  tags   = { Name = "mlops-igw" }
 }
 
+# Elastic IP
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
 }
 
+# NAT Gateway
 resource "aws_nat_gateway" "nat_gw" {
   allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public_1a.id
-  tags = { Name = "mlops-nat-gw" }
+  tags          = { Name = "mlops-nat-gw" }
   depends_on    = [aws_internet_gateway.igw]
 }
 
+# Route Table Public
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.mlops_vpc.id
   route {
@@ -68,31 +76,36 @@ resource "aws_route_table" "public_rt" {
   tags = { Name = "mlops-public-rt" }
 }
 
+# Route Table Association Public
 resource "aws_route_table_association" "pub_1a_assoc" {
   subnet_id      = aws_subnet.public_1a.id
   route_table_id = aws_route_table.public_rt.id
 }
 
+# Route Table Association Public Backup
 resource "aws_route_table_association" "pub_1b_assoc" {
   subnet_id      = aws_subnet.public_1b.id
   route_table_id = aws_route_table.public_rt.id
 }
 
+# Route Table Private
 resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.mlops_vpc.id
   route {
-    cidr_block = "0.0.0.0/0"
+    cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.nat_gw.id
   }
   tags = { Name = "mlops-private-rt" }
 }
 
+# Route Table Association Private
 resource "aws_route_table_association" "priv_1a_assoc" {
   subnet_id      = aws_subnet.private_1a.id
   route_table_id = aws_route_table.private_rt.id
 }
 
 # 2. SECURITY GROUPS
+# Security Group Load Balancer
 resource "aws_security_group" "lb_sg" {
   name        = "mlops-lb-sg"
   description = "Security group for Application Load Balancer"
@@ -104,7 +117,7 @@ resource "aws_security_group" "lb_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -114,6 +127,7 @@ resource "aws_security_group" "lb_sg" {
   tags = { Name = "mlops-lb-sg" }
 }
 
+# Security Group Master Node
 resource "aws_security_group" "master_sg" {
   name        = "mlops-master-sg"
   description = "Security group for K3s Master Node"
@@ -147,6 +161,7 @@ resource "aws_security_group" "master_sg" {
   tags = { Name = "mlops-master-sg" }
 }
 
+# Security Group Worker Node
 resource "aws_security_group" "worker_sg" {
   name        = "mlops-worker-sg"
   description = "Security group for K3s Worker Node"
@@ -175,6 +190,7 @@ resource "aws_security_group" "worker_sg" {
 }
 
 # 3. EC2 INSTANCES (Master & Workers)
+# Data AMI
 data "aws_ami" "ubuntu_22_04" {
   most_recent = true
   owners      = ["099720109477"]
@@ -184,9 +200,10 @@ data "aws_ami" "ubuntu_22_04" {
   }
 }
 
+# EC2 Master Node
 resource "aws_instance" "master_node" {
   ami                    = data.aws_ami.ubuntu_22_04.id
-  instance_type          = "t3.small"
+  instance_type          = "t3.medium"
   subnet_id              = aws_subnet.public_1a.id
   vpc_security_group_ids = [aws_security_group.master_sg.id]
   key_name               = "mlops-keypair"
@@ -198,6 +215,7 @@ resource "aws_instance" "master_node" {
   tags = { Name = "mlops-master-node" }
 }
 
+# EC2 Worker Node
 resource "aws_instance" "worker_nodes" {
   count                  = 2
   ami                    = data.aws_ami.ubuntu_22_04.id
@@ -214,6 +232,7 @@ resource "aws_instance" "worker_nodes" {
 }
 
 # 4. LOAD BALANCER & TARGET GROUP
+# Target Group Worker Node
 resource "aws_lb_target_group" "worker_tg" {
   name     = "mlops-worker-tg"
   port     = 80
@@ -231,6 +250,7 @@ resource "aws_lb_target_group" "worker_tg" {
   }
 }
 
+# Target Group Attachment Worker Node
 resource "aws_lb_target_group_attachment" "worker_attach" {
   count            = 2
   target_group_arn = aws_lb_target_group.worker_tg.arn
@@ -238,6 +258,7 @@ resource "aws_lb_target_group_attachment" "worker_attach" {
   port             = 80
 }
 
+# Load Balancer
 resource "aws_lb" "api_alb" {
   name               = "mlops-api-lb"
   internal           = false
@@ -246,6 +267,7 @@ resource "aws_lb" "api_alb" {
   subnets            = [aws_subnet.public_1a.id, aws_subnet.public_1b.id]
 }
 
+# Listener HTTP
 resource "aws_lb_listener" "http_listener" {
   load_balancer_arn = aws_lb.api_alb.arn
   port              = "80"
@@ -259,12 +281,8 @@ resource "aws_lb_listener" "http_listener" {
 
 # 5. S3 BUCKET
 resource "aws_s3_bucket" "artifacts_bucket" {
-  bucket        = "mlops-nids-artifacts-${random_id.bucket_id.hex}"
+  bucket        = "mlops-nids-artifacts"
   force_destroy = true
-}
-
-resource "random_id" "bucket_id" {
-  byte_length = 4
 }
 
 resource "aws_s3_bucket_ownership_controls" "artifacts_acl_ownership" {
@@ -287,4 +305,20 @@ resource "aws_s3_bucket_versioning" "artifacts_versioning" {
   versioning_configuration {
     status = "Enabled"
   }
+}
+
+# 6. OUTPUTS
+output "master_public_ip" {
+  description = "Public IP for SSH access to Master Node"
+  value       = aws_instance.master_node.public_ip
+}
+
+output "load_balancer_dns" {
+  description = "Link to call the MLOps API"
+  value       = aws_lb.api_alb.dns_name
+}
+
+output "s3_bucket_name" {
+  description = "Model Storage Bucket"
+  value       = aws_s3_bucket.artifacts_bucket.id
 }
