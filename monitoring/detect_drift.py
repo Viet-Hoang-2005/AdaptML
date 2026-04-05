@@ -19,9 +19,13 @@ load_dotenv(dotenv_path=os.path.join(ROOT_DIR, '.env'))
 
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
-DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "mlops_nids_db")
+
+# detect_drift.py chỉ thực hiện thao tác ĐỌC (SELECT) để phân tích drift.
+# Do đó nó kết nối đến endpoint READ-ONLY của CloudNativePG (-> load-balanced giữa Primary + Standby).
+# DB_HOST_RO fallback về DB_HOST nếu chạy local (docker-compose chỉ có 1 host).
+DB_HOST_RO = os.getenv("DB_HOST_RO", os.getenv("DB_HOST", "localhost"))
 
 # Ngưỡng phát hiện drift: Nếu tỷ lệ feature bị drift >= giá trị này thì kích hoạt cảnh báo.
 # Mặc định 50%, override bằng env var DRIFT_THRESHOLD trong CronJob YAML.
@@ -161,11 +165,12 @@ if __name__ == "__main__":
     print("🛡️ MLOps NIDS System — Data Drift Detection Service")
     print("=" * 55)
 
-    # Kết nối Database
-    db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    # Kết nối đến endpoint READ-ONLY của CloudNativePG để không tạo tải cho Primary.
+    # pool_pre_ping=True giúp tự khôi phục nếu Standby vừa bị promote lên làm Primary.
+    db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST_RO}:{DB_PORT}/{DB_NAME}"
     try:
-        engine = create_engine(db_url)
-        print(f"🔗 [0/4] Connected to PostgreSQL at {DB_HOST}:{DB_PORT}/{DB_NAME}")
+        engine = create_engine(db_url, pool_pre_ping=True, pool_recycle=1800)
+        print(f"🔗 [0/4] Connected to PostgreSQL (RO) at {DB_HOST_RO}:{DB_PORT}/{DB_NAME}")
     except Exception as e:
         print(f"❌ Cannot connect to database: {e}")
         sys.exit(1)
