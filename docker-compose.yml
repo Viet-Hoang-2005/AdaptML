@@ -1,7 +1,7 @@
-version:  '3.8'
+version: '3.8'
 
 services:
-  # 1. Dịch vụ cơ sở dữ liệu (PostgreSQL)
+  # 1. PostgreSQL Database (mô phỏng CloudNativePG local)
   postgres:
     image: postgres:15-alpine
     container_name: mlops_nids_postgres
@@ -16,8 +16,15 @@ services:
       - mlops_nids_pgdata:/var/lib/postgresql/data
     networks:
       - mlops_nids_network
+    # Đợi PostgreSQL thực sự sẵn sàng nhận connection trước khi API start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
-  # 2. Dịch vụ API (FastAPI)
+  # 2. FastAPI Inference Server
   api:
     build:
       context: ./api
@@ -28,27 +35,57 @@ services:
       - "5000:5000"
     environment:
       PYTHONUNBUFFERED: 1
+      MODEL_VERSION: ${MODEL_VERSION:-v1}
+      # CloudNativePG local: cả RW và RO đều trỏ về cùng 1 container postgres
+      DB_HOST_RW: postgres
+      DB_HOST_RO: postgres
+      DB_HOST: postgres
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT}
+      DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
-      DB_HOST: postgres
     volumes:
-      - ./models:/models
+      - ./models:/models        # Mount thư mục models local vào container
       - ./api:/app
     command: uvicorn src.index:app --host 0.0.0.0 --port 5000 --reload
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy   # Đợi postgres healthy mới start API
     networks:
       - mlops_nids_network
 
-# 3. Mạng nội bộ cho các container
+  # 3. Evidently Drift Monitor (chạy thủ công hoặc test local)
+  # docker-compose run --rm evidently
+  evidently:
+    build:
+      context: ./monitoring
+      dockerfile: Dockerfile
+    container_name: mlops_nids_evidently
+    # Không restart tự động - đây là job chạy 1 lần như CronJob trong K3s
+    restart: "no"
+    environment:
+      # Chạy local: cả RO đều trỏ về postgres container
+      DB_HOST_RO: postgres
+      DB_HOST: postgres
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      DRIFT_THRESHOLD: ${DRIFT_THRESHOLD:-0.5}
+      GITHUB_REPO: ${GITHUB_REPO}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mlops_nids_network
+
+# 4. Mạng nội bộ cho các container
 networks:
   mlops_nids_network:
     driver: bridge
 
-# 4. Volume để lưu trữ dữ liệu của PostgreSQL
+# 5. Volume để lưu trữ dữ liệu của PostgreSQL
 volumes:
   mlops_nids_pgdata:
     external: false
-      
