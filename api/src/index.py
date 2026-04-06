@@ -31,7 +31,7 @@ app.add_middleware(
 
 # 2. CẤU HÌNH ĐƯỜNG DẪN VÀ THAM SỐ (ĐỘNG HÓA)
 # Bắt biến môi trường MODEL_VERSION
-MODEL_VERSION = os.environ.get('MODEL_VERSION', 'v2')
+MODEL_VERSION = os.environ.get('MODEL_VERSION', 'v1')
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Đường dẫn tự động nhảy theo version

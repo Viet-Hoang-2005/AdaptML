@@ -32,7 +32,7 @@ DB_HOST_RO = os.getenv("DB_HOST_RO", os.getenv("DB_HOST", "localhost"))
 DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD", "0.5"))
 
 # Thông tin GitHub để kích hoạt CI/CD Pipeline tự động
-GITHUB_REPO  = os.getenv("GITHUB_REPO", "github-username/mlops-nids-system")
+GITHUB_REPO = os.getenv("GITHUB_REPO", "Viet-Hoang-2005/MLOps-nids-system")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
 # 2. KẾT NỐI DATABASE VÀ TẢI DỮ LIỆU
@@ -85,7 +85,7 @@ def run_drift_analysis(reference_df: pd.DataFrame, production_df: pd.DataFrame) 
     """
     print("🔬 [2/4] Running Data Drift analysis using Evidently AI...")
 
-    ref_clean  = preprocess(reference_df)
+    ref_clean = preprocess(reference_df)
     prod_clean = preprocess(production_df)
 
     # Chỉ giữ lại các cột xuất hiện trong cả 2 tập để tránh lỗi schema mismatch
