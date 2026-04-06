@@ -8,8 +8,8 @@ Tài liệu này cung cấp các nguyên tắc và quy trình để tham gia đ�
 
 | Họ và Tên              | Email                  | Phụ trách chính                                                 |
 | ---------------------- | ---------------------- | --------------------------------------------------------------- |
-| Trần Nguyễn Việt Hoàng | 23520541@gm.uit.edu.vn | MLOps Architecture · FastAPI · Evidently AI · Training Pipeline |
-| Bùi Ngọc Thái          | 23521412@gm.uit.edu.vn | K3s Operations · Terraform/AWS · CI/CD · CloudNativePG          |
+| Trần Nguyễn Việt Hoàng | 23520541@gm.uit.edu.vn | MLOps Architecture + FastAPI + Evidently AI + Training Pipeline |
+| Bùi Ngọc Thái          | 23521412@gm.uit.edu.vn | K3s Operations + Terraform/AWS + CI/CD + CloudNativePG          |
 
 ---
 
@@ -188,4 +188,4 @@ Khi báo bug, vui lòng cung cấp:
 
 ---
 
-_Created for MLOps NIDS System Project - NT114_
+_Created for UIT · NT114 · MLOps NIDS System Project_

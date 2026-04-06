@@ -6,13 +6,13 @@ Tài liệu ghi lại toàn bộ lịch sử phát triển của dự án **MLOp
 
 ---
 
-## [3.0.0] — 2026-04-05
+## [3.0.0]: 2026-04-05
 
 ### Giai đoạn 3: Hạ tầng & Triển khai Production (Infrastructure & Production Deployment)
 
 Giai đoạn hoàn thiện cuối cùng: đưa toàn bộ hệ thống lên hạ tầng AWS thực tế với cụm K3s 3 node, bảo đảm tính sẵn sàng cao (High Availability) cho cơ sở dữ liệu, và viết lại toàn bộ CI/CD pipeline phù hợp với kiến trúc mới.
 
-### ✨ Added — Tính năng mới
+### ✨ Added - Tính năng mới
 
 - **Hạ tầng AWS bằng Terraform** (`infra/main.tf`):
   - VPC với Public Subnet (Master + ALB) và Private Subnet (Worker Nodes)
@@ -23,12 +23,12 @@ Giai đoạn hoàn thiện cuối cùng: đưa toàn bộ hệ thống lên hạ
 
 - **K3s Kubernetes Manifests** (`k8s/`):
   - `api-deployment.yaml`: FastAPI Deployment với **Init Container** kéo model từ S3 tự động, `readinessProbe` và `livenessProbe`, NodePort Service
-  - `postgres-cluster.yaml`: **CloudNativePG Cluster** — Primary + Standby Streaming Replication tự động failover
+  - `postgres-cluster.yaml`: **CloudNativePG Cluster** - Primary + Standby Streaming Replication tự động failover
   - `evidently-cronjob.yaml`: CronJob Evidently AI chạy 0h UTC hằng ngày
 
 - **CloudNativePG High Availability** (`k8s/postgres-cluster.yaml`):
-  - Primary Pod (Worker 1) — xử lý INSERT/UPDATE từ FastAPI
-  - Standby Pod (Worker 2) — xử lý SELECT từ Evidently, tự động sync qua WAL Streaming
+  - Primary Pod (Worker 1): xử lý INSERT/UPDATE từ FastAPI
+  - Standby Pod (Worker 2): xử lý SELECT từ Evidently, tự động sync qua WAL Streaming
   - Hai K8s Service endpoint riêng biệt: `nids-postgres-rw` (ghi) và `nids-postgres-ro` (đọc)
   - Auto Failover: Standby tự động được thăng cấp lên Primary trong vòng 30–60 giây khi Primary sập
 
@@ -49,7 +49,7 @@ Giai đoạn hoàn thiện cuối cùng: đưa toàn bộ hệ thống lên hạ
   - `ci_cd_pipeline.yml`: Lint -> Build Docker (API + Evidently) -> Push Docker Hub (`tnvhoang/`) -> Apply K8s Manifests -> Rolling Update
   - `retrain_pipeline.yml`: Đọc `data_manifest.json` -> Kaggle Retrain -> `evaluate_model.py` -> K3s Deploy -> `update_reference_data.py`
 
-### 🔧 Fixed — Sửa lỗi
+### 🔧 Fixed - Sửa lỗi
 
 - Init Container trong `api-deployment.yaml` kéo sai tên file model (`label_nids_encoder_v1.pkl` -> `label_classes_v1.json`)
 - S3 bucket name không nhất quán giữa YAML và pipeline (`mlops-nids-models-bucket` -> `mlops-nids-artifacts`)
@@ -65,13 +65,13 @@ Giai đoạn hoàn thiện cuối cùng: đưa toàn bộ hệ thống lên hạ
 
 ---
 
-## [2.0.0] — 2026-03-30
+## [2.0.0]: 2026-03-30
 
-### Giai đoạn 2: Vòng lặp MLOps — Giám sát & Tái huấn luyện Tự động (Monitoring & Continuous Training)
+### Giai đoạn 2: Vòng lặp MLOps - Giám sát & Tái huấn luyện Tự động (Monitoring & Continuous Training)
 
 Giai đoạn xây dựng "trái tim" của hệ thống MLOps: vòng lặp khép kín từ Detection -> Webhook -> Retrain -> Evaluate -> Deploy -> Sync.
 
-### ✨ Added — Tính năng mới
+### ✨ Added - Tính năng mới
 
 - **Evidently AI Drift Detection** (`monitoring/detect_drift.py`):
   - So sánh `nids_reference_data` (baseline training) và `nids_production_data` (24h gần nhất)
@@ -119,7 +119,7 @@ Giai đoạn xây dựng "trái tim" của hệ thống MLOps: vòng lặp khép
   - Trích xuất các tập dataset từ CIC-IDS2017 gốc theo số class (2, 3, 4 classes)
   - Tạo các scenario: V1 (2 classes), V2 (3 classes), V3-V4 (4 classes)
 
-### 🔧 Changed — Cập nhật
+### 🔧 Changed - Cập nhật
 
 - Chuyển toàn bộ API từ **Flask** sang **FastAPI** để tận dụng async processing
 - `predict` endpoint dùng **BackgroundTasks** để ghi log không làm tăng latency phản hồi
@@ -128,18 +128,18 @@ Giai đoạn xây dựng "trái tim" của hệ thống MLOps: vòng lặp khép
 
 ---
 
-## [1.0.0] — 2026-03-19
+## [1.0.0]: 2026-03-19
 
 ### Giai đoạn 1: Xây dựng Nền tảng Core ML (Core ML Foundation)
 
 Giai đoạn nghiên cứu, khảo sát và xây dựng prototype đầu tiên: mô hình phân loại tấn công mạng và API inference cơ bản.
 
-### ✨ Added — Khởi tạo
+### ✨ Added - Khởi tạo
 
 - **Nghiên cứu lý thuyết**:
   - Khảo sát các phương pháp MLOps, ML Lifecycle, Data Drift detection
   - Tìm hiểu bài toán Network Intrusion Detection (NIDS) và tập dữ liệu **CIC-IDS2017**
-  - So sánh các thuật toán: Random Forest, SVM, XGBoost → chọn **XGBoost** vì F1 > 99%
+  - So sánh các thuật toán: Random Forest, SVM, XGBoost -> chọn **XGBoost** vì F1 > 99%
 
 - **Tiền xử lý dữ liệu CIC-IDS2017**:
   - Trích xuất và chuẩn hóa ~70 network flow features
@@ -160,7 +160,7 @@ Giai đoạn nghiên cứu, khảo sát và xây dựng prototype đầu tiên: 
 - **FastAPI Inference Server** (`api/src/index.py`):
   - `POST /predict`: nhận JSON payload network features, trả về `Predicted_Label` + `Confidence_Score`
   - `GET /`: health check endpoint
-  - Model được nạp vào RAM khi khởi động — inference < 100ms
+  - Model được nạp vào RAM khi khởi động - inference < 100ms
   - Hỗ trợ dynamic `MODEL_VERSION` qua biến môi trường
 
 - **PostgreSQL Logging** (`api/src/db_manager.py`):
@@ -187,4 +187,4 @@ Dự án tuân thủ [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PA
 
 ---
 
-_Last updated: April 2026 - MLOps NIDS System Project · NT114 UIT_
+_Last updated: April 2026 - UIT · NT114 · MLOps NIDS System Project_

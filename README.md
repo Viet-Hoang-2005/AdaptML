@@ -11,7 +11,7 @@
 [![AWS](https://img.shields.io/badge/AWS-Terraform-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
-**Học phần:** NT114 — Đồ án Chuyên ngành · Khoa Mạng máy tính và Truyền thông dữ liệu · UIT
+**Học phần:** NT114 - Đồ án Chuyên ngành · Khoa Mạng máy tính và Truyền thông dữ liệu · UIT
 
 | Thành viên             | Email                  | Phụ trách                                                       |
 | ---------------------- | ---------------------- | --------------------------------------------------------------- |
@@ -134,14 +134,14 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 
 Cách nhanh nhất để chạy thử hệ thống trên máy local mà không cần K3s hay AWS.
 
-**Bước 1 — Clone repository**
+**Bước 1: Clone repository**
 
 ```bash
 git clone https://github.com/Viet-Hoang-2005/MLOps-weather-system.git
 cd mlops-nids-system
 ```
 
-**Bước 2 — Cấu hình biến môi trường**
+**Bước 2: Cấu hình biến môi trường**
 
 ```bash
 cp .env.example .env
@@ -168,7 +168,7 @@ AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key_here
 AWS_DEFAULT_REGION=your_aws_default_region_here
 ```
 
-**Bước 3 — Build và khởi chạy**
+**Bước 3: Build và khởi chạy**
 
 ```bash
 docker-compose up --build
@@ -177,7 +177,7 @@ docker-compose up --build
 docker-compose logs -f api
 ```
 
-**Bước 4 — Kiểm tra hoạt động**
+**Bước 4: Kiểm tra hoạt động**
 
 ```bash
 # Health check
@@ -203,7 +203,7 @@ docker-compose down
 
 ### ☁️ Triển khai Production (K3s trên AWS EC2)
 
-#### Bước 1 — Khởi tạo hạ tầng AWS bằng Terraform
+#### Bước 1: Khởi tạo hạ tầng AWS bằng Terraform
 
 ```bash
 cd infra/
@@ -214,7 +214,7 @@ terraform apply
 
 Terraform sẽ tạo: VPC + 3 EC2 (1 Master + 2 Workers) + ALB + S3 Bucket
 
-#### Bước 2 — Cài đặt K3s lên các EC2
+#### Bước 2: Cài đặt K3s lên các EC2
 
 ```bash
 # Trên Master Node
@@ -228,7 +228,7 @@ curl -sfL https://get.k3s.io | K3S_URL=https://<MASTER_IP>:6443 K3S_TOKEN=<TOKEN
 sudo k3s kubectl get nodes
 ```
 
-#### Bước 3 — Cài đặt CloudNativePG Operator
+#### Bước 3: Cài đặt CloudNativePG Operator
 
 ```bash
 kubectl apply --server-side -f \
@@ -238,7 +238,7 @@ kubectl wait --for=condition=ready pod -n cnpg-system \
   -l app.kubernetes.io/name=cloudnative-pg --timeout=120s
 ```
 
-#### Bước 4 — Tạo Kubernetes Secrets
+#### Bước 4: Tạo Kubernetes Secrets
 
 ```bash
 # AWS credentials (cho Init Container kéo model từ S3)
@@ -256,7 +256,7 @@ kubectl create secret generic postgres-secrets \
   --from-literal=POSTGRES_PASSWORD="<strong-password>"
 ```
 
-#### Bước 5 — Upload model lên S3
+#### Bước 5: Upload model lên S3
 
 ```bash
 aws s3 cp models/v1/xgb_nids_model_v1.pkl   s3://mlops-nids-artifacts/models/v1/
@@ -265,7 +265,7 @@ aws s3 cp models/v1/metrics_v1.json         s3://mlops-nids-artifacts/models/v1/
 aws s3 cp data_manifest.json                s3://mlops-nids-artifacts/
 ```
 
-#### Bước 6 — Deploy lên K3s
+#### Bước 6: Deploy lên K3s
 
 ```bash
 # PostgreSQL Cluster (Primary + Standby)
@@ -282,9 +282,9 @@ kubectl apply -f k8s/evidently-cronjob.yaml
 kubectl get pods,services,cronjob -o wide
 ```
 
-#### Bước 7 — Cấu hình GitHub Secrets cho CI/CD
+#### Bước 7: Cấu hình GitHub Secrets cho CI/CD
 
-Trong `GitHub Repo → Settings → Secrets and variables → Actions`:
+Trong `GitHub Repo -> Settings -> Secrets and variables -> Actions`:
 
 | Secret                  | Mô tả                                         |
 | ----------------------- | --------------------------------------------- |
@@ -315,7 +315,7 @@ python web/src/test_api.py
 pip install locust
 locust -f web/src/locustfile.py --host=http://<ALB-DNS-hoặc-localhost:5000>
 # Truy cập Locust Dashboard: http://localhost:8089
-# Khuyến nghị: 50 users · spawn 5/s · chạy 5 phút để tạo đủ 100+ production samples
+# Khuyến nghị: 50 users + spawn 5/s + chạy 5 phút để tạo đủ 100+ production samples
 ```
 
 **Chạy Evidently drift detection thủ công:**
@@ -327,7 +327,7 @@ python monitoring/detect_drift.py
 
 **Kích hoạt Retrain Pipeline thủ công:**
 
-Vào `GitHub → Actions → MLOps NIDS Retraining Pipeline → Run workflow`
+Vào `GitHub -> Actions -> MLOps NIDS Retraining Pipeline -> Run workflow`
 
 ---
 
@@ -349,40 +349,40 @@ Vào `GitHub → Actions → MLOps NIDS Retraining Pipeline → Run workflow`
 mlops-nids-system/
 ├── .github/
 │   ├── workflows/
-│   │   ├── ci_cd_pipeline.yml      # Build -> Push Docker -> Deploy K3s
-│   │   └── retrain_pipeline.yml    # Retrain -> Evaluate -> Deploy -> Sync
+│   │   ├── ci_cd_pipeline.yml        # Build -> Push Docker -> Deploy K3s
+│   │   └── retrain_pipeline.yml      # Retrain -> Evaluate -> Deploy -> Sync
 │   └── scripts/
-│       ├── evaluate_model.py       # Model quality gate (Champion vs Challenger)
-│       └── update_reference_data.py # Sync baseline sau retrain
+│       ├── evaluate_model.py         # Model quality gate (Champion vs Challenger)
+│       └── update_reference_data.py  # Sync baseline after retrain
 ├── api/
 │   ├── src/
-│   │   ├── index.py                # GET + POST /predict
-│   │   └── db_manager.py           # Dual-endpoint: engine_rw + engine_ro
+│   │   ├── index.py                  # GET + POST /predict
+│   │   └── db_manager.py             # Dual-endpoint: engine_rw + engine_ro
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── monitoring/
-│   ├── detect_drift.py             # Evidently AI + nids-postgres-ro
+│   ├── detect_drift.py               # Evidently AI + nids-postgres-ro
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── kaggle_training/
-│   ├── train.py                    # XGBoost + MLflow + Hyperparameter Tuning
+│   ├── train.py                      # XGBoost + MLflow + Hyperparameter Tuning
 │   └── kernel-metadata.json
 ├── k8s/
-│   ├── api-deployment.yaml         # FastAPI + Init Container + NodePort 30080
-│   ├── postgres-cluster.yaml       # CloudNativePG Primary + Standby
-│   └── evidently-cronjob.yaml      # CronJob 0h UTC hằng ngày
+│   ├── api-deployment.yaml           # FastAPI + Init Container + NodePort 30080
+│   ├── postgres-cluster.yaml         # CloudNativePG Primary + Standby
+│   └── evidently-cronjob.yaml        # CronJob 0h UTC daily
 ├── infra/
-│   ├── main.tf                     # VPC + EC2 + ALB + S3 (Terraform)
+│   ├── main.tf                       # VPC + EC2 + ALB + S3 (Terraform)
 │   └── variables.tf
 ├── web/src/
-│   ├── test_api.py                 # Basic API test
-│   └── locustfile.py               # Stress test + drift simulation
+│   ├── test_api.py                   # Basic API test
+│   └── locustfile.py                 # Stress test + drift simulation
 ├── models/
-│   ├── v1/                         # 2-class: BENIGN + DDoS
-│   └── v2/                         # 3-class: + PortScan
-├── data_manifest.json              # "Nguon Su That": target_csv + model_version
-├── docker-compose.yml              # Local development environment
-└── .env.example                    # Template biến môi trường
+│   ├── v1/                           # 2-class: BENIGN + DDoS
+│   └── v2/                           # 3-class: + PortScan
+├── data_manifest.json                # "Source of Trust": target_csv + model_version
+├── docker-compose.yml                # Local development environment
+└── .env.example                      # Environment variable template
 ```
 
 ---
@@ -399,6 +399,6 @@ mlops-nids-system/
 
 <div align="center">
 
-_Developed for NT114 — MLOps NIDS System Project · NT114 - UIT_
+_Developed for UIT · NT114 · MLOps NIDS System Project_
 
 </div>
