@@ -7,12 +7,18 @@ import os
 import pandas as pd
 from io import StringIO
 from datetime import datetime
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-# 1. CẤU HÌNH TỪ BIẾN MÔI TRƯỜNG (Inject bởi GitHub Actions)
-DB_USER = os.environ["DB_USER"]
-DB_PASSWORD = os.environ["DB_PASSWORD"]
-DB_HOST = os.environ["DB_HOST"]
+# 1. CẤU HÌNH TỪ BIẾN MÔI TRƯỜNG
+# Load biến môi trường từ file .env khi chạy local
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv(dotenv_path=os.path.join(ROOT_DIR, '.env'))
+
+# Khi chạy trên GitHub Actions, các biến này sẽ được inject tự động
+DB_USER = os.environ.get("DB_USER")
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
+DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "mlops_nids_db")
 
@@ -23,7 +29,7 @@ REFERENCE_TABLE = "nids_reference_data"
 
 # 2. ĐỌC MANIFEST TỪ AWS S3
 def load_manifest_from_s3(s3_client) -> dict:
-    print(f"📋 [1/4] Reading data manifest from s3://{AWS_BUCKET}/{MANIFEST_KEY}...")
+    print(f"[2/4] Reading data manifest from s3://{AWS_BUCKET}/{MANIFEST_KEY}...")
     
     response = s3_client.get_object(Bucket=AWS_BUCKET, Key=MANIFEST_KEY)
     manifest = json.loads(response['Body'].read().decode('utf-8'))
@@ -37,7 +43,7 @@ def load_csv_from_s3(s3_client, manifest: dict) -> pd.DataFrame:
     prefix = manifest.get("s3_training_data_prefix", "training-data/")
     csv_key = f"{prefix}{manifest['target_csv']}"
 
-    print(f"📥 [2/4] Downloading dataset from s3://{AWS_BUCKET}/{csv_key}...")
+    print(f"[3/4] Downloading dataset from s3://{AWS_BUCKET}/{csv_key}...")
     response = s3_client.get_object(Bucket=AWS_BUCKET, Key=csv_key)
     csv_content = response['Body'].read().decode('utf-8')
     df = pd.read_csv(StringIO(csv_content))
@@ -47,7 +53,7 @@ def load_csv_from_s3(s3_client, manifest: dict) -> pd.DataFrame:
 
 # 4. CẬP NHẬT BẢNG REFERENCE TRONG POSTGRESQL (PRIMARY)
 def update_reference_table(engine, df: pd.DataFrame, manifest: dict):
-    print(f"🗄️ [3/4] Updating '{REFERENCE_TABLE}' in PostgreSQL...")
+    print(f"[4/4] Updating '{REFERENCE_TABLE}' in PostgreSQL...")
 
     # Xóa baseline cũ để tránh tích lũy nhiều phiên bản lẫn lộn
     with engine.begin() as conn:
@@ -84,17 +90,9 @@ def update_reference_table(engine, df: pd.DataFrame, manifest: dict):
 
 # 5. MAIN
 if __name__ == "__main__":
-    print("=" * 60)
-    print("🛡️ MLOps NIDS System — Reference Data Sync Service")
-    print("=" * 60)
-
-    # Kết nối AWS S3
-    try:
-        s3 = boto3.client('s3', region_name=AWS_REGION)
-        print(f"☁️ [0/4] Connected to AWS S3 (Region: {AWS_REGION})")
-    except Exception as e:
-        print(f"❌ Cannot connect to AWS S3: {e}")
-        sys.exit(1)
+    print("=" * 50)
+    print("🛡️   MLOps NIDS System - Reference Data Sync Service")
+    print("=" * 50)
 
     # Kết nối PostgreSQL PRIMARY (READ-WRITE endpoint của CloudNativePG)
     db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
@@ -105,9 +103,17 @@ if __name__ == "__main__":
         # Test connection ngay để fail-fast nếu credentials sai
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        print(f"🔗 [0/4] Connected to PostgreSQL at {DB_HOST}:{DB_PORT}/{DB_NAME}")
+        print(f"[0/4] Connected to PostgreSQL at {DB_HOST}:{DB_PORT}/{DB_NAME}")
     except Exception as e:
         print(f"❌ Cannot connect to PostgreSQL: {e}")
+        sys.exit(1)
+
+    # Kết nối AWS S3
+    try:
+        s3 = boto3.client('s3', region_name=AWS_REGION)
+        print(f"[1/4] Connected to AWS S3 (Region: {AWS_REGION})")
+    except Exception as e:
+        print(f"❌ Cannot connect to AWS S3: {e}")
         sys.exit(1)
 
     # Đọc manifest -> Tải CSV -> Cập nhật DB
@@ -119,10 +125,7 @@ if __name__ == "__main__":
         print(f"❌ Error during sync process: {e}")
         sys.exit(1)
 
-    print("\n" + "=" * 60)
-    print("  ✅ Reference Data sync COMPLETED!")
-    print(f"     New dataset : {manifest['target_csv']}")
-    print(f"     Model ver.  : {manifest['model_version']}")
-    print(f"     Rows synced : {len(new_reference_df):,}")
-    print(f"     detect_drift.py will use this as the new baseline.")
-    print("=" * 60)
+    print("✅ Reference Data sync COMPLETED!")
+    print(f"-> New dataset  : {manifest['target_csv']}")
+    print(f"-> Model ver    : {manifest['model_version']}")
+    print(f"-> Rows synced  : {len(new_reference_df):,}")

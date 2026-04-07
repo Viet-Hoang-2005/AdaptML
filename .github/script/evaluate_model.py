@@ -42,14 +42,14 @@ def evaluate_challenger( champion_metrics: Dict, challenger_metrics: Dict, min_f
     chall_classes = challenger_metrics.get("num_classes", 2)
     chall_version = challenger_metrics.get("model_version", "unknown")
 
-    print("=" * 55)
-    print("      MLOps NIDS — Model Evaluation Gate")
-    print("=" * 55)
-    print(f"  🥇 Champion:           F1={champ_f1:.4f}  |  Classes={champ_classes}")
-    print(f"  🚀 Challenger ({chall_version}):  F1={chall_f1:.4f}  |  Classes={chall_classes}")
-    print(f"  Min F1 threshold:   {min_f1}")
-    print(f"  Drift tolerance:    {drift_tolerance}")
-    print("-" * 55)
+    print("=" * 50)
+    print("🛡️   MLOps NIDS - Model Evaluation Gate")
+    print("=" * 50)
+    print(f"🥇 Champion:                      F1={champ_f1:.4f}  |  Classes={champ_classes}")
+    print(f"🚀 Challenger ({chall_version}):  F1={chall_f1:.4f}  |  Classes={chall_classes}")
+    print(f"Min F1 threshold:   {min_f1}")
+    print(f"Drift tolerance:    {drift_tolerance}")
+    print("-" * 50)
 
     # Quy tắc 1: Không cho phép các model có F1 < min_f1
     if chall_f1 < min_f1:
@@ -94,7 +94,7 @@ def evaluate_challenger( champion_metrics: Dict, challenger_metrics: Dict, min_f
 if __name__ == "__main__":
     # Khởi tạo ArgumentParser để xử lý các tham số dòng lệnh
     parser = argparse.ArgumentParser(
-        description="🛡️ MLOps NIDS — Champion vs Challenger Model Evaluation"
+        description="🛡️ MLOps NIDS System - Champion vs Challenger Model Evaluation"
     )
     parser.add_argument("--champion", type=str, required=True, help="Path to Champion metrics JSON")
     parser.add_argument("--challenger", type=str, required=True, help="Path to Challenger metrics JSON")
@@ -113,7 +113,7 @@ if __name__ == "__main__":
         drift_tolerance=args.drift_tolerance,
     )
 
-    print(f"\n RESULT: {reason}")
+    print(f"\nRESULT: {reason}")
 
     # Xuất kết quả dạng JSON để pipeline có thể đọc (upload lên Artifacts)
     result_summary = {
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     }
     with open("evaluation_result.json", "w") as f:
         json.dump(result_summary, f, indent=2)
-    print("📄 Saved detailed result -> evaluation_result.json")
+    print("Saved detailed result -> evaluation_result.json")
 
     # Kết quả: exit(0) = APPROVE deploy, exit(1) = REJECT deploy.
     if is_approved:
