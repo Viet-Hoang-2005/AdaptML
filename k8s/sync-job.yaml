@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: reference-data-sync-job
+  namespace: default
+  # Dùng chú thích để đảm bảo job này được xóa trước khi chạy cái mới nếu cần, 
+  # tuy nhiên chúng ta sẽ dùng kubectl delete trong Pipeline trước.
+spec:
+  # Số lần Pod được retry lại nếu script bị lỗi trước khi báo Failed toàn bộ Job
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: data-sync
+          image: tnvhoang/mlops-data-sync:latest # Tên chuẩn theo docker hub username
+          imagePullPolicy: Always
+          env:
+            - name: AWS_DEFAULT_REGION
+              value: "ap-southeast-1"
+            - name: AWS_BUCKET_NAME
+              value: "mlops-nids-artifacts"
+            - name: DB_HOST
+              value: "nids-postgres-rw" # Địa chỉ Name Server Cluster IP nội bộ
+            - name: DB_NAME
+              value: "mlops_nids_db"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-secrets
+                  key: AWS_SECRET_ACCESS_KEY
