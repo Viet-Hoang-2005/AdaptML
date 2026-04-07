@@ -11,10 +11,10 @@ from sqlalchemy.pool import QueuePool
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(dotenv_path=os.path.join(ROOT_DIR, '.env'))
 
-DB_USER = os.getenv("DB_USER", "admin")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "secret")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "mlops_nids_db")
+DB_USER = os.environ.get("DB_USER")
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
+DB_PORT = os.environ.get("DB_PORT", "5432")
+DB_NAME = os.environ.get("DB_NAME", "mlops_nids_db")
 
 # CloudNativePG tạo ra 2 Service endpoint riêng biệt:
 #   DB_HOST_RW (Read-Write): Trỏ đến Pod PRIMARY — dùng cho INSERT/UPDATE/DELETE.
@@ -26,14 +26,14 @@ DB_NAME = os.getenv("DB_NAME", "mlops_nids_db")
 #                            Tên Service: <cluster-name>-ro
 #
 # Khi chạy local (docker-compose), cả 2 biến đều trỏ về cùng 1 host.
-DB_HOST_RW = os.getenv("DB_HOST_RW", os.getenv("DB_HOST", "localhost"))
-DB_HOST_RO = os.getenv("DB_HOST_RO", os.getenv("DB_HOST", "localhost"))
+DB_HOST_RW = os.environ.get("DB_HOST_RW", "localhost")
+DB_HOST_RO = os.environ.get("DB_HOST_RO", "localhost")
 
 # 2. KHỞI TẠO 2 CONNECTION POOL (READ-WRITE và READ-ONLY)
 def _create_engine_safe(host: str, label: str):
     """
     Tạo SQLAlchemy Engine với Connection Pooling cho một host cụ thể.
-    Trả về None nếu kết nối thất bại — API vẫn khởi động được, không crash hard.
+    Trả về None nếu kết nối thất bại - API vẫn khởi động được, không crash hard.
     """
     db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{host}:{DB_PORT}/{DB_NAME}"
     try:
@@ -101,9 +101,9 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
 
         record_count = len(df)
         if record_count == 1 and 'id' in df.columns:
-            print(f"✅ [RW] Inserted 1 record (ID: {df['id'].iloc[0]}) → '{table_name}'")
+            print(f"✅ [RW] Inserted 1 record (ID: {df['id'].iloc[0]}) -> '{table_name}'")
         else:
-            print(f"✅ [RW] Inserted {record_count} records → '{table_name}'")
+            print(f"✅ [RW] Inserted {record_count} records -> '{table_name}'")
         return True
 
     except Exception as e:

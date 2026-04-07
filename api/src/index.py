@@ -48,8 +48,12 @@ try:
     with open(LABEL_PATH, 'r') as f:
         LABEL_CLASSES = json.load(f)
     
-    print(f"🤖 Loaded XGBoost Model {MODEL_VERSION.upper()} (expecting {len(EXPECTED_FEATURES)} features)!")
-    print(f"🏷️ Loaded Labels: {LABEL_CLASSES}")
+    print("=" * 50)
+    print("🛡️   MLOps NIDS System - API Service")
+    print("=" * 50)
+
+    print(f"🤖 Loaded XGBoost Model {MODEL_VERSION.upper()} (expecting {len(EXPECTED_FEATURES)} features)")
+    print(f"🔖 Loaded Labels: {LABEL_CLASSES}")
 except Exception as e:
     print(f"❌ Error! Could not load model or labels. Details: {e}")
     model = LABEL_CLASSES = EXPECTED_FEATURES = None
@@ -83,7 +87,7 @@ async def health_check():
 
 # Endpoint chính để nhận dữ liệu mạng, dự đoán và trả về kết quả dự đoán cùng xác suất cho từng lớp.
 @app.post("/predict")
-async def predict_intrusion(payload: NetworkTraffic, background_tasks: BackgroundTasks):
+async def predict_intrusion(payload: NetworkTraffic, background_tasks: BackgroundTasks):    
     if model is None or LABEL_CLASSES is None or EXPECTED_FEATURES is None:
         raise HTTPException(status_code=500, detail="Error! The model has not been initialized on the server")
 
