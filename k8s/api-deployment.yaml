@@ -1,7 +1,4 @@
-# api-deployment.yaml
-# Triển khai FastAPI NIDS lên K3s với Init Container kéo model từ S3.
-# Kết nối đến CloudNativePG qua endpoint READ-WRITE (nids-postgres-rw).
-
+# api-deployment.yaml: Triển khai FastAPI NIDS lên K3s với Init Container kéo model từ S3.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,7 +16,7 @@ spec:
       labels:
         app: mlops-nids-api
     spec:
-      # INIT CONTAINER: Chạy TRƯỚC FastAPI để kéo model từ S3
+      # INIT CONTAINER: Chạy trước FastAPI để kéo model từ S3
       # Dùng emptyDir volume để chia sẻ file .pkl với app container
       initContainers:
         - name: aws-s3-model-sync
@@ -35,15 +32,16 @@ spec:
               aws s3 cp s3://${AWS_BUCKET_NAME}/models/${MODEL_VERSION}/xgb_nids_model_${MODEL_VERSION}.pkl \
                 /models/${MODEL_VERSION}/xgb_nids_model_${MODEL_VERSION}.pkl
 
-              # Tải file label classes (.json) — KHÔNG PHẢI .pkl
+              # Tải file label classes (.json)
               aws s3 cp s3://${AWS_BUCKET_NAME}/models/${MODEL_VERSION}/label_classes_${MODEL_VERSION}.json \
                 /models/${MODEL_VERSION}/label_classes_${MODEL_VERSION}.json
 
               echo "Model sync complete."
               ls -la /models/${MODEL_VERSION}/
+          # Cấu hình biến môi trường cho Init Container
           env:
             - name: MODEL_VERSION
-              value: "v1"                    # Đổi thành "v2" khi nâng cấp model
+              value: "v1"
             - name: AWS_BUCKET_NAME
               value: "mlops-nids-artifacts"
             - name: AWS_DEFAULT_REGION
@@ -70,11 +68,11 @@ spec:
           ports:
             - containerPort: 5000
           env:
-            # Version model — phải khớp với MODEL_VERSION trong Init Container
+            # Version model phải khớp với MODEL_VERSION trong Init Container
             - name: MODEL_VERSION
               value: "v1"
 
-            # CloudNativePG READ-WRITE endpoint — dùng cho INSERT log production data
+            # CloudNativePG READ-WRITE endpoint dùng cho INSERT log production data
             - name: DB_HOST_RW
               value: "nids-postgres-rw"
             # Fallback cho docker-compose local (chỉ có 1 host)
@@ -97,7 +95,7 @@ spec:
 
           volumeMounts:
             - name: model-volume
-              mountPath: /models   # FastAPI đọc file .pkl từ đây
+              mountPath: /models  # FastAPI đọc file .pkl từ đây
 
           # Kiểm tra pod sẵn sàng nhận traffic chưa (dùng endpoint health check đã thêm)
           readinessProbe:
@@ -117,9 +115,10 @@ spec:
       volumes:
         - name: model-volume
           # emptyDir: Volume tạm thời trong RAM của Node
-          # Init Container ghi file .pkl vào đây → App Container đọc ra
+          # Init Container ghi file .pkl vào đây -> App Container đọc ra
           emptyDir: {}
 
+# Service để load balance traffic đến các pod của API
 ---
 apiVersion: v1
 kind: Service
@@ -128,10 +127,29 @@ metadata:
 spec:
   selector:
     app: mlops-nids-api
-  # NodePort thay vì LoadBalancer — ALB bên ngoài (Terraform) sẽ forward traffic vào
-  type: NodePort
+  type: ClusterIP
   ports:
     - protocol: TCP
       port: 80
       targetPort: 5000
-      nodePort: 30080   # Port cố định để ALB Target Group biết forward vào đây
+
+# Ingress để expose API ra bên ngoài
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  annotations:
+    # Báo cho K3s biết hãy dùng Traefik (mặc định) để bắt traffic
+    kubernetes.io/ingress.class: traefik
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-service
+                port:
+                  number: 80
