@@ -1,5 +1,5 @@
 ---
-name: MLOps NIDS Pipeline
+name: mlops-nids-lifecycle
 description: Vòng đời của mô hình Machine Learning, từ Retraining, Cổng chất lượng (Quality Gate), cho đến khi được tự động triển khai.
 ---
 
@@ -23,7 +23,7 @@ Quy trình End-to-End:
 2. Download file cấu hình Data Manifest S3.
 3. Chạy Kaggle Kernel thông qua Kaggle API (`train.py`), pipeline sẽ tải Data Manifest đẩy model `.pkl` kèm bảng metrics `.json` lên các bucket folder S3 (`models/<version>/`).
 4. Tại bước đánh giá Cổng Chất Lượng **Quality Gate** (`evaluate_model.py`), Challenger Metrics (Model Mới tạo) và Champion Metrics (Model Nằm Production) được load về để đối chiếu logic thông minh.
-5. Nếu **Approve**: Trigger K3s Rolling Update. Khép kín vòng lặp MLOps bằng script **`update_reference_data.py`** (Lấy dữ liệu CSV mới chèn vào Postgres làm baseline sạch cho chu kỳ giám sát Data Drift cho những ngày mai).
+5. Nếu **Approve**: Trigger K3s Rolling Update (`kubectl rollout restart`). Cuối cùng, khép kín vòng lặp MLOps bằng cách tạo **K8s Job (`k8s/sync-job.yaml`)** chạy ngầm trong cụm K3s. Job này sẽ thực thi `update_reference_data.py` để lấy CSV mới chèn vào Postgres làm baseline sạch cho chu kỳ giám sát Data Drift mà KHÔNG cần mở cổng DB ra ngoài Internet.
 
 ## 3. Quality Gate (`evaluate_model.py`)
 
