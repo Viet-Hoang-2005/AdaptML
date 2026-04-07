@@ -1,11 +1,9 @@
-name: MLOps NIDS — CI/CD Pipeline
+name: MLOps NIDS - CI/CD Pipeline
 
-# ============================================================
 # TRIGGER: Pipeline này chạy khi có code thay đổi được push lên main.
 # Nhiệm vụ: Kiểm tra code (Lint), Build Docker Images và Deploy lên K3s.
 # Đây là pipeline "Continuous Integration & Delivery" — khác với
 # retrain_pipeline.yml (chuyên xử lý Data Drift & Model Retraining).
-# ============================================================
 on:
   push:
     branches: [main]
@@ -23,11 +21,10 @@ on:
 env:
   API_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-nids-api
   MONITOR_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-evidently-monitor
+  SYNC_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-data-sync
 
 jobs:
-  # ============================================================
   # JOB 1: Kiểm tra Chất lượng Code (Code Quality Gate)
-  # ============================================================
   lint_and_test:
     name: "🔍 Kiểm tra Code (Lint & Syntax Check)"
     runs-on: ubuntu-latest
@@ -69,9 +66,7 @@ jobs:
           echo "🔍 Kiểm tra .github/scripts/update_reference_data.py..."
           python -c "import ast; ast.parse(open('.github/scripts/update_reference_data.py').read()); print('✅ update_reference_data.py OK')"
 
-  # ============================================================
   # JOB 2: Build & Push Docker Images lên Docker Hub
-  # ============================================================
   build_and_push:
     name: "🐳 Build Docker Images (API + Evidently)"
     needs: lint_and_test
@@ -119,15 +114,27 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # --- Build Image 3: Reference Data Sync ---
+      - name: Build & Push Docker Image — Data Sync Script
+        uses: docker/build-push-action@v5
+        with:
+          context: ./.github/scripts
+          file: ./.github/scripts/Dockerfile
+          push: true
+          tags: |
+            ${{ env.SYNC_IMAGE }}:${{ github.sha }}
+            ${{ env.SYNC_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Tóm tắt Images vừa build
         run: |
           echo "✅ Images đã push lên Docker Hub:"
           echo "   API:      ${{ env.API_IMAGE }}:${{ github.sha }}"
           echo "   Monitor:  ${{ env.MONITOR_IMAGE }}:${{ github.sha }}"
+          echo "   Sync Job: ${{ env.SYNC_IMAGE }}:${{ github.sha }}"
 
-  # ============================================================
   # JOB 3: Deploy lên K3s (chỉ chạy trên nhánh main)
-  # ============================================================
   deploy_to_k3s:
     name: "🚀 Deploy K3s (Rolling Update)"
     needs: build_and_push
@@ -147,7 +154,7 @@ jobs:
         # "field is immutable" khi apply lên deployment đang chạy
         run: |
           echo "📦 Applying K8s manifests..."
-          kubectl apply -f k8s/postgres.yaml
+          kubectl apply -f k8s/postgres-cluster.yaml
           kubectl apply -f k8s/api-deployment.yaml
           kubectl apply -f k8s/evidently-cronjob.yaml
           echo "✅ Đã apply toàn bộ manifests."
