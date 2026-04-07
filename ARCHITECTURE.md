@@ -19,7 +19,8 @@ flowchart TB
         ALB[Application Load Balancer<br/>Public Endpoint]
 
         subgraph K3S["K3s Production Cluster (1 Master + 2 Workers)"]
-            API[FastAPI NIDS Server<br/>2 Replicas · NodePort 30080]
+            API[FastAPI NIDS Server<br/>2 Replicas · ClusterIP]
+            TRAEFIK[Traefik Ingress Controller<br/>Port 80]
             subgraph CNPG["CloudNativePG PostgreSQL HA"]
                 PG_PRIMARY[(Primary Node<br/>READ + WRITE)]
                 PG_STANDBY[(Standby Node<br/>READ-ONLY · Streaming Replica)]
@@ -43,7 +44,8 @@ flowchart TB
 
     USER -->|POST /predict| ALB
     LOCUST -->|Stress Test| ALB
-    ALB -->|NodePort 30080| API
+    ALB -->|Port 80 TCP| TRAEFIK
+    TRAEFIK -->|Ingress Route| API
     API -->|Async INSERT| PG_PRIMARY
     PG_PRIMARY -.->|Streaming Replication| PG_STANDBY
     EVIDENTLY -->|SELECT 24h gần nhất| PG_STANDBY
@@ -256,7 +258,7 @@ ap-southeast-1 (Singapore)
 │   └── ip-10-0-2-8    - t3.medium: K3s Worker 2 + Postgres STANDBY
 │
 ├── Application Load Balancer (mlops-api-lb)
-│   └── Listener :80 → Target Group → Worker NodePort 30080
+│   └── Listener :80 → Target Group → Worker Port 80 (Traefik Ingress)
 │
 └── S3 Bucket: mlops-nids-artifacts
     ├── models/v1/  ← xgb_nids_model_v1.pkl + label_classes_v1.json + metrics_v1.json
