@@ -1,8 +1,4 @@
-# evidently-cronjob.yaml
-# Container phát hiện Data Drift chạy định kỳ mỗi ngày 0h.
-# Kết nối đến CloudNativePG qua endpoint READ-ONLY (nids-postgres-ro)
-# vì detect_drift.py chỉ thực hiện thao tác SELECT.
-
+# evidently-cronjob.yaml: Container phát hiện Data Drift chạy định kỳ mỗi ngày 0h.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -13,12 +9,9 @@ spec:
   # Chạy hàng ngày lúc 0h UTC (7h sáng giờ Việt Nam)
   schedule: "0 0 * * *"
 
-  # Giữ lại log của 3 lần chạy thành công gần nhất để debug
-  successfulJobsHistoryLimit: 3
-  # Giữ lại log của 1 lần chạy thất bại gần nhất
-  failedJobsHistoryLimit: 1
-  # Không cho phép 2 Job chạy đồng thời (tránh gửi 2 webhook)
-  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3   # Giữ lại log của 3 lần chạy thành công gần nhất để debug
+  failedJobsHistoryLimit: 1       # Giữ lại log của 1 lần chạy thất bại gần nhất
+  concurrencyPolicy: Forbid       # Không cho phép 2 Job chạy đồng thời (tránh gửi 2 webhook)
 
   jobTemplate:
     spec:
@@ -29,10 +22,17 @@ spec:
             - name: drift-monitor
               image: tnvhoang/mlops-evidently-monitor:latest
               imagePullPolicy: Always
+              # Cấu hình tài nguyên cho container tránh Evidently chiếm dụng tài nguyên
+              resource:
+                requests:
+                  memory: "256Mi"
+                  cpu: "200m"
+                limits:
+                  memory: "768Mi"
+                  cpu: "500m"
               env:
-                # ---- PostgreSQL READ-ONLY Endpoint (CloudNativePG) ----
-                # detect_drift.py chỉ SELECT → dùng nids-postgres-ro
-                # để phân tải, không tác động đến Primary đang phục vụ API
+                # PostgreSQL READ-ONLY Endpoint (CloudNativePG)
+                # detect_drift.py chỉ SELECT -> dùng nids-postgres-ro để phân tải
                 - name: DB_HOST_RO
                   value: "nids-postgres-ro"
                 # Fallback cho detect_drift.py khi đọc biến DB_HOST thông thường
@@ -53,19 +53,16 @@ spec:
                       name: postgres-secrets
                       key: POSTGRES_PASSWORD
 
-                # ---- Cấu hình Drift Detection ----
-                # Ngưỡng 50%: Nếu hơn một nửa số feature bị drift → kích hoạt retrain
+                # Cấu hình Drift Detection
+                # Ngưỡng 50%: Nếu hơn một nửa số feature bị drift -> kích hoạt Retrain
                 - name: DRIFT_THRESHOLD
                   value: "0.5"
 
-                # ---- GitHub Webhook để kích hoạt retrain_pipeline.yml ----
+                # GitHub Webhook để kích hoạt retrain_pipeline.yml
                 - name: GITHUB_REPO
-                  value: "Viet-Hoang-2005/MLOps-weather-system"
+                  value: "Viet-Hoang-2005/MLOps-nids-system"
                 - name: GITHUB_TOKEN
                   valueFrom:
                     secretKeyRef:
                       name: github-secrets
                       key: GITHUB_TOKEN
-
-          # Không cần volume nào — detect_drift.py đọc dữ liệu từ PostgreSQL,
-          # không đọc file từ ổ cứng của Node (đã bỏ hostPath volume cũ)

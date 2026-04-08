@@ -1,11 +1,9 @@
-name: MLOps NIDS Retraining Pipeline
+name: MLOps NIDS - Retraining Pipeline
 
-# ============================================================
 # TRIGGER: Pipeline được kích hoạt theo 3 cách:
 #   1. Tự động mỗi nửa đêm (định kỳ kiểm tra drift)
 #   2. Thủ công từ tab Actions trên GitHub (workflow_dispatch)
 #   3. Webhook từ Evidently container (repository_dispatch)
-# ============================================================
 on:
   schedule:
     - cron: '0 0 * * *'
@@ -14,9 +12,7 @@ on:
     types: [data_drift_detected]
 
 jobs:
-  # ============================================================
   # JOB 1: Đọc Data Manifest và kích hoạt Kaggle Retrain
-  # ============================================================
   retrain_kaggle:
     name: "🧠 Retrain Model (Kaggle Compute)"
     runs-on: ubuntu-latest
@@ -36,7 +32,7 @@ jobs:
           AWS_DEFAULT_REGION: ap-southeast-1
         run: |
           # Tải data_manifest.json từ S3 — "nguồn sự thật" về dataset cần train
-          aws s3 cp s3://mlops-nids-models-bucket/data_manifest.json ./data_manifest.json
+          aws s3 cp s3://mlops-nids-artifacts/data_manifest.json ./data_manifest.json
           
           # Trích xuất thông tin và truyền sang các Job tiếp theo qua output
           MODEL_VERSION=$(jq -r '.model_version' data_manifest.json)
@@ -100,13 +96,13 @@ jobs:
         run: |
           mkdir -p models/$MODEL_VERSION
           kaggle kernels output hongtrnnguynvit/mlops-nids-training-pipeline -p models/$MODEL_VERSION/
-          
+          d
           echo "📦 Files tải về:"
           ls -la models/$MODEL_VERSION/
           
           # Upload model lên S3 để Init Container K3s có thể kéo về
-          aws s3 sync models/$MODEL_VERSION/ s3://mlops-nids-models-bucket/models/$MODEL_VERSION/
-          echo "☁️  Đã upload model lên S3: s3://mlops-nids-models-bucket/models/$MODEL_VERSION/"
+          aws s3 sync models/$MODEL_VERSION/ s3://mlops-nids-artifacts/models/$MODEL_VERSION/
+          echo "☁️  Đã upload model lên S3: s3://mlops-nids-artifacts/models/$MODEL_VERSION/"
 
       - name: Lưu metrics JSON lên Artifacts của GitHub Actions
         env:
@@ -117,9 +113,7 @@ jobs:
           path: models/${{ steps.read_manifest.outputs.model_version }}/metrics_${{ steps.read_manifest.outputs.model_version }}.json
           retention-days: 7
 
-  # ============================================================
   # JOB 2: Trọng tài chấm điểm — Cho phép hay chặn Deploy
-  # ============================================================
   evaluate_model:
     name: "⚖️  Trọng tài Đánh giá (Model Evaluation Gate)"
     needs: retrain_kaggle
@@ -146,13 +140,13 @@ jobs:
           CHAMPION_VERSION: ${{ needs.retrain_kaggle.outputs.champion_version }}
         run: |
           # Đọc champion_version từ manifest để biết tải metrics của version nào
-          aws s3 cp s3://mlops-nids-models-bucket/data_manifest.json ./data_manifest.json
+          aws s3 cp s3://mlops-nids-artifacts/data_manifest.json ./data_manifest.json
           CHAMPION_VERSION=$(jq -r '.champion_version // "v1"' data_manifest.json)
           echo "📊 Champion version hiện tại: $CHAMPION_VERSION"
           
           # Tải metrics của champion từ S3 (đây là nguồn ground truth mới nhất)
           aws s3 cp \
-            s3://mlops-nids-models-bucket/models/$CHAMPION_VERSION/metrics_${CHAMPION_VERSION}.json \
+            s3://mlops-nids-artifacts/models/$CHAMPION_VERSION/metrics_${CHAMPION_VERSION}.json \
             /tmp/champion_metrics.json || \
           cp models/v1/metrics_v1.json /tmp/champion_metrics.json  # Fallback về v1 nếu S3 chưa có
           
@@ -177,9 +171,7 @@ jobs:
             --min-f1 0.85 \
             --drift-tolerance 0.01
 
-  # ============================================================
   # JOB 3: Triển khai Zero-Downtime lên K3s (chỉ khi đủ điều kiện)
-  # ============================================================
   deploy_to_k3s:
     name: "🚀 Triển khai K3s (Zero-Downtime Rolling Update)"
     needs: [retrain_kaggle, evaluate_model]
@@ -211,11 +203,9 @@ jobs:
       - name: Xác nhận Pods đang chạy
         run: kubectl get pods -l app=mlops-nids-api
 
-  # ============================================================
   # JOB 4: Đồng bộ Reference Data — Khép kín vòng lặp MLOps
-  # ============================================================
   sync_reference_data:
-    name: "🔄 Đồng bộ Reference Data (Vòng lặp Khép kín)"
+    name: "🔄 Đồng bộ Reference Data bằng K8s Job"
     needs: [retrain_kaggle, deploy_to_k3s]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -223,28 +213,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Xác thực Kubeconfig K3s
+        uses: azure/k8s-set-context@v2
         with:
-          python-version: '3.10'
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
 
-      - name: Cài đặt thư viện
-        run: pip install boto3 pandas sqlalchemy psycopg2-binary --quiet
-
-      - name: Cập nhật nids_reference_data trong PostgreSQL
-        # Sau khi deploy model mới thành công, cập nhật baseline reference
-        # để detect_drift.py dùng dataset mới làm "thước đo" từ lần tiếp theo
-        env:
-          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION:    ap-southeast-1
-          AWS_BUCKET_NAME:       mlops-nids-models-bucket
-          DB_HOST:               ${{ secrets.DB_HOST }}
-          DB_USER:               ${{ secrets.DB_USER }}
-          DB_PASSWORD:           ${{ secrets.DB_PASSWORD }}
-          DB_NAME:               mlops_nids_db
+      - name: Kích hoạt K8s Job đồng bộ Reference Data
+        # Áp dụng Job trên Cụm K3s, chạy bảo mật nội bộ thay vì kết nối mở port 5432
         run: |
-          echo "🔄 Bắt đầu đồng bộ Reference Data mới vào PostgreSQL..."
-          python .github/scripts/update_reference_data.py
+          echo "🔄 Bắt đầu đồng bộ Reference Data mới bên trong K3s cluster..."
+          
+          # Xoá Job cũ nếu còn sót (bỏ qua lỗi nếu chưa tồn tại)
+          kubectl delete job reference-data-sync-job --ignore-not-found
+          
+          # Cập nhật Job để đảm bảo sử dụng image mới nhất trên dockerhub nếu có
+          kubectl apply -f k8s/sync-job.yaml
+          
+          echo "⏳ Đợi K8s Job đồng bộ hoàn thành (timeout 300s)..."
+          # Chờ đến khi Job báo condition=complete
+          kubectl wait --for=condition=complete job/reference-data-sync-job --timeout=300s
+          
+          echo "📋 Logs của tiến trình đồng bộ:"
+          kubectl logs job/reference-data-sync-job
 
       - name: Gửi thông báo Pipeline hoàn tất
         if: always()

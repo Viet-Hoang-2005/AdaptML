@@ -1,14 +1,14 @@
 # postgres-cluster.yaml
-# CloudNativePG Cluster — Primary + Standby Streaming Replication
+# CloudNativePG Cluster - Primary + Standby Streaming Replication
 #
 # Kiến trúc:
-#   Worker 1: [nids-postgres-1] PRIMARY  — Đọc + Ghi
-#   Worker 2: [nids-postgres-2] STANDBY  — Chỉ Đọc (streaming replica)
+#   Worker 1: [nids-postgres-1] PRIMARY - Đọc + Ghi
+#   Worker 2: [nids-postgres-2] STANDBY - Chỉ Đọc (streaming replica)
 #
 # CloudNativePG tự tạo các K8s Service sau:
-#   nids-postgres-rw  → Primary (dùng cho INSERT/UPDATE)
-#   nids-postgres-ro  → Load-balanced Primary + Standby (dùng cho SELECT)
-#   nids-postgres-r   → Tất cả instances
+#   nids-postgres-rw -> Primary (dùng cho INSERT/UPDATE)
+#   nids-postgres-ro -> Load-balanced Primary + Standby (dùng cho SELECT)
+#   nids-postgres-r  -> Tất cả instances
 
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
@@ -21,39 +21,44 @@ spec:
   # Phiên bản PostgreSQL
   imageName: ghcr.io/cloudnative-pg/postgresql:15
 
-  # Tên database và user — phải khớp với biến trong Secret và code Python
+  # Khởi tạo database và user
   bootstrap:
     initdb:
       database: mlops_nids_db
       owner: postgres
-      # CloudNativePG tự tạo Secret <cluster-name>-app chứa password ngẫu nhiên
-      # Hoặc ta dùng secret có sẵn:
       secret:
-        name: postgres-secrets
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: POSTGRES_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: POSTGRES_PASSWORD
 
   # Cấu hình Storage cho mỗi instance
-  # K3s dùng local-path provisioner theo mặc định — không cần cài thêm
   storage:
-    storageClass: local-path   # StorageClass built-in của K3s
+    storageClass: local-path
     size: 10Gi
 
   # Gán cứng Primary vào Worker 1 và Standby vào Worker 2
-  # Thay giá trị hostname bằng tên Node thực từ: kubectl get nodes
   affinity:
     enablePodAntiAffinity: true   # Không cho 2 Postgres Pods chạy chung 1 Node
-    topologyKey: kubernetes.io/hostname
+    topologyKey: kubernetes.io/ip-10-0-2-221
 
   # Cấu hình PostgreSQL
   postgresql:
     parameters:
       # Tối ưu cho t3.medium (4GB RAM)
-      shared_buffers: "512MB"      # 25% RAM để cache data hay dùng
+      shared_buffers: "512MB"
       effective_cache_size: "1536MB"
-      work_mem: "16MB"             # Bộ nhớ cho mỗi thao tác sort/join
+      work_mem: "16MB"
       maintenance_work_mem: "128MB"
       max_connections: "100"
 
-  # Cấu hình Backup định kỳ (tuỳ chọn — cần S3 bucket backup riêng)
+  # Cấu hình Backup định kỳ (tuỳ chọn - cần S3 bucket backup riêng)
   # backup:
   #   barmanObjectStore:
   #     destinationPath: s3://mlops-nids-backups/postgres/

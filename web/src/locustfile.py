@@ -65,9 +65,9 @@ class NIDSTestUser(HttpUser):
 # 3. EVENT HOOK: IN BÁO CÁO KHI DỪNG TEST
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
-    print("\n" + "="*60)
+    print("\n" + "="*50)
     print("📊 SUMMARY OF PREDICTION RESULTS FROM THE XGBOOST MODEL")
-    print("="*60)
+    print("="*50)
     
     total_correct = 0
     total_wrong = 0
@@ -86,6 +86,6 @@ def on_test_stop(environment, **kwargs):
     total_requests = total_correct + total_wrong
     if total_requests > 0:
         overall_accuracy = (total_correct / total_requests) * 100
-        print("-" * 60)
+        print("-" * 50)
         print(f"🏆 OVERALL ACCURACY: {overall_accuracy:.2f}%")
-    print("="*60 + "\n")
+    print("="*50 + "\n")

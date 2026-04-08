@@ -68,7 +68,8 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
                         │    ▼                                     │
                         │  K3s Cluster (1 Master + 2 Workers)      │
                         │  ┌────────────────────────────────────┐  │
-                        │  │  FastAPI Pods (x2, NodePort 30080) │  │
+                        │  │  FastAPI Pods (x2, ClusterIP)      │  │
+                        │  │    Ingress: Traefik (Port 80)      │  │
                         │  │    Init Container: S3 → model.pkl  │  │
                         │  └──────────┬─────────────────────────┘  │
                         │             │ INSERT (async)             │
@@ -175,6 +176,9 @@ docker-compose up --build
 
 # Theo dõi log API
 docker-compose logs -f api
+
+# Theo dõi Data Drift bằng Evidently
+docker-compose logs -f evidently
 ```
 
 **Bước 4: Kiểm tra hoạt động**
@@ -220,6 +224,7 @@ Terraform sẽ tạo: VPC + 3 EC2 (1 Master + 2 Workers) + ALB + S3 Bucket
 # Trên Master Node
 curl -sfL https://get.k3s.io | sh -
 sudo cat /etc/rancher/k3s/k3s.yaml  # Copy nội dung này vào GitHub Secret KUBE_CONFIG
+sudo cat /var/lib/rancher/k3s/server/node-token # Copy token này để thêm Worker Node
 
 # Trên mỗi Worker Node (thay <TOKEN> và <MASTER_IP>)
 curl -sfL https://get.k3s.io | K3S_URL=https://<MASTER_IP>:6443 K3S_TOKEN=<TOKEN> sh -
@@ -259,10 +264,10 @@ kubectl create secret generic postgres-secrets \
 #### Bước 5: Upload model lên S3
 
 ```bash
-aws s3 cp models/v1/xgb_nids_model_v1.pkl   s3://mlops-nids-artifacts/models/v1/
-aws s3 cp models/v1/label_classes_v1.json   s3://mlops-nids-artifacts/models/v1/
-aws s3 cp models/v1/metrics_v1.json         s3://mlops-nids-artifacts/models/v1/
-aws s3 cp data_manifest.json                s3://mlops-nids-artifacts/
+aws s3 cp models/v1/xgb_nids_model_v1.pkl s3://mlops-nids-artifacts/models/v1/
+aws s3 cp models/v1/label_classes_v1.json s3://mlops-nids-artifacts/models/v1/
+aws s3 cp models/v1/metrics_v1.json s3://mlops-nids-artifacts/models/v1/
+aws s3 cp data_manifest.json s3://mlops-nids-artifacts/
 ```
 
 #### Bước 6: Deploy lên K3s
@@ -368,7 +373,7 @@ mlops-nids-system/
 │   ├── train.py                      # XGBoost + MLflow + Hyperparameter Tuning
 │   └── kernel-metadata.json
 ├── k8s/
-│   ├── api-deployment.yaml           # FastAPI + Init Container + NodePort 30080
+│   ├── api-deployment.yaml           # FastAPI + Init Container + ClusterIP + Traefik Ingress
 │   ├── postgres-cluster.yaml         # CloudNativePG Primary + Standby
 │   └── evidently-cronjob.yaml        # CronJob 0h UTC daily
 ├── infra/

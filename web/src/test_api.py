@@ -8,7 +8,8 @@ import time
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TEST_CSV_PATH = os.path.join(ROOT_DIR, 'data', 'test_data.csv')
 
-API_URL = "http://localhost:5000/predict"
+# Đọc API_URL từ biến môi trường để linh hoạt giữa môi trường local và K3s production
+API_URL = os.environ.get("API_URL", "http://localhost:5000/predict")
 
 def api_test_continuous(samples_per_class=1):
     print(f"🚀 STARTING CONTINUOUS API INFERENCE TEST...")

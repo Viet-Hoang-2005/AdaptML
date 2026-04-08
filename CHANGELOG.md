@@ -17,12 +17,12 @@ Giai đoạn hoàn thiện cuối cùng: đưa toàn bộ hệ thống lên hạ
 - **Hạ tầng AWS bằng Terraform** (`infra/main.tf`):
   - VPC với Public Subnet (Master + ALB) và Private Subnet (Worker Nodes)
   - Cụm K3s: 1 Master (`t3.medium`) + 2 Worker (`t3.medium`) trên EC2
-  - Application Load Balancer (ALB) phân phối traffic từ Internet vào Worker NodePort 30080
+  - Application Load Balancer (ALB) phân phối traffic từ Internet vào Worker trên cổng 80 (cho Traefik Ingress)
   - S3 Bucket (`mlops-nids-artifacts`) với Versioning và Block Public Access để lưu model artifacts
   - NAT Gateway cho Worker Nodes truy cập Internet trong Private Subnet
 
 - **K3s Kubernetes Manifests** (`k8s/`):
-  - `api-deployment.yaml`: FastAPI Deployment với **Init Container** kéo model từ S3 tự động, `readinessProbe` và `livenessProbe`, NodePort Service
+  - `api-deployment.yaml`: FastAPI Deployment với **Init Container** kéo model từ S3 tự động, `readinessProbe` và `livenessProbe`, ClusterIP Service và Traefik Ingress
   - `postgres-cluster.yaml`: **CloudNativePG Cluster** - Primary + Standby Streaming Replication tự động failover
   - `evidently-cronjob.yaml`: CronJob Evidently AI chạy 0h UTC hằng ngày
 

@@ -8,16 +8,16 @@ ENV PYTHONUNBUFFERED 1
 # Tạo thư mục chạy trong container
 WORKDIR /app
 
-# Cài đặt các thư viện hệ thống cần thiết cho thư viện psycopg2 (PostgreSQL)
+# Cài đặt g++ và python3-dev để có thể compile các thư viện ML của Evidently
 RUN apt-get update \
-    && apt-get install -y gcc libpq-dev \
-    && apt-get clean
+    && apt-get install -y gcc g++ python3-dev libpq-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy dependencies và cài đặt
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy toàn bộ code vào image
 # COPY . . đặt file vào /app/ để lệnh python có thể tìm thấy detect_drift.py tại /app/detect_drift.py
 COPY . .
 
