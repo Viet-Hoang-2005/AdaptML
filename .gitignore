@@ -38,6 +38,7 @@ models/*.pkl
 models/*.pth
 mlruns/
 mlartifacts/
+mlflow_artifacts/
 
 # Database
 *.db

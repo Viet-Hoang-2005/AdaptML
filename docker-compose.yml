@@ -79,12 +79,38 @@ services:
     networks:
       - mlops_nids_network
 
-# 4. Mạng nội bộ cho các container
+  # 4. MLflow Tracking Server + Model Registry
+  mlflow:
+    image: python:3.10-slim
+    container_name: mlops_nids_mlflow
+    restart: always
+    working_dir: /app
+    ports:
+      - "5001:5000"          # Host:5001 → Container:5000 (MLflow default port)
+    volumes:
+      - ./mlflow_artifacts:/app/mlflow_artifacts  # SQLite DB + artifact store
+      - ./scripts:/app/scripts                    # mount script để đăng ký model nếu cần
+    command: >
+      bash -c "pip install --no-cache-dir mlflow>=2.10.0 boto3 joblib xgboost -q &&
+               mlflow ui
+               --backend-store-uri sqlite:///mlflow_artifacts/mlflow.db
+               --artifacts-root mlflow_artifacts
+               --host 0.0.0.0
+               --port 5000
+               --serve-models"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mlops_nids_network
+
+# 5. Mạng nội bộ cho các container
 networks:
   mlops_nids_network:
     driver: bridge
 
-# 5. Volume để lưu trữ dữ liệu của PostgreSQL
+# 6. Volume để lưu trữ dữ liệu của PostgreSQL + MLflow artifacts
 volumes:
   mlops_nids_pgdata:
     external: false
+  mlflow_artifacts:

@@ -1,0 +1,7 @@
+# MLflow dependencies — local Tracking Server + Model Registry
+# Install: pip install -r requirements_mlflow.txt
+
+mlflow>=2.10.0
+boto3>=1.34.0
+joblib
+xgboost
