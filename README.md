@@ -13,16 +13,17 @@
 
 **Học phần:** NT114 - Đồ án Chuyên ngành · Khoa Mạng máy tính và Truyền thông dữ liệu · UIT
 
-| Thành viên             | Email                  | Phụ trách                                                       |
-| ---------------------- | ---------------------- | --------------------------------------------------------------- |
+| Thành viên | Email | Phụ trách |
+|---|---|---|
 | Trần Nguyễn Việt Hoàng | 23520541@gm.uit.edu.vn | MLOps Architecture + FastAPI + Evidently AI + Training Pipeline |
 | Bùi Ngọc Thái          | 23521412@gm.uit.edu.vn | K3s Operations + Terraform/AWS + CI/CD + CloudNativePG          |
 
 </div>
 
+
 ---
 
-## 📖 Tổng quan
+## 1. Tổng quan
 
 Hệ thống này là một **MLOps pipeline hoàn chỉnh end-to-end** được xây dựng chuyên biệt cho bài toán phát hiện tấn công mạng (NIDS). Điểm nổi bật là khả năng **tự vận hành khép kín**: tự phát hiện khi dữ liệu thực tế bị lệch so với dữ liệu training, tự kích hoạt quá trình tái huấn luyện, và tự triển khai model mới mà **không gây gián đoạn dịch vụ** (zero-downtime).
 
@@ -31,114 +32,146 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
                                               ↓
                                    Evidently AI (Daily Drift Check)
                                               ↓ drift detected
-                                   GitHub Actions (Retrain Pipeline)
+                                   run_ai_pipeline.py (Local Orchestrator)
                                               ↓
-                              Kaggle Compute → evaluate_model.py → K3s Deploy
-                                              ↓ success
-                                   update_reference_data.py (Close the Loop)
+                              Kaggle Compute → MLflow Registry → Evaluation Gate
+                                              ↓ approved
+                                   GitHub Actions (Deploy + Sync)
 ```
 
----
-
-## ✨ Tính năng Cốt lõi
-
-| #   | Tính năng                                                                    | Công nghệ                    |
-| --- | ---------------------------------------------------------------------------- | ---------------------------- |
-| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%            | XGBoost + CIC-IDS2017        |
-| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                         | FastAPI + Uvicorn            |
-| 3   | **Async logging** mọi request vào DB mà không tăng latency                   | BackgroundTasks + PostgreSQL |
-| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                     | CloudNativePG + K3s          |
-| 5   | **Daily drift detection** 0h UTC, phân tích phân phối 70+ features           | Evidently AI + CronJob       |
-| 6   | **Automated retraining** khi drift ≥ 50%, không cần can thiệp thủ công       | Kaggle API + GitHub Actions  |
-| 7   | **Model quality gate** - chỉ promote model mới khi vượt Champion             | evaluate_model.py            |
-| 8   | **Zero-downtime deployment** Rolling update + Init Container kéo model từ S3 | K3s + AWS S3                 |
-| 9   | **Closed-loop feedback** - baseline tự cập nhật sau mỗi lần retrain          | update_reference_data.py     |
-| 10  | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời        | Locust                       |
+> **Kiến trúc MLflow-Centric:** `run_ai_pipeline.py` (Local Orchestrator) đóng vai trò nhạc trưởng — gọi Kaggle, ghi metrics vào MLflow, chạy Evaluation Gate, và bắn webhook sang GitHub Actions chỉ để deploy. GitHub Actions giảm từ **4 jobs → 2 jobs**.
 
 ---
 
-## 🏗️ Kiến trúc Hệ thống
+## 2. Tính năng Cốt lõi
 
+| # | Tính năng | Công nghệ |
+|---|---|---|
+| 1 | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99% | XGBoost + CIC-IDS2017 |
+| 2 | **Low-latency inference** < 100ms, model nạp vào RAM | FastAPI + Uvicorn |
+| 3 | **Async logging** mọi request vào DB mà không tăng latency | BackgroundTasks + PostgreSQL |
+| 4 | **PostgreSQL HA** Primary + Standby, auto failover < 60s | CloudNativePG + K3s |
+| 5 | **Daily drift detection** 0h UTC, phân tích phân phối 70+ features | Evidently AI + CronJob |
+| 6 | **Automated retraining** khi drift ≥ 50%, không cần can thiệp thủ công | Kaggle API + Local Orchestrator |
+| 7 | **MLflow Model Registry** — Nguồn sự thật DUY NHẤT về model versions | MLflow + PostgreSQL Backend |
+| 8 | **Model quality gate** — chỉ promote model mới khi vượt Champion | `mlflow_evaluation_gate.py` |
+| 9 | **Zero-downtime deployment** Rolling update + Init Container kéo model từ S3 | K3s + AWS S3 |
+| 10 | **Closed-loop feedback** — baseline tự cập nhật sau mỗi lần retrain | K8s Job + PostgreSQL |
+| 11 | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời | Locust |
+
+---
+                        ┌──────────────────────────────────────────────┐
+                        │              AWS ap-southeast-1              │
+ Users / Locust ───────►│ ALB (Public)                                 │
+                        │   │                                          │
+                        │   ▼                                          │
+                        │ K3s Cluster (1 Master + 2 Workers)           │
+                        │ ┌──────────────────────────────────────────┐ │
+                        │ │ FastAPI Pods (x2, ClusterIP)             │ │
+                        │ │   Ingress: Traefik (Port 80)             │ │
+                        │ └─────────┬────────────────────────────────┘ │
+                        │           │ INSERT (async)                   │
+                        │           ▼                                  │
+                        │ ┌──────────────────────────────────────────┐ │
+                        │ │ CloudNativePG PostgreSQL                 │ │
+                        │ │ Primary ←→ Standby (HA)                  │ │
+                        │ │ ┌─────────┬──────────┐                   │ │
+                        │ │ │ nids_db │ mlflow   │ ← DB chia sẻ      │ │
+                        │ │ └─────────┴──────────┘                   │ │
+                        │ └──────────────────────────────────────────┘ │
+                        │           │ SELECT (daily)                   │
+                        │           ▼                                  │
+                        │ ┌──────────────────────────────────────────┐ │
+                        │ │ Evidently CronJob                        │ │
+                        │ │ 0h UTC · Drift Analysis                  │ │
+                        │ └─────────┬────────────────────────────────┘ │
+                        │           │ drift detected                   │
+                        │           ▼                                  │
+                        │ ┌──────────────────────────────────────────┐ │
+                        │ │ run_ai_pipeline.py                       │ │ ← ★ Nhạc
+                        │ │ (Local Orchestrator)                     │ │   trưởng
+                        │ └─────────┬────────────────────────────────┘ │
+                        │           │ Kaggle API                       │
+                        │           ▼                                  │
+                        │ ┌──────────────────────────────────────────┐ │
+                        │ │ Kaggle Compute Engine                    │ │
+                        │ │ train.py · XGBoost                       │ │
+                        │ └─────────┬────────────────────────────────┘ │
+                        │           │ upload artifact to S3            │
+                        │           ▼                                  │
+                        │ ┌──────────────────────────────────────────┐ │
+                        │ │ MLflow Server                            │ │ ← ★ MLflow
+                        │ │ Master Node :30000                       │ │   Centric
+                        │ │ PostgreSQL Backend                       │ │
+                        │ └─────────┬────────────────────────────────┘ │
+                        │           │ query + register                 │
+                        │           ▼                                  │
+                        │ ┌──────────────────────────────────────────┐ │
+                        │ │ mlflow_evaluation_gate.py                │ │
+                        │ │ → Webhook if APPROVED                    │ │
+                        │ └─────────┬────────────────────────────────┘ │
+                        │           │ webhook: deploy_new_champion     │
+                        │           ▼                                  │
+                        │ ┌──────────────────────────────────────────┐ │
+                        │ │ GitHub Actions (2 Jobs)                  │ │
+                        │ │ Deploy + Sync only                       │ │
+                        │ └──────────────────────────────────────────┘ │
+                        └──────────────────────────────────────────────┘
+                                                   ▲
+                                                   │ model artifacts
+                                        S3 (mlops-nids-artifacts)
 ```
-                        ┌──────────────────────────────────────────┐
-                        │           AWS ap-southeast-1             │
-                        │                                          │
-  Users / Locust ──────►│  ALB (Public)                            │
-                        │    │                                     │
-                        │    ▼                                     │
-                        │  K3s Cluster (1 Master + 2 Workers)      │
-                        │  ┌────────────────────────────────────┐  │
-                        │  │  FastAPI Pods (x2, ClusterIP)      │  │
-                        │  │    Ingress: Traefik (Port 80)      │  │
-                        │  │    Init Container: S3 → model.pkl  │  │
-                        │  └──────────┬─────────────────────────┘  │
-                        │             │ INSERT (async)             │
-                        │             ▼                            │
-                        │  ┌───────────────────────────┐           │
-                        │  │  CloudNativePG PostgreSQL │           │
-                        │  │  Primary ←→ Standby (HA)  │           │
-                        │  └──────────┬────────────────┘           │
-                        │             │ SELECT (daily)             │
-                        │             ▼                            │
-                        │  ┌───────────────────────────┐           │
-                        │  │  Evidently CronJob        │           │
-                        │  │  0h UTC · Drift Analysis  │           │
-                        │  └──────────┬────────────────┘           │
-                        │             │ Webhook                    │
-                        └─────────────│───────────────────── S3 ───┘
-                                      │                      ▲
-                                      ▼                      │
-                              GitHub Actions          model artifacts
-                         Retrain → Evaluate → Deploy → Sync
-                                      │
-                                      ▼
-                              Kaggle Compute Engine
-                              train.py · MLflow · XGBoost
-```
 
-> Xem chi tiết kiến trúc và các diagram tại [ARCHITECTURE.md](ARCHITECTURE.md)
+> Kiến trúc chi tiết: [ARCHITECTURE.md](ARCHITECTURE.md)
+
 
 ---
 
-## 🛠️ Technology Stack
+## 3. Kiến trúc Hệ thống
 
-| Layer                  | Technology                                   |
-| ---------------------- | -------------------------------------------- |
-| **Machine Learning**   | XGBoost + Scikit-learn + Pandas + MLflow     |
-| **Model Serving**      | FastAPI + Uvicorn + Python 3.10              |
-| **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy   |
-| **Drift Monitoring**   | Evidently AI + DataDriftPreset + K8s CronJob |
-| **Load Testing**       | Locust                                       |
-| **Compute Engine**     | Kaggle Kernels API                           |
-| **CI/CD/CT**           | GitHub Actions                               |
-| **Container Registry** | Docker Hub                                   |
-| **Model Registry**     | AWS S3                                       |
-| **Orchestration**      | K3s (Kubernetes)                             |
-| **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)       |
+> Xem sơ đồ Mermaid chi tiết tại: [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ---
 
-## 🚀 Hướng dẫn Cài đặt và Khởi chạy
+## 4. Technology Stack
+
+| Layer | Technology |
+|---|---|
+| **Machine Learning** | XGBoost + Scikit-learn + Pandas + MLflow |
+| **Model Serving** | FastAPI + Uvicorn + Python 3.10 |
+| **Model Registry** | MLflow Model Registry (K3s Master Node) |
+| **Database (HA)** | PostgreSQL 15 + CloudNativePG + SQLAlchemy |
+| **Drift Monitoring** | Evidently AI + DataDriftPreset + K8s CronJob |
+| **Orchestration** | Local Python (`run_ai_pipeline.py`) |
+| **Load Testing** | Locust |
+| **Compute Engine** | Kaggle Kernels API |
+| **CI/CD** | GitHub Actions (2 Jobs: Deploy + Sync) |
+| **Container Registry** | Docker Hub + GHCR (MLflow) |
+| **Artifact Storage** | AWS S3 (`mlops-nids-artifacts`) |
+| **Orchestration K8s** | K3s (Kubernetes) |
+| **Infrastructure** | Terraform + AWS (VPC + EC2 + ALB + S3) |
+
+---
+
+## 5. Hướng dẫn Cài đặt
 
 ### Yêu cầu Hệ thống
 
-| Thành phần              | Tối thiểu                   | Khuyến nghị  |
-| ----------------------- | --------------------------- | ------------ |
-| Python                  | 3.10+                       | 3.10         |
-| Docker & Docker Compose | v24+                        | Latest       |
-| RAM                     | 4 GB                        | 8 GB         |
-| OS                      | Windows 10+ / Ubuntu 20.04+ | Ubuntu 22.04 |
+| Thành phần | Tối thiểu | Khuyến nghị |
+|---|---|---|
+| Python | 3.10+ | 3.10 |
+| Docker & Docker Compose | v24+ | Latest |
+| RAM | 4 GB | 8 GB |
+| OS | Windows 10+ / Ubuntu 20.04+ | Ubuntu 22.04 |
 
 ---
 
-### 🖥️ Chạy Local (Docker Compose)
-
-Cách nhanh nhất để chạy thử hệ thống trên máy local mà không cần K3s hay AWS.
+### 5.1 Chạy Local (Docker Compose)
 
 **Bước 1: Clone repository**
 
 ```bash
-git clone https://github.com/Viet-Hoang-2005/MLOps-weather-system.git
+git clone https://github.com/Viet-Hoang-2005/MLOps-nids-system.git
 cd mlops-nids-system
 ```
 
@@ -146,27 +179,6 @@ cd mlops-nids-system
 
 ```bash
 cp .env.example .env
-```
-
-Chỉnh sửa file `.env` với thông tin của bạn:
-
-```ini
-# PostgreSQL
-DB_USER=your_db_user_here
-DB_PASSWORD=your_db_password_here
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=mlops_nids_db
-
-# Evidently Webhook
-GITHUB_REPO=Viet-Hoang-2005/MLOps-nids-system
-GITHUB_TOKEN=your_github_token_here
-DRIFT_THRESHOLD=0.5
-
-# AWS (cần để script CI/CD chạy)
-AWS_ACCESS_KEY_ID=your_aws_access_key_id_here
-AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key_here
-AWS_DEFAULT_REGION=your_aws_default_region_here
 ```
 
 **Bước 3: Build và khởi chạy**
@@ -194,7 +206,7 @@ python web/src/test_api.py
 locust -f web/src/locustfile.py --host=http://localhost:5000
 ```
 
-Locust Dashbroad: `http://localhost:8089`
+Locust Dashboard: `http://localhost:8089`
 API Swagger UI: `http://localhost:5000/docs`
 
 **Dừng hệ thống:**
@@ -205,7 +217,7 @@ docker-compose down
 
 ---
 
-### ☁️ Triển khai Production (K3s trên AWS EC2)
+### 5.2 Triển khai Production (K3s trên AWS EC2)
 
 #### Bước 1: Khởi tạo hạ tầng AWS bằng Terraform
 
@@ -216,21 +228,15 @@ terraform plan
 terraform apply
 ```
 
-Terraform sẽ tạo: VPC + 3 EC2 (1 Master + 2 Workers) + ALB + S3 Bucket
-
-#### Bước 2: Cài đặt K3s lên các EC2
+#### Bước 2: Cài đặt K3s
 
 ```bash
-# Trên Master Node
+# Tren Master Node
 curl -sfL https://get.k3s.io | sh -
-sudo cat /etc/rancher/k3s/k3s.yaml  # Copy nội dung này vào GitHub Secret KUBE_CONFIG
-sudo cat /var/lib/rancher/k3s/server/node-token # Copy token này để thêm Worker Node
+sudo cat /etc/rancher/k3s/k3s.yaml  # Copy vao GitHub Secret KUBE_CONFIG
 
-# Trên mỗi Worker Node (thay <TOKEN> và <MASTER_IP>)
+# Tren moi Worker Node (thay TOKEN va MASTER_IP)
 curl -sfL https://get.k3s.io | K3S_URL=https://<MASTER_IP>:6443 K3S_TOKEN=<TOKEN> sh -
-
-# Xác nhận cluster
-sudo k3s kubectl get nodes
 ```
 
 #### Bước 3: Cài đặt CloudNativePG Operator
@@ -238,7 +244,6 @@ sudo k3s kubectl get nodes
 ```bash
 kubectl apply --server-side -f \
   https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.22/releases/cnpg-1.22.0.yaml
-
 kubectl wait --for=condition=ready pod -n cnpg-system \
   -l app.kubernetes.io/name=cloudnative-pg --timeout=120s
 ```
@@ -246,31 +251,37 @@ kubectl wait --for=condition=ready pod -n cnpg-system \
 #### Bước 4: Tạo Kubernetes Secrets
 
 ```bash
-# AWS credentials (cho Init Container kéo model từ S3)
+# AWS credentials (cho Init Container keo model tu S3)
 kubectl create secret generic aws-secrets \
   --from-literal=AWS_ACCESS_KEY_ID="<your-key>" \
   --from-literal=AWS_SECRET_ACCESS_KEY="<your-secret>"
 
-# GitHub Token (cho Evidently Webhook)
-kubectl create secret generic github-secrets \
-  --from-literal=GITHUB_TOKEN="<your-token>"
-
-# PostgreSQL credentials
+# MLflow PostgreSQL credentials
 kubectl create secret generic postgres-secrets \
   --from-literal=POSTGRES_USER="postgres" \
   --from-literal=POSTGRES_PASSWORD="<strong-password>"
+
+# GitHub Token (cho run_ai_pipeline.py ban webhook)
+kubectl create secret generic github-secrets \
+  --from-literal=GITHUB_TOKEN="<your-token>"
 ```
 
-#### Bước 5: Upload model lên S3
+#### Bước 5: Khởi tạo MLflow Database (chi 1 lan)
 
 ```bash
-aws s3 cp models/v1/xgb_nids_model_v1.pkl s3://mlops-nids-artifacts/models/v1/
-aws s3 cp models/v1/label_classes_v1.json s3://mlops-nids-artifacts/models/v1/
-aws s3 cp models/v1/metrics_v1.json s3://mlops-nids-artifacts/models/v1/
-aws s3 cp data_manifest.json s3://mlops-nids-artifacts/
+kubectl apply -f k8s/init-mlflow-db.yaml
+kubectl wait --for=condition=complete job/mlflow-db-init --timeout=120s
 ```
 
-#### Bước 6: Deploy lên K3s
+#### Bước 6: Deploy MLflow Server (NodePort 30000)
+
+```bash
+kubectl apply -f k8s/mlflow-deployment.yaml
+kubectl get pods -l app=mlflow-server
+# Truy cap: http://<master-ip>:30000
+```
+
+#### Bước 7: Deploy toàn bộ hệ thống
 
 ```bash
 # PostgreSQL Cluster (Primary + Standby)
@@ -283,82 +294,70 @@ kubectl apply -f k8s/api-deployment.yaml
 # Evidently CronJob
 kubectl apply -f k8s/evidently-cronjob.yaml
 
-# Kiểm tra trạng thái
 kubectl get pods,services,cronjob -o wide
 ```
 
-#### Bước 7: Cấu hình GitHub Secrets cho CI/CD
+#### Bước 8: Cấu hình GitHub Secrets
 
-Trong `GitHub Repo -> Settings -> Secrets and variables -> Actions`:
-
-| Secret                  | Mô tả                                         |
-| ----------------------- | --------------------------------------------- |
-| `DOCKERHUB_USERNAME`    | Docker Hub username                           |
-| `DOCKERHUB_TOKEN`       | Docker Hub Access Token                       |
-| `AWS_ACCESS_KEY_ID`     | AWS IAM Access Key                            |
-| `AWS_SECRET_ACCESS_KEY` | AWS IAM Secret Key                            |
-| `KUBE_CONFIG`           | Nội dung file `~/.kube/config` từ Master Node |
-| `KAGGLE_USERNAME`       | Kaggle username                               |
-| `KAGGLE_KEY`            | Kaggle API Key                                |
-| `DB_HOST`               | IP Public của PostgreSQL / Master Node        |
-| `DB_USER`               | `postgres`                                    |
-| `DB_PASSWORD`           | Password đã đặt ở Bước 4                      |
+| Secret | Mô tả |
+|---|---|
+| `DOCKERHUB_USERNAME` | Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub Access Token |
+| `AWS_ACCESS_KEY_ID` | AWS IAM Access Key |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM Secret Key |
+| `KUBE_CONFIG` | Nội dung file `~/.kube/config` từ Master Node |
+| `KAGGLE_USERNAME` | Kaggle username |
+| `KAGGLE_KEY` | Kaggle API Key |
+| `DB_HOST` | IP Public của PostgreSQL / Master Node |
+| `DB_USER` | `postgres` |
+| `DB_PASSWORD` | Password đã đặt ở Bước 4 |
 
 ---
 
-### 🧪 Kiểm thử Hệ thống
-
-**Test API cơ bản:**
+### 5.3 Kiểm thử Hệ thống
 
 ```bash
+# Test API
 python web/src/test_api.py
-```
 
-**Stress test & giả lập Data Drift bằng Locust:**
-
-```bash
+# Load test
 pip install locust
-locust -f web/src/locustfile.py --host=http://<ALB-DNS-hoặc-localhost:5000>
-# Truy cập Locust Dashboard: http://localhost:8089
-# Khuyến nghị: 50 users + spawn 5/s + chạy 5 phút để tạo đủ 100+ production samples
+locust -f web/src/locustfile.py --host=http://localhost:5000
+# Locust Dashboard: http://localhost:8089
+
+# Chạy MLflow Evaluation Gate thủ công
+python orchestration/mlflow_evaluation_gate.py
+# Exit code 0 = APPROVED, Exit code 1 = REJECTED
+
+# Chạy Local Orchestrator thủ công
+python orchestration/run_ai_pipeline.py --trigger manual
 ```
 
-**Chạy Evidently drift detection thủ công:**
+### 5.4 Xử lý sự cố Thường gặp
 
-```bash
-pip install -r monitoring/requirements.txt
-python monitoring/detect_drift.py
-```
-
-**Kích hoạt Retrain Pipeline thủ công:**
-
-Vào `GitHub -> Actions -> MLOps NIDS Retraining Pipeline -> Run workflow`
+| Vấn đề | Nguyên nhân | Giải pháp |
+|---|---|---|
+| Port 5000/5432 bị chiếm | Có service khác đang chạy | `docker-compose down` |
+| `psycopg2.OperationalError` | `DB_HOST` sai | Local: `localhost`; K3s: `nids-postgres-rw` |
+| Init Container fail | S3 path hoặc credentials sai | `kubectl logs <pod> -c aws-s3-model-sync` |
+| Evidently skip analysis | Production data < 100 mẫu | Chạy Locust thêm để tạo đủ data |
+| CloudNativePG cluster pending | Operator chưa ready | `kubectl get pods -n cnpg-system` |
+| MLflow UI không truy cập được | NodePort 30000 chưa mở | Kiểm tra Security Group Master Node |
 
 ---
 
-### 🔧 Xử lý Sự cố Thường gặp
-
-| Vấn đề                        | Nguyên nhân                  | Giải pháp                                       |
-| ----------------------------- | ---------------------------- | ----------------------------------------------- |
-| Port 5000/5432 bị chiếm       | Có service khác đang chạy    | `docker-compose down` hoặc tắt PostgreSQL local |
-| `psycopg2.OperationalError`   | `DB_HOST` sai                | Local: `localhost`; K3s: `nids-postgres-rw`     |
-| Init Container fail           | S3 path hoặc credentials sai | `kubectl logs <pod> -c aws-s3-model-sync`       |
-| Evidently skip analysis       | Production data < 100 mẫu    | Chạy Locust thêm để tạo đủ data                 |
-| CloudNativePG cluster pending | Operator chưa ready          | `kubectl get pods -n cnpg-system`               |
-
----
-
-## 📁 Cấu trúc Thư mục
+## 6. Cấu trúc Thư mục
 
 ```
 mlops-nids-system/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci_cd_pipeline.yml        # Build -> Push Docker -> Deploy K3s
-│   │   └── retrain_pipeline.yml      # Retrain -> Evaluate -> Deploy -> Sync
+│   │   └── retrain_pipeline.yml      # ★ TO-BE: 2 Jobs (Deploy + Sync)
 │   └── scripts/
-│       ├── evaluate_model.py         # Model quality gate (Champion vs Challenger)
-│       └── update_reference_data.py  # Sync baseline after retrain
+│       ├── evaluate_model.py         # Legacy (chỉ dùng trong CI/CD thử nghiệm)
+│       ├── update_reference_data.py  # Đồng bộ baseline sau retrain
+│       └── extract_data.py           # Trích xuất dataset từ CIC-IDS2017
 ├── api/
 │   ├── src/
 │   │   ├── index.py                  # GET + POST /predict
@@ -369,41 +368,45 @@ mlops-nids-system/
 │   ├── detect_drift.py               # Evidently AI + nids-postgres-ro
 │   ├── Dockerfile
 │   └── requirements.txt
+├── orchestration/                    # ★ TO-BE: Local Orchestrator
+│   ├── run_ai_pipeline.py           # Nhạc trưởng: Kaggle -> MLflow -> Gate -> Webhook
+│   ├── mlflow_evaluation_gate.py    # Evaluation Gate: query MLflow, approve/reject
+│   └── register_models_to_mlflow.py  # Đăng ký v1, v2 vào MLflow Registry
 ├── kaggle_training/
-│   ├── train.py                      # XGBoost + MLflow + Hyperparameter Tuning
+│   ├── train.py                     # XGBoost + MLflow logging + Hyperparameter Tuning
 │   └── kernel-metadata.json
 ├── k8s/
-│   ├── api-deployment.yaml           # FastAPI + Init Container + ClusterIP + Traefik Ingress
+│   ├── api-deployment.yaml           # FastAPI + Init Container + ClusterIP
 │   ├── postgres-cluster.yaml         # CloudNativePG Primary + Standby
+│   ├── mlflow-deployment.yaml        # ★ TO-BE: MLflow Server trên Master Node (Port 30000)
+│   ├── init-mlflow-db.yaml           # ★ TO-BE: Khởi tạo database + user mlflow
 │   └── evidently-cronjob.yaml        # CronJob 0h UTC daily
 ├── infra/
-│   ├── main.tf                       # VPC + EC2 + ALB + S3 (Terraform)
+│   ├── main.tf                      # VPC + EC2 + ALB + S3 (Terraform)
 │   └── variables.tf
 ├── web/src/
-│   ├── test_api.py                   # Basic API test
-│   └── locustfile.py                 # Stress test + drift simulation
+│   ├── test_api.py                  # Basic API test
+│   └── locustfile.py                # Stress test + drift simulation
 ├── models/
-│   ├── v1/                           # 2-class: BENIGN + DDoS
-│   └── v2/                           # 3-class: + PortScan
+│   ├── v1/                          # 2-class: BENIGN + DDoS
+│   └── v2/                          # 3-class: + PortScan
+├── docs/
+│   └── MLFLOW_INTEGRATION_ARCHITECTURE.md  # ★ TO-BE: Kiến trúc MLflow-Centric chi tiết
 ├── data_manifest.json                # "Source of Trust": target_csv + model_version
-├── docker-compose.yml                # Local development environment
-└── .env.example                      # Environment variable template
+├── docker-compose.yml               # Local development environment
+└── .env.example                    # Environment variable template
 ```
 
 ---
 
-## 📚 Tài liệu Liên quan
+## 7. Tài liệu Liên quan
 
-| Tài liệu                           | Mô tả                                              |
-| ---------------------------------- | -------------------------------------------------- |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Kiến trúc chi tiết, diagrams, database schema      |
-| [CHANGELOG.md](CHANGELOG.md)       | Lịch sử phát triển theo từng giai đoạn             |
+| Tài liệu | Mô tả |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Kiến trúc chi tiết, diagrams, database schema |
+| [CHANGELOG.md](CHANGELOG.md) | Lịch sử phát triển theo từng giai đoạn |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Quy tắc đóng góp, branch naming, commit convention |
 
 ---
 
-<div align="center">
-
 _Developed for UIT · NT114 · MLOps NIDS System Project_
-
-</div>

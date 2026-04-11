@@ -1,0 +1,94 @@
+# k8s/init-mlflow-db.yaml
+# Kubernetes Job: Khoi tao MLflow database tren CloudNativePG (PostgreSQL)
+# Chi tao 1 lan khi setup ha tang, khong can chay lai
+# Tac gia: MLflow NIDS Team
+# Ngay: 2026-04-11
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mlflow-db-init
+  labels:
+    app: mlflow-db-init
+  annotations:
+    description: "Tao mlflow database va user tren CloudNativePG"
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: mlflow-db-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: postgres:15-alpine
+          env:
+            - name: PGHOST
+              value: "nids-postgres-rw"
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              set -e
+              echo "Dang ket noi toi PostgreSQL: ${PGHOST}:${PGPORT}"
+
+              # Cho PostgreSQL san sang (timeout 60s)
+              for i in $(seq 1 30); do
+                if pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" 2>/dev/null; then
+                  echo "PostgreSQL san sang"
+                  break
+                fi
+                echo "Dang doi PostgreSQL... lan ${i}/30"
+                sleep 2
+              done
+
+              echo "=== Bat dau khoi tao MLflow Database ==="
+
+              # Tao user mlflow (neu chua ton tai)
+              psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" <<-EOSQL
+              DO $$
+              BEGIN
+                IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'mlflow') THEN
+                  CREATE USER mlflow WITH PASSWORD 'mlflow_password';
+                  RAISE NOTICE 'User mlflow da duoc tao';
+                ELSE
+                  RAISE NOTICE 'User mlflow da ton tai, bo qua';
+                END IF;
+              END
+              $$;
+              EOSQL
+
+              # Tao database mlflow (neu chua ton tai)
+              psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" <<-EOSQL
+              SELECT 'CREATE DATABASE mlflow' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mlflow')\\gexec
+              EOSQL
+
+              # Cap quyen ALL tren database mlflow cho user mlflow
+              psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" <<-EOSQL
+              GRANT ALL PRIVILEGES ON DATABASE mlflow TO mlflow;
+              GRANT ALL ON SCHEMA public TO mlflow;
+              ALTER DATABASE mlflow OWNER TO mlflow;
+              \\c mlflow
+              GRANT ALL ON SCHEMA public TO mlflow;
+              GRANT ALL PRIVILEGES ON SCHEMA public TO mlflow;
+              ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO mlflow;
+              ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO mlflow;
+              EOSQL
+
+              echo "=== MLflow database da san sang ==="
+              echo "Database: mlflow | User: mlflow | Password: mlflow_password"
+              echo "MLFLOW_TRACKING_URI=postgresql://mlflow:mlflow_password@nids-postgres-rw:5432/mlflow"
