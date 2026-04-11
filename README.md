@@ -60,6 +60,10 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 | 11 | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời | Locust |
 
 ---
+## 3. Kiến trúc Hệ thống
+
+> Xem sơ đồ Mermaid chi tiết tại: [ARCHITECTURE.md](ARCHITECTURE.md)
+
 ```
                         ┌──────────────────────────────────────────────┐
                         │              AWS ap-southeast-1              │
@@ -122,16 +126,6 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
                                                    │ model artifacts
                                         S3 (mlops-nids-artifacts)
 ```
-
-> Kiến trúc chi tiết: [ARCHITECTURE.md](ARCHITECTURE.md)
-
-
----
-
-## 3. Kiến trúc Hệ thống
-
-> Xem sơ đồ Mermaid chi tiết tại: [ARCHITECTURE.md](ARCHITECTURE.md)
-
 ---
 
 ## 4. Technology Stack
