@@ -60,6 +60,7 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 | 11 | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời | Locust |
 
 ---
+```
                         ┌──────────────────────────────────────────────┐
                         │              AWS ap-southeast-1              │
  Users / Locust ───────►│ ALB (Public)                                 │
