@@ -110,8 +110,23 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
         print(f"❌ [RW] Error saving to '{table_name}': {e}")
         return False
 
+# 4. HÀM ĐẾM SỐ LƯỢNG BẢN GHI
+def get_production_data_count() -> int:
+    """Đếm tổng số bản ghi trong bảng nids_production_data."""
+    # Mặc định lấy từ engine_ro nếu có để giảm tải, nếu không có fallback sang engine_rw
+    engine = engine_ro if engine_ro else engine_rw
+    if engine is None:
+        return 0
 
-# 4. TEST CHẠY THỬ ĐỘC LẬP
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) FROM nids_production_data"))
+            return result.scalar()
+    except Exception as e:
+        print(f"❌ Error counting records: {e}")
+        return 0
+
+# 5. TEST CHẠY THỬ ĐỘC LẬP
 if __name__ == "__main__":
     import uuid
     from datetime import datetime

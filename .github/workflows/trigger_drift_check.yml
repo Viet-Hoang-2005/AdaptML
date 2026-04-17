@@ -1,0 +1,39 @@
+name: MLOps NIDS - Manual Trigger Evidently AI Drift Check
+
+on:
+  repository_dispatch:
+    types: [trigger_drift_check]
+
+jobs:
+  run-drift-check:
+    name: "🔍 Trigger Evidently AI Data Drift Check on K3s"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Xác thực Kubeconfig K3s
+        uses: azure/k8s-set-context@v2
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Kích hoạt K8s Job phát hiện Drift
+        run: |
+          echo "🚀 Bắt đầu chạy Evidently AI Data Drift Check..."
+          echo "Triggered by: ${{ github.event.client_payload.trigger_source }}"
+          echo "Current data count: ${{ github.event.client_payload.current_data_count }}"
+          
+          # Sinh ID duy nhất cho Job bằng timestamp
+          JOB_NAME="evidently-manual-$(date +%s)"
+          
+          # Tạo một Job thực thi một lần (One-off Job) dựa trên khuôn mẫu CronJob hiện có
+          kubectl create job --from=cronjob/evidently-drift-monitor $JOB_NAME
+          
+          echo "⏳ Đợi K8s Job khởi chạy và theo dõi logs..."
+          # Đợi Pod được sinh ra từ Job (chờ khoảng 10-15s để Pod Ready)
+          sleep 10
+          kubectl wait --for=condition=ready pod -l job-name=$JOB_NAME --timeout=60s || true
+          
+          # In log để lưu vào màn hình GitHub Actions
+          kubectl logs -l job-name=$JOB_NAME
