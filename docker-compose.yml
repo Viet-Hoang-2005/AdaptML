@@ -44,6 +44,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
+      REDPANDA_BROKERS: redpanda:9092
     volumes:
       - ./models:/models  # Mount thư mục models local vào container
       - ./api:/app
@@ -51,6 +52,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy  # Đợi postgres healthy mới start API
+      redpanda:
+        condition: service_started
     networks:
       - mlops_nids_network
 
@@ -79,12 +82,75 @@ services:
     networks:
       - mlops_nids_network
 
-# 4. Mạng nội bộ cho các container
+  # 5. NIDS Log Consumer (đứng giữa Redpanda và PostgreSQL)
+  consumer:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: mlops_nids_consumer
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: 1
+      DB_HOST_RW: postgres
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      REDPANDA_BROKERS: redpanda:9092
+    volumes:
+      - ./api:/app
+    command: python src/consumer.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+    networks:
+      - mlops_nids_network
+
+  # 6. Redpanda Kafka Broker
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: mlops_nids_redpanda
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --memory 1G
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --mode dev-container
+    ports:
+      - "19092:19092"
+      - "18082:18082"
+      - "19644:9644"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - mlops_nids_network
+
+  # 7. Redpanda Console (Kafka UI)
+  console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    container_name: mlops_nids_redpanda_console
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      - redpanda
+    networks:
+      - mlops_nids_network
+
+# 8. Mạng nội bộ cho các container
 networks:
   mlops_nids_network:
     driver: bridge
 
-# 5. Volume để lưu trữ dữ liệu của PostgreSQL
+# 5. Volume để lưu trữ dữ liệu của PostgreSQL và Redpanda
 volumes:
   mlops_nids_pgdata:
     external: false
+  redpanda_data:
