@@ -59,42 +59,7 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 
 ## 🏗️ Kiến trúc Hệ thống
 
-```
-                        ┌──────────────────────────────────────────┐
-                        │           AWS ap-southeast-1             │
-                        │                                          │
-  Users / Locust ──────►│  ALB (Public)                            │
-                        │    │                                     │
-                        │    ▼                                     │
-                        │  K3s Cluster (1 Master + 2 Workers)      │
-                        │  ┌────────────────────────────────────┐  │
-                        │  │  FastAPI Pods (x2, ClusterIP)      │  │
-                        │  │    Ingress: Traefik (Port 80)      │  │
-                        │  │    Init Container: S3 → model.pkl  │  │
-                        │  └──────────┬─────────────────────────┘  │
-                        │             │ INSERT (async)             │
-                        │             ▼                            │
-                        │  ┌───────────────────────────┐           │
-                        │  │  CloudNativePG PostgreSQL │           │
-                        │  │  Primary ←→ Standby (HA)  │           │
-                        │  └──────────┬────────────────┘           │
-                        │             │ SELECT (daily)             │
-                        │             ▼                            │
-                        │  ┌───────────────────────────┐           │
-                        │  │  Evidently CronJob        │           │
-                        │  │  0h UTC · Drift Analysis  │           │
-                        │  └──────────┬────────────────┘           │
-                        │             │ Webhook                    │
-                        └─────────────│───────────────────── S3 ───┘
-                                      │                      ▲
-                                      ▼                      │
-                              GitHub Actions          model artifacts
-                         Retrain → Evaluate → Deploy → Sync
-                                      │
-                                      ▼
-                              Kaggle Compute Engine
-                              train.py · MLflow · XGBoost
-```
+![MLOPs NIDS System Architecture](assets/pictures/MLOps-NIDS-Architecture.png)
 
 > Xem chi tiết kiến trúc và các diagram tại [ARCHITECTURE.md](ARCHITECTURE.md)
 
@@ -115,6 +80,50 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 | **Model Registry**     | AWS S3                                       |
 | **Orchestration**      | K3s (Kubernetes)                             |
 | **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)       |
+
+---
+
+## 📁 Cấu trúc Thư mục
+
+```
+mlops-nids-system/
+├── .github/
+│   ├── workflows/
+│   │   ├── ci_cd_pipeline.yml        # Build -> Push Docker -> Deploy K3s
+│   │   └── retrain_pipeline.yml      # Retrain -> Evaluate -> Deploy -> Sync
+│   └── scripts/
+│       ├── evaluate_model.py         # Model quality gate (Champion vs Challenger)
+│       └── update_reference_data.py  # Sync baseline after retrain
+├── api/
+│   ├── src/
+│   │   ├── index.py                  # GET + POST /predict
+│   │   └── db_manager.py             # Dual-endpoint: engine_rw + engine_ro
+│   ├── Dockerfile
+│   └── requirements.txt
+├── monitoring/
+│   ├── detect_drift.py               # Evidently AI + nids-postgres-ro
+│   ├── Dockerfile
+│   └── requirements.txt
+├── kaggle_training/
+│   ├── train.py                      # XGBoost + MLflow + Hyperparameter Tuning
+│   └── kernel-metadata.json
+├── k8s/
+│   ├── api-deployment.yaml           # FastAPI + Init Container + ClusterIP + Traefik Ingress
+│   ├── postgres-cluster.yaml         # CloudNativePG Primary + Standby
+│   └── evidently-cronjob.yaml        # CronJob 0h UTC daily
+├── infra/
+│   ├── main.tf                       # VPC + EC2 + ALB + S3 (Terraform)
+│   └── variables.tf
+├── web/src/
+│   ├── test_api.py                   # Basic API test
+│   └── locustfile.py                 # Stress test + drift simulation
+├── models/
+│   ├── v1/                           # 2-class: BENIGN + DDoS
+│   └── v2/                           # 3-class: + PortScan
+├── data_manifest.json                # "Source of Trust": target_csv + model_version
+├── docker-compose.yml                # Local development environment
+└── .env.example                      # Environment variable template
+```
 
 ---
 
@@ -345,50 +354,6 @@ Vào `GitHub -> Actions -> MLOps NIDS Retraining Pipeline -> Run workflow`
 | Init Container fail           | S3 path hoặc credentials sai | `kubectl logs <pod> -c aws-s3-model-sync`       |
 | Evidently skip analysis       | Production data < 100 mẫu    | Chạy Locust thêm để tạo đủ data                 |
 | CloudNativePG cluster pending | Operator chưa ready          | `kubectl get pods -n cnpg-system`               |
-
----
-
-## 📁 Cấu trúc Thư mục
-
-```
-mlops-nids-system/
-├── .github/
-│   ├── workflows/
-│   │   ├── ci_cd_pipeline.yml        # Build -> Push Docker -> Deploy K3s
-│   │   └── retrain_pipeline.yml      # Retrain -> Evaluate -> Deploy -> Sync
-│   └── scripts/
-│       ├── evaluate_model.py         # Model quality gate (Champion vs Challenger)
-│       └── update_reference_data.py  # Sync baseline after retrain
-├── api/
-│   ├── src/
-│   │   ├── index.py                  # GET + POST /predict
-│   │   └── db_manager.py             # Dual-endpoint: engine_rw + engine_ro
-│   ├── Dockerfile
-│   └── requirements.txt
-├── monitoring/
-│   ├── detect_drift.py               # Evidently AI + nids-postgres-ro
-│   ├── Dockerfile
-│   └── requirements.txt
-├── kaggle_training/
-│   ├── train.py                      # XGBoost + MLflow + Hyperparameter Tuning
-│   └── kernel-metadata.json
-├── k8s/
-│   ├── api-deployment.yaml           # FastAPI + Init Container + ClusterIP + Traefik Ingress
-│   ├── postgres-cluster.yaml         # CloudNativePG Primary + Standby
-│   └── evidently-cronjob.yaml        # CronJob 0h UTC daily
-├── infra/
-│   ├── main.tf                       # VPC + EC2 + ALB + S3 (Terraform)
-│   └── variables.tf
-├── web/src/
-│   ├── test_api.py                   # Basic API test
-│   └── locustfile.py                 # Stress test + drift simulation
-├── models/
-│   ├── v1/                           # 2-class: BENIGN + DDoS
-│   └── v2/                           # 3-class: + PortScan
-├── data_manifest.json                # "Source of Trust": target_csv + model_version
-├── docker-compose.yml                # Local development environment
-└── .env.example                      # Environment variable template
-```
 
 ---
 
