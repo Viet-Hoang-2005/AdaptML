@@ -4,10 +4,6 @@ import os
 os.system("pip install mlflow --quiet")
 os.system("pip install boto3 --quiet")
 
-# Thiết lập phiên bản model và file CSV mục tiêu từ biến môi trường
-os.environ["MODEL_VERSION"] = "v2"
-os.environ["TARGET_CSV"] = "train_3_classes.csv"
-
 # Import các thư viện cần thiết cho machine learning và xử lý dữ liệu
 import pandas as pd
 import numpy as np
@@ -61,7 +57,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
 
     local_csv_path = None
     
-    # PHƯƠNG ÁN A: Ưu tiên tải dữ liệu từ AWS S3
+    # Phương án A: Ưu tiên tải dữ liệu từ AWS S3
     AWS_BUCKET = os.environ.get("AWS_BUCKET_NAME", "mlops-nids-artifacts")
     S3_PREFIX = os.environ.get("S3_TRAINING_DATA_PREFIX", "training-data/")
     s3_download_path = os.path.join('/kaggle/working', TARGET_CSV)
@@ -76,7 +72,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     except Exception as e:
         print(f"⚠️ Failed to download from S3 (Error: {e}).")
 
-    # PHƯƠNG ÁN B: Tìm kiếm cục bộ trong thư mục /kaggle/input/
+    # Phương án B: Tìm kiếm cục bộ trong thư mục /kaggle/input/
     if local_csv_path is None:
         print(f"🔍 Searching for {TARGET_CSV} in /kaggle/input/...")
         for dirname, _, filenames in os.walk('/kaggle/input'):
@@ -102,7 +98,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     y = le.fit_transform(y_raw)
     num_classes = len(le.classes_)
 
-    print(f"🏷️ Detected attack classes: {le.classes_}")
+    print(f"🔖 Detected attack classes: {le.classes_}")
     print(f"Total classes (num_classes): {num_classes}")
     mlflow.log_param("num_classes", num_classes)
 
