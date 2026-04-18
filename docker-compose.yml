@@ -18,7 +18,7 @@ services:
       - mlops_nids_network
     # Đợi PostgreSQL thực sự sẵn sàng nhận connection trước khi API start
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -32,7 +32,7 @@ services:
     container_name: mlops_nids_api
     restart: always
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       PYTHONUNBUFFERED: 1
       MODEL_VERSION: ${MODEL_VERSION:-v1}
@@ -46,12 +46,12 @@ services:
       DB_NAME: ${DB_NAME}
       REDPANDA_BROKERS: redpanda:9092
     volumes:
-      - ./models:/models  # Mount thư mục models local vào container
+      - ./models:/models # Mount thư mục models local vào container
       - ./api:/app
     command: uvicorn src.index:app --host 0.0.0.0 --port 5000 --reload
     depends_on:
       postgres:
-        condition: service_healthy  # Đợi postgres healthy mới start API
+        condition: service_healthy # Đợi postgres healthy mới start API
       redpanda:
         condition: service_started
     networks:
@@ -92,6 +92,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       DB_HOST_RW: postgres
+      DB_HOST_RO: postgres
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_PORT: ${DB_PORT:-5432}
