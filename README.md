@@ -27,13 +27,17 @@
 Hệ thống này là một **MLOps pipeline hoàn chỉnh end-to-end** được xây dựng chuyên biệt cho bài toán phát hiện tấn công mạng (NIDS). Điểm nổi bật là khả năng **tự vận hành khép kín**: tự phát hiện khi dữ liệu thực tế bị lệch so với dữ liệu training, tự kích hoạt quá trình tái huấn luyện, và tự triển khai model mới mà **không gây gián đoạn dịch vụ** (zero-downtime).
 
 ```
-Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
+Client Traffic → FastAPI (Inference) → Redpanda (Message Broker)
                                               ↓
-                                   Evidently AI (Daily Drift Check)
+                                     Consumer (Batch Processing)
+                                              ↓
+                                      PostgreSQL (Logging)
+                                              ↓ (Auto-trigger via Webhook)
+                                   Evidently AI (Data Drift Check)
                                               ↓ drift detected
                                    GitHub Actions (Retrain Pipeline)
                                               ↓
-                              Kaggle Compute → evaluate_model.py → K3s Deploy
+                              Kaggle Compute → MLFlow → K3s Deploy
                                               ↓ success
                                    update_reference_data.py (Close the Loop)
 ```
@@ -46,9 +50,9 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 | --- | ---------------------------------------------------------------------------- | ---------------------------- |
 | 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%            | XGBoost + CIC-IDS2017        |
 | 2   | **Low-latency inference** < 100ms, model nạp vào RAM                         | FastAPI + Uvicorn            |
-| 3   | **Async logging** mọi request vào DB mà không tăng latency                   | BackgroundTasks + PostgreSQL |
+| 3   | **Event-driven streaming** chịu tải dữ liệu lớn, zero-data loss              | Redpanda + Consumer          |
 | 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                     | CloudNativePG + K3s          |
-| 5   | **Daily drift detection** 0h UTC, phân tích phân phối 70+ features           | Evidently AI + CronJob       |
+| 5   | **Automated drift detection** tự động kích hoạt qua Webhook khi đủ 100+ mẫu  | Evidently AI + GitHub Actions|
 | 6   | **Automated retraining** khi drift ≥ 50%, không cần can thiệp thủ công       | Kaggle API + GitHub Actions  |
 | 7   | **Model quality gate** - chỉ promote model mới khi vượt Champion             | evaluate_model.py            |
 | 8   | **Zero-downtime deployment** Rolling update + Init Container kéo model từ S3 | K3s + AWS S3                 |
@@ -71,6 +75,7 @@ Client Traffic → FastAPI (Inference) → PostgreSQL (Logging)
 | ---------------------- | -------------------------------------------- |
 | **Machine Learning**   | XGBoost + Scikit-learn + Pandas + MLflow     |
 | **Model Serving**      | FastAPI + Uvicorn + Python 3.10              |
+| **Message Broker**     | Redpanda (Kafka-compatible)                  |
 | **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy   |
 | **Drift Monitoring**   | Evidently AI + DataDriftPreset + K8s CronJob |
 | **Load Testing**       | Locust                                       |
@@ -90,13 +95,16 @@ mlops-nids-system/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci_cd_pipeline.yml        # Build -> Push Docker -> Deploy K3s
-│   │   └── retrain_pipeline.yml      # Retrain -> Evaluate -> Deploy -> Sync
+│   │   ├── retrain_pipeline.yml      # Retrain -> Evaluate -> Deploy -> Sync
+│   │   └── trigger_drift_check.yml   # Lắng nghe Webhook từ Consumer để chạy Evidently
 │   └── scripts/
 │       ├── evaluate_model.py         # Model quality gate (Champion vs Challenger)
-│       └── update_reference_data.py  # Sync baseline after retrain
+│       ├── update_reference_data.py  # Sync baseline sau khi retrain (Hỗ trợ Fallback)
+│       └── clear_production_data.py  # Utility dọn dẹp Production Data trong DB
 ├── api/
 │   ├── src/
-│   │   ├── index.py                  # GET + POST /predict
+│   │   ├── index.py                  # GET + POST /predict (Ghi data vào Redpanda)
+│   │   ├── consumer.py               # Nhặt data từ Redpanda -> Batch insert DB -> Bắn Webhook
 │   │   └── db_manager.py             # Dual-endpoint: engine_rw + engine_ro
 │   ├── Dockerfile
 │   └── requirements.txt
@@ -199,11 +207,12 @@ curl http://localhost:5000/
 # Test predict endpoint
 python web/src/test_api.py
 
-# Locust test
+# Locust test (Cài đặt: pip3 install locust)
 locust -f web/src/locustfile.py --host=http://localhost:5000
 ```
 
-Locust Dashbroad: `http://localhost:8089`
+Locust Dashboard: `http://localhost:8089` (Thêm flag `-P 8090` nếu port bị trùng)
+Redpanda Console: `http://localhost:8080` (Giao diện xem Message Broker)
 API Swagger UI: `http://localhost:5000/docs`
 
 **Dừng hệ thống:**
@@ -309,9 +318,6 @@ Trong `GitHub Repo -> Settings -> Secrets and variables -> Actions`:
 | `KUBE_CONFIG`           | Nội dung file `~/.kube/config` từ Master Node |
 | `KAGGLE_USERNAME`       | Kaggle username                               |
 | `KAGGLE_KEY`            | Kaggle API Key                                |
-| `DB_HOST`               | IP Public của PostgreSQL / Master Node        |
-| `DB_USER`               | `postgres`                                    |
-| `DB_PASSWORD`           | Password đã đặt ở Bước 4                      |
 
 ---
 
@@ -349,10 +355,12 @@ Vào `GitHub -> Actions -> MLOps NIDS Retraining Pipeline -> Run workflow`
 
 | Vấn đề                        | Nguyên nhân                  | Giải pháp                                       |
 | ----------------------------- | ---------------------------- | ----------------------------------------------- |
-| Port 5000/5432 bị chiếm       | Có service khác đang chạy    | `docker-compose down` hoặc tắt PostgreSQL local |
-| `psycopg2.OperationalError`   | `DB_HOST` sai                | Local: `localhost`; K3s: `nids-postgres-rw`     |
+| Port 5000 bị chiếm trên Mac   | Tính năng "AirPlay Receiver" | Tắt AirPlay Receiver trong System Settings      |
+| Port 8089 bị chiếm            | Có app khác đang chạy        | Thêm `-P 8090` khi chạy lệnh locust             |
+| `zsh: command not found: locust`| Gõ sai `locus` hoặc lỗi PATH | Chạy `python3 -m locust -f ...` để gọi trực tiếp|
+| Lỗi Connection Refused trong API| Chưa load đúng DB_HOST_RO    | Đảm bảo config `DB_HOST_RO: postgres` trong Docker|
+| `psycopg2.OperationalError`   | Thiếu thư viện trên máy host | Chạy `pip3 install psycopg2-binary`             |
 | Init Container fail           | S3 path hoặc credentials sai | `kubectl logs <pod> -c aws-s3-model-sync`       |
-| Evidently skip analysis       | Production data < 100 mẫu    | Chạy Locust thêm để tạo đủ data                 |
 | CloudNativePG cluster pending | Operator chưa ready          | `kubectl get pods -n cnpg-system`               |
 
 ---

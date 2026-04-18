@@ -71,4 +71,5 @@ htmlcov/
 .terraform/
 .terraform.tfstate
 .terraform.lock.hcl
+terraform.tfvars
 .ssh/

@@ -48,7 +48,10 @@ def trigger_github_webhook(count: int):
 def check_threshold_and_trigger(last_triggered_count: int) -> int:
     """Kiểm tra số lượng và gọi webhook nếu vượt ngưỡng. Trả về last_triggered_count mới."""
     count = get_production_data_count()
-    if count - last_triggered_count >= EVIDENTLY_TRIGGER_THRESHOLD:
+    diff = count - last_triggered_count
+    print(f"📈 Drift monitoring: {count} total rows. New rows since last trigger: {diff}/{EVIDENTLY_TRIGGER_THRESHOLD}")
+    
+    if diff >= EVIDENTLY_TRIGGER_THRESHOLD:
         trigger_github_webhook(count)
         return count
     return last_triggered_count
