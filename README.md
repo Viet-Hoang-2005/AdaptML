@@ -118,7 +118,8 @@ mlops-nids-system/
 ├── k8s/
 │   ├── api-deployment.yaml           # FastAPI + Init Container + ClusterIP + Traefik Ingress
 │   ├── postgres-cluster.yaml         # CloudNativePG Primary + Standby
-│   └── evidently-cronjob.yaml        # CronJob 0h UTC daily
+│   ├── evidently-job.yaml            # Job quét Drift (kích hoạt qua Webhook từ Redpanda)
+│   └── sync-job.yaml                 # Job đồng bộ Reference Data (kích hoạt qua Webhook từ S3)
 ├── infra/
 │   ├── main.tf                       # VPC + EC2 + ALB + S3 (Terraform)
 │   └── variables.tf
@@ -297,9 +298,6 @@ kubectl wait --for=condition=Ready cluster/nids-postgres --timeout=180s
 
 # FastAPI Server
 kubectl apply -f k8s/api-deployment.yaml
-
-# Evidently CronJob
-kubectl apply -f k8s/evidently-cronjob.yaml
 
 # Kiểm tra trạng thái
 kubectl get pods,services,cronjob -o wide
