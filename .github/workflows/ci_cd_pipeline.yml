@@ -1,9 +1,5 @@
 name: MLOps NIDS - CI/CD Pipeline
 
-# TRIGGER: Pipeline này chạy khi có code thay đổi được push lên main.
-# Nhiệm vụ: Kiểm tra code (Lint), Build Docker Images và Deploy lên K3s.
-# Đây là pipeline "Continuous Integration & Delivery" — khác với
-# retrain_pipeline.yml (chuyên xử lý Data Drift & Model Retraining).
 on:
   push:
     branches: [main]
@@ -156,7 +152,9 @@ jobs:
           echo "📦 Applying K8s manifests..."
           kubectl apply -f k8s/postgres-cluster.yaml
           kubectl apply -f k8s/api-deployment.yaml
-          kubectl apply -f k8s/evidently-cronjob.yaml
+          kubectl apply -f k8s/redpanda-deployment.yaml
+          kubectl apply -f k8s/consumer-deployment.yaml
+          kubectl apply -f k8s/evidently-job.yaml
           echo "✅ Đã apply toàn bộ manifests."
 
       - name: Cập nhật Image Tag mới nhất cho API Deployment
@@ -166,11 +164,11 @@ jobs:
             fastapi-server=${{ env.API_IMAGE }}:${{ github.sha }}
           echo "🏷️  Đã cập nhật image tag: ${{ github.sha }}"
 
-      - name: Cập nhật Image Tag mới nhất cho Evidently CronJob
+      - name: Cập nhật Image Tag mới nhất cho Consumer
         run: |
-          kubectl patch cronjob evidently-drift-monitor \
-            -p '{"spec":{"jobTemplate":{"spec":{"template":{"spec":{"containers":[{"name":"drift-monitor","image":"${{ env.MONITOR_IMAGE }}:${{ github.sha }}"}]}}}}}}'
-          echo "🏷️  Đã cập nhật Evidently Monitor image tag."
+          kubectl set image deployment/mlops-nids-consumer \
+            consumer=${{ env.API_IMAGE }}:${{ github.sha }}
+          echo "🏷️  Đã cập nhật Consumer image tag: ${{ github.sha }}"
 
       - name: Đợi Rolling Update hoàn thành (Zero-Downtime)
         run: |

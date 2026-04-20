@@ -1,9 +1,5 @@
 name: MLOps NIDS - Retraining Pipeline
 
-# TRIGGER: Pipeline được kích hoạt theo 3 cách:
-#   1. Tự động mỗi nửa đêm (định kỳ kiểm tra drift)
-#   2. Thủ công từ tab Actions trên GitHub (workflow_dispatch)
-#   3. Webhook từ Evidently container (repository_dispatch)
 on:
   schedule:
     - cron: '0 0 * * *'
@@ -96,7 +92,6 @@ jobs:
         run: |
           mkdir -p models/$MODEL_VERSION
           kaggle kernels output hongtrnnguynvit/mlops-nids-training-pipeline -p models/$MODEL_VERSION/
-          d
           echo "📦 Files tải về:"
           ls -la models/$MODEL_VERSION/
           
