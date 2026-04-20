@@ -68,6 +68,10 @@ spec:
           ports:
             - containerPort: 5000
           env:
+            # Redpanda Broker endpoint chuyên dùng để gửi log
+            - name: REDPANDA_BROKERS
+              value: "redpanda-service:9092"
+
             # Version model phải khớp với MODEL_VERSION trong Init Container
             - name: MODEL_VERSION
               value: "v1"
