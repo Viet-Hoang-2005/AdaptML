@@ -27,37 +27,37 @@
 Hệ thống này là một **MLOps pipeline hoàn chỉnh end-to-end** được xây dựng chuyên biệt cho bài toán phát hiện tấn công mạng (NIDS). Điểm nổi bật là khả năng **tự vận hành khép kín**: tự phát hiện khi dữ liệu thực tế bị lệch so với dữ liệu training, tự kích hoạt quá trình tái huấn luyện, và tự triển khai model mới mà **không gây gián đoạn dịch vụ** (zero-downtime).
 
 ```
-Client Traffic → FastAPI (Inference) → Redpanda (Message Broker)
-                                              ↓
-                                     Consumer (Batch Processing)
-                                              ↓
-                                      PostgreSQL (Logging)
-                                              ↓ (Auto-trigger via Webhook)
-                                   Evidently AI (Data Drift Check)
-                                              ↓ drift detected
-                                   GitHub Actions (Retrain Pipeline)
-                                              ↓
-                              Kaggle Compute → MLFlow → K3s Deploy
-                                              ↓ success
-                                   update_reference_data.py (Close the Loop)
+Inference Traffic → FastAPI (Producer) → Redpanda (Message Queue)
+                                               ↓
+                                   Consumer (Batch DB Writer)
+                                               ↓
+                                   PostgreSQL (Production Logs)
+                                               ↓ (Event-driven Webhook)
+                                    Evidently AI (Drift Check Job)
+                                               ↓ drift detected
+                                    GitHub Actions (Retrain Pipeline)
+                                               ↓
+                                Kaggle + MLflow → AWS S3 → K3s Deploy
+                                               ↓ success
+                                    update_reference_data.py (Reference Sync)
 ```
 
 ---
 
 ## ✨ Tính năng Cốt lõi
 
-| #   | Tính năng                                                                    | Công nghệ                    |
-| --- | ---------------------------------------------------------------------------- | ---------------------------- |
-| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%            | XGBoost + CIC-IDS2017        |
-| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                         | FastAPI + Uvicorn            |
-| 3   | **Event-driven streaming** chịu tải dữ liệu lớn, zero-data loss              | Redpanda + Consumer          |
-| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                     | CloudNativePG + K3s          |
-| 5   | **Automated drift detection** tự động kích hoạt qua Webhook khi đủ 100+ mẫu  | Evidently AI + GitHub Actions|
-| 6   | **Automated retraining** khi drift ≥ 50%, không cần can thiệp thủ công       | Kaggle API + GitHub Actions  |
-| 7   | **Model quality gate** - chỉ promote model mới khi vượt Champion             | evaluate_model.py            |
-| 8   | **Zero-downtime deployment** Rolling update + Init Container kéo model từ S3 | K3s + AWS S3                 |
-| 9   | **Closed-loop feedback** - baseline tự cập nhật sau mỗi lần retrain          | update_reference_data.py     |
-| 10  | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời        | Locust                       |
+| #   | Tính năng                                                                    | Công nghệ                     |
+| --- | ---------------------------------------------------------------------------- | ----------------------------- |
+| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%            | XGBoost + CIC-IDS2017         |
+| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                         | FastAPI + Uvicorn             |
+| 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer | Redpanda + Consumer           |
+| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                     | CloudNativePG + K3s           |
+| 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu  | Evidently AI + GitHub Actions |
+| 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên Kaggle GPU   | AWS Lambda + GitHub Actions   |
+| 7   | **Model quality gate** - chỉ promote model mới khi vượt Champion             | evaluate_model.py             |
+| 8   | **Zero-downtime deployment** Rolling update + Init Container kéo model từ S3 | K3s + AWS S3                  |
+| 9   | **Closed-loop feedback** - baseline tự cập nhật sau mỗi lần retrain          | update_reference_data.py      |
+| 10  | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời        | Locust                        |
 
 ---
 
@@ -71,20 +71,20 @@ Client Traffic → FastAPI (Inference) → Redpanda (Message Broker)
 
 ## 🛠️ Technology Stack
 
-| Layer                  | Technology                                   |
-| ---------------------- | -------------------------------------------- |
-| **Machine Learning**   | XGBoost + Scikit-learn + Pandas + MLflow     |
-| **Model Serving**      | FastAPI + Uvicorn + Python 3.10              |
-| **Message Broker**     | Redpanda (Kafka-compatible)                  |
-| **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy   |
-| **Drift Monitoring**   | Evidently AI + DataDriftPreset + K8s CronJob |
-| **Load Testing**       | Locust                                       |
-| **Compute Engine**     | Kaggle Kernels API                           |
-| **CI/CD/CT**           | GitHub Actions                               |
-| **Container Registry** | Docker Hub                                   |
-| **Model Registry**     | AWS S3                                       |
-| **Orchestration**      | K3s (Kubernetes)                             |
-| **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)       |
+| Layer                  | Technology                                 |
+| ---------------------- | ------------------------------------------ |
+| **Machine Learning**   | XGBoost + Scikit-learn + Pandas + MLflow   |
+| **Model Serving**      | FastAPI + Uvicorn + Python 3.10            |
+| **Message Broker**     | Redpanda (Kafka-compatible)                |
+| **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy |
+| **Drift Monitoring**   | Evidently AI + Event-driven K8s Job        |
+| **Load Testing**       | Locust                                     |
+| **Compute Engine**     | Kaggle Kernels API                         |
+| **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda                |
+| **Container Registry** | Docker Hub                                 |
+| **Model Registry**     | AWS S3                                     |
+| **Orchestration**      | K3s (Kubernetes)                           |
+| **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)     |
 
 ---
 
@@ -116,10 +116,12 @@ mlops-nids-system/
 │   ├── train.py                      # XGBoost + MLflow + Hyperparameter Tuning
 │   └── kernel-metadata.json
 ├── k8s/
-│   ├── api-deployment.yaml           # FastAPI + Init Container + ClusterIP + Traefik Ingress
-│   ├── postgres-cluster.yaml         # CloudNativePG Primary + Standby
-│   ├── evidently-job.yaml            # Job quét Drift (kích hoạt qua Webhook từ Redpanda)
-│   └── sync-job.yaml                 # Job đồng bộ Reference Data (kích hoạt qua Webhook từ S3)
+│   ├── api-deployment.yaml           # FastAPI Server + Init Container
+│   ├── redpanda-deployment.yaml      # Redpanda Broker (StatefulSet)
+│   ├── consumer-deployment.yaml      # NIDS Log Consumer
+│   ├── postgres-cluster.yaml         # CloudNativePG Cluster
+│   ├── evidently-job.yaml            # Job quét Drift (kích hoạt qua Webhook)
+│   └── sync-job.yaml                 # Job đồng bộ Reference Data
 ├── infra/
 │   ├── main.tf                       # VPC + EC2 + ALB + S3 (Terraform)
 │   └── variables.tf
@@ -212,9 +214,10 @@ python web/src/test_api.py
 locust -f web/src/locustfile.py --host=http://localhost:5000
 ```
 
-Locust Dashboard: `http://localhost:8089` (Thêm flag `-P 8090` nếu port bị trùng)
-Redpanda Console: `http://localhost:8080` (Giao diện xem Message Broker)
-API Swagger UI: `http://localhost:5000/docs`
+Locust Dashboard: `http://localhost:8089` (Stress Test)
+Redpanda Console: `http://localhost:8080` (Theo dõi Message Queue)
+PostgreSQL: `localhost:5432` (Dữ liệu production)
+API Swagger UI: `http://localhost:5000/docs` (Cổng 5000 map từ container)
 
 **Dừng hệ thống:**
 
@@ -351,15 +354,15 @@ Vào `GitHub -> Actions -> MLOps NIDS Retraining Pipeline -> Run workflow`
 
 ### 🔧 Xử lý Sự cố Thường gặp
 
-| Vấn đề                        | Nguyên nhân                  | Giải pháp                                       |
-| ----------------------------- | ---------------------------- | ----------------------------------------------- |
-| Port 5000 bị chiếm trên Mac   | Tính năng "AirPlay Receiver" | Tắt AirPlay Receiver trong System Settings      |
-| Port 8089 bị chiếm            | Có app khác đang chạy        | Thêm `-P 8090` khi chạy lệnh locust             |
-| `zsh: command not found: locust`| Gõ sai `locus` hoặc lỗi PATH | Chạy `python3 -m locust -f ...` để gọi trực tiếp|
-| Lỗi Connection Refused trong API| Chưa load đúng DB_HOST_RO    | Đảm bảo config `DB_HOST_RO: postgres` trong Docker|
-| `psycopg2.OperationalError`   | Thiếu thư viện trên máy host | Chạy `pip3 install psycopg2-binary`             |
-| Init Container fail           | S3 path hoặc credentials sai | `kubectl logs <pod> -c aws-s3-model-sync`       |
-| CloudNativePG cluster pending | Operator chưa ready          | `kubectl get pods -n cnpg-system`               |
+| Vấn đề                           | Nguyên nhân                  | Giải pháp                                          |
+| -------------------------------- | ---------------------------- | -------------------------------------------------- |
+| Port 5000 bị chiếm trên Mac      | Tính năng "AirPlay Receiver" | Tắt AirPlay Receiver trong System Settings         |
+| Port 8089 bị chiếm               | Có app khác đang chạy        | Thêm `-P 8090` khi chạy lệnh locust                |
+| `zsh: command not found: locust` | Gõ sai `locus` hoặc lỗi PATH | Chạy `python3 -m locust -f ...` để gọi trực tiếp   |
+| Lỗi Connection Refused trong API | Chưa load đúng DB_HOST_RO    | Đảm bảo config `DB_HOST_RO: postgres` trong Docker |
+| `psycopg2.OperationalError`      | Thiếu thư viện trên máy host | Chạy `pip3 install psycopg2-binary`                |
+| Init Container fail              | S3 path hoặc credentials sai | `kubectl logs <pod> -c aws-s3-model-sync`          |
+| CloudNativePG cluster pending    | Operator chưa ready          | `kubectl get pods -n cnpg-system`                  |
 
 ---
 
