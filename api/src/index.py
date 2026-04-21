@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Dict
 from datetime import datetime
-from src.db_manager import save_dataframe_to_db
+from confluent_kafka import Producer
 
 # 1. KHỞI TẠO FASTAPI
 app = FastAPI(
@@ -29,6 +29,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Cấu hình Redpanda Producer
+REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
+KAFKA_TOPIC = "nids_production_data"
+try:
+    kafka_producer = Producer({
+        'bootstrap.servers': REDPANDA_BROKERS,
+        'client.id': 'fastapi-nids-producer',
+        'linger.ms': 5  # Gom nhóm message để tăng tốc độ ghi
+    })
+    print(f"🚀 Connected setup for Redpanda at {REDPANDA_BROKERS} - Topic: {KAFKA_TOPIC}")
+except Exception as e:
+    print(f"❌ Failed to setup Redpanda producer: {e}")
+    kafka_producer = None
 
 # 2. CẤU HÌNH ĐƯỜNG DẪN VÀ THAM SỐ (ĐỘNG HÓA)
 # Bắt biến môi trường MODEL_VERSION
@@ -62,23 +76,37 @@ except Exception as e:
 class NetworkTraffic(BaseModel):
     features: Dict[str, float]
 
-# 4. HÀM CHẠY NGẦM (BACKGROUND TASK) ĐỂ LƯU DATABASE
-def save_to_database(features_dict: dict, predicted_label: str, confidence: float):
+# 4. HÀM CHẠY NGẦM (BACKGROUND TASK) ĐỂ LƯU REDPANDA
+def send_to_redpanda(features_dict: dict, predicted_label: str, confidence: float):
+    if kafka_producer is None:
+        print("⚠️ Redpanda producer is not available. Skipping log.")
+        return
+
     try:
-        # Copy features để tạo row dữ liệu mới, thêm thông tin dự đoán và metadata trước khi lưu vào database
+        # Copy features để tạo row dữ liệu mới, thêm thông tin dự đoán
         row_data = features_dict.copy()
         
         row_data['id'] = str(uuid.uuid4()) # Sinh khóa chính (UUID)
-        row_data['created_at'] = datetime.utcnow() # Thêm thuộc tính created_at để theo dõi thời gian dự đoán
-        row_data['Predicted_Label'] = predicted_label  # Lưu nhãn dự đoán vào database
-        row_data['Confidence_Score'] = confidence # Lưu điểm số confidence vào database
+        row_data['created_at'] = datetime.utcnow().isoformat() # Convert to string for JSON payload
+        row_data['Predicted_Label'] = predicted_label  
+        row_data['Confidence_Score'] = confidence 
         
-        # Chuyển row_data thành DataFrame và lưu vào database
-        df = pd.DataFrame([row_data])
-        save_dataframe_to_db(df, "nids_production_data")
+        # Ép kiểu json cho msg
+        payload = json.dumps(row_data).encode('utf-8')
+        
+        # Bắn vào Kafka/Redpanda
+        kafka_producer.produce(topic=KAFKA_TOPIC, key=row_data['id'].encode('utf-8'), value=payload)
+        kafka_producer.poll(0) # Trigger async callback
         
     except Exception as e:
-        print(f"❌ Error in background task while saving to database: {e}")
+        print(f"❌ Error in background task while sending to Redpanda: {e}")
+
+# Flush khi app shutdown (nếu muốn)
+@app.on_event("shutdown")
+def shutdown_event():
+    if kafka_producer:
+        print("⏳ Flushing Redpanda messages...")
+        kafka_producer.flush(timeout=5.0)
 
 # 5. API ENDPOINT
 # Endpoint kiểm tra sức khỏe của API, trả về trạng thái và version của model đang chạy.
@@ -126,9 +154,9 @@ async def predict_intrusion(payload: NetworkTraffic, background_tasks: Backgroun
         # Trích xuất lại dictionary đã được lọc đúng thứ tự và số lượng của EXPECTED_FEATURES
         validated_features = df_input.iloc[0].to_dict()
 
-        # Lưu kết quả dự đoán vào database dưới dạng background task
+        # Lưu kết quả dự đoán vào Redpanda dưới dạng background task
         background_tasks.add_task(
-            save_to_database, 
+            send_to_redpanda, 
             features_dict=validated_features, 
             predicted_label=predicted_label,
             confidence=confidence

@@ -1,9 +1,5 @@
 name: MLOps NIDS - CI/CD Pipeline
 
-# TRIGGER: Pipeline này chạy khi có code thay đổi được push lên main.
-# Nhiệm vụ: Kiểm tra code (Lint), Build Docker Images và Deploy lên K3s.
-# Đây là pipeline "Continuous Integration & Delivery" — khác với
-# retrain_pipeline.yml (chuyên xử lý Data Drift & Model Retraining).
 on:
   push:
     branches: [main]
@@ -26,44 +22,44 @@ env:
 jobs:
   # JOB 1: Kiểm tra Chất lượng Code (Code Quality Gate)
   lint_and_test:
-    name: "🔍 Kiểm tra Code (Lint & Syntax Check)"
+    name: "🔍 Code Quality Check (Lint & Syntax)"
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Thiết lập Python 3.10
+      - name: Setup Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Cache pip để tăng tốc CI
+      - name: Cache pip dependencies
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('api/requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-
 
-      - name: Cài đặt thư viện API
+      - name: Install API dependencies
         run: pip install -r api/requirements.txt --quiet
 
-      - name: Kiểm tra lỗi cú pháp nghiêm trọng (Flake8 Strict)
+      - name: Check for critical syntax errors (Flake8 Strict)
         # Chỉ chặn các lỗi nghiêm trọng: Syntax Error (E9), undefined name (F82),
         # undefined variable (F63, F7) — không chặn warning style như dòng quá dài
         run: |
           pip install flake8 --quiet
-          echo "🔍 Kiểm tra lỗi cú pháp trong api/src/..."
+          echo "🔍 Checking syntax in api/src/..."
           flake8 api/src/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          echo "🔍 Kiểm tra lỗi cú pháp trong monitoring/..."
+          echo "🔍 Checking syntax in monitoring/..."
           flake8 monitoring/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          echo "✅ Không phát hiện lỗi cú pháp nghiêm trọng."
+          echo "✅ No critical syntax errors detected."
 
-      - name: Kiểm tra import hợp lệ của các script CI/CD
+      - name: Check valid imports for CI/CD scripts
         run: |
           pip install boto3 pandas sqlalchemy --quiet
-          echo "🔍 Kiểm tra .github/scripts/evaluate_model.py..."
+          echo "🔍 Checking .github/scripts/evaluate_model.py..."
           python -c "import ast; ast.parse(open('.github/scripts/evaluate_model.py').read()); print('✅ evaluate_model.py OK')"
-          echo "🔍 Kiểm tra .github/scripts/update_reference_data.py..."
+          echo "🔍 Checking .github/scripts/update_reference_data.py..."
           python -c "import ast; ast.parse(open('.github/scripts/update_reference_data.py').read()); print('✅ update_reference_data.py OK')"
 
   # JOB 2: Build & Push Docker Images lên Docker Hub
@@ -77,10 +73,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Thiết lập Docker Buildx (Hỗ trợ Multi-platform)
+      - name: Setup Docker Buildx (Multi-platform support)
         uses: docker/setup-buildx-action@v3
 
-      - name: Đăng nhập Docker Hub
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -127,16 +123,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Tóm tắt Images vừa build
+      - name: Summary of built images
         run: |
-          echo "✅ Images đã push lên Docker Hub:"
+          echo "✅ Images pushed to Docker Hub:"
           echo "   API:      ${{ env.API_IMAGE }}:${{ github.sha }}"
           echo "   Monitor:  ${{ env.MONITOR_IMAGE }}:${{ github.sha }}"
           echo "   Sync Job: ${{ env.SYNC_IMAGE }}:${{ github.sha }}"
 
   # JOB 3: Deploy lên K3s (chỉ chạy trên nhánh main)
   deploy_to_k3s:
-    name: "🚀 Deploy K3s (Rolling Update)"
+    name: "🚀 Deploy to K3s (Rolling Update)"
     needs: build_and_push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -144,53 +140,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Xác thực Kubeconfig K3s
+      - name: Authenticate Kubeconfig K3s
         uses: azure/k8s-set-context@v2
         with:
           kubeconfig: ${{ secrets.KUBE_CONFIG }}
 
-      - name: Apply Kubernetes Manifests (PostgreSQL + API + CronJob)
+      - name: Apply Kubernetes Manifests (PostgreSQL + API + Jobs)
         # kubectl apply --server-side: Sử dụng Server-Side Apply để tránh lỗi
         # "field is immutable" khi apply lên deployment đang chạy
         run: |
           echo "📦 Applying K8s manifests..."
           kubectl apply -f k8s/postgres-cluster.yaml
           kubectl apply -f k8s/api-deployment.yaml
-          kubectl apply -f k8s/evidently-cronjob.yaml
-          echo "✅ Đã apply toàn bộ manifests."
+          kubectl apply -f k8s/redpanda-deployment.yaml
+          kubectl apply -f k8s/consumer-deployment.yaml
+          kubectl apply -f k8s/evidently-job.yaml
+          echo "✅ All manifests applied."
 
-      - name: Cập nhật Image Tag mới nhất cho API Deployment
+      - name: Update latest image tag for API Deployment
         # Ép Deployment dùng đúng image SHA vừa build — tránh K3s cache image cũ
         run: |
           kubectl set image deployment/mlops-nids-api \
             fastapi-server=${{ env.API_IMAGE }}:${{ github.sha }}
-          echo "🏷️  Đã cập nhật image tag: ${{ github.sha }}"
+          echo "🏷️  Updated image tag: ${{ github.sha }}"
 
-      - name: Cập nhật Image Tag mới nhất cho Evidently CronJob
+      - name: Update latest image tag for Consumer
         run: |
-          kubectl patch cronjob evidently-drift-monitor \
-            -p '{"spec":{"jobTemplate":{"spec":{"template":{"spec":{"containers":[{"name":"drift-monitor","image":"${{ env.MONITOR_IMAGE }}:${{ github.sha }}"}]}}}}}}'
-          echo "🏷️  Đã cập nhật Evidently Monitor image tag."
+          kubectl set image deployment/mlops-nids-consumer \
+            consumer=${{ env.API_IMAGE }}:${{ github.sha }}
+          echo "🏷️  Updated Consumer image tag: ${{ github.sha }}"
 
-      - name: Đợi Rolling Update hoàn thành (Zero-Downtime)
+      - name: Wait for Rolling Update to complete (Zero-Downtime)
         run: |
-          echo "⏳ Đợi API pods rolling update hoàn thành..."
+          echo "⏳ Waiting for API pods rolling update..."
           kubectl rollout status deployment/mlops-nids-api --timeout=300s
-          echo "✅ Rolling update hoàn thành thành công."
+          echo "✅ Rolling update completed successfully."
 
-      - name: Xác minh trạng thái pods sau deploy
+      - name: Verify pod status after deployment
         run: |
-          echo "📋 Trạng thái tất cả pods:"
+          echo "📋 Status of all pods:"
           kubectl get pods -o wide
           echo ""
-          echo "📋 Logs của API pod (20 dòng cuối):"
+          echo "📋 Logs of API pod (last 20 lines):"
           kubectl logs -l app=mlops-nids-api --tail=20 || true
 
-      - name: Gửi thông báo Deploy thành công
+      - name: Send deployment success notification
         if: success()
         run: |
           echo "==========================================="
-          echo "  ✅ CI/CD Deploy hoàn tất!"
+          echo "  ✅ CI/CD Deployment complete!"
           echo "  📌 Commit:  ${{ github.sha }}"
           echo "  📌 Author:  ${{ github.actor }}"
           echo "  📌 Message: ${{ github.event.head_commit.message }}"

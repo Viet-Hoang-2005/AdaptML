@@ -1,0 +1,17 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.aws/
+terraform.tfvars
+
+# Git & IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+*.log

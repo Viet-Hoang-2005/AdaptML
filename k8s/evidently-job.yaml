@@ -1,0 +1,60 @@
+# evidently-job.yaml: Container phát hiện Data Drift được kích hoạt tự động qua Webhook
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: evidently-drift-monitor
+  labels:
+    app: evidently-drift-monitor
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: drift-monitor
+          image: tnvhoang/mlops-evidently-monitor:latest
+          imagePullPolicy: Always
+          # Cấu hình tài nguyên cho container tránh Evidently chiếm dụng tài nguyên
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "768Mi"
+              cpu: "500m"
+          env:
+            # PostgreSQL READ-ONLY Endpoint (CloudNativePG)
+            # detect_drift.py chỉ SELECT -> dùng nids-postgres-ro để phân tải
+            - name: DB_HOST_RO
+              value: "nids-postgres-ro"
+            # Fallback cho detect_drift.py khi đọc biến DB_HOST thông thường
+            - name: DB_HOST
+              value: "nids-postgres-ro"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "mlops_nids_db"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
+
+            # Cấu hình Drift Detection
+            # Ngưỡng 50%: Nếu hơn một nửa số feature bị drift -> kích hoạt Retrain
+            - name: DRIFT_THRESHOLD
+              value: "0.5"
+
+            # GitHub Webhook để kích hoạt retrain_pipeline.yml
+            - name: GITHUB_REPO
+              value: "Viet-Hoang-2005/MLOps-nids-system"
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-secrets
+                  key: GITHUB_TOKEN
