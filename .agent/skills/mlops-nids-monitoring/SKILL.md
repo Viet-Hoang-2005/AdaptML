@@ -5,7 +5,7 @@ description: Phương pháp tính toán Error / Drift và logic của Webhook.
 
 # Data Drift Monitoring bằng Evidently AI
 
-Script giám sát trạng thái Data Drift tĩnh `monitoring/detect_drift.py` được đóng gói trong Docker Container và Deploy dưới dạng hệ thống K3s `CronJob`. Chạy phân tích vào đúng 0h00 hàng ngày theo khung giờ UTC.
+Script giám sát trạng thái Data Drift tĩnh `monitoring/detect_drift.py` được đóng gói trong Docker Container và Deploy dưới dạng hệ thống K3s `Job`. Thay vì chạy định kỳ (CronJob), Job này được khởi chạy tự động (Event-Driven) thông qua Webhook từ Redpanda Consumer khi số lượng dữ liệu sản xuất vượt ngưỡng.
 
 ## 1. Bối Cảnh So Sánh
 

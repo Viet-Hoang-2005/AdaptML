@@ -19,10 +19,16 @@ Khi tương tác với hệ thống MLOps NIDS, hãy nhớ các nguyên tắc ki
 - Tại Worker Node, bộ định tuyến nội bộ **Traefik Ingress** sẽ hứng traffic từ cổng 80 và điều hướng vào **FastAPI Pods** thông qua Service kiểu `ClusterIP`. 
 - Traefik chịu trách nhiệm Load Balancing nội bộ mạng cluster tới các Replicas của API.
 
-## 3. Low-Latency Inference & Async Logging
+## 3. Streaming & Async Logging (Redpanda)
 
 - FastAPI xử lý yêu cầu suy diễn một cách đồng bộ để phản hồi cho Client dưới ngưỡng 100ms.
-- Toàn bộ features đầu vào (payload) và kết quả suy diễn (prediction, confidence) được ném vào **BackgroundTasks** để chèn (INSERT) vào DB một cách bất đồng bộ. Bảng PostgresQL `nids_production_data` lưu trữ các dữ liệu này.
+- Toàn bộ dữ liệu được ném vào **Redpanda (Message Broker)** để chịu tải cao.
+- **Consumer Script (`consumer.py`)** chạy ngầm, gom dữ liệu thành các Batch (500 dòng) rồi mới `INSERT` vào DB. Nó cũng đóng vai trò theo dõi số lượng bản ghi để bắn Webhook kích hoạt Data Drift Check.
+
+## 3.5. Event-Driven S3 Lambda
+
+- Khi Data Engineer cập nhật `data_manifest.json` lên AWS S3, **S3 Event Notification** sẽ kích hoạt **AWS Lambda**.
+- Lambda này sẽ bắn Webhook tới GitHub Actions để tự động kích hoạt luồng Retrain ngay lập tức.
 
 ## 4. Database Architecture (Dual Endpoint)
 

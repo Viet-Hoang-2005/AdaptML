@@ -4,10 +4,6 @@ import os
 os.system("pip install mlflow --quiet")
 os.system("pip install boto3 --quiet")
 
-# Thiết lập phiên bản model và file CSV mục tiêu từ biến môi trường
-os.environ["MODEL_VERSION"] = "v2"
-os.environ["TARGET_CSV"] = "train_3_classes.csv"
-
 # Import các thư viện cần thiết cho machine learning và xử lý dữ liệu
 import pandas as pd
 import numpy as np
@@ -27,7 +23,7 @@ from sklearn.utils.class_weight import compute_sample_weight
 from scipy.stats import uniform, randint
 from xgboost import XGBClassifier
 
-# --- 0. CẤU HÌNH BIẾN MÔI TRƯỜNG & MLFLOW ---
+# 0. CẤU HÌNH BIẾN MÔI TRƯỜNG & MLFLOW
 # Nạp AWS Credentials từ Kaggle Secret
 try:
     from kaggle_secrets import UserSecretsClient
@@ -55,13 +51,13 @@ mlflow.set_experiment("MLOps_NIDS_Training")
 
 # Khởi tạo MLflow Context ngay từ đầu để theo dõi toàn bộ tiến trình
 with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
-    # --- 1. LOAD DATA ---
+    # 1. LOAD DATA
     mlflow.log_param("model_version", MODEL_VERSION)
     mlflow.log_param("target_csv", TARGET_CSV)
 
     local_csv_path = None
     
-    # PHƯƠNG ÁN A: Ưu tiên tải dữ liệu từ AWS S3
+    # Phương án A: Ưu tiên tải dữ liệu từ AWS S3
     AWS_BUCKET = os.environ.get("AWS_BUCKET_NAME", "mlops-nids-artifacts")
     S3_PREFIX = os.environ.get("S3_TRAINING_DATA_PREFIX", "training-data/")
     s3_download_path = os.path.join('/kaggle/working', TARGET_CSV)
@@ -76,7 +72,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     except Exception as e:
         print(f"⚠️ Failed to download from S3 (Error: {e}).")
 
-    # PHƯƠNG ÁN B: Tìm kiếm cục bộ trong thư mục /kaggle/input/
+    # Phương án B: Tìm kiếm cục bộ trong thư mục /kaggle/input/
     if local_csv_path is None:
         print(f"🔍 Searching for {TARGET_CSV} in /kaggle/input/...")
         for dirname, _, filenames in os.walk('/kaggle/input'):
@@ -96,23 +92,23 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     X = df.drop(columns=['Label'])
     y_raw = df['Label']
 
-    # --- 2. AUTOMATED LABEL ENCODING ---
+    # 2. AUTOMATED LABEL ENCODING
     # Chuyển đổi labels từ string sang số nguyên để phù hợp với XGBoost
     le = LabelEncoder()
     y = le.fit_transform(y_raw)
     num_classes = len(le.classes_)
 
-    print(f"🏷️ Detected attack classes: {le.classes_}")
+    print(f"🔖 Detected attack classes: {le.classes_}")
     print(f"Total classes (num_classes): {num_classes}")
     mlflow.log_param("num_classes", num_classes)
 
-    # --- 3. DATASET SPLITTING (STRATIFIED) ---
+    # 3. DATASET SPLITTING (STRATIFIED)
     # Chia dữ liệu thành train, validation và test với tỷ lệ 60:20:20, giữ nguyên phân phối classes
     X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=0.2, random_state=42, stratify=y_temp)
     print(f"Dataset shapes - Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
 
-    # --- 4. CONFIGURING XGBOOST & TUNING ---
+    # 4. CONFIGURING XGBOOST & TUNING
     # Thiết lập các tham số cơ bản cho XGBoost
     xgb_params = {
         'tree_method': 'hist',
@@ -175,7 +171,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     print(f"🎯 Best hyperparameters: {search.best_params_}")
     mlflow.log_params(search.best_params_)
 
-    # --- 5. FINAL MODEL TRAINING ---
+    # 5. FINAL MODEL TRAINING
     # Kết hợp tham số tốt nhất từ tuning với tham số cơ bản, thêm early stopping
     best_xgb_params = xgb_params.copy()
     best_xgb_params.update(search.best_params_)
@@ -193,7 +189,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
         verbose=False
     )
 
-    # --- 6. EVALUATION ---
+    # 6. EVALUATION
     # Dự đoán trên test set và tính các metrics
     y_pred = best_xgb.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
@@ -211,7 +207,7 @@ with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}"):
     mlflow.log_metric("recall", rec)
     mlflow.log_metric("f1_score", f1)
 
-    # --- 7. EXPORT ARTIFACTS CHO GITHUB ACTIONS ---
+    # 7. EXPORT ARTIFACTS CHO GITHUB ACTIONS
     # Tạo thư mục output nếu chưa tồn tại
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 

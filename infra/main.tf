@@ -105,7 +105,7 @@ resource "aws_route_table_association" "priv_1a_assoc" {
 }
 
 # 2. SECURITY GROUPS
-# Security Group Load Balancer
+# Security Group cho Load Balancer
 resource "aws_security_group" "lb_sg" {
   name        = "mlops-lb-sg"
   description = "Security group for Application Load Balancer"
@@ -127,7 +127,7 @@ resource "aws_security_group" "lb_sg" {
   tags = { Name = "mlops-lb-sg" }
 }
 
-# Security Group Master Node
+# Security Group cho Master Node
 resource "aws_security_group" "master_sg" {
   name        = "mlops-master-sg"
   description = "Security group for K3s Master Node"
@@ -139,7 +139,6 @@ resource "aws_security_group" "master_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  # GitHub Actions gọi lệnh Deploy
   ingress {
     from_port   = 6443
     to_port     = 6443
@@ -161,13 +160,12 @@ resource "aws_security_group" "master_sg" {
   tags = { Name = "mlops-master-sg" }
 }
 
-# Security Group Worker Node
+# Security Group cho Worker Node
 resource "aws_security_group" "worker_sg" {
   name        = "mlops-worker-sg"
   description = "Security group for K3s Worker Node"
   vpc_id      = aws_vpc.mlops_vpc.id
 
-  # Chỉ nhận Port 80 từ ALB
   ingress {
     from_port       = 80
     to_port         = 80
@@ -190,7 +188,7 @@ resource "aws_security_group" "worker_sg" {
 }
 
 # 3. EC2 INSTANCES (Master & Workers)
-# Data AMI
+# Data AMI Ubuntu
 data "aws_ami" "ubuntu_22_04" {
   most_recent = true
   owners      = ["099720109477"]
@@ -232,13 +230,14 @@ resource "aws_instance" "worker_nodes" {
 }
 
 # 4. LOAD BALANCER & TARGET GROUP
-# Target Group Worker Node
+# Target Group cho Worker Node
 resource "aws_lb_target_group" "worker_tg" {
   name     = "mlops-worker-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.mlops_vpc.id
 
+  # Cấu hình health check kiểm tra trạng thái API
   health_check {
     path                = "/"
     protocol            = "HTTP"
@@ -250,7 +249,7 @@ resource "aws_lb_target_group" "worker_tg" {
   }
 }
 
-# Target Group Attachment Worker Node
+# Gắn Target Group với Worker Node
 resource "aws_lb_target_group_attachment" "worker_attach" {
   count            = 2
   target_group_arn = aws_lb_target_group.worker_tg.arn
@@ -273,6 +272,7 @@ resource "aws_lb_listener" "http_listener" {
   port              = "80"
   protocol          = "HTTP"
 
+  # Forward request đến Target Group của Worker Node
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.worker_tg.arn
@@ -285,6 +285,7 @@ resource "aws_s3_bucket" "artifacts_bucket" {
   force_destroy = true
 }
 
+# Thiết lập quyền truy cập và versioning cho S3 bucket
 resource "aws_s3_bucket_ownership_controls" "artifacts_acl_ownership" {
   bucket = aws_s3_bucket.artifacts_bucket.id
   rule {
@@ -292,6 +293,7 @@ resource "aws_s3_bucket_ownership_controls" "artifacts_acl_ownership" {
   }
 }
 
+# Chặn truy cập công khai vào S3 bucket
 resource "aws_s3_bucket_public_access_block" "artifacts_public_block" {
   bucket                  = aws_s3_bucket.artifacts_bucket.id
   block_public_acls       = true
@@ -300,6 +302,7 @@ resource "aws_s3_bucket_public_access_block" "artifacts_public_block" {
   restrict_public_buckets = true
 }
 
+# Kích hoạt versioning cho S3 bucket
 resource "aws_s3_bucket_versioning" "artifacts_versioning" {
   bucket = aws_s3_bucket.artifacts_bucket.id
   versioning_configuration {
@@ -307,7 +310,78 @@ resource "aws_s3_bucket_versioning" "artifacts_versioning" {
   }
 }
 
-# 6. OUTPUTS
+# 6. AWS LAMBDA & S3 EVENT NOTIFICATION
+# IAM Role cho Lambda
+data "aws_iam_policy_document" "lambda_assume_role" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role" "lambda_exec_role" {
+  name               = "mlops-lambda-github-webhook-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+# Gán quyền thực thi Lambda cho IAM Role
+resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+  role       = aws_iam_role.lambda_exec_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Nén code Lambda thành file zip
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = "${path.module}/lambda/s3_webhook_trigger.py"
+  output_path = "${path.module}/lambda/s3_webhook_trigger.zip"
+}
+
+# Lambda Function
+resource "aws_lambda_function" "github_webhook_lambda" {
+  filename         = data.archive_file.lambda_zip.output_path
+  function_name    = "mlops-trigger-github-webhook"
+  role             = aws_iam_role.lambda_exec_role.arn
+  handler          = "s3_webhook_trigger.lambda_handler"
+  runtime          = "python3.10"
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+
+  # Biến môi trường GitHub cho Lambda
+  environment {
+    variables = {
+      GITHUB_REPO  = var.github_repo
+      GITHUB_TOKEN = var.github_token
+    }
+  }
+}
+
+# Cho phép S3 invoke Lambda
+resource "aws_lambda_permission" "allow_s3_invocation" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.github_webhook_lambda.arn
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.artifacts_bucket.arn
+}
+
+# S3 Event Notification
+resource "aws_s3_bucket_notification" "bucket_notification" {
+  bucket = aws_s3_bucket.artifacts_bucket.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.github_webhook_lambda.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_suffix       = "data_manifest.json"
+  }
+
+  depends_on = [aws_lambda_permission.allow_s3_invocation]
+}
+
+# 7. OUTPUTS
 output "master_public_ip" {
   description = "Public IP for SSH access to Master Node"
   value       = aws_instance.master_node.public_ip

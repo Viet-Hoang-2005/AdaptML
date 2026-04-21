@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mlops-nids-redpanda
+  labels:
+    app: mlops-nids-redpanda
+spec:
+  serviceName: redpanda-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlops-nids-redpanda
+  template:
+    metadata:
+      labels:
+        app: mlops-nids-redpanda
+    spec:
+      containers:
+      - name: redpanda
+        image: docker.redpanda.com/redpandadata/redpanda:latest
+        command:
+        - redpanda
+        - start
+        - --smp 1
+        - --memory 1G 
+        - --overprovisioned
+        - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+        - --advertise-kafka-addr internal://redpanda-service:9092,external://localhost:19092
+        ports:
+        - containerPort: 9092
+          name: kafka
+        - containerPort: 19092
+          name: kafka-ext
+        - containerPort: 9644
+          name: admin
+        resources:
+          # Ép xung tự bảo vệ: KHÔNG để Redpanda hút cạn RAM của Worker Node.
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: redpanda-data
+          mountPath: /var/lib/redpanda/data
+  volumeClaimTemplates:
+  - metadata:
+      name: redpanda-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda-service
+spec:
+  ports:
+  - port: 9092
+    targetPort: 9092
+    name: kafka
+  - port: 9644
+    targetPort: 9644
+    name: admin
+  clusterIP: None
+  selector:
+    app: mlops-nids-redpanda

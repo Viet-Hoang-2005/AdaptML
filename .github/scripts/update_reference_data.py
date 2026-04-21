@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, text
 # 1. CẤU HÌNH TỪ BIẾN MÔI TRƯỜNG
 # Load biến môi trường từ file .env khi chạy local
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.path.join(ROOT_DIR, 'data')
 load_dotenv(dotenv_path=os.path.join(ROOT_DIR, '.env'))
 
 # Khi chạy trên GitHub Actions, các biến này sẽ được inject tự động
@@ -27,7 +28,9 @@ AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1")
 MANIFEST_KEY = "data_manifest.json"
 REFERENCE_TABLE = "nids_reference_data"
 
-# 2. ĐỌC MANIFEST TỪ AWS S3
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# 2. ĐỌC MANIFEST TỪ AWS S3 HOẶC LOCAL
 def load_manifest_from_s3(s3_client) -> dict:
     print(f"[2/4] Reading data manifest from s3://{AWS_BUCKET}/{MANIFEST_KEY}...")
     
@@ -38,7 +41,16 @@ def load_manifest_from_s3(s3_client) -> dict:
     print(f" -> Model version  : {manifest['model_version']}")
     return manifest
 
-# 3. TẢI FILE CSV TỪ S3
+def load_manifest_local() -> dict:
+    manifest_path = os.path.join(ROOT_DIR, MANIFEST_KEY)
+    print(f" -> Fallback: Reading data manifest from local {manifest_path}...")
+    with open(manifest_path, 'r', encoding='utf-8') as f:
+        manifest = json.load(f)
+    print(f" -> Target dataset : {manifest['target_csv']}")
+    print(f" -> Model version  : {manifest['model_version']}")
+    return manifest
+
+# 3. TẢI FILE CSV TỪ S3 HOẶC LOCAL
 def load_csv_from_s3(s3_client, manifest: dict) -> pd.DataFrame:
     prefix = manifest.get("s3_training_data_prefix", "training-data/")
     csv_key = f"{prefix}{manifest['target_csv']}"
@@ -47,6 +59,14 @@ def load_csv_from_s3(s3_client, manifest: dict) -> pd.DataFrame:
     response = s3_client.get_object(Bucket=AWS_BUCKET, Key=csv_key)
     csv_content = response['Body'].read().decode('utf-8')
     df = pd.read_csv(StringIO(csv_content))
+
+    print(f" -> Downloaded: {len(df):,} rows × {len(df.columns)} columns")
+    return df
+
+def load_csv_local(manifest: dict) -> pd.DataFrame:
+    csv_path = os.path.join(DATA_DIR, manifest['target_csv'])
+    print(f" -> Fallback: Reading dataset from local {csv_path}...")
+    df = pd.read_csv(csv_path)
 
     print(f" -> Downloaded: {len(df):,} rows × {len(df.columns)} columns")
     return df
@@ -113,13 +133,32 @@ if __name__ == "__main__":
         s3 = boto3.client('s3', region_name=AWS_REGION)
         print(f"[1/4] Connected to AWS S3 (Region: {AWS_REGION})")
     except Exception as e:
-        print(f"❌ Cannot connect to AWS S3: {e}")
-        sys.exit(1)
+        print(f"⚠️ Cannot connect to AWS S3: {e}. Will fallback to local files.")
+        s3 = None
 
     # Đọc manifest -> Tải CSV -> Cập nhật DB
     try:
-        manifest = load_manifest_from_s3(s3)
-        new_reference_df = load_csv_from_s3(s3, manifest)
+        # Load manifest
+        if s3 is not None:
+            try:
+                manifest = load_manifest_from_s3(s3)
+            except Exception as e:
+                print(f"⚠️ S3 Manifest failed ({e}), falling back to local...")
+                manifest = load_manifest_local()
+        else:
+            manifest = load_manifest_local()
+
+        # Load CSV
+        if s3 is not None:
+            try:
+                new_reference_df = load_csv_from_s3(s3, manifest)
+            except Exception as e:
+                print(f"⚠️ S3 CSV failed ({e}), falling back to local...")
+                new_reference_df = load_csv_local(manifest)
+        else:
+            new_reference_df = load_csv_local(manifest)
+
+        # Update DB
         update_reference_table(engine, new_reference_df, manifest)
     except Exception as e:
         print(f"❌ Error during sync process: {e}")

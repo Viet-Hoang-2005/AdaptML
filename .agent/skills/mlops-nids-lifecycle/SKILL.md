@@ -15,11 +15,11 @@ File manifest JSON trên thư mục gốc của S3 (`s3://mlops-nids-artifacts/d
 - `champion_version`: Hướng dẫn pipeline quá trình Evalutate Models rút kết quả cũ với mới.  
   Pipeline GitHub Actions của dự án luôn khởi đầu từ việc lấy parameters bằng Manifest này.
 
-## 2. Tái Huấn Luyện (Retraining Pipeline: `retrain_pipeline.yml`)
+2. **Tái Huấn Luyện (Retraining Pipeline: `retrain_pipeline.yml`)**
 
 Quy trình End-to-End:
 
-1. Trigger khởi chạy thông qua webhook event từ Evidently (Cron) hoặc Manual trigger thao tác người dùng.
+1. Trigger khởi chạy thông qua webhook event từ Evidently (Data Drift) hoặc AWS Lambda (Data Engineer upload dữ liệu mới lên S3). Mọi hoạt động đều là Event-Driven.
 2. Download file cấu hình Data Manifest S3.
 3. Chạy Kaggle Kernel thông qua Kaggle API (`train.py`), pipeline sẽ tải Data Manifest đẩy model `.pkl` kèm bảng metrics `.json` lên các bucket folder S3 (`models/<version>/`).
 4. Tại bước đánh giá Cổng Chất Lượng **Quality Gate** (`evaluate_model.py`), Challenger Metrics (Model Mới tạo) và Champion Metrics (Model Nằm Production) được load về để đối chiếu logic thông minh.
