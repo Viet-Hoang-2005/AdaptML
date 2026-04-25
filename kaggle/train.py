@@ -49,6 +49,13 @@ def load_secret(secret_name: str, *, required: bool = False) -> str | None:
         return None
 
 
+def get_required_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
 USER_SECRETS = UserSecretsClient()
 
 os.environ["AWS_ACCESS_KEY_ID"] = load_secret("AWS_ACCESS_KEY_ID", required=True)
@@ -68,19 +75,31 @@ if mlflow_username:
 if mlflow_password:
     os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_password
 
-MODEL_VERSION = os.environ.get("MODEL_VERSION", "v1")
-TARGET_CSV = os.environ.get("TARGET_CSV", "train_2_classes.csv")
+MODEL_VERSION = get_required_env("MODEL_VERSION")
+TARGET_CSV = get_required_env("TARGET_CSV")
 AWS_BUCKET_NAME = os.environ.get("AWS_BUCKET_NAME", "mlops-nids-artifacts")
 S3_TRAINING_DATA_PREFIX = os.environ.get("S3_TRAINING_DATA_PREFIX", "training-data/")
-MLFLOW_TRACKING_URI = os.environ.get(
-    "MLFLOW_TRACKING_URI", "file:///kaggle/working/mlruns"
-)
+MLFLOW_TRACKING_URI = get_required_env("MLFLOW_TRACKING_URI")
+MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "MLOps_NIDS_Training")
 MLFLOW_MODEL_NAME = os.environ.get("MLFLOW_MODEL_NAME", "NIDS-XGBoost")
+STAGING_ALIAS = os.environ.get("MLFLOW_STAGING_ALIAS", "Staging")
 OUTPUT_DIR = "/kaggle/working/models"
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_registry_uri(MLFLOW_TRACKING_URI)
-mlflow.set_experiment("MLOps_NIDS_Training")
+mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+
+print("=" * 60)
+print("Kaggle training configuration")
+print(f"MODEL_VERSION         : {MODEL_VERSION}")
+print(f"TARGET_CSV            : {TARGET_CSV}")
+print(f"AWS_BUCKET_NAME       : {AWS_BUCKET_NAME}")
+print(f"S3_TRAINING_DATA_PREFIX: {S3_TRAINING_DATA_PREFIX}")
+print(f"MLFLOW_TRACKING_URI   : {MLFLOW_TRACKING_URI}")
+print(f"MLFLOW_EXPERIMENT_NAME: {MLFLOW_EXPERIMENT_NAME}")
+print(f"MLFLOW_MODEL_NAME     : {MLFLOW_MODEL_NAME}")
+print(f"STAGING_ALIAS         : {STAGING_ALIAS}")
+print("=" * 60)
 
 
 def download_training_data(target_csv: str) -> str:
@@ -172,16 +191,16 @@ def register_model_to_mlflow(run_id: str, artifact_uri: str) -> tuple[str, str]:
         try:
             client.set_registered_model_alias(
                 name=MLFLOW_MODEL_NAME,
-                alias="Staging",
+                alias=STAGING_ALIAS,
                 version=registration.version,
             )
         except Exception as exc:
-            print(f"Failed to set alias 'Staging': {exc}")
+            print(f"Failed to set alias '{STAGING_ALIAS}': {exc}")
             print("Falling back to stage transition for backward compatibility...")
             client.transition_model_version_stage(
                 name=MLFLOW_MODEL_NAME,
                 version=registration.version,
-                stage="Staging",
+                stage=STAGING_ALIAS,
                 archive_existing_versions=False,
             )
 
@@ -191,6 +210,8 @@ def register_model_to_mlflow(run_id: str, artifact_uri: str) -> tuple[str, str]:
             "candidate_s3_prefix": candidate_s3_prefix,
             "registered_by": "kaggle_train_py",
             "training_source": "kaggle",
+            "mlflow_experiment_name": MLFLOW_EXPERIMENT_NAME,
+            "staging_alias": STAGING_ALIAS,
         }
         for key, value in model_version_tags.items():
             client.set_model_version_tag(
@@ -206,7 +227,7 @@ def register_model_to_mlflow(run_id: str, artifact_uri: str) -> tuple[str, str]:
         print(f"artifact_uri: {artifact_uri}")
         print(f"registered_model_name: {MLFLOW_MODEL_NAME}")
         print(f"registered_model_version: {registration.version}")
-        print("alias: Staging")
+        print(f"alias: {STAGING_ALIAS}")
         print(f"candidate_s3_prefix: {candidate_s3_prefix}")
         print("=" * 60)
         return str(registration.version), candidate_s3_prefix
