@@ -126,9 +126,27 @@ def upload_artifacts_to_s3(local_paths: list[str]) -> None:
         raise
 
 
-def register_model_to_mlflow(run_id: str) -> None:
+def list_run_artifacts_for_debug(client: MlflowClient, run_id: str, artifact_path: str = "") -> None:
+    try:
+        artifacts = client.list_artifacts(run_id, artifact_path)
+    except Exception as exc:
+        print(f"Failed to list artifacts under '{artifact_path or '/'}': {exc}")
+        return
+
+    if not artifacts:
+        print(f"No artifacts found under '{artifact_path or '/'}' for run {run_id}.")
+        return
+
+    for item in artifacts:
+        print(f"- {item.path}")
+        if item.is_dir:
+            list_run_artifacts_for_debug(client, run_id, item.path)
+
+
+def register_model_to_mlflow(run_id: str, artifact_uri: str) -> tuple[str, str]:
     model_uri = f"runs:/{run_id}/model"
     client = MlflowClient()
+    candidate_s3_prefix = f"s3://{AWS_BUCKET_NAME}/models/{MODEL_VERSION}/"
 
     try:
         registration = mlflow.register_model(
@@ -151,30 +169,52 @@ def register_model_to_mlflow(run_id: str) -> None:
                 "Registered MLflow model version did not reach READY state in time."
             )
 
-        client.transition_model_version_stage(
-            name=MLFLOW_MODEL_NAME,
-            version=registration.version,
-            stage="Staging",
-            archive_existing_versions=False,
-        )
-        client.set_model_version_tag(
-            name=MLFLOW_MODEL_NAME,
-            version=registration.version,
-            key="model_version",
-            value=MODEL_VERSION,
-        )
-        client.set_model_version_tag(
-            name=MLFLOW_MODEL_NAME,
-            version=registration.version,
-            key="approval_status",
-            value="pending",
-        )
-        print(
-            "Registered model to MLflow Registry: "
-            f"{MLFLOW_MODEL_NAME} v{registration.version} -> Staging"
-        )
+        try:
+            client.set_registered_model_alias(
+                name=MLFLOW_MODEL_NAME,
+                alias="Staging",
+                version=registration.version,
+            )
+        except Exception as exc:
+            print(f"Failed to set alias 'Staging': {exc}")
+            print("Falling back to stage transition for backward compatibility...")
+            client.transition_model_version_stage(
+                name=MLFLOW_MODEL_NAME,
+                version=registration.version,
+                stage="Staging",
+                archive_existing_versions=False,
+            )
+
+        model_version_tags = {
+            "model_version": MODEL_VERSION,
+            "approval_status": "pending",
+            "candidate_s3_prefix": candidate_s3_prefix,
+            "registered_by": "kaggle_train_py",
+            "training_source": "kaggle",
+        }
+        for key, value in model_version_tags.items():
+            client.set_model_version_tag(
+                name=MLFLOW_MODEL_NAME,
+                version=registration.version,
+                key=key,
+                value=value,
+            )
+
+        print("=" * 60)
+        print("MLflow registration completed successfully.")
+        print(f"run_id: {run_id}")
+        print(f"artifact_uri: {artifact_uri}")
+        print(f"registered_model_name: {MLFLOW_MODEL_NAME}")
+        print(f"registered_model_version: {registration.version}")
+        print("alias: Staging")
+        print(f"candidate_s3_prefix: {candidate_s3_prefix}")
+        print("=" * 60)
+        return str(registration.version), candidate_s3_prefix
     except Exception as exc:
         print(f"MLflow registration failed: {exc}")
+        print(f"model_uri: {model_uri}")
+        print("Available artifact paths for debugging:")
+        list_run_artifacts_for_debug(client, run_id)
         raise
 
 
@@ -239,12 +279,22 @@ def main() -> None:
         fit_params["sample_weight"] = train_sample_weight
 
     with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}") as run:
+        run_id = run.info.run_id
         mlflow.log_param("model_version", MODEL_VERSION)
         mlflow.log_param("target_csv", TARGET_CSV)
         mlflow.log_param("num_classes", num_classes)
         mlflow.log_param("mlflow_model_name", MLFLOW_MODEL_NAME)
         mlflow.log_param("aws_bucket_name", AWS_BUCKET_NAME)
         mlflow.log_param("objective", xgb_params["objective"])
+        mlflow.set_tags(
+            {
+                "pipeline": "kaggle_retrain",
+                "approval_status": "pending",
+                "model_version": MODEL_VERSION,
+                "candidate_s3_prefix": f"s3://{AWS_BUCKET_NAME}/models/{MODEL_VERSION}/",
+                "training_source": "kaggle",
+            }
+        )
 
         print("Running hyperparameter search...")
         search.fit(X_train, y_train, **fit_params)
@@ -307,10 +357,11 @@ def main() -> None:
 
         mlflow.log_artifacts(OUTPUT_DIR, artifact_path="deployment_exports")
         mlflow.xgboost.log_model(best_xgb, artifact_path="model")
+        artifact_uri = mlflow.get_artifact_uri()
 
         artifact_paths = [model_path, classes_path, metrics_path]
         upload_artifacts_to_s3(artifact_paths)
-        register_model_to_mlflow(run.info.run_id)
+        register_model_to_mlflow(run_id, artifact_uri)
 
         print(f"Training completed successfully for {MODEL_VERSION}.")
 

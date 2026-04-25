@@ -15,7 +15,7 @@
     "TARGET_CSV": "train_3_classes.csv",
     "AWS_BUCKET_NAME": "mlops-nids-artifacts",
     "S3_TRAINING_DATA_PREFIX": "training-data/",
-    "MLFLOW_TRACKING_URI": "http://localhost:5001",
+    "MLFLOW_TRACKING_URI": "https://mlflow.mlops-nids-nt114.id.vn",
     "MLFLOW_MODEL_NAME": "NIDS-XGBoost"
   }
 }
