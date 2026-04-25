@@ -38,7 +38,7 @@ Inference Traffic → FastAPI (Producer) → Redpanda (Message Queue)
                                                ↓ drift detected
                                     GitHub Actions (Retrain Pipeline)
                                                ↓
-                                Kaggle + MLflow → AWS S3 → K3s Deploy
+                                Kaggle → AWS S3 + MLflow Registry → K3s Deploy
                                                ↓ success
                                     update_reference_data.py (Reference Sync)
 ```
@@ -84,7 +84,7 @@ Inference Traffic → FastAPI (Producer) → Redpanda (Message Queue)
 | **Compute Engine**     | Kaggle Kernels API                         |
 | **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda                |
 | **Container Registry** | Docker Hub                                 |
-| **Model Registry**     | AWS S3                                     |
+| **Model Registry**     | MLflow + AWS S3                            |
 | **Orchestration**      | K3s (Kubernetes)                           |
 | **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)     |
 
@@ -97,7 +97,7 @@ mlops-nids-system/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci_cd_pipeline.yml        # Build -> Push Docker -> Deploy K3s
-│   │   ├── retrain_pipeline.yml      # Retrain -> Evaluate -> Deploy -> Sync
+│   │   ├── retrain_pipeline.yml      # Chỉ trigger Kaggle retrain (fire-and-forget)
 │   │   └── trigger_drift_check.yml   # Lắng nghe Webhook từ Consumer để chạy Evidently
 │   └── scripts/
 │       ├── evaluate_model.py         # Model quality gate (Champion vs Challenger)
@@ -262,13 +262,30 @@ kubectl apply -f k8s/init-mlflow-db.yaml
 kubectl wait --for=condition=complete job/mlflow-db-init --timeout=120s
 ```
 
-#### Bước 6: Deploy MLflow Server (NodePort 30000)
+#### Bước 6: Deploy MLflow internal + Nginx + Cloudflare Tunnel
 
 ```bash
 kubectl apply -f k8s/mlflow-deployment.yaml
+kubectl apply -f k8s/mlflow-nginx.yaml
+kubectl apply -f k8s/cloudflared-tunnel.yaml
 kubectl get pods -l app=mlflow-server
-# Truy cap: http://<master-ip>:30000
+# Truy cap: https://mlflow.your-domain.com
 ```
+
+MLflow chạy nội bộ trong K3s và được expose ra ngoài theo kiến trúc:
+
+`Cloudflare Tunnel -> Nginx -> mlflow-service`
+
+Kaggle và GitHub phải truy cập bằng public HTTPS URL, ví dụ:
+
+```bash
+MLFLOW_TRACKING_URI=https://mlflow.your-domain.com
+```
+
+Không sử dụng:
+
+- `http://localhost:5001`
+- `http://<master-node-ip>:30000`
 
 #### Bước 7: Deploy toàn bộ hệ thống
 
@@ -294,6 +311,7 @@ kubectl get pods,services,cronjob -o wide
 | `KUBE_CONFIG`           | Nội dung file `~/.kube/config` từ Master Node |
 | `KAGGLE_USERNAME`       | Kaggle username                               |
 | `KAGGLE_KEY`            | Kaggle API Key                                |
+| `MLFLOW_TRACKING_URI`   | Public HTTPS URL, ví dụ `https://mlflow.your-domain.com` |
 
 ---
 

@@ -177,7 +177,7 @@ sequenceDiagram
     participant ORCH as run_ai_pipeline.py<br/>(Local Orchestrator)
     participant K as Kaggle Compute
     participant S as AWS S3
-    participant MLF as MLflow Server<br/>(K3s Master :30000)
+    participant MLF as MLflow Server<br/>(Cloudflare Tunnel -> Nginx -> ClusterIP)
     participant GATE as mlflow_evaluation_gate.py
     participant GA as GitHub Actions
     participant P as K3s Cluster
@@ -273,7 +273,7 @@ ap-southeast-1 (Singapore)
 │
 ├── EC2 Instances
 │   ├── ip-10-0-1-219  - t3.medium: K3s Master (control-plane)
-│   │                       ★ MLflow Server Pod chạy tại đây (NodePort 30000)
+│   │                       ★ MLflow chạy nội bộ trong K3s, public qua Cloudflare Tunnel -> Nginx
 │   │                       ★ Backend: CloudNativePG PostgreSQL (dùng chung cluster)
 │   ├── ip-10-0-2-244  - t3.medium: K3s Worker 1 + Postgres PRIMARY
 │   └── ip-10-0-2-8    - t3.medium: K3s Worker 2 + Postgres STANDBY
@@ -336,14 +336,23 @@ Việc chuyển đổi từ ghi log trực tiếp sang mô hình **Data Streamin
 ### 6.3. Truy cập MLflow UI
 
 ```
-# Sau khi deploy k8s/mlflow-deployment.yaml:
-http://<master-node-public-ip>:30000
+# Sau khi deploy:
+# - k8s/mlflow-deployment.yaml
+# - k8s/mlflow-nginx.yaml
+# - k8s/cloudflared-tunnel.yaml
+https://mlflow.your-domain.com
 
 # Các chức năng:
 # - Experiments: xem tất cả các run với params, metrics, artifacts
 # - Models: xem Registry với các version + stage
 # - Compare: so sánh các run với nhau
 ```
+
+Lưu ý:
+
+- `MLFLOW_TRACKING_URI` phải là public HTTPS URL.
+- Kaggle không được dùng `localhost`.
+- Kaggle cũng không được dùng master-node NodePort.
 
 ---
 
