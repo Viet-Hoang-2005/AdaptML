@@ -1,10 +1,7 @@
 # postgres-cluster.yaml
-# CloudNativePG Cluster - Primary + Standby Streaming Replication
+# CloudNativePG Cluster
 #
 # Kiến trúc:
-#   Worker 1: [nids-postgres-1] PRIMARY - Đọc + Ghi
-#   Worker 2: [nids-postgres-2] STANDBY - Chỉ Đọc (streaming replica)
-#
 # CloudNativePG tự tạo các K8s Service sau:
 #   nids-postgres-rw -> Primary (dùng cho INSERT/UPDATE)
 #   nids-postgres-ro -> Load-balanced Primary + Standby (dùng cho SELECT)
@@ -15,37 +12,33 @@ kind: Cluster
 metadata:
   name: nids-postgres
 spec:
-  # 2 instances: 1 Primary + 1 Standby đồng bộ streaming replication
-  instances: 2
+  # Tạm chạy single-node để bring-up MLflow/PostgreSQL trước.
+  instances: 1
+
+  enableSuperuserAccess: true
 
   # Phiên bản PostgreSQL
   imageName: ghcr.io/cloudnative-pg/postgresql:15
 
-  # Khởi tạo database và user
+  superuserSecret:
+    name: nids-postgres-superuser-secret
+
+  # Khởi tạo database và application owner
   bootstrap:
     initdb:
-      database: mlops_nids_db
+      database: nids_db
       owner: postgres
       secret:
-        - name: DB_USER
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secrets
-              key: POSTGRES_USER
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secrets
-              key: POSTGRES_PASSWORD
+        name: nids-postgres-app-secret
 
   # Cấu hình Storage cho mỗi instance
   storage:
     storageClass: local-path
     size: 10Gi
 
-  # Gán cứng Primary vào Worker 1 và Standby vào Worker 2
+  # Khi mở rộng lại nhiều instance, anti-affinity giúp tách các pod ra khác node.
   affinity:
-    enablePodAntiAffinity: true   # Không cho 2 Postgres Pods chạy chung 1 Node
+    enablePodAntiAffinity: true
     topologyKey: kubernetes.io/ip-10-0-2-221
 
   # Cấu hình PostgreSQL
