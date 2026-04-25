@@ -1,3 +1,24 @@
+"""
+Phase 3 bridge script.
+
+Muc dich:
+  Doc model dang o Production trong MLflow Registry va dispatch mot event sang
+  GitHub Actions de deploy API.
+
+Env quan trong:
+  - MLFLOW_TRACKING_URI
+  - MLFLOW_REGISTRY_URI (optional, default = tracking URI)
+  - MLFLOW_MODEL_NAME
+  - GITHUB_REPOSITORY hoac GITHUB_REPO
+  - GITHUB_TOKEN
+  - GITHUB_EVENT_TYPE hoac GITHUB_DEPLOY_EVENT (optional)
+  - PRODUCTION_ALIAS (optional)
+
+Luu y:
+  Script se uu tien alias neu `PRODUCTION_ALIAS` duoc cung cap. Neu khong co,
+  no se fallback ve stage `Production` de giu backward compatibility.
+"""
+
 import json
 import os
 import urllib.request
@@ -20,19 +41,42 @@ def _get_latest_production_model(client: MlflowClient, model_name: str):
     return versions[0]
 
 
+def _get_target_production_model(
+    client: MlflowClient,
+    model_name: str,
+    production_alias: str,
+):
+    if production_alias:
+        try:
+            return client.get_model_version_by_alias(model_name, production_alias)
+        except Exception:
+            pass
+    return _get_latest_production_model(client, model_name)
+
+
 def main():
     tracking_uri = _require_env("MLFLOW_TRACKING_URI")
     registry_uri = os.environ.get("MLFLOW_REGISTRY_URI", tracking_uri).strip() or tracking_uri
     model_name = os.environ.get("MLFLOW_MODEL_NAME", "NIDS-XGBoost")
-    github_repo = _require_env("GITHUB_REPO")
+    github_repo = (
+        os.environ.get("GITHUB_REPOSITORY", "").strip()
+        or os.environ.get("GITHUB_REPO", "").strip()
+    )
+    if not github_repo:
+        raise ValueError("Missing required environment variable: GITHUB_REPOSITORY or GITHUB_REPO")
     github_token = _require_env("GITHUB_TOKEN")
-    event_type = os.environ.get("GITHUB_DEPLOY_EVENT", "mlflow_production_selected")
+    event_type = (
+        os.environ.get("GITHUB_EVENT_TYPE", "").strip()
+        or os.environ.get("GITHUB_DEPLOY_EVENT", "").strip()
+        or "mlflow_production_selected"
+    )
+    production_alias = os.environ.get("PRODUCTION_ALIAS", "").strip()
 
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_registry_uri(registry_uri)
     client = MlflowClient()
 
-    production_mv = _get_latest_production_model(client, model_name)
+    production_mv = _get_target_production_model(client, model_name, production_alias)
     run = client.get_run(production_mv.run_id)
     params = run.data.params
     metrics = run.data.metrics

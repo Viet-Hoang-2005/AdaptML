@@ -16,6 +16,11 @@ Ngat quy trinh:
 Fix: Dung sqlite:// cho CA tracking va registry (MLflow 3.x luu params vao SQLAlchemy)
 """
 
+LEGACY_NOTE = """
+LEGACY: local seed script for hardcoded v1/v2 models.
+Not used in the current Kaggle -> MLflow -> PostgreSQL/S3 flow.
+"""
+
 import os
 import sys
 import json
@@ -30,6 +35,8 @@ import mlflow
 from mlflow.tracking import MlflowClient
 from mlflow.models import infer_signature
 from mlflow.pyfunc import PythonModel
+
+warnings.warn(LEGACY_NOTE.strip(), DeprecationWarning, stacklevel=2)
 
 # ── Cau hinh duong dan ──────────────────────────────────────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

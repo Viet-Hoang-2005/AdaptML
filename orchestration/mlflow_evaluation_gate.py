@@ -25,6 +25,12 @@ import mlflow
 from mlflow.tracking import MlflowClient
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.warn(
+    "Legacy evaluation gate: this script still depends on local SQLite and stage transitions. "
+    "It is not aligned with the current public MLflow + alias-based flow.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CẤU HÌNH KẾT NỐI
