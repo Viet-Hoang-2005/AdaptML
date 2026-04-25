@@ -56,6 +56,8 @@ spec:
             - "5000"
             - --allowed-hosts
             - mlflow.mlops-nids-nt114.id.vn,mlflow.mlops-nids-nt114.id.vn:443,localhost,127.0.0.1,mlflow-service,mlflow-service.default.svc.cluster.local
+            - --cors-allowed-origins
+            - https://mlflow.mlops-nids-nt114.id.vn
             - --backend-store-uri
             - postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@nids-postgres-rw:5432/mlflow
             - --default-artifact-root
