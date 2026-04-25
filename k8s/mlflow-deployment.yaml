@@ -1,22 +1,3 @@
-# k8s/mlflow-deployment.yaml
-# Phase 1: MLflow Server tren Master Node — Control Plane
-# Giai doan 1 trong Roadmap MLflow-Centric
-# Chi tao manifest, chua kubectl apply
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mlflow-artifacts-pvc
-  labels:
-    app: mlflow-server
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 5Gi
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -34,13 +15,6 @@ spec:
       labels:
         app: mlflow-server
     spec:
-      # Ep chay tren Master Node (Control Plane)
-      nodeSelector:
-        node-role.kubernetes.io/master: "true"
-      tolerations:
-        - key: "node-role.kubernetes.io/master"
-          operator: "Exists"
-          effect: "NoSchedule"
       containers:
         - name: mlflow
           image: ghcr.io/mlflow/mlflow:latest
@@ -49,24 +23,16 @@ spec:
             - containerPort: 5000
               protocol: TCP
           env:
-            # Ket noi PostgreSQL Backend (CloudNativePG)
-            - name: DB_HOST
-              value: "nids-postgres-rw"
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_NAME
-              value: "mlflow"
-            - name: DB_USER
+            - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
                   name: postgres-secrets
                   key: POSTGRES_USER
-            - name: DB_PASSWORD
+            - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: postgres-secrets
                   key: POSTGRES_PASSWORD
-            # AWS credentials cho S3 artifact store
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -77,6 +43,10 @@ spec:
                 secretKeyRef:
                   name: aws-secrets
                   key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_DEFAULT_REGION
+              value: "ap-southeast-1"
+            - name: AWS_BUCKET_NAME
+              value: "mlops-nids-artifacts"
           args:
             - mlflow
             - server
@@ -84,8 +54,10 @@ spec:
             - "0.0.0.0"
             - --port
             - "5000"
+            - --backend-store-uri
+            - postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@nids-postgres-rw:5432/mlflow
             - --default-artifact-root
-            - "s3://mlops-nids-artifacts/mlflow-artifacts"
+            - s3://$(AWS_BUCKET_NAME)/mlflow-artifacts/
           resources:
             requests:
               cpu: 250m
@@ -102,11 +74,10 @@ metadata:
   labels:
     app: mlflow-server
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: mlflow-server
   ports:
     - port: 5000
       targetPort: 5000
-      nodePort: 30000
       protocol: TCP
