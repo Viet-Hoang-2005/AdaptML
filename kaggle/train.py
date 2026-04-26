@@ -130,21 +130,6 @@ def download_training_data(target_csv: str) -> str:
         f"Could not find {target_csv} in S3 or under /kaggle/input/."
     )
 
-
-def upload_artifacts_to_s3(local_paths: list[str]) -> None:
-    s3_client = boto3.client("s3")
-    s3_prefix = f"models/{MODEL_VERSION}/"
-
-    try:
-        for local_path in local_paths:
-            s3_key = f"{s3_prefix}{os.path.basename(local_path)}"
-            s3_client.upload_file(local_path, AWS_BUCKET_NAME, s3_key)
-            print(f"Uploaded {local_path} to s3://{AWS_BUCKET_NAME}/{s3_key}")
-    except Exception as exc:
-        print(f"S3 artifact upload failed: {exc}")
-        raise
-
-
 def list_run_artifacts_for_debug(client: MlflowClient, run_id: str, artifact_path: str = "") -> None:
     try:
         artifacts = client.list_artifacts(run_id, artifact_path)
@@ -381,7 +366,6 @@ def main() -> None:
         artifact_uri = mlflow.get_artifact_uri()
 
         artifact_paths = [model_path, classes_path, metrics_path]
-        upload_artifacts_to_s3(artifact_paths)
         register_model_to_mlflow(run_id, artifact_uri)
 
         print(f"Training completed successfully for {MODEL_VERSION}.")
