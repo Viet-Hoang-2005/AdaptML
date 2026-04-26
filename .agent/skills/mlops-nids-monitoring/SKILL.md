@@ -24,4 +24,6 @@ Script giám sát trạng thái Data Drift tĩnh `monitoring/detect_drift.py` đ
 
 - Khi phát hiện Drift, script gửi một HTTP POST Request tới GitHub API (`repository_dispatch`).
 - Trường `event_type`: `data_drift_detected`.
-- Workflow `retrain_pipeline.yml` sẽ lắng nghe sự kiện này để tự động kích hoạt tiến trình Retrain trên Kaggle.
+- Workflow `trigger_drift_check.yml` sẽ lắng nghe sự kiện này và chạy K8s Job Evidently.
+- **Human-in-the-Loop (HitL) Retraining**: Nếu Evidently xác nhận có Data Drift, thay vì tự động gọi Kaggle retrain rủi ro cao, hệ thống sẽ gửi Cảnh báo (Email/Slack) cho Data Engineer.
+- Data Engineer chuẩn bị tập dữ liệu mới, upload S3 và cập nhật `data_manifest.json`. Lúc này S3 Event mới gọi Lambda để kích hoạt quá trình Continuous Training.

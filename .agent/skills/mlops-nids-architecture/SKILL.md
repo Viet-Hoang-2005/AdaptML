@@ -10,8 +10,8 @@ Khi tương tác với hệ thống MLOps NIDS, hãy nhớ các nguyên tắc ki
 ## 1. Zero-Downtime Deployment
 
 - Hệ thống KHÔNG build model (file `.pkl`) trực tiếp vào Docker image.
-- Model và cấu hình nhãn (`.pkl` và `.json`) được lưu trữ tại AWS S3 (`mlops-nids-artifacts`).
-- Trong K3s, một **Init-Container** (`amazon/aws-cli`) sẽ kéo model từ bucket S3 về một `emptyDir` mount chung. App container (FastAPI) đọc model từ `emptyDir` này. Khi có model mới, GitHub Actions dùng cờ lệnh `kubectl rollout restart deployment` để K3s chạy lại quá trình Init mà không tắt ngay Pod cũ, đảm bảo downtime bằng 0.
+- Mô hình được lưu trữ tập trung tại S3, do **MLflow Tracking Server** tự động tổ chức đường dẫn thông qua `mlflow-artifacts`.
+- Trong K3s, một **Init-Container** (`amazon/aws-cli`) sẽ dùng các biến môi trường `RUN_ID` và `EXPERIMENT_ID` được cung cấp bởi GitHub Actions để định vị chính xác file `.pkl` sâu trong S3 và kéo về thư mục `emptyDir`. Khi có model mới, GitHub Actions dùng lệnh `kubectl rollout restart deployment` để API tải lại model mới mà không gây downtime.
 
 ## 2. API Routing & Load Balancing
 
@@ -25,10 +25,11 @@ Khi tương tác với hệ thống MLOps NIDS, hãy nhớ các nguyên tắc ki
 - Toàn bộ dữ liệu được ném vào **Redpanda (Message Broker)** để chịu tải cao.
 - **Consumer Script (`consumer.py`)** chạy ngầm, gom dữ liệu thành các Batch (500 dòng) rồi mới `INSERT` vào DB. Nó cũng đóng vai trò theo dõi số lượng bản ghi để bắn Webhook kích hoạt Data Drift Check.
 
-## 3.5. Event-Driven S3 Lambda
+## 3.5. Event-Driven S3 Lambda & Continuous Training
 
 - Khi Data Engineer cập nhật `data_manifest.json` lên AWS S3, **S3 Event Notification** sẽ kích hoạt **AWS Lambda**.
 - Lambda này sẽ bắn Webhook tới GitHub Actions để tự động kích hoạt luồng Retrain ngay lập tức.
+- Kaggle Kernel (`train.py`) thực hiện training, báo cáo metrics và ném Artifacts (mô hình) vào **MLflow Server** đang chạy trên Worker Node. MLflow ghi nhận thông tin vào PostgreSQL Backend và S3 Backend.
 
 ## 4. Database Architecture (Dual Endpoint)
 

@@ -21,14 +21,14 @@ Quy trình End-to-End:
 
 1. Trigger khởi chạy thông qua webhook event từ Evidently (Data Drift) hoặc AWS Lambda (Data Engineer upload dữ liệu mới lên S3). Mọi hoạt động đều là Event-Driven.
 2. Download file cấu hình Data Manifest S3.
-3. Chạy Kaggle Kernel thông qua Kaggle API (`train.py`), pipeline sẽ tải Data Manifest đẩy model `.pkl` kèm bảng metrics `.json` lên các bucket folder S3 (`models/<version>/`).
-4. Tại bước đánh giá Cổng Chất Lượng **Quality Gate** (`evaluate_model.py`), Challenger Metrics (Model Mới tạo) và Champion Metrics (Model Nằm Production) được load về để đối chiếu logic thông minh.
-5. Nếu **Approve**: Trigger K3s Rolling Update (`kubectl rollout restart`). Cuối cùng, khép kín vòng lặp MLOps bằng cách tạo **K8s Job (`k8s/sync-job.yaml`)** chạy ngầm trong cụm K3s. Job này sẽ thực thi `update_reference_data.py` để lấy CSV mới chèn vào Postgres làm baseline sạch cho chu kỳ giám sát Data Drift mà KHÔNG cần mở cổng DB ra ngoài Internet.
+3. Chạy Kaggle Kernel thông qua Kaggle API (`train.py`). Pipeline sẽ tự động ném metrics và model (`.pkl`) vào MLflow.
+4. **Phê duyệt Human-in-the-Loop (HitL)**: Thay vì duyệt tự động bằng script, quá trình phê duyệt chất lượng được chuyển lên Giao diện Web của **MLflow Registry**. AI Engineer đánh giá và chuyển Stage của mô hình mong muốn sang `Production`.
+5. Script `dispatch_production_model.py` tóm được Webhook, trích xuất `RUN_ID`, `EXPERIMENT_ID` và gửi cho GitHub Actions kích hoạt K3s Rolling Update. Cuối cùng, một Job đồng bộ Reference Data cũng được kích hoạt ngầm để hỗ trợ phát hiện Data Drift.
 
-## 3. Quality Gate (`evaluate_model.py`)
+## 3. Quản lý Version (MLflow Model Registry)
 
-Quy tắc xét duyệt Promotion (Trọng tâm để xem xét log nếu pipeline không cho phép lên Production):
+Quy tắc xét duyệt Promotion:
 
-- **Rejection Threshold:** Bất cứ Challenger Model nào có F1-score thấp hơn ngưỡng `< 0.85` sẽ bị Cấn Hồi lập tức, bỏ qua mọi tham số.
-- **Capability Upgrade:** Challenger Model phân loại đánh nhãn được nhiều nhãn (classes) tấn công hơn -> Chuyển thành Trạng thái **Approve** ngay lập tức, ngay cả khi F1 tổng có hơi tụt hậu so với Champion (đảm bảo F1 vẫn phải trên 0.85).
-- **Head-to-Head:** Lấy Challenger bằng hoặc hơn -> **Approve**. F1 Challenger thấp hơn nhưng nằm trong ngưỡng dung sai Drift-Tolerance `<= 0.01` -> **Approve** (Điều này thể hiện Model mới đang bám sát đúng phân phối thực tế mới). Ngược lại, F1 tụt xa khỏi `0.01` -> **Reject**.
+- **Tracking:** Mọi tham số từ Kaggle đều được bắn về MLflow (Live Tracking).
+- **Staging/Pending:** Mô hình mới sinh ra luôn nằm ở trạng thái Staging/Pending.
+- **Production (HitL):** AI Engineer xem biểu đồ trên MLflow, so sánh các Run, và bấm chọn "Transition to Production" nếu thấy thỏa mãn tiêu chuẩn. Đây là điểm cắt (Decoupling) hoàn hảo giữa Training và Deployment. Hệ thống là kiến trúc **Phương án A+** với MLflow làm Kho bãi và GitHub làm Nhạc trưởng điều phối K8s.
