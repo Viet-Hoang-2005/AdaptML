@@ -7,6 +7,14 @@ on:
         description: "Business model version to deploy, e.g. v3"
         required: true
         type: string
+      run_id:
+        description: "MLflow Run ID containing the model artifacts"
+        required: true
+        type: string
+      experiment_id:
+        description: "MLflow Experiment ID"
+        required: true
+        type: string
   repository_dispatch:
     types: [mlflow_production_selected]
 
@@ -23,8 +31,12 @@ jobs:
         run: |
           if [ -n "${{ github.event.client_payload.model_version }}" ]; then
             echo "model_version=${{ github.event.client_payload.model_version }}" >> $GITHUB_OUTPUT
+            echo "run_id=${{ github.event.client_payload.run_id }}" >> $GITHUB_OUTPUT
+            echo "experiment_id=${{ github.event.client_payload.experiment_id }}" >> $GITHUB_OUTPUT
           elif [ -n "${{ inputs.model_version }}" ]; then
             echo "model_version=${{ inputs.model_version }}" >> $GITHUB_OUTPUT
+            echo "run_id=${{ inputs.run_id }}" >> $GITHUB_OUTPUT
+            echo "experiment_id=${{ inputs.experiment_id }}" >> $GITHUB_OUTPUT
           else
             echo "Missing model_version from repository_dispatch payload or workflow input."
             exit 1
@@ -38,8 +50,10 @@ jobs:
       - name: Update API Deployment Model Version
         env:
           MODEL_VERSION: ${{ steps.resolve_model_version.outputs.model_version }}
+          RUN_ID: ${{ steps.resolve_model_version.outputs.run_id }}
+          EXPERIMENT_ID: ${{ steps.resolve_model_version.outputs.experiment_id }}
         run: |
-          kubectl set env deployment/mlops-nids-api MODEL_VERSION=$MODEL_VERSION
+          kubectl set env deployment/mlops-nids-api MODEL_VERSION=$MODEL_VERSION RUN_ID=$RUN_ID EXPERIMENT_ID=$EXPERIMENT_ID
           kubectl rollout restart deployment/mlops-nids-api
           kubectl rollout status deployment/mlops-nids-api --timeout=300s
 

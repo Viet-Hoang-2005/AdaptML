@@ -87,6 +87,8 @@ def main():
             "The MLflow Production model does not contain the business model_version param/tag required for deployment."
         )
 
+    experiment_id = run.info.experiment_id
+
     payload = {
         "event_type": event_type,
         "client_payload": {
@@ -94,6 +96,7 @@ def main():
             "registry_version": str(production_mv.version),
             "model_version": model_version,
             "run_id": production_mv.run_id,
+            "experiment_id": experiment_id,
             "current_stage": production_mv.current_stage,
             "f1_score": metrics.get("f1_score"),
         },

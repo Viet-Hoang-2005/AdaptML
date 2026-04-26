@@ -152,7 +152,7 @@ jobs:
           echo "📦 Applying K8s manifests..."
           kubectl apply -f k8s/postgres-cluster.yaml
           kubectl apply -f k8s/api-deployment.yaml
-          kubectl apply -f k8s/redpanda-deployment.yaml
+          kubectl apply -f k8s/redpanda-statefulset.yaml
           kubectl apply -f k8s/consumer-deployment.yaml
           kubectl apply -f k8s/evidently-job.yaml
           echo "✅ All manifests applied."

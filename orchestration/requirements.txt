@@ -1,7 +1,3 @@
-# Dependencies for orchestration and MLflow bridge scripts.
-# Install from project root with:
-#   pip install -r orchestration/requirements.txt
-
 mlflow>=2.10.0
 boto3>=1.34.0
 joblib==1.3.2
