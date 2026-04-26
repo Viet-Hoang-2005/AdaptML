@@ -1,243 +1,75 @@
-name: MLOps NIDS - Retraining Pipeline
+name: MLOps NIDS - Controlled Retraining Pipeline
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
   repository_dispatch:
-    types: [data_drift_detected, data_manifest_updated]
+    types: [data_manifest_updated]
+
+env:
+  AWS_BUCKET_NAME: mlops-nids-artifacts
+  S3_TRAINING_DATA_PREFIX: training-data/
+  MLFLOW_MODEL_NAME: NIDS-XGBoost
 
 jobs:
-  # JOB 1: Đọc Data Manifest và kích hoạt Kaggle Retrain
-  retrain_kaggle:
-    name: "🧠 Retrain Model (Kaggle Compute)"
+  trigger_kaggle_training:
+    name: Trigger Kaggle Training Job
     runs-on: ubuntu-latest
-    outputs:
-      model_version: ${{ steps.read_manifest.outputs.model_version }}
-      target_csv: ${{ steps.read_manifest.outputs.target_csv }}
-      champion_version: ${{ steps.read_manifest.outputs.champion_version }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install AWS CLI & load Data Manifest from S3
+      - name: Load Data Manifest from S3
         id: read_manifest
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ap-southeast-1
         run: |
-          # Tải data_manifest.json từ S3 — "nguồn sự thật" về dataset cần train
-          aws s3 cp s3://mlops-nids-artifacts/data_manifest.json ./data_manifest.json
-          
-          # Trích xuất thông tin và truyền sang các Job tiếp theo qua output
+          aws s3 cp s3://${{ env.AWS_BUCKET_NAME }}/data_manifest.json ./data_manifest.json
+
           MODEL_VERSION=$(jq -r '.model_version' data_manifest.json)
           TARGET_CSV=$(jq -r '.target_csv' data_manifest.json)
-          # champion_version là version đang chạy trên Production (mặc định v1)
-          CHAMPION_VERSION=$(jq -r '.champion_version // "v1"' data_manifest.json)
-          
-          echo "model_version=$MODEL_VERSION"     >> $GITHUB_OUTPUT
-          echo "target_csv=$TARGET_CSV"           >> $GITHUB_OUTPUT
-          echo "champion_version=$CHAMPION_VERSION" >> $GITHUB_OUTPUT
-          
-          echo "📋 Loaded manifest:"
-          echo "   Dataset: $TARGET_CSV"
-          echo "   New Model Version: $MODEL_VERSION"
-          echo "   Current Champion: $CHAMPION_VERSION"
 
-      - name: Setup Kaggle API and push Training Job
+          echo "model_version=$MODEL_VERSION" >> $GITHUB_OUTPUT
+          echo "target_csv=$TARGET_CSV" >> $GITHUB_OUTPUT
+
+          echo "Loaded manifest:"
+          echo "  target_csv=$TARGET_CSV"
+          echo "  model_version=$MODEL_VERSION"
+
+      - name: Push Kaggle Training Kernel
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
           MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
           TARGET_CSV: ${{ steps.read_manifest.outputs.target_csv }}
+          AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
+          S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
         run: |
           pip install kaggle --quiet
           mkdir -p ~/.kaggle
           echo '{"username":"${{ secrets.KAGGLE_USERNAME }}","key":"${{ secrets.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
           chmod 600 ~/.kaggle/kaggle.json
-          
-          echo "🚀 Pushing train.py to Kaggle Kernel..."
-          # Cập nhật biến môi trường trong kernel-metadata.json trước khi push
-          jq --arg csv "$TARGET_CSV" --arg ver "$MODEL_VERSION" \
-            '.environment_variables.TARGET_CSV = $csv | .environment_variables.MODEL_VERSION = $ver' \
-            kaggle_training/kernel-metadata.json > /tmp/meta.json && \
-            mv /tmp/meta.json kaggle_training/kernel-metadata.json
-          
-          kaggle kernels push -p kaggle_training/
-          
-          echo "⏳ Waiting for Kaggle training completion (max 60m)..."
-          # Vòng lặp polling kiểm tra trạng thái Kaggle Kernel mỗi 2 phút
-          # Kernel slug phải khớp với field "id" trong kernel-metadata.json
-          KERNEL_SLUG="hongtrnnguynvit/mlops-nids-training-pipeline"
-          for i in $(seq 1 30); do
-            STATUS=$(kaggle kernels status $KERNEL_SLUG | grep -oP '"\K[^"]+(?=" status)')
-            echo "   Try $i — Status: $STATUS"
-            if [ "$STATUS" = "complete" ]; then
-              echo "✅ Kaggle Kernel complete!"
-              break
-            elif [ "$STATUS" = "error" ]; then
-              echo "❌ Kaggle Kernel error!"
-              exit 1
-            fi
-            sleep 120
-          done
 
-      - name: Download artifacts (model PKL + metrics JSON) from Kaggle
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-southeast-1
-          MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
-        run: |
-          mkdir -p models/$MODEL_VERSION
-          kaggle kernels output hongtrnnguynvit/mlops-nids-training-pipeline -p models/$MODEL_VERSION/
-          echo "📦 Downloaded files:"
-          ls -la models/$MODEL_VERSION/
-          
-          # Upload model lên S3 để Init Container K3s có thể kéo về
-          aws s3 sync models/$MODEL_VERSION/ s3://mlops-nids-artifacts/models/$MODEL_VERSION/
-          echo "☁️  Uploaded model to S3: s3://mlops-nids-artifacts/models/$MODEL_VERSION/"
+          jq \
+            --arg csv "$TARGET_CSV" \
+            --arg ver "$MODEL_VERSION" \
+            --arg bucket "$AWS_BUCKET_NAME" \
+            --arg prefix "$S3_TRAINING_DATA_PREFIX" \
+            --arg mlflow_uri "$MLFLOW_TRACKING_URI" \
+            --arg model_name "$MLFLOW_MODEL_NAME" \
+            '.environment_variables.TARGET_CSV = $csv
+            | .environment_variables.MODEL_VERSION = $ver
+            | .environment_variables.AWS_BUCKET_NAME = $bucket
+            | .environment_variables.S3_TRAINING_DATA_PREFIX = $prefix
+            | .environment_variables.MLFLOW_TRACKING_URI = $mlflow_uri
+            | .environment_variables.MLFLOW_MODEL_NAME = $model_name' \
+            kaggle/kernel-metadata.json > /tmp/kernel-metadata.json
 
-      - name: Upload metrics JSON to GitHub Actions Artifacts
-        env:
-          MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: challenger-metrics
-          path: models/${{ steps.read_manifest.outputs.model_version }}/metrics_${{ steps.read_manifest.outputs.model_version }}.json
-          retention-days: 7
+          mv /tmp/kernel-metadata.json kaggle/kernel-metadata.json
+          kaggle kernels push -p kaggle/
 
-  # JOB 2: Trọng tài chấm điểm — Cho phép hay chặn Deploy
-  evaluate_model:
-    name: "⚖️  Model Evaluation Gate (Arbitrator)"
-    needs: retrain_kaggle
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies for evaluate_model script
-        run: pip install --quiet boto3
-
-      - name: Download current Champion metrics from S3
-        # Champion metrics là file của model đang chạy trên Production.
-        # Tải từ S3 thay vì đọc file trong repo để đảm bảo luôn là bản mới nhất
-        # sau mỗi lần retrain thành công trước đó.
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-southeast-1
-          CHAMPION_VERSION: ${{ needs.retrain_kaggle.outputs.champion_version }}
-        run: |
-          # Đọc champion_version từ manifest để biết tải metrics của version nào
-          aws s3 cp s3://mlops-nids-artifacts/data_manifest.json ./data_manifest.json
-          CHAMPION_VERSION=$(jq -r '.champion_version // "v1"' data_manifest.json)
-          echo "📊 Current Champion version: $CHAMPION_VERSION"
-          
-          # Tải metrics của champion từ S3 (đây là nguồn ground truth mới nhất)
-          aws s3 cp \
-            s3://mlops-nids-artifacts/models/$CHAMPION_VERSION/metrics_${CHAMPION_VERSION}.json \
-            /tmp/champion_metrics.json || \
-          cp models/v1/metrics_v1.json /tmp/champion_metrics.json  # Fallback về v1 nếu S3 chưa có
-          
-          echo "📊 Champion metrics:"
-          cat /tmp/champion_metrics.json
-
-      - name: Download Challenger metrics from Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: challenger-metrics
-          path: /tmp/challenger/
-
-      - name: Run Automated Evaluation script
-        run: |
-          CHALLENGER_FILE=$(ls /tmp/challenger/metrics_*.json | head -1)
-          echo "🏆 Challenger metrics: $CHALLENGER_FILE"
-          cat $CHALLENGER_FILE
-          
-          python .github/scripts/evaluate_model.py \
-            --champion  /tmp/champion_metrics.json \
-            --challenger $CHALLENGER_FILE \
-            --min-f1 0.85 \
-            --drift-tolerance 0.01
-
-  # JOB 3: Triển khai Zero-Downtime lên K3s (chỉ khi đủ điều kiện)
-  deploy_to_k3s:
-    name: "🚀 Zero-Downtime Deployment to K3s"
-    needs: [retrain_kaggle, evaluate_model]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Authenticate Kubeconfig K3s
-        uses: azure/k8s-set-context@v2
-        with:
-          kubeconfig: ${{ secrets.KUBE_CONFIG }}
-
-      - name: Update MODEL_VERSION variable on K3s cluster
-        env:
-          MODEL_VERSION: ${{ needs.retrain_kaggle.outputs.model_version }}
-        run: |
-          # Ép K3s deployment dùng model version mới
-          kubectl set env deployment/mlops-nids-api MODEL_VERSION=$MODEL_VERSION
-          echo "🏷️  Updated MODEL_VERSION=$MODEL_VERSION on deployment"
-
-      - name: Start Rolling Update (Zero-Downtime)
-        run: |
-          echo "🔄 Starting Rolling Update — terminating old pods, init containers pulling new model from S3..."
-          kubectl rollout restart deployment/mlops-nids-api
-          kubectl rollout status deployment/mlops-nids-api --timeout=300s
-
-      - name: Verify running pods
-        run: kubectl get pods -l app=mlops-nids-api
-
-  # JOB 4: Đồng bộ Reference Data — Khép kín vòng lặp MLOps
-  sync_reference_data:
-    name: "🔄 Sync Reference Data via K8s Job"
-    needs: [retrain_kaggle, deploy_to_k3s]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Authenticate Kubeconfig K3s
-        uses: azure/k8s-set-context@v2
-        with:
-          kubeconfig: ${{ secrets.KUBE_CONFIG }}
-
-      - name: Trigger K8s Reference Data Sync Job
-        # Áp dụng Job trên Cụm K3s, chạy bảo mật nội bộ thay vì kết nối mở port 5432
-        run: |
-          echo "🔄 Starting new Reference Data sync inside K3s cluster..."
-          
-          # Xoá Job cũ nếu còn sót (bỏ qua lỗi nếu chưa tồn tại)
-          kubectl delete job reference-data-sync-job --ignore-not-found
-          
-          # Cập nhật Job để đảm bảo sử dụng image mới nhất trên dockerhub nếu có
-          kubectl apply -f k8s/sync-job.yaml
-          
-          echo "⏳ Waiting for K8s Sync Job to finish (timeout 300s)..."
-          # Chờ đến khi Job báo condition=complete
-          kubectl wait --for=condition=complete job/reference-data-sync-job --timeout=300s
-          
-          echo "📋 Logs of sync process:"
-          kubectl logs job/reference-data-sync-job
-
-      - name: Send Pipeline completion notification
-        if: always()
-        run: |
-          echo "=============================================="
-          echo "  ✅ MLOps NIDS Pipeline hoàn tất!"
-          echo "  📌 Model mới: ${{ needs.retrain_kaggle.outputs.model_version }}"
-          echo "  📌 Dataset:   ${{ needs.retrain_kaggle.outputs.target_csv }}"
-          echo "  📌 Reference Data đã được cập nhật."
-          echo "=============================================="
+          echo "Kaggle training job triggered successfully."
+          echo "This workflow is fire-and-forget by design."

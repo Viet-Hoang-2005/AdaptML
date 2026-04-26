@@ -6,185 +6,167 @@ Tài liệu ghi lại toàn bộ lịch sử phát triển của dự án **MLOp
 
 ---
 
-## [3.0.0]: 2026-04-05
+## [Unreleased] - 2026-04-11
 
-### Giai đoạn 3: Hạ tầng & Triển khai Production (Infrastructure & Production Deployment)
+### Giai đoạn 4: Tái Cấu Trúc MLflow-Centric (Infrastructure & Orchestration Overhaul)
 
-Giai đoạn hoàn thiện cuối cùng: đưa toàn bộ hệ thống lên hạ tầng AWS thực tế với cụm K3s 3 node, bảo đảm tính sẵn sàng cao (High Availability) cho cơ sở dữ liệu, và viết lại toàn bộ CI/CD pipeline phù hợp với kiến trúc mới.
+Giai đoạn chuyển đổi từ kiến trúc "GitHub Actions làm nhạc trưởng" sang **MLflow-Centric Architecture** — `run_ai_pipeline.py` (Local Orchestrator) đóng vai trò điều phối pipeline, MLflow Model Registry là nguồn sự thật DUY NHẤT về model versions, và GitHub Actions giảm từ 4 Jobs xuống còn 2 Jobs.
 
 ### ✨ Added - Tính năng mới
 
-- **Hạ tầng AWS bằng Terraform** (`infra/main.tf`):
-  - VPC với Public Subnet (Master + ALB) và Private Subnet (Worker Nodes)
-  - Cụm K3s: 1 Master (`t3.medium`) + 2 Worker (`t3.medium`) trên EC2
-  - Application Load Balancer (ALB) phân phối traffic từ Internet vào Worker trên cổng 80 (cho Traefik Ingress)
-  - S3 Bucket (`mlops-nids-artifacts`) với Versioning và Block Public Access để lưu model artifacts
-  - NAT Gateway cho Worker Nodes truy cập Internet trong Private Subnet
+- **MLflow Server trên K3s Master Node** (`k8s/mlflow-deployment.yaml`):
+  - Chạy trên Control Plane Node (Master Node), ổn định, không chạy workload người dùng
+  - NodePort 30000 — MLflow UI truy cập từ bên ngoài cluster
+  - Backend: CloudNativePG PostgreSQL (dùng chung cluster với `nids_db`) ★
+  - Artifact root: `s3://mlops-nids-artifacts/mlflow-artifacts/`
+  - Resource limits: `250m-1000m CPU`, `512Mi-2Gi RAM` — không ảnh hưởng etcd
+  - AWS credentials từ Kubernetes Secret (`aws-secrets`)
 
-- **K3s Kubernetes Manifests** (`k8s/`):
-  - `api-deployment.yaml`: FastAPI Deployment với **Init Container** kéo model từ S3 tự động, `readinessProbe` và `livenessProbe`, ClusterIP Service và Traefik Ingress
-  - `postgres-cluster.yaml`: **CloudNativePG Cluster** - Primary + Standby Streaming Replication tự động failover
-  - `evidently-cronjob.yaml`: CronJob Evidently AI chạy 0h UTC hằng ngày
+- **Khởi tạo MLflow Database** (`k8s/init-mlflow-db.yaml`):
+  - Kubernetes Job chạy 1 lần duy nhất khi setup hạ tầng
+  - Tạo database `mlflow`, user `mlflow` với password `mlflow_password`
+  - Retry loop `pg_isready` (60s timeout) — đợi CloudNativePG Primary sẵn sàng
+  - Auto-cleanup sau 300s nhờ `ttlSecondsAfterFinished`
 
-- **CloudNativePG High Availability** (`k8s/postgres-cluster.yaml`):
-  - Primary Pod (Worker 1): xử lý INSERT/UPDATE từ FastAPI
-  - Standby Pod (Worker 2): xử lý SELECT từ Evidently, tự động sync qua WAL Streaming
-  - Hai K8s Service endpoint riêng biệt: `nids-postgres-rw` (ghi) và `nids-postgres-ro` (đọc)
-  - Auto Failover: Standby tự động được thăng cấp lên Primary trong vòng 30–60 giây khi Primary sập
+- **MLflow Evaluation Gate** (`orchestration/mlflow_evaluation_gate.py`):
+  - Query trực tiếp PostgreSQL MLflow backend bằng SQLite (tránh MLflow 3.x API changes)
+  - `_find_version_by_stage()` dùng `ORDER BY creation_time DESC LIMIT 1` — luôn lấy bản mới nhất trong stage
+  - 3 quy tắc đánh giá: F1 ≥ min_f1 (0.85), capability upgrade, head-to-head comparison
+  - Gọi `client.transition_model_version_stage()` để promote/reject
 
-- **Dual DB Endpoint Architecture** (`api/src/db_manager.py`):
-  - `engine_rw` -> kết nối `nids-postgres-rw` (Primary) cho thao tác ghi log production
-  - `engine_ro` -> kết nối `nids-postgres-ro` (Standby) dự phòng cho thao tác đọc
-  - `pool_pre_ping=True` giúp engine tự hồi phục kết nối sau sự kiện failover
-  - `pool_recycle=1800` tránh stale connection sau thời gian dài không dùng
+- **Local Orchestrator** (`orchestration/run_ai_pipeline.py`):
+  - ★ **Nhạc trưởng mới** của toàn bộ pipeline — thay thế 2 jobs GitHub Actions
+  - Luồng: Kaggle API → poll status → tải artifact S3 → log MLflow → Evaluation Gate → webhook GitHub
+  - Exponential backoff polling: 30s → 60s → 120s
+  - Bắn `repository_dispatch: deploy_new_champion` khi APPROVED, kèm `client_payload.model_version`
 
-- **Read-Only endpoint cho Drift Detection** (`monitoring/detect_drift.py`):
-  - Đọc `DB_HOST_RO` thay vì `DB_HOST` -> kết nối đến `nids-postgres-ro` (Standby)
-  - Tách biệt hoàn toàn workload đọc (Evidently) khỏi workload ghi (FastAPI)
-
-- **Health Check Endpoint** (`api/src/index.py`):
-  - `GET /` trả về `{"status": "healthy", "model_version": "v1"}` để ALB và K8s probe kiểm tra
-
-- **CI/CD Pipeline hoàn chỉnh** (`.github/workflows/`):
-  - `ci_cd_pipeline.yml`: Lint -> Build Docker (API + Evidently) -> Push Docker Hub (`tnvhoang/`) -> Apply K8s Manifests -> Rolling Update
-  - `retrain_pipeline.yml`: Đọc `data_manifest.json` -> Kaggle Retrain -> `evaluate_model.py` -> K3s Deploy -> `update_reference_data.py`
+- **MLflow Model Registration Script** (`orchestration/register_models_to_mlflow.py`):
+  - Đăng ký v1 (2-class, Staging) và v2 (3-class, Production) vào MLflow Model Registry
+  - Log metrics, params, artifacts vào MLflow run
+  - Gọi `client.transition_model_version_stage()` để set đúng stage ban đầu
 
 ### 🔧 Fixed - Sửa lỗi
 
-- Init Container trong `api-deployment.yaml` kéo sai tên file model (`label_nids_encoder_v1.pkl` -> `label_classes_v1.json`)
-- S3 bucket name không nhất quán giữa YAML và pipeline (`mlops-nids-models-bucket` -> `mlops-nids-artifacts`)
-- `DB_NAME` không đồng nhất giữa YAML, `db_manager.py` và `detect_drift.py` (thống nhất về `mlops_nids_db`)
-- Kaggle Kernel slug sai trong `retrain_pipeline.yml` (`mlops-nids-training` -> `mlops-nids-training-pipeline`)
-- Evidently CronJob dùng `hostPath` volume -> không hoạt động trên cụm multi-node (đã xóa, dùng DB làm nguồn dữ liệu)
-- Monitoring Dockerfile dùng Python 3.9 không tương thích cú pháp `tuple[...]` type hint (nâng lên 3.10)
-- `COPY . /app/monitoring` trong Dockerfile monitoring dẫn đến CMD path sai (đổi thành `COPY . .`)
-- `requirements.txt` của monitoring thiếu `sqlalchemy` -> script crash khi khởi động
-- Master Node EC2 dùng `t3.small` (2GB RAM) không đủ tài nguyên cho K3s control-plane (nâng lên `t3.medium`)
-- Champion metrics trong pipeline `evaluate_model` hardcode path version v1 -> đã động hóa đọc từ `data_manifest.json`
-- `kernel-metadata.json` thiếu trường `environment_variables` -> `jq` inject sai khi pipeline chạy
+- **S3 Bucket Name nhất quán** (`kaggle_training/kernel-metadata.json`, `.github/workflows/retrain_pipeline.yml`):
+  - `mlops-nids-models-bucket` → `mlops-nids-artifacts` (đúng bucket Terraform tạo)
+  - Fix Deep Audit Issue #1 (CRITICAL)
+
+- **GITHUB_REPO đúng repo** (`k8s/evidently-cronjob.yaml`):
+  - `Viet-Hoang-2005/MLOps-weather-system` → `Viet-Hoang-2005/MLOps-nids-system`
+  - Fix Deep Audit Issue #2 (CRITICAL — webhook 404 ngăn hoàn toàn auto-retrain)
+
+- **`postgres.yaml` → `postgres-cluster.yaml`** (`.github/workflows/ci_cd_pipeline.yml`):
+  - Fix Deep Audit Issue #3 (HIGH — apply file không tồn tại)
+
+### 🔄 Changed - Thay đổi
+
+- **Cấu trúc thư mục**:
+  - Thêm `orchestration/` — chứa `run_ai_pipeline.py`, `mlflow_evaluation_gate.py`, `register_models_to_mlflow.py`
+  - Scripts cũ trong `.github/scripts/` vẫn giữ lại (legacy cho CI/CD thử nghiệm)
+
+- **Technology Stack** (`README.md`):
+  - `Model Registry: AWS S3` → `MLflow Model Registry (K3s Master Node)`
+  - `Orchestration: K3s (Kubernetes)` → `Local Python (run_ai_pipeline.py)`
+  - Thêm `MLflow` vào ML Stack
+
+- **README.md flow**:
+  - GitHub Actions làm nhạc trưởng → `run_ai_pipeline.py` (Local Orchestrator)
+  - Thêm MLflow Server vào sơ đồ topology
+  - Cập nhật sơ đồ luồng: Evidently → Orchestrator → Kaggle → MLflow → Gate → GitHub Deploy
+
+### 🗑️ Deprecated - Lỗi thời
+
+- **`.github/scripts/evaluate_model.py`**:
+  - Chuyển logic vào `orchestration/mlflow_evaluation_gate.py`
+  - Query MLflow trực tiếp thay vì đọc file JSON
+  - Vẫn giữ trong `.github/scripts/` để CI/CD thử nghiệm có thể dùng tạm
+
+### 📋 Architecture Changes — Before vs After
+
+| Tiêu chí | Before (GitHub Actions Orchestrator) | After (MLflow-Centric) |
+|---|---|---|
+| Trigger | CRON + Webhook + Manual | Webhook (`deploy_new_champion`) |
+| Kaggle training | GitHub Actions poll | Local script (`run_ai_pipeline.py`) |
+| Metrics storage | File JSON (S3 + GitHub Artifacts) | MLflow Model Registry (PostgreSQL) |
+| Evaluation | `evaluate_model.py` đọc JSON | `mlflow_evaluation_gate.py` query MLflow |
+| MODEL_VERSION | Hardcoded trong YAML | Từ `client_payload.model_version` webhook |
+| GitHub Jobs | 4 jobs | 2 jobs (Deploy + Sync) |
+| Orchestrator | GitHub Actions | Local Python |
+| MLflow | Chỉ logging (train.py) | Central Brain — Registry + Evaluation + Lineage |
+
+---
+
+## [3.0.0]: 2026-04-05
+
+### Giai đoạn 3: Hạ tầng & Triển khai Production
+
+### ✨ Added
+
+- **Hạ tầng AWS bằng Terraform** (`infra/main.tf`): VPC, K3s, ALB, S3
+- **K3s Kubernetes Manifests** (`k8s/`): `api-deployment.yaml`, `postgres-cluster.yaml`, `evidently-cronjob.yaml`
+- **CloudNativePG High Availability**: Primary + Standby, auto failover
+- **Dual DB Endpoint Architecture** (`api/src/db_manager.py`): `engine_rw` + `engine_ro`
+- **Health Check Endpoint** (`api/src/index.py`)
+- **CI/CD Pipeline hoàn chỉnh** (`.github/workflows/`)
+
+### 🔧 Fixed
+
+- Init Container kéo sai tên file model
+- S3 bucket name không nhất quán (đã được fix lại trong Unreleased)
+- Kaggle Kernel slug sai
+- Evidently CronJob dùng `hostPath` (đã xóa, dùng DB làm nguồn dữ liệu)
+- Monitoring Dockerfile Python 3.9 → 3.10
+- Master Node EC2 `t3.small` → `t3.medium`
+- Champion metrics hardcode path v1 → đọc động từ `data_manifest.json`
+- `kernel-metadata.json` thiếu `environment_variables`
 
 ---
 
 ## [2.0.0]: 2026-03-30
 
-### Giai đoạn 2: Vòng lặp MLOps - Giám sát & Tái huấn luyện Tự động (Monitoring & Continuous Training)
+### Giai đoạn 2: Vòng lặp MLOps - Giám sát & Tái huấn luyện Tự động
 
-Giai đoạn xây dựng "trái tim" của hệ thống MLOps: vòng lặp khép kín từ Detection -> Webhook -> Retrain -> Evaluate -> Deploy -> Sync.
+### ✨ Added
 
-### ✨ Added - Tính năng mới
+- **Evidently AI Drift Detection** (`monitoring/detect_drift.py`)
+- **Kaggle Training Pipeline** (`kaggle_training/train.py`)
+- **Model Evaluation Quality Gate** (`.github/scripts/evaluate_model.py`)
+- **Reference Data Sync** (`.github/scripts/update_reference_data.py`)
+- **Data Manifest** (`data_manifest.json`)
+- **Retrain Pipeline** (`.github/workflows/retrain_pipeline.yml`)
+- **Load Testing & Drift Simulation** (`web/src/locustfile.py`)
+- **Data Extraction** (`.github/scripts/extract_data.py`)
 
-- **Evidently AI Drift Detection** (`monitoring/detect_drift.py`):
-  - So sánh `nids_reference_data` (baseline training) và `nids_production_data` (24h gần nhất)
-  - Dùng `DataDriftPreset` (kiểm định KS-Test / Chi-Square từng feature) và `DatasetDriftMetric` (kết luận tổng thể)
-  - Tự động loại bỏ cột metadata (`id`, `created_at`, `Predicted_Label`, `Confidence_Score`) trước khi so sánh
-  - Kích hoạt `repository_dispatch` Webhook đến GitHub nếu drift rate ≥ 50%
-  - Kiểm tra tối thiểu 100 mẫu production trước khi phân tích để đảm bảo kết quả thống kê có nghĩa
+### 🔄 Changed
 
-- **Kaggle Training Pipeline** (`kaggle_training/train.py`):
-  - Nạp dataset từ AWS S3 theo `TARGET_CSV` trong `data_manifest.json`
-  - Hyperparameter Tuning tự động bằng `RandomizedSearchCV` + `StratifiedKFold`
-  - Xử lý class imbalance bằng `compute_sample_weight`
-  - Hỗ trợ multi-class động: 2 classes (binary) và 3+ classes (softmax)
-  - Theo dõi toàn bộ experiment bằng **MLflow** (params, metrics, artifacts)
-  - Xuất `metrics_v*.json` (accuracy, precision, recall, f1, hyperparameters, num_classes)
-  - Upload model artifacts lên S3 tự động sau khi train
-
-- **Model Evaluation Quality Gate** (`.github/scripts/evaluate_model.py`):
-  - So sánh Challenger (model mới) với Champion (model đang production) theo 3 quy tắc:
-    - **Capability Upgrade**: Challenger có nhiều class hơn Champion -> ưu tiên promote
-    - **Head-to-Head**: Cùng num_classes -> so sánh F1-score với drift tolerance 1%
-    - **Rejection Threshold**: F1 < 0.85 -> tự động reject dù số class nhiều hơn
-  - Pipeline fail (exit 1) nếu Challenger bị reject -> chặn deploy model kém
-
-- **Reference Data Sync** (`.github/scripts/update_reference_data.py`):
-  - Tải dataset mới từ S3 sau khi deploy thành công
-  - Cập nhật bảng `nids_reference_data` trong PostgreSQL -> đảm bảo Evidently dùng baseline mới nhất
-  - Khép kín vòng lặp MLOps: Data -> Train -> Deploy -> **Sync Base** -> Monitor -> Drift -> Retrain
-
-- **Data Manifest** (`data_manifest.json`):
-  - "Nguồn sự thật" duy nhất cho pipeline: `target_csv`, `model_version`, `champion_version`
-  - Thay đổi dataset/version chỉ cần sửa 1 file JSON trên S3, không cần chỉnh code
-
-- **Retrain Pipeline** (`.github/workflows/retrain_pipeline.yml`):
-  - Job 1 `retrain_kaggle`: Đọc manifest -> inject env vars -> push Kaggle Kernel -> polling status
-  - Job 2 `evaluate_model`: Tải champion metrics từ S3 + challenger từ Artifacts -> chạy evaluation
-  - Job 3 `deploy_to_k3s`: `kubectl set env MODEL_VERSION` -> `kubectl rollout restart`
-  - Job 4 `sync_reference_data`: Chạy `update_reference_data.py` để cập nhật baseline
-
-- **Load Testing & Drift Simulation** (`web/src/locustfile.py`):
-  - Giả lập traffic BENIGN và Attack (DDoS, PortScan) theo tỷ lệ có thể cấu hình
-  - Tạo đủ production data cho Evidently phân tích (≥ 100 mẫu)
-
-- **Data Extraction** (`.github/scripts/extract_data.py`):
-  - Trích xuất các tập dataset từ CIC-IDS2017 gốc theo số class (2, 3, 4 classes)
-  - Tạo các scenario: V1 (2 classes), V2 (3 classes), V3-V4 (4 classes)
-
-### 🔧 Changed - Cập nhật
-
-- Chuyển toàn bộ API từ **Flask** sang **FastAPI** để tận dụng async processing
-- `predict` endpoint dùng **BackgroundTasks** để ghi log không làm tăng latency phản hồi
-- XGBoost objective tự động chọn `binary:logistic` (2 classes) hoặc `multi:softmax` (3+ classes)
-- `db_manager.py` hỗ trợ connection pooling (`pool_size=10`, `max_overflow=20`)
+- Chuyển API từ Flask sang FastAPI
+- `db_manager.py` hỗ trợ connection pooling
 
 ---
 
 ## [1.0.0]: 2026-03-19
 
-### Giai đoạn 1: Xây dựng Nền tảng Core ML (Core ML Foundation)
+### Giai đoạn 1: Xây dựng Nền tảng Core ML
 
-Giai đoạn nghiên cứu, khảo sát và xây dựng prototype đầu tiên: mô hình phân loại tấn công mạng và API inference cơ bản.
+### ✨ Added
 
-### ✨ Added - Khởi tạo
-
-- **Nghiên cứu lý thuyết**:
-  - Khảo sát các phương pháp MLOps, ML Lifecycle, Data Drift detection
-  - Tìm hiểu bài toán Network Intrusion Detection (NIDS) và tập dữ liệu **CIC-IDS2017**
-  - So sánh các thuật toán: Random Forest, SVM, XGBoost -> chọn **XGBoost** vì F1 > 99%
-
-- **Tiền xử lý dữ liệu CIC-IDS2017**:
-  - Trích xuất và chuẩn hóa ~70 network flow features
-  - Xử lý missing values, infinite values và class imbalance
-  - Tạo tập train 2 classes: `BENIGN` và `DDoS` (`train_2_classes.csv`)
-  - Tạo tập train 3 classes: thêm `PortScan` (`train_3_classes.csv`)
-
-- **Mô hình XGBoost V1** (`models/v1/`):
-  - Accuracy: 99.99%, F1-score: 99.99% trên tập test CIC-IDS2017
-  - Xuất `xgb_nids_model_v1.pkl` và `label_classes_v1.json`
-  - Ghi chép metrics vào `metrics_v1.json`
-
-- **Mô hình XGBoost V2** (`models/v2/`):
-  - Mở rộng lên 3 classes (thêm PortScan)
-  - Xuất `xgb_nids_model_v2.pkl` và `label_classes_v2.json`
-  - Ghi chép metrics vào `metrics_v2.json`
-
-- **FastAPI Inference Server** (`api/src/index.py`):
-  - `POST /predict`: nhận JSON payload network features, trả về `Predicted_Label` + `Confidence_Score`
-  - `GET /`: health check endpoint
-  - Model được nạp vào RAM khi khởi động - inference < 100ms
-  - Hỗ trợ dynamic `MODEL_VERSION` qua biến môi trường
-
-- **PostgreSQL Logging** (`api/src/db_manager.py`):
-  - Lưu toàn bộ request + prediction vào bảng `nids_production_data`
-  - Bảng `nids_reference_data` lưu training data làm baseline so sánh
-  - Connection pooling với SQLAlchemy
-
-- **Docker hóa**:
-  - `api/Dockerfile`: đóng gói FastAPI Server
-  - `monitoring/Dockerfile`: đóng gói Evidently CronJob
-  - `docker-compose.yml`: môi trường local đầy đủ (FastAPI + PostgreSQL)
+- Nghiên cứu lý thuyết: CIC-IDS2017, XGBoost, MLOps lifecycle
+- Tiền xử lý dữ liệu CIC-IDS2017
+- Mô hình XGBoost V1 & V2
+- FastAPI Inference Server
+- PostgreSQL Logging
+- Docker hóa
 
 ---
 
 ## Quy ước Đánh số Phiên bản (Versioning)
 
-Dự án tuân thủ [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`
-
-| Loại      | Ý nghĩa                                    | Ví dụ thực tế trong dự án                                      |
-| --------- | ------------------------------------------ | -------------------------------------------------------------- |
+| Loại | Ý nghĩa | Ví dụ thực tế trong dự án |
+|---|---|---|
 | **MAJOR** | Thay đổi kiến trúc lớn, phá vỡ cấu trúc cũ | `1.0->2.0`: Flask->FastAPI; `2.0->3.0`: thêm K3s+CloudNativePG |
-| **MINOR** | Tính năng mới, tương thích ngược           | Thêm endpoint mới, thêm class phân loại mới                    |
-| **PATCH** | Sửa lỗi nhỏ, vá bảo mật                    | Sửa path S3, fix connection string                             |
+| **MINOR** | Tính năng mới, tương thích ngược | Thêm endpoint mới, thêm class phân loại mới |
+| **PATCH** | Sửa lỗi nhỏ, vá bảo mật | Sửa path S3, fix connection string |
 
 ---
 
-_Last updated: April 2026 - UIT · NT114 · MLOps NIDS System Project_
+_Last updated: 2026-04-11 - UIT · NT114 · MLOps NIDS System Project_

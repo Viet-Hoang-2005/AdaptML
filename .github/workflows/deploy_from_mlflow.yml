@@ -1,0 +1,47 @@
+name: MLOps NIDS - Deploy Production Model from MLflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Business model version to deploy, e.g. v3"
+        required: true
+        type: string
+  repository_dispatch:
+    types: [mlflow_production_selected]
+
+jobs:
+  deploy_to_k3s:
+    name: "Deploy MLflow Production Model to K3s"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve Model Version
+        id: resolve_model_version
+        run: |
+          if [ -n "${{ github.event.client_payload.model_version }}" ]; then
+            echo "model_version=${{ github.event.client_payload.model_version }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ inputs.model_version }}" ]; then
+            echo "model_version=${{ inputs.model_version }}" >> $GITHUB_OUTPUT
+          else
+            echo "Missing model_version from repository_dispatch payload or workflow input."
+            exit 1
+          fi
+
+      - name: Authenticate Kubeconfig K3s
+        uses: azure/k8s-set-context@v2
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Update API Deployment Model Version
+        env:
+          MODEL_VERSION: ${{ steps.resolve_model_version.outputs.model_version }}
+        run: |
+          kubectl set env deployment/mlops-nids-api MODEL_VERSION=$MODEL_VERSION
+          kubectl rollout restart deployment/mlops-nids-api
+          kubectl rollout status deployment/mlops-nids-api --timeout=300s
+
+      - name: Verify Running Pods
+        run: kubectl get pods -l app=mlops-nids-api

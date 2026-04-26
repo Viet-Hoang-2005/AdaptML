@@ -162,7 +162,7 @@ def run_drift_analysis(reference_df, production_df):
 
 # 5. KÍCH HOẠT GITHUB ACTIONS VIA WEBHOOK
 def trigger_github_webhook(drift_summary):
-    print("[4/4] DRIFT DETECTED! Triggering GitHub webhook...")
+    print("[4/4] DRIFT DETECTED! Triggering GitHub alert workflow...")
 
     if not GITHUB_TOKEN:
         print("⚠️ GITHUB_TOKEN not configured - skipping webhook.")
@@ -180,18 +180,20 @@ def trigger_github_webhook(drift_summary):
 
     url = f"https://api.github.com/repos/{GITHUB_REPO}/dispatches"
     
-    # Payload sẽ được gửi đến GitHub Actions để kích hoạt workflow retrain_pipeline.yml với thông tin về drift.
+    # Phase 1 chỉ gửi alert cho Data Engineer. Retrain chỉ được khởi động khi
+    # data_manifest.json thay đổi bởi Data Engineer trên S3.
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json",
         "Content-Type": "application/json"
     }
     payload = {
-        "event_type": "data_drift_detected",
+        "event_type": "drift_alert_required",
         "client_payload": {
             "drift_share": drift_summary["share_drifted_features"],
             "drifted_features": drift_summary["number_of_drifted_features"],
-            "threshold": DRIFT_THRESHOLD
+            "threshold": DRIFT_THRESHOLD,
+            "drifted_feature_names": drift_summary["drifted_feature_names"],
         }
     }
 
