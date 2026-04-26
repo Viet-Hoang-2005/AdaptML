@@ -85,6 +85,30 @@ services:
     networks:
       - mlops_nids_network
 
+  # 4. MLflow Tracking Server
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: mlops_nids_mlflow
+    restart: always
+    ports:
+      - "5001:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-southeast-1}
+      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME:-mlops-nids-artifacts}
+    command: >
+      mlflow server 
+      --host 0.0.0.0 
+      --port 5000 
+      --backend-store-uri postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME} 
+      --default-artifact-root s3://${AWS_BUCKET_NAME:-mlops-nids-artifacts}/mlflow-artifacts/
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mlops_nids_network
+
   # 5. NIDS Log Consumer (đứng giữa Redpanda và PostgreSQL)
   consumer:
     build:
@@ -156,7 +180,7 @@ networks:
   mlops_nids_network:
     driver: bridge
 
-# 5. Volume để lưu trữ dữ liệu của PostgreSQL và Redpanda
+# 9. Volume để lưu trữ dữ liệu của PostgreSQL và Redpanda
 volumes:
   mlops_nids_pgdata:
     external: false
