@@ -29,11 +29,11 @@ spec:
               mkdir -p /models/${MODEL_VERSION}
 
               # Tải file model XGBoost (.pkl)
-              aws s3 cp s3://${AWS_BUCKET_NAME}/models/${MODEL_VERSION}/xgb_nids_model_${MODEL_VERSION}.pkl \
+              aws s3 cp s3://${AWS_BUCKET_NAME}/mlflow-artifacts/${EXPERIMENT_ID}/${RUN_ID}/artifacts/deployment_exports/xgb_nids_model_${MODEL_VERSION}.pkl \
                 /models/${MODEL_VERSION}/xgb_nids_model_${MODEL_VERSION}.pkl
 
               # Tải file label classes (.json)
-              aws s3 cp s3://${AWS_BUCKET_NAME}/models/${MODEL_VERSION}/label_classes_${MODEL_VERSION}.json \
+              aws s3 cp s3://${AWS_BUCKET_NAME}/mlflow-artifacts/${EXPERIMENT_ID}/${RUN_ID}/artifacts/deployment_exports/label_classes_${MODEL_VERSION}.json \
                 /models/${MODEL_VERSION}/label_classes_${MODEL_VERSION}.json
 
               echo "Model sync complete."
@@ -42,6 +42,10 @@ spec:
           env:
             - name: MODEL_VERSION
               value: "v1"
+            - name: EXPERIMENT_ID
+              value: "1"
+            - name: RUN_ID
+              value: "unknown"
             - name: AWS_BUCKET_NAME
               value: "mlops-nids-artifacts"
             - name: AWS_DEFAULT_REGION
@@ -75,6 +79,10 @@ spec:
             # Version model phải khớp với MODEL_VERSION trong Init Container
             - name: MODEL_VERSION
               value: "v1"
+            - name: EXPERIMENT_ID
+              value: "1"
+            - name: RUN_ID
+              value: "unknown"
 
             # CloudNativePG READ-WRITE endpoint dùng cho INSERT log production data
             - name: DB_HOST_RW

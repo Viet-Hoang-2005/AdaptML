@@ -15,6 +15,13 @@ spec:
       labels:
         app: mlflow-server
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: DoesNotExist
       containers:
         - name: mlflow
           image: ghcr.io/mlflow/mlflow:latest
