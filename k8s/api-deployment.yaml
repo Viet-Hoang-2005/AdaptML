@@ -109,6 +109,14 @@ spec:
             - name: model-volume
               mountPath: /models  # FastAPI đọc file .pkl từ đây
 
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+
           # Kiểm tra pod sẵn sàng nhận traffic chưa (dùng endpoint health check đã thêm)
           readinessProbe:
             httpGet:

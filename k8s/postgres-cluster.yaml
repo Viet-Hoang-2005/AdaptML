@@ -44,12 +44,12 @@ spec:
   # Cấu hình PostgreSQL
   postgresql:
     parameters:
-      # Tối ưu cho t3.medium (4GB RAM)
-      shared_buffers: "512MB"
-      effective_cache_size: "1536MB"
-      work_mem: "16MB"
-      maintenance_work_mem: "128MB"
-      max_connections: "100"
+      # Tối ưu cho t3.large (8GB RAM)
+      shared_buffers: "1024MB"
+      effective_cache_size: "3072MB"
+      work_mem: "32MB"
+      maintenance_work_mem: "256MB"
+      max_connections: "200"
 
   # Cấu hình Backup định kỳ (tuỳ chọn - cần S3 bucket backup riêng)
   # backup:

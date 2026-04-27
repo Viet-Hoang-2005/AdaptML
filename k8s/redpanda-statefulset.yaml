@@ -22,7 +22,7 @@ spec:
         - redpanda
         - start
         - --smp 1
-        - --memory 1G 
+        - --memory 2G 
         - --overprovisioned
         - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
         - --advertise-kafka-addr internal://redpanda-service:9092,external://localhost:19092
@@ -36,10 +36,10 @@ spec:
         resources:
           # Ép xung tự bảo vệ: KHÔNG để Redpanda hút cạn RAM của Worker Node.
           limits:
-            memory: "1Gi"
+            memory: "2Gi"
             cpu: "1000m"
           requests:
-            memory: "512Mi"
+            memory: "1Gi"
             cpu: "500m"
         volumeMounts:
         - name: redpanda-data
