@@ -159,10 +159,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-ingress
-  annotations:
-    # Báo cho K3s biết hãy dùng Traefik (mặc định) để bắt traffic
-    kubernetes.io/ingress.class: traefik
 spec:
+  ingressClassName: traefik
   rules:
     - http:
         paths:
