@@ -7,7 +7,6 @@ import warnings
 from datetime import datetime
 from time import sleep
 
-
 def ensure_dependency(package_name: str) -> None:
     try:
         importlib.import_module(package_name)

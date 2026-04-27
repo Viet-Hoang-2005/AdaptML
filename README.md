@@ -46,18 +46,18 @@ Inference Traffic → FastAPI (Producer) → Redpanda (Message Queue)
 
 ## ✨ Tính năng Cốt lõi
 
-| #   | Tính năng                                                                    | Công nghệ                     |
-| --- | ---------------------------------------------------------------------------- | ----------------------------- |
-| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%            | XGBoost + CIC-IDS2017         |
-| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                         | FastAPI + Uvicorn             |
-| 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer | Redpanda + Consumer           |
-| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                     | CloudNativePG + K3s           |
-| 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu  | Evidently AI + GitHub Actions |
-| 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên Kaggle GPU   | AWS Lambda + GitHub Actions   |
-| 7   | **Model Registry & HitL** - Quản lý vòng đời model và phê duyệt thủ công | MLflow Registry               |
+| #   | Tính năng                                                                     | Công nghệ                     |
+| --- | ----------------------------------------------------------------------------- | ----------------------------- |
+| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%             | XGBoost + CIC-IDS2017         |
+| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                          | FastAPI + Uvicorn             |
+| 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer  | Redpanda + Consumer           |
+| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                      | CloudNativePG + K3s           |
+| 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu   | Evidently AI + GitHub Actions |
+| 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên Kaggle GPU    | AWS Lambda + GitHub Actions   |
+| 7   | **Model Registry & HitL** - Quản lý vòng đời model và phê duyệt thủ công      | MLflow Registry               |
 | 8   | **Zero-downtime deployment** Rolling update + Kéo model bằng RUN_ID từ MLflow | K3s + AWS S3 + GitHub Actions |
-| 9   | **Closed-loop feedback** - baseline tự cập nhật sau mỗi lần retrain          | update_reference_data.py      |
-| 10  | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời        | Locust                        |
+| 9   | **Closed-loop feedback** - baseline tự cập nhật sau mỗi lần retrain           | update_reference_data.py      |
+| 10  | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời         | Locust                        |
 
 ---
 
@@ -240,19 +240,28 @@ kubectl wait --for=condition=ready pod -n cnpg-system \
 #### Bước 4: Tạo Kubernetes Secrets
 
 ```bash
-# AWS credentials (cho Init Container keo model tu S3)
+# 1. Secret cho AWS
 kubectl create secret generic aws-secrets \
-  --from-literal=AWS_ACCESS_KEY_ID="<your-key>" \
-  --from-literal=AWS_SECRET_ACCESS_KEY="<your-secret>"
+  --from-literal=AWS_ACCESS_KEY_ID="<your-aws-key-id>" \
+  --from-literal=AWS_SECRET_ACCESS_KEY="<your-aws-secret-access-key>"
 
-# MLflow PostgreSQL credentials
+# 2. Secret cho PostgreSQL
 kubectl create secret generic postgres-secrets \
-  --from-literal=POSTGRES_USER="postgres" \
-  --from-literal=POSTGRES_PASSWORD="<strong-password>"
+  --from-literal=POSTGRES_USER="mlops_user" \
+  --from-literal=POSTGRES_PASSWORD="<your-postgres-password>"
 
-# GitHub Token (cho run_ai_pipeline.py ban webhook)
+# 3. Secret cho GitHub Actions Webhook
 kubectl create secret generic github-secrets \
-  --from-literal=GITHUB_TOKEN="<your-token>"
+  --from-literal=GITHUB_TOKEN="<your-github-token>" \
+  --from-literal=GITHUB_REPO="<your-github-repository>"
+
+# 4. Tạo Secret cho MLflow Nginx
+htpasswd -c -b auth <your-mlflow-username> <your-mlflow-password>
+kubectl create secret generic mlflow-basic-auth --from-file=auth
+
+# 5. Tạo Secret cho Cloudflare Tunnel
+kubectl create secret generic tunnel-token \
+  --from-literal=token="<your-cloudflare-tunnel-token>"
 ```
 
 #### Bước 5: Khởi tạo MLflow Database (chi 1 lan)
