@@ -21,9 +21,9 @@ try:
     data_records = df.to_dict('records')
     # Đảo ngược list để hàm pop() rút dữ liệu từ trên xuống dưới (O(1))
     data_records.reverse() 
-    print(f"✅ Successfully loaded {len(data_records)} rows TestData into Locust.")
+    print(f"Successfully loaded {len(data_records)} rows TestData into Locust.")
 except Exception as e:
-    print(f"❌ Error loading data: {e}")
+    print(f"Error loading data: {e}")
     data_records = []
 
 # 2. ĐỊNH NGHĨA KỊCH BẢN NGƯỜI DÙNG ẢO
@@ -65,9 +65,9 @@ class NIDSTestUser(HttpUser):
 # 3. EVENT HOOK: IN BÁO CÁO KHI DỪNG TEST
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
-    print("\n" + "="*50)
-    print("📊 SUMMARY OF PREDICTION RESULTS FROM THE XGBOOST MODEL")
-    print("="*50)
+    print("\n" + "="*60)
+    print("     SUMMARY OF PREDICTION RESULTS FROM THE XGBOOST MODEL")
+    print("="*60)
     
     total_correct = 0
     total_wrong = 0
@@ -86,6 +86,6 @@ def on_test_stop(environment, **kwargs):
     total_requests = total_correct + total_wrong
     if total_requests > 0:
         overall_accuracy = (total_correct / total_requests) * 100
-        print("-" * 50)
-        print(f"🏆 OVERALL ACCURACY: {overall_accuracy:.2f}%")
-    print("="*50 + "\n")
+        print("-" * 60)
+        print(f"OVERALL ACCURACY: {overall_accuracy:.2f}%")
+    print("="*60 + "\n")
