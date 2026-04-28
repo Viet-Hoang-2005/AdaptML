@@ -1,8 +1,11 @@
+# mlflow-deployment.yaml: Deployment và Service cho MLflow Tracking Server
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mlflow-server
+  annotations:
+    description: "MLflow Tracking Server and Model Registry"
   labels:
     app: mlflow-server
 spec:
@@ -15,15 +18,11 @@ spec:
       labels:
         app: mlflow-server
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-role.kubernetes.io/control-plane
-                operator: DoesNotExist
+      nodeSelector:
+        workload-type: worker
       containers:
         - name: mlflow
+          # Sử dụng image chính thức của MLflow từ GitHub Container Registry
           image: ghcr.io/mlflow/mlflow:latest
           imagePullPolicy: IfNotPresent
           ports:
@@ -54,6 +53,7 @@ spec:
               value: "ap-southeast-1"
             - name: AWS_BUCKET_NAME
               value: "mlops-nids-artifacts"
+          # Cấu hình lệnh khởi động MLflow Server với backend store là PostgreSQL và artifact store là S3
           args:
             - mlflow
             - server
@@ -66,7 +66,7 @@ spec:
             - --cors-allowed-origins
             - https://mlflow.mlops-nids-nt114.id.vn
             - --backend-store-uri
-            - postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@nids-postgres-rw:5432/mlflow
+            - postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@mlops-nids-postgres-rw:5432/mlflow
             - --default-artifact-root
             - s3://$(AWS_BUCKET_NAME)/mlflow-artifacts/
           resources:
@@ -77,6 +77,7 @@ spec:
               cpu: 1000m
               memory: 2Gi
 
+# Service để expose MLflow Server nội bộ trong cluster
 ---
 apiVersion: v1
 kind: Service

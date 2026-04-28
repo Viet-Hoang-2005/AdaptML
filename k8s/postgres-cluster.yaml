@@ -1,25 +1,22 @@
-# postgres-cluster.yaml
-# CloudNativePG Cluster
-#
-# Kiến trúc:
-# CloudNativePG tự tạo các K8s Service sau:
-#   nids-postgres-rw -> Primary (dùng cho INSERT/UPDATE)
-#   nids-postgres-ro -> Load-balanced Primary + Standby (dùng cho SELECT)
-#   nids-postgres-r  -> Tất cả instances
-
+# postgres-cluster.yaml: CloudNativePG Cluster
+#   mlops-nids-postgres-rw -> Primary (dùng cho INSERT/UPDATE)
+#   mlops-nids-postgres-ro -> Load-balanced Primary + Standby (dùng cho SELECT)
+#   mlops-nids-postgres-r  -> Tất cả instances
+---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: nids-postgres
+  name: mlops-nids-postgres
+  annotations:
+    description: "CloudNativePG cluster for MLflow metadata and NIDS baseline data storage"
 spec:
-  # Tạm chạy single-node để bring-up MLflow/PostgreSQL trước.
+  nodeSelector:
+    workload-type: worker
+
+  # Chạy single-node để bring-up MLflow/PostgreSQL trước.
   instances: 1
-
   enableSuperuserAccess: true
-
-  # Phiên bản PostgreSQL
   imageName: ghcr.io/cloudnative-pg/postgresql:15
-
   superuserSecret:
     name: nids-postgres-superuser-secret
 
@@ -41,30 +38,15 @@ spec:
     enablePodAntiAffinity: true
     topologyKey: kubernetes.io/ip-10-0-2-221
 
-  # Cấu hình PostgreSQL
+  # Tuning PostgreSQL parameters cho MLflow workload
   postgresql:
     parameters:
-      # Tối ưu cho t3.large (8GB RAM)
       shared_buffers: "1024MB"
       effective_cache_size: "3072MB"
       work_mem: "32MB"
       maintenance_work_mem: "256MB"
       max_connections: "200"
 
-  # Cấu hình Backup định kỳ (tuỳ chọn - cần S3 bucket backup riêng)
-  # backup:
-  #   barmanObjectStore:
-  #     destinationPath: s3://mlops-nids-backups/postgres/
-  #     s3Credentials:
-  #       accessKeyId:
-  #         name: aws-secrets
-  #         key: AWS_ACCESS_KEY_ID
-  #       secretAccessKey:
-  #         name: aws-secrets
-  #         key: AWS_SECRET_ACCESS_KEY
-  #   retentionPolicy: "7d"
-
-  # Resource limits để tránh Postgres ngốn hết RAM của Worker
   resources:
     requests:
       memory: "512Mi"

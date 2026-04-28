@@ -1,3 +1,4 @@
+# mlflow-nginx.yaml: Triển khai Nginx làm reverse proxy cho MLflow với Basic Authentication
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -6,21 +7,29 @@ metadata:
   labels:
     app: mlflow-nginx
 data:
+  # Cấu hình Nginx làm reverse proxy cho MLflow với Basic Authentication
   default.conf: |
     server {
       listen 8080;
       server_name _;
 
+      # Tăng kích thước body tối đa cho phép upload file lớn (artifact)
       client_max_body_size 100m;
 
+      # Cấu hình Basic Authentication
       location / {
         auth_basic "MLflow";
         auth_basic_user_file /etc/nginx/auth/auth;
 
+        # Cấu hình proxy pass đến MLflow service
         proxy_pass http://mlflow-service:5000;
+        
+        # Cấu hình timeout
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
         proxy_connect_timeout 60s;
+        
+        # Cấu hình header
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -29,11 +38,14 @@ data:
       }
     }
 
+# Tạo Deployment cho Nginx reverse proxy
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mlflow-nginx
+  annotations:
+    description: "Nginx reverse proxy to provide Basic Authentication for MLflow Tracking Server"
   labels:
     app: mlflow-nginx
 spec:
@@ -46,6 +58,8 @@ spec:
       labels:
         app: mlflow-nginx
     spec:
+      nodeSelector:
+        workload-type: worker
       containers:
         - name: nginx
           image: nginx:stable
@@ -75,6 +89,7 @@ spec:
           secret:
             secretName: mlflow-basic-auth
 
+# Tạo Service để expose Nginx reverse proxy
 ---
 apiVersion: v1
 kind: Service

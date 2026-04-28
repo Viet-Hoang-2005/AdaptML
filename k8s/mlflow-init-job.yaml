@@ -1,31 +1,30 @@
-# k8s/init-mlflow-db.yaml
-# Kubernetes Job: Khoi tao MLflow database tren CloudNativePG (PostgreSQL)
-# Chi tao 1 lan khi setup ha tang, khong can chay lai
-# Tac gia: MLflow NIDS Team
-# Ngay: 2026-04-11
+# k8s/mlflow-init-job.yaml: Job khởi tạo database cho MLflow trên CloudNativePG
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: mlflow-db-init
+  annotations:
+    description: "One-time Job to initialize MLflow database schema and user roles in PostgreSQL"
   labels:
     app: mlflow-db-init
-  annotations:
-    description: "Tao mlflow database va user tren CloudNativePG"
 spec:
-  ttlSecondsAfterFinished: 300
+  ttlSecondsAfterFinished: 300 # Tự động xóa Job sau 5 phút kể từ khi hoàn thành
   template:
     metadata:
       labels:
         app: mlflow-db-init
     spec:
+      nodeSelector:
+        workload-type: worker
       restartPolicy: OnFailure
       containers:
         - name: init
+          # Pull image của PostgreSQL để chạy script khởi tạo database
           image: postgres:15-alpine
           env:
             - name: PGHOST
-              value: "nids-postgres-rw"
+              value: "mlops-nids-postgres-rw"
             - name: PGPORT
               value: "5432"
             - name: PGUSER
@@ -38,27 +37,28 @@ spec:
                 secretKeyRef:
                   name: postgres-secrets
                   key: POSTGRES_PASSWORD
+          # Script khởi tạo database mlflow, user mlflow và cấp quyền
           command:
             - /bin/sh
             - -c
           args:
             - |
               set -e
-              echo "Dang ket noi toi PostgreSQL: ${PGHOST}:${PGPORT}"
+              echo "Connecting to PostgreSQL: ${PGHOST}:${PGPORT}"
 
-              # Cho PostgreSQL san sang (timeout 60s)
+              # Chờ PostgreSQL sẵn sàng (timeout 60s)
               for i in $(seq 1 30); do
                 if pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" 2>/dev/null; then
-                  echo "PostgreSQL san sang"
+                  echo "PostgreSQL is ready!"
                   break
                 fi
-                echo "Dang doi PostgreSQL... lan ${i}/30"
+                echo "Waiting for PostgreSQL... ${i}/30"
                 sleep 2
               done
 
-              echo "=== Bat dau khoi tao MLflow Database ==="
+              echo "Starting MLflow Database Initialization"
 
-              # Tao hoac dong bo role mlflow
+              # Tạo hoặc đồng bộ hóa vai trò mlflow
               psql -v ON_ERROR_STOP=1 -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres <<'SQL'
               DO $$
               BEGIN
@@ -71,18 +71,18 @@ spec:
               $$;
               SQL
 
-              # CREATE DATABASE khong duoc chay trong transaction block, nen check rieng
+              # CREATE DATABASE không được chạy trong transaction block, nên kiểm tra riêng
               if [ "$(psql -v ON_ERROR_STOP=1 -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'mlflow'")" != "1" ]; then
                 psql -v ON_ERROR_STOP=1 -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres -c "CREATE DATABASE mlflow"
               fi
 
-              # Dong bo owner va quyen tren database mlflow
+              # Đồng bộ hóa owner và quyền trên database mlflow
               psql -v ON_ERROR_STOP=1 -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres <<'SQL'
               ALTER DATABASE mlflow OWNER TO mlflow;
               GRANT ALL PRIVILEGES ON DATABASE mlflow TO mlflow;
               SQL
 
-              # Dong bo schema public ben trong database mlflow
+              # Đồng bộ schema public bên trong database mlflow
               psql -v ON_ERROR_STOP=1 -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d mlflow <<'SQL'
               ALTER SCHEMA public OWNER TO mlflow;
               GRANT ALL ON SCHEMA public TO mlflow;
@@ -90,6 +90,6 @@ spec:
               ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO mlflow;
               SQL
 
-              echo "=== MLflow database da san sang ==="
+              echo "MLflow Database is ready!"
               echo "Database: mlflow | User: mlflow | Password: mlflow_password"
-              echo "MLFLOW_TRACKING_URI=postgresql://mlflow:mlflow_password@nids-postgres-rw:5432/mlflow"
+              echo "MLFLOW_TRACKING_URI=postgresql://mlflow:mlflow_password@mlops-nids-postgres-rw:5432/mlflow"

@@ -1,20 +1,26 @@
+# redpanda-statefulset.yaml: Redpanda StatefulSet và Service để triển khai Redpanda Kafka Broker trên K3s
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: mlops-nids-redpanda
+  name: redpanda
+  annotations:
+    description: "Redpanda StatefulSet for high-performance Kafka-compatible message broker"
   labels:
-    app: mlops-nids-redpanda
+    app: redpanda
 spec:
   serviceName: redpanda-service
   replicas: 1
   selector:
     matchLabels:
-      app: mlops-nids-redpanda
+      app: redpanda
   template:
     metadata:
       labels:
-        app: mlops-nids-redpanda
+        app: redpanda
     spec:
+      nodeSelector:
+        workload-type: worker
       containers:
       - name: redpanda
         image: docker.redpanda.com/redpandadata/redpanda:latest
@@ -34,7 +40,7 @@ spec:
         - containerPort: 9644
           name: admin
         resources:
-          # Ép xung tự bảo vệ: KHÔNG để Redpanda hút cạn RAM của Worker Node.
+          # Ép xung tự bảo vệ: Không để Redpanda hút cạn RAM của Worker Node.
           limits:
             memory: "2Gi"
             cpu: "1000m"
@@ -53,6 +59,7 @@ spec:
         requests:
           storage: 5Gi
 
+# Tạo Service để expose Redpanda Kafka Broker
 ---
 apiVersion: v1
 kind: Service
@@ -68,4 +75,4 @@ spec:
     name: admin
   clusterIP: None
   selector:
-    app: mlops-nids-redpanda
+    app: redpanda

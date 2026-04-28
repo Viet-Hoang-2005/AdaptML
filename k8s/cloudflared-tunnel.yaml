@@ -1,8 +1,11 @@
+# cloudflared-tunnel.yaml: Triển khai Cloudflared Tunnel để kết nối K3s với Cloudflare Zero Trust
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cloudflared
+  annotations:
+    description: "Cloudflare Tunnel to securely expose the K3s Traefik Ingress to the public internet"
   labels:
     app: cloudflared
 spec:
@@ -15,8 +18,11 @@ spec:
       labels:
         app: cloudflared
     spec:
+      nodeSelector:
+        workload-type: worker
       containers:
         - name: cloudflared
+          # Pull image chính thức của Cloudflared từ Docker Hub
           image: cloudflare/cloudflared:latest
           imagePullPolicy: IfNotPresent
           args:
@@ -29,6 +35,8 @@ spec:
                 secretKeyRef:
                   name: tunnel-token
                   key: token
+          
+          # Cấu hình tài nguyên cho Cloudflared
           resources:
             requests:
               cpu: 50m
