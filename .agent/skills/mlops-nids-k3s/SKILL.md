@@ -23,5 +23,5 @@ description: Hướng dẫn quản trị Kubernetes manifesting và Cụm Postgr
 
 ## 4. Troubleshooting Support Operations
 
-- Gặp lỗi không Start API với mã `psycopg2.OperationalError`: Xem lại YAML và DB_HOST. CloudNativePG chỉ sinh ra dịch vụ với tên `nids-postgres-rw`, `nids-postgres-ro`, `nids-postgres-r`.
+- Gặp lỗi không Start API với mã `psycopg2.OperationalError`: Xem lại YAML và DB_HOST. CloudNativePG chỉ sinh ra dịch vụ với tên `mlops-nids-postgres-rw`, `mlops-nids-postgres-ro`, `mlops-nids-postgres-r`.
 - CrashLoopBackOff từ khâu Init Container: Dùng lệnh Logs theo cụm `kubectl logs <name_pod_api> -c aws-s3-model-sync`, tra kiểm tra xem các biến `RUN_ID` và `EXPERIMENT_ID` truyền từ GitHub Action có chính xác với đường dẫn MLflow S3 Artifacts hay không.
