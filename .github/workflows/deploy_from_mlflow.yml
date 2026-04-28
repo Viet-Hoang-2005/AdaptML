@@ -1,3 +1,4 @@
+# deploy_from_mlflow.yml: GitHub Actions workflow để triển khai model production từ MLflow
 name: MLOps NIDS - Deploy Production Model from MLflow
 
 on:
@@ -57,5 +58,14 @@ jobs:
           kubectl rollout restart deployment/mlops-nids-api
           kubectl rollout status deployment/mlops-nids-api --timeout=300s
 
-      - name: Verify Running Pods
-        run: kubectl get pods -l app=mlops-nids-api
+      - name: Trigger Reference Data Sync Job
+        run: |
+          echo "Triggering Reference Data Sync Job to update Baseline Data for drift detection..."
+          kubectl delete job mlops-nids-sync-data --ignore-not-found
+          kubectl apply -f k8s/mlops-nids-sync-data.yaml
+          echo "Reference Data Sync Job started."
+
+      - name: Verify Running System
+        run: |
+          kubectl get pods -l app=mlops-nids-api
+          kubectl get jobs

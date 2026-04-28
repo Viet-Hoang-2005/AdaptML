@@ -1,3 +1,4 @@
+# trigger_drift_check.yml: GitHub Actions workflow kích hoạt kiểm tra Data drift bằng Evidently
 name: MLOps NIDS - Manual Trigger Evidently AI Drift Check
 
 on:
@@ -6,7 +7,7 @@ on:
 
 jobs:
   run-drift-check:
-    name: "🔍 Trigger Evidently AI Data Drift Check on K3s"
+    name: "Trigger Evidently AI Data Drift Check on K3s"
     runs-on: ubuntu-latest
 
     steps:
@@ -20,20 +21,20 @@ jobs:
 
       - name: Trigger K8s Data Drift Check Job
         run: |
-          echo "🚀 Starting Evidently AI Data Drift Check..."
+          echo "Starting Evidently AI Data Drift Check..."
           echo "Triggered by: ${{ github.event.client_payload.trigger_source }}"
           echo "Current data count: ${{ github.event.client_payload.current_data_count }}"
           
           # Xóa Job cũ nếu có (bỏ qua lỗi nếu chưa tồn tại)
-          kubectl delete job evidently-drift-monitor --ignore-not-found
+          kubectl delete job mlops-nids-evidently --ignore-not-found
           
           # Áp dụng file YAML để tạo Job mới
           kubectl apply -f k8s/evidently-job.yaml
           
-          echo "⏳ Waiting for K8s Job to start and monitoring logs..."
+          echo "Waiting for K8s Job to start and monitoring logs..."
           # Đợi Pod được sinh ra từ Job (chờ khoảng 10-15s để Pod Ready)
           sleep 10
-          kubectl wait --for=condition=ready pod -l job-name=evidently-drift-monitor --timeout=60s || true
+          kubectl wait --for=condition=ready pod -l job-name=mlops-nids-evidently --timeout=60s || true
           
           # In log để lưu vào màn hình GitHub Actions
-          kubectl logs -l job-name=evidently-drift-monitor
+          kubectl logs -l job-name=mlops-nids-evidently

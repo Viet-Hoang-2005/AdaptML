@@ -1,4 +1,4 @@
-# update_reference_data.py: Cập nhật bảng nids_reference_data trong PostgreSQL sau khi deploy model mới thành công.
+# update_reference_data.py: Cập nhật References Data trong PostgreSQL sau khi deploy model mới thành công.
 import sys
 import json
 import uuid
@@ -37,17 +37,17 @@ def load_manifest_from_s3(s3_client) -> dict:
     response = s3_client.get_object(Bucket=AWS_BUCKET, Key=MANIFEST_KEY)
     manifest = json.loads(response['Body'].read().decode('utf-8'))
     
-    print(f" -> Target dataset : {manifest['target_csv']}")
-    print(f" -> Model version  : {manifest['model_version']}")
+    print(f" Target dataset : {manifest['target_csv']}")
+    print(f" Model version  : {manifest['model_version']}")
     return manifest
 
 def load_manifest_local() -> dict:
     manifest_path = os.path.join(ROOT_DIR, MANIFEST_KEY)
-    print(f" -> Fallback: Reading data manifest from local {manifest_path}...")
+    print(f" Fallback: Reading data manifest from local {manifest_path}...")
     with open(manifest_path, 'r', encoding='utf-8') as f:
         manifest = json.load(f)
-    print(f" -> Target dataset : {manifest['target_csv']}")
-    print(f" -> Model version  : {manifest['model_version']}")
+    print(f" Target dataset : {manifest['target_csv']}")
+    print(f" Model version  : {manifest['model_version']}")
     return manifest
 
 # 3. TẢI FILE CSV TỪ S3 HOẶC LOCAL
@@ -60,15 +60,15 @@ def load_csv_from_s3(s3_client, manifest: dict) -> pd.DataFrame:
     csv_content = response['Body'].read().decode('utf-8')
     df = pd.read_csv(StringIO(csv_content))
 
-    print(f" -> Downloaded: {len(df):,} rows × {len(df.columns)} columns")
+    print(f" Downloaded: {len(df):,} rows × {len(df.columns)} columns")
     return df
 
 def load_csv_local(manifest: dict) -> pd.DataFrame:
     csv_path = os.path.join(DATA_DIR, manifest['target_csv'])
-    print(f" -> Fallback: Reading dataset from local {csv_path}...")
+    print(f" Fallback: Reading dataset from local {csv_path}...")
     df = pd.read_csv(csv_path)
 
-    print(f" -> Downloaded: {len(df):,} rows × {len(df.columns)} columns")
+    print(f" Downloaded: {len(df):,} rows × {len(df.columns)} columns")
     return df
 
 # 4. CẬP NHẬT BẢNG REFERENCE TRONG POSTGRESQL (PRIMARY)
@@ -82,7 +82,7 @@ def update_reference_table(engine, df: pd.DataFrame, manifest: dict):
             print(f"TRUNCATED old data from '{REFERENCE_TABLE}'")
         except Exception as e:
             # Bảng có thể chưa tồn tại (lần đầu chạy) -> bỏ qua lỗi này
-            print(f"⚠️ Could not truncate (may not exist yet): {e}")
+            print(f"Could not truncate (may not exist yet): {e}")
 
     df_to_insert = df.copy()
 
@@ -110,10 +110,6 @@ def update_reference_table(engine, df: pd.DataFrame, manifest: dict):
 
 # 5. MAIN
 if __name__ == "__main__":
-    print("=" * 50)
-    print("🛡️   MLOps NIDS System - Reference Data Sync Service")
-    print("=" * 50)
-
     # Kết nối PostgreSQL PRIMARY (READ-WRITE endpoint của CloudNativePG)
     db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     try:
@@ -125,7 +121,7 @@ if __name__ == "__main__":
             conn.execute(text("SELECT 1"))
         print(f"[0/4] Connected to PostgreSQL at {DB_HOST}:{DB_PORT}/{DB_NAME}")
     except Exception as e:
-        print(f"❌ Cannot connect to PostgreSQL: {e}")
+        print(f"Cannot connect to PostgreSQL: {e}")
         sys.exit(1)
 
     # Kết nối AWS S3
@@ -133,7 +129,7 @@ if __name__ == "__main__":
         s3 = boto3.client('s3', region_name=AWS_REGION)
         print(f"[1/4] Connected to AWS S3 (Region: {AWS_REGION})")
     except Exception as e:
-        print(f"⚠️ Cannot connect to AWS S3: {e}. Will fallback to local files.")
+        print(f"Cannot connect to AWS S3: {e}. Will fallback to local files.")
         s3 = None
 
     # Đọc manifest -> Tải CSV -> Cập nhật DB
@@ -143,7 +139,7 @@ if __name__ == "__main__":
             try:
                 manifest = load_manifest_from_s3(s3)
             except Exception as e:
-                print(f"⚠️ S3 Manifest failed ({e}), falling back to local...")
+                print(f"S3 Manifest failed ({e}), falling back to local...")
                 manifest = load_manifest_local()
         else:
             manifest = load_manifest_local()
@@ -153,7 +149,7 @@ if __name__ == "__main__":
             try:
                 new_reference_df = load_csv_from_s3(s3, manifest)
             except Exception as e:
-                print(f"⚠️ S3 CSV failed ({e}), falling back to local...")
+                print(f"S3 CSV failed ({e}), falling back to local...")
                 new_reference_df = load_csv_local(manifest)
         else:
             new_reference_df = load_csv_local(manifest)
@@ -161,10 +157,10 @@ if __name__ == "__main__":
         # Update DB
         update_reference_table(engine, new_reference_df, manifest)
     except Exception as e:
-        print(f"❌ Error during sync process: {e}")
+        print(f"Error during sync process: {e}")
         sys.exit(1)
 
-    print("✅ Reference Data sync COMPLETED!")
-    print(f"-> New dataset  : {manifest['target_csv']}")
-    print(f"-> Model ver    : {manifest['model_version']}")
-    print(f"-> Rows synced  : {len(new_reference_df):,}")
+    print("Reference Data sync COMPLETED!")
+    print(f" New dataset  : {manifest['target_csv']}")
+    print(f" Model ver    : {manifest['model_version']}")
+    print(f" Rows synced  : {len(new_reference_df):,}")
