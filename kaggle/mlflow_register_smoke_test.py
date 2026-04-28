@@ -1,7 +1,6 @@
 import os
 import sys
 
-
 def _ensure_dependency(module_name: str, package_name: str | None = None) -> None:
     package_name = package_name or module_name
     try:
@@ -13,13 +12,11 @@ def _ensure_dependency(module_name: str, package_name: str | None = None) -> Non
             [sys.executable, "-m", "pip", "install", "--quiet", package_name]
         )
 
-
 for module_name, package_name in (
     ("mlflow", "mlflow"),
     ("sklearn", "scikit-learn"),
 ):
     _ensure_dependency(module_name, package_name)
-
 
 import mlflow
 import mlflow.sklearn
@@ -29,11 +26,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 
-
 DEFAULT_TRACKING_URI = "https://mlflow.mlops-nids-nt114.id.vn"
 EXPERIMENT_NAME = "kaggle-mlflow-register-smoke-test"
 REGISTERED_MODEL_NAME = "NIDS-Smoke-Test-Model"
-
 
 def _load_secret_from_kaggle(secret_name: str) -> str | None:
     try:
@@ -44,7 +39,6 @@ def _load_secret_from_kaggle(secret_name: str) -> str | None:
     except Exception:
         return None
 
-
 def _get_required_secret(secret_name: str) -> str:
     value = _load_secret_from_kaggle(secret_name) or os.environ.get(secret_name, "").strip()
     if not value:
@@ -54,12 +48,10 @@ def _get_required_secret(secret_name: str) -> str:
         )
     return value
 
-
 def _maybe_set_secret(secret_name: str) -> None:
     value = _load_secret_from_kaggle(secret_name) or os.environ.get(secret_name, "").strip()
     if value:
         os.environ[secret_name] = value
-
 
 def _wait_until_ready(client: MlflowClient, model_name: str, version: str, timeout_seconds: int = 120):
     import time
@@ -72,7 +64,6 @@ def _wait_until_ready(client: MlflowClient, model_name: str, version: str, timeo
         time.sleep(2)
     raise TimeoutError(f"Timed out waiting for model version {model_name}/{version} to become READY")
 
-
 def _set_stage_alias_or_tag(client: MlflowClient, model_name: str, version: str) -> str:
     try:
         client.set_registered_model_alias(model_name, "Staging", version)
@@ -80,7 +71,6 @@ def _set_stage_alias_or_tag(client: MlflowClient, model_name: str, version: str)
     except Exception:
         client.set_model_version_tag(model_name, version, "stage", "Staging")
         return "tag:stage=Staging"
-
 
 def main() -> None:
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI).strip() or DEFAULT_TRACKING_URI
@@ -144,7 +134,6 @@ def main() -> None:
         print(f"Registered Model Name  : {REGISTERED_MODEL_NAME}")
         print(f"Model Version          : {version}")
         print(f"Staging Marker         : {staging_marker}")
-
 
 if __name__ == "__main__":
     main()
