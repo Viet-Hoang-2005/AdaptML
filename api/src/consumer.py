@@ -1,3 +1,4 @@
+# consumer.py: Consumer liên tục lắng nghe Redpanda, gom nhóm dữ liệu, và lưu vào PostgreSQL
 import os
 import json
 import time
@@ -13,12 +14,12 @@ EVIDENTLY_TRIGGER_THRESHOLD = int(os.environ.get('EVIDENTLY_TRIGGER_THRESHOLD', 
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
+# Hàm gửi Webhook kích hoạt GitHub Action tạo Evidently Drift Check
 def trigger_github_webhook(count: int):
-    """Gửi Webhook kích hoạt GitHub Action Evidently Drift Check."""
-    print(f"🚀 Data count reached {count} (threshold: {EVIDENTLY_TRIGGER_THRESHOLD}). Triggering GitHub webhook...")
+    print(f"Data count reached {count} (threshold: {EVIDENTLY_TRIGGER_THRESHOLD}). Triggering GitHub webhook...")
 
     if not GITHUB_TOKEN or not GITHUB_REPO:
-        print("⚠️ GITHUB_TOKEN or GITHUB_REPO not configured - skipping webhook.")
+        print("GITHUB_TOKEN or GITHUB_REPO not configured - skipping webhook.")
         return
 
     url = f"https://api.github.com/repos/{GITHUB_REPO}/dispatches"
@@ -39,23 +40,25 @@ def trigger_github_webhook(count: int):
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
         if response.status_code == 204:
-            print("✅ Webhook sent successfully! GitHub Actions has been triggered.")
+            print("Webhook sent Successfully! GitHub Actions has been triggered.")
         else:
-            print(f"❌ Webhook failed! HTTP {response.status_code}: {response.text}")
+            print(f"Webhook failed! HTTP {response.status_code}: {response.text}")
     except Exception as e:
-        print(f"❌ Error sending webhook: {e}")
+        print(f"Error sending webhook: {e}")
 
+# Hàm kiểm tra và gọi webhook nếu Production Data vượt ngưỡng
 def check_threshold_and_trigger(last_triggered_count: int) -> int:
     """Kiểm tra số lượng và gọi webhook nếu vượt ngưỡng. Trả về last_triggered_count mới."""
     count = get_production_data_count()
     diff = count - last_triggered_count
-    print(f"📈 Drift monitoring: {count} total rows. New rows since last trigger: {diff}/{EVIDENTLY_TRIGGER_THRESHOLD}")
+    print(f"Drift monitoring: {count} total rows. New rows since last trigger: {diff}/{EVIDENTLY_TRIGGER_THRESHOLD}")
     
     if diff >= EVIDENTLY_TRIGGER_THRESHOLD:
         trigger_github_webhook(count)
         return count
     return last_triggered_count
 
+# Hàm main để chạy Consumer liên tục lắng nghe Redpanda và xử lý dữ liệu
 def main():
     # Cấu hình Kafka Consumer
     conf = {
@@ -65,24 +68,23 @@ def main():
         'enable.auto.commit': False  # Tự quản lý commit để tránh mất data nếu crash giữa chừng
     }
 
+    # Khởi tạo Consumer và subscribe vào topic
     consumer = Consumer(conf)
     consumer.subscribe([KAFKA_TOPIC])
 
-    print(f"🎧 Consumer listening to the topic '{KAFKA_TOPIC}' at {REDPANDA_BROKERS}")
+    print(f"Consumer listening to the topic '{KAFKA_TOPIC}' at {REDPANDA_BROKERS}")
 
     BATCH_SIZE = 500  # Số lượng gom nhóm tối đa trước khi Write DB
     current_batch = []
     last_triggered_count = get_production_data_count() # Lấy số lượng ban đầu để tránh trigger ngay lúc bật
-    print(f"📊 Initial DB record count: {last_triggered_count}")
+    print(f"Initial DB record count: {last_triggered_count}")
     
     try:
         while True:
             # Liên tục lắng nghe (poll) với timeout 1 giây
             msg = consumer.poll(timeout=1.0)
             
-            # Khởi động cơ chế "Flush on Idle":
-            # Nếu không có message nào mới, nhưng trong giỏ (current_batch) vẫn còn dữ liệu tệp cũ,
-            # thì mang đi insert luôn thay vì đợi đến khi đủ BATCH_SIZE
+            # Cơ chế "Flush on Idle": Nếu không có message mới nào trong 1 giây, tự động flush batch hiện tại vào DB.
             if msg is None:
                 if len(current_batch) > 0:
                     df = pd.DataFrame(current_batch)
@@ -92,7 +94,7 @@ def main():
                         
                     if save_dataframe_to_db(df, "nids_production_data"):
                         consumer.commit() # Chỉ commit khi đã lưu thẳng vào Database thành công
-                        print(f"✅ Flushed {len(current_batch)} records to DB due to idle time.")
+                        print(f"Flushed {len(current_batch)} records to DB due to idle time.")
                         last_triggered_count = check_threshold_and_trigger(last_triggered_count)
                     current_batch = []
                 continue
@@ -119,17 +121,17 @@ def main():
                         
                     if save_dataframe_to_db(df, "nids_production_data"):
                         consumer.commit()
-                        print(f"📦 Completed batch delivery: {len(current_batch)} records to DB.")
+                        print(f"Completed batch delivery: {len(current_batch)} records to DB.")
                         last_triggered_count = check_threshold_and_trigger(last_triggered_count)
                     current_batch = []
                     
             except Exception as parse_e:
-                print(f"⚠️ Error parsing payload: {parse_e}")
+                print(f"Error parsing payload: {parse_e}")
                 
     except KeyboardInterrupt:
-        print("🛑 Received shutdown command...")
+        print("Received shutdown command...")
     finally:
-        # Xử lý tàn dư nếu bị tắt khẩn cấp
+        # Trước khi đóng Consumer, nếu còn dữ liệu trong batch thì cũng nên flush nốt vào DB để tránh mất mát dữ liệu cuối cùng.
         if len(current_batch) > 0:
             df = pd.DataFrame(current_batch)
             if 'created_at' in df.columns:
@@ -138,10 +140,10 @@ def main():
                 consumer.commit()
                 last_triggered_count = check_threshold_and_trigger(last_triggered_count)
         consumer.close()
-        print("💤 Consumer cleaned up safely.")
+        print("Consumer cleaned up safely.")
 
 if __name__ == '__main__':
     # Đợi Redpanda khởi động hoàn tất trước khi Consumer nhảy vào kết nối
-    print("⏳ Waiting for Redpanda Broker to start...")
+    print("Waiting for Redpanda Broker to start...")
     time.sleep(10)
     main()
