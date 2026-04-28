@@ -22,13 +22,12 @@ DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "mlops_nids_db")
-
-# Chỉ thực hiện thao tác đọc (SELECT) để phân tích Drift -> kết nối đến endpoint READ-ONLY của CloudNativePG.
-DB_HOST_RO = os.getenv("DB_HOST_RO", "localhost")
+DB_HOST_RO = os.getenv("DB_HOST_RO", "localhost") # Chỉ thực hiện thao tác đọc (SELECT) để phân tích Drift
 
 GITHUB_REPO = os.getenv("GITHUB_REPO", "Viet-Hoang-2005/MLOps-nids-system")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
+# Ngưỡng Drift và số lượng mẫu tối đa để phân tích
 DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD", "0.6"))
 MAX_SAMPLES = 100_000
 
@@ -141,9 +140,9 @@ def run_drift_analysis(reference_df, production_df):
         "drifted_feature_names": drifted_feature_names,
     }
 
-    print("\n" + "="*50)
-    print("📊   SUMMARY OF DATA DRIFT RESULTS (v0.4.15)")
-    print("-" * 50)
+    print("\n" + "="*60)
+    print("     SUMMARY OF DATA DRIFT RESULTS")
+    print("-" * 60)
     print(f"Total features: {summary['number_of_features']}")
     print(f"Drifted features: {summary['number_of_drifted_features']}")
     print(f"Drift rate: {summary['share_drifted_features']:.2%}")
@@ -155,7 +154,7 @@ def run_drift_analysis(reference_df, production_df):
 
     drift_status = "DETECTED" if summary["dataset_drift"] else "NOT DETECTED"
     print(f"Dataset drift: {drift_status}")
-    print("="*50 + "\n")
+    print("="*60 + "\n")
 
     return summary
 
@@ -165,7 +164,7 @@ def trigger_github_webhook(drift_summary):
     print("[4/4] DRIFT DETECTED! Triggering GitHub alert workflow...")
 
     if not GITHUB_TOKEN:
-        print("⚠️ GITHUB_TOKEN not configured - skipping webhook.")
+        print("GITHUB_TOKEN not configured - skipping webhook.")
         return
 
     # Thiết lập session với retry strategy để tăng độ bền khi gửi webhook, tránh lỗi tạm thời do mạng hoặc GitHub.
@@ -180,8 +179,7 @@ def trigger_github_webhook(drift_summary):
 
     url = f"https://api.github.com/repos/{GITHUB_REPO}/dispatches"
     
-    # Phase 1 chỉ gửi alert cho Data Engineer. Retrain chỉ được khởi động khi
-    # data_manifest.json thay đổi bởi Data Engineer trên S3.
+    # Chỉ gửi alert cho Data Engineer, retrain chỉ được khởi động khi data_manifest.json thay đổi bởi Data Engineer trên S3.
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json",
@@ -200,18 +198,14 @@ def trigger_github_webhook(drift_summary):
     response = session.post(url, headers=headers, data=json.dumps(payload), timeout=15)
 
     if response.status_code == 204:
-        print("✅ Webhook sent successfully! GitHub Actions has been triggered.")
+        print("Webhook sent successfully! GitHub Actions has been triggered.")
     else:
-        print(f"❌ Webhook failed! HTTP {response.status_code} after 3 retries: {response.text}")
+        print(f"Webhook failed! HTTP {response.status_code} after 3 retries: {response.text}")
         sys.exit(1)
 
 
 # CHƯƠNG TRÌNH CHÍNH
 if __name__ == "__main__":
-    print("=" * 50)
-    print("🛡️   MLOps NIDS System - Data Drift Detection Service")
-    print("=" * 50)
-
     # Kết nối đến endpoint READ-ONLY của CloudNativePG để không tạo tải cho Primary.
     db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST_RO}:{DB_PORT}/{DB_NAME}"
     try:
@@ -223,27 +217,27 @@ if __name__ == "__main__":
         )
         print(f"[0/4] Connected to PostgreSQL (RO) at {DB_HOST_RO}:{DB_PORT}/{DB_NAME}")
     except Exception as e:
-        print(f"❌ Failed to connect: {e}")
+        print(f"Failed to connect: {e}")
         sys.exit(1)
 
     # Tải dữ liệu tham chiếu và sản xuất, với cơ chế sampling nhanh nếu dữ liệu quá lớn để đảm bảo hiệu suất.
     try:
         reference_df, production_df = load_data_from_db(engine)
     except Exception as e:
-        print(f"❌ Failed to load data: {e}")
+        print(f"Failed to load data: {e}")
         sys.exit(1)
 
     # Kiểm tra xem có đủ dữ liệu production để phân tích drift không.
     MIN_SAMPLES = 100  
     if len(production_df) < MIN_SAMPLES:
-        print(f"⚠️ Only {len(production_df)} production samples available (minimum: {MIN_SAMPLES}). Skipping drift analysis.")
+        print(f"Only {len(production_df)} production samples available (minimum: {MIN_SAMPLES}). Skipping drift analysis.")
         sys.exit(0)  
 
     # Chạy phân tích drift và đánh giá kết quả để quyết định có cần kích hoạt retrain pipeline hay không.
     try:
         drift_summary = run_drift_analysis(reference_df, production_df)
     except Exception as e:
-        print(f"❌ Drift analysis failed: {e}")
+        print(f"Drift analysis failed: {e}")
         import traceback
         traceback.print_exc()  
         sys.exit(1)
@@ -253,4 +247,4 @@ if __name__ == "__main__":
         trigger_github_webhook(drift_summary)
     else:
         share = drift_summary["share_drifted_features"]
-        print(f"✅ Drift rate {share:.2%} is below the allowed threshold. System is stable.")
+        print(f"Drift rate {share:.2%} is below the allowed threshold. System is stable.")

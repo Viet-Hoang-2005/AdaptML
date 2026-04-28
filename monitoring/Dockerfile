@@ -2,8 +2,8 @@
 FROM python:3.10-slim
 
 # Ngăn python ghi log .pyc và bật stdout ngay lập tức
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Tạo thư mục chạy trong container
 WORKDIR /app

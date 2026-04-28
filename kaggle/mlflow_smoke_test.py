@@ -2,7 +2,6 @@ import os
 import sys
 import tempfile
 
-
 def _ensure_dependency(module_name: str, package_name: str | None = None) -> None:
     package_name = package_name or module_name
     try:
@@ -19,10 +18,8 @@ _ensure_dependency("mlflow")
 
 import mlflow
 
-
 DEFAULT_TRACKING_URI = "https://mlflow.mlops-nids-nt114.id.vn"
 EXPERIMENT_NAME = "kaggle-mlflow-smoke-test"
-
 
 def _load_secret_from_kaggle(secret_name: str) -> str | None:
     try:
@@ -33,7 +30,6 @@ def _load_secret_from_kaggle(secret_name: str) -> str | None:
     except Exception:
         return None
 
-
 def _get_required_secret(secret_name: str) -> str:
     value = _load_secret_from_kaggle(secret_name) or os.environ.get(secret_name, "").strip()
     if not value:
@@ -42,7 +38,6 @@ def _get_required_secret(secret_name: str) -> str:
             "Add it to Kaggle Secrets or provide it as an environment variable."
         )
     return value
-
 
 def main() -> None:
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI).strip() or DEFAULT_TRACKING_URI
@@ -76,7 +71,6 @@ def main() -> None:
             print(f"Experiment   : {EXPERIMENT_NAME}")
             print(f"Run ID       : {run.info.run_id}")
             print(f"Artifact URI : {mlflow.get_artifact_uri()}")
-
 
 if __name__ == "__main__":
     main()

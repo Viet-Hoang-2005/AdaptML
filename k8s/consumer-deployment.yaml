@@ -1,11 +1,15 @@
+# consumer-deployment.yaml: Triển khai Kafka Consumer để tiêu thụ dữ liệu từ Redpanda và phát hiện Data Drift với Evidently
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mlops-nids-consumer
+  annotations:
+    description: "Kafka Consumer to process network traffic data in batches and store predictions"
   labels:
     app: mlops-nids-consumer
 spec:
-  # Consumer chỉ cần 1 replica (vì ta dùng kafka group consumer) là đủ dọt dẹp thoải mái
+  # Consumer chỉ cần 1 replica (dùng kafka group consumer) là đủ để dọn dẹp
   replicas: 1
   selector:
     matchLabels:
@@ -15,12 +19,15 @@ spec:
       labels:
         app: mlops-nids-consumer
     spec:
+      nodeSelector:
+        workload-type: worker
       containers:
         - name: consumer
-          # Ta xài lén image của API, vì thư viện confluent-kafka và DB_MANAGER đều nằm chung
+          # Xài image của API (thư viện confluent-kafka nằm chung)
           image: tnvhoang/mlops-nids-api:latest
           imagePullPolicy: Always
           command: ["python", "src/consumer.py"]
+          # Cấu hình biến môi trường cho Consumer
           env:
             - name: REDPANDA_BROKERS
               value: "redpanda-service:9092"
@@ -34,9 +41,9 @@ spec:
                   name: github-secrets
                   key: GITHUB_TOKEN
             - name: DB_HOST_RW
-              value: "nids-postgres-rw"
-            - name: DB_HOST # Dự phòng cho các logic local ngầm
-              value: "nids-postgres-rw"
+              value: "mlops-nids-postgres-rw"
+            - name: DB_HOST
+              value: "mlops-nids-postgres-rw"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
@@ -51,3 +58,12 @@ spec:
                 secretKeyRef:
                   name: postgres-secrets
                   key: POSTGRES_PASSWORD
+
+          # Cấu hình tài nguyên cho Consumer
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

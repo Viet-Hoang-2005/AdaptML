@@ -1,3 +1,4 @@
+# retrain_pipeline.yml: GitHub Actions workflow để tự động hóa pipeline retraining có kiểm soát
 name: MLOps NIDS - Controlled Retraining Pipeline
 
 on:

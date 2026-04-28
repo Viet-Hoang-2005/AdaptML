@@ -201,7 +201,7 @@ data "aws_ami" "ubuntu_22_04" {
 # EC2 Master Node
 resource "aws_instance" "master_node" {
   ami                    = data.aws_ami.ubuntu_22_04.id
-  instance_type          = "t3.medium"
+  instance_type          = "t3.small"
   subnet_id              = aws_subnet.public_1a.id
   vpc_security_group_ids = [aws_security_group.master_sg.id]
   key_name               = "mlops-keypair"
@@ -217,7 +217,7 @@ resource "aws_instance" "master_node" {
 resource "aws_instance" "worker_nodes" {
   count                  = 2
   ami                    = data.aws_ami.ubuntu_22_04.id
-  instance_type          = "t3.medium"
+  instance_type          = "t3.large"
   subnet_id              = aws_subnet.private_1a.id
   vpc_security_group_ids = [aws_security_group.worker_sg.id]
   key_name               = "mlops-keypair"

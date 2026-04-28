@@ -7,19 +7,19 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![XGBoost](https://img.shields.io/badge/XGBoost-F1%3E99%25-FF6600?style=flat-square)](https://xgboost.readthedocs.io)
+[![MLflow](https://img.shields.io/badge/MLflow-2.x-0194E2?style=flat-square&logo=mlflow&logoColor=white)](https://mlflow.org)
+[![Evidently AI](https://img.shields.io/badge/Evidently_AI-0.4.x-6D31FF?style=flat-square)](https://evidentlyai.com)
 [![Kubernetes](https://img.shields.io/badge/K3s-v1.34-326CE5?style=flat-square&logo=kubernetes&logoColor=white)](https://k3s.io)
 [![AWS](https://img.shields.io/badge/AWS-Terraform-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
-[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 **Học phần:** NT114 - Đồ án Chuyên ngành · Khoa Mạng máy tính và Truyền thông dữ liệu · UIT
 
-| Thành viên | Email | Phụ trách |
-|---|---|---|
+| Thành viên             | Email                  | Phụ trách                                                       |
+| ---------------------- | ---------------------- | --------------------------------------------------------------- |
 | Trần Nguyễn Việt Hoàng | 23520541@gm.uit.edu.vn | MLOps Architecture + FastAPI + Evidently AI + Training Pipeline |
-| Bùi Ngọc Thái          | 23521412@gm.uit.edu.vn | K3s Operations + Terraform/AWS + CI/CD + CloudNativePG          |
+| Bùi Ngọc Thái          | 23521412@gm.uit.edu.vn | K3s Operations + Terraform/AWS + CI/CD + MLflow                 |
 
 </div>
-
 
 ---
 
@@ -47,20 +47,21 @@ Inference Traffic → FastAPI (Producer) → Redpanda (Message Queue)
 
 ## ✨ Tính năng Cốt lõi
 
-| #   | Tính năng                                                                    | Công nghệ                     |
-| --- | ---------------------------------------------------------------------------- | ----------------------------- |
-| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%            | XGBoost + CIC-IDS2017         |
-| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                         | FastAPI + Uvicorn             |
-| 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer | Redpanda + Consumer           |
-| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                     | CloudNativePG + K3s           |
-| 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu  | Evidently AI + GitHub Actions |
-| 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên Kaggle GPU   | AWS Lambda + GitHub Actions   |
-| 7   | **Model quality gate** - chỉ promote model mới khi vượt Champion             | evaluate_model.py             |
-| 8   | **Zero-downtime deployment** Rolling update + Init Container kéo model từ S3 | K3s + AWS S3                  |
-| 9   | **Closed-loop feedback** - baseline tự cập nhật sau mỗi lần retrain          | update_reference_data.py      |
-| 10  | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời        | Locust                        |
+| #   | Tính năng                                                                     | Công nghệ                     |
+| --- | ----------------------------------------------------------------------------- | ----------------------------- |
+| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%             | XGBoost + CIC-IDS2017         |
+| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                          | FastAPI + Uvicorn             |
+| 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer  | Redpanda + Consumer           |
+| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                      | CloudNativePG + K3s           |
+| 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu   | Evidently AI + GitHub Actions |
+| 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên Kaggle GPU    | AWS Lambda + GitHub Actions   |
+| 7   | **Model Registry & HitL** - Quản lý vòng đời model và phê duyệt thủ công      | MLflow Registry               |
+| 8   | **Zero-downtime deployment** Rolling update + Kéo model bằng RUN_ID từ MLflow | K3s + AWS S3 + GitHub Actions |
+| 9   | **Closed-loop feedback** - baseline tự cập nhật sau mỗi lần retrain           | update_reference_data.py      |
+| 10  | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời         | Locust                        |
 
 ---
+
 ## 3. Kiến trúc Hệ thống
 
 > Xem sơ đồ Mermaid chi tiết tại: [ARCHITECTURE.md](ARCHITECTURE.md)
@@ -98,11 +99,11 @@ mlops-nids-system/
 │   ├── workflows/
 │   │   ├── ci_cd_pipeline.yml        # Build -> Push Docker -> Deploy K3s
 │   │   ├── retrain_pipeline.yml      # Chỉ trigger Kaggle retrain (fire-and-forget)
-│   │   └── trigger_drift_check.yml   # Lắng nghe Webhook từ Consumer để chạy Evidently
-│   └── scripts/
-│       ├── evaluate_model.py         # Model quality gate (Champion vs Challenger)
-│       ├── update_reference_data.py  # Sync baseline sau khi retrain (Hỗ trợ Fallback)
-│       └── clear_production_data.py  # Utility dọn dẹp Production Data trong DB
+│   │   ├── trigger_drift_check.yml   # Lắng nghe Webhook từ Consumer để chạy Evidently
+│   │   └── deploy_from_mlflow.yml    # Nhận RUN_ID từ MLflow để Deploy API lên K3s
+├── mlflow/
+│   ├── dispatch_production_model.py  # Đọc MLflow Registry, bắn Webhook Deploy
+│   └── requirements.txt
 ├── api/
 │   ├── src/
 │   │   ├── index.py                  # GET + POST /predict (Ghi data vào Redpanda)
@@ -111,19 +112,19 @@ mlops-nids-system/
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── monitoring/
-│   ├── detect_drift.py               # Evidently AI + nids-postgres-ro
+│   ├── detect_drift.py               # Evidently AI + mlops-nids-postgres-ro
 │   ├── Dockerfile
 │   └── requirements.txt
-├── kaggle_training/
-│   ├── train.py                      # XGBoost + MLflow + Hyperparameter Tuning
+├── kaggle/
+│   ├── train.py                      # XGBoost + MLflow Tracking + Artifact Logging
 │   └── kernel-metadata.json
 ├── k8s/
 │   ├── api-deployment.yaml           # FastAPI Server + Init Container
-│   ├── redpanda-deployment.yaml      # Redpanda Broker (StatefulSet)
+│   ├── redpanda-statefulset.yaml      # Redpanda Broker (StatefulSet)
 │   ├── consumer-deployment.yaml      # NIDS Log Consumer
 │   ├── postgres-cluster.yaml         # CloudNativePG Cluster
 │   ├── evidently-job.yaml            # Job quét Drift (kích hoạt qua Webhook)
-│   └── sync-job.yaml                 # Job đồng bộ Reference Data
+│   └── mlflow-deployment.yaml        # MLflow Tracking Server + Postgres Backend
 ├── infra/
 │   ├── main.tf                       # VPC + EC2 + ALB + S3 (Terraform)
 │   └── variables.tf
@@ -144,12 +145,12 @@ mlops-nids-system/
 
 ### Yêu cầu Hệ thống
 
-| Thành phần | Tối thiểu | Khuyến nghị |
-|---|---|---|
-| Python | 3.10+ | 3.10 |
-| Docker & Docker Compose | v24+ | Latest |
-| RAM | 4 GB | 8 GB |
-| OS | Windows 10+ / Ubuntu 20.04+ | Ubuntu 22.04 |
+| Thành phần              | Tối thiểu                   | Khuyến nghị  |
+| ----------------------- | --------------------------- | ------------ |
+| Python                  | 3.10+                       | 3.10         |
+| Docker & Docker Compose | v24+                        | Latest       |
+| RAM                     | 4 GB                        | 8 GB         |
+| OS                      | Windows 10+ / Ubuntu 20.04+ | Ubuntu 22.04 |
 
 ---
 
@@ -240,25 +241,34 @@ kubectl wait --for=condition=ready pod -n cnpg-system \
 #### Bước 4: Tạo Kubernetes Secrets
 
 ```bash
-# AWS credentials (cho Init Container keo model tu S3)
+# 1. Secret cho AWS
 kubectl create secret generic aws-secrets \
-  --from-literal=AWS_ACCESS_KEY_ID="<your-key>" \
-  --from-literal=AWS_SECRET_ACCESS_KEY="<your-secret>"
+  --from-literal=AWS_ACCESS_KEY_ID="<your-aws-key-id>" \
+  --from-literal=AWS_SECRET_ACCESS_KEY="<your-aws-secret-access-key>"
 
-# MLflow PostgreSQL credentials
+# 2. Secret cho PostgreSQL
 kubectl create secret generic postgres-secrets \
-  --from-literal=POSTGRES_USER="postgres" \
-  --from-literal=POSTGRES_PASSWORD="<strong-password>"
+  --from-literal=POSTGRES_USER="mlops_user" \
+  --from-literal=POSTGRES_PASSWORD="<your-postgres-password>"
 
-# GitHub Token (cho run_ai_pipeline.py ban webhook)
+# 3. Secret cho GitHub Actions Webhook
 kubectl create secret generic github-secrets \
-  --from-literal=GITHUB_TOKEN="<your-token>"
+  --from-literal=GITHUB_TOKEN="<your-github-token>" \
+  --from-literal=GITHUB_REPO="<your-github-repository>"
+
+# 4. Tạo Secret cho MLflow Nginx
+htpasswd -c -b auth <your-mlflow-username> <your-mlflow-password>
+kubectl create secret generic mlflow-basic-auth --from-file=auth
+
+# 5. Tạo Secret cho Cloudflare Tunnel
+kubectl create secret generic tunnel-token \
+  --from-literal=token="<your-cloudflare-tunnel-token>"
 ```
 
 #### Bước 5: Khởi tạo MLflow Database (chi 1 lan)
 
 ```bash
-kubectl apply -f k8s/init-mlflow-db.yaml
+kubectl apply -f k8s/mlflow-init-job.yaml
 kubectl wait --for=condition=complete job/mlflow-db-init --timeout=120s
 ```
 
@@ -272,27 +282,12 @@ kubectl get pods -l app=mlflow-server
 # Truy cap: https://mlflow.your-domain.com
 ```
 
-MLflow chạy nội bộ trong K3s và được expose ra ngoài theo kiến trúc:
-
-`Cloudflare Tunnel -> Nginx -> mlflow-service`
-
-Kaggle và GitHub phải truy cập bằng public HTTPS URL, ví dụ:
-
-```bash
-MLFLOW_TRACKING_URI=https://mlflow.your-domain.com
-```
-
-Không sử dụng:
-
-- `http://localhost:5001`
-- `http://<master-node-ip>:30000`
-
 #### Bước 7: Deploy toàn bộ hệ thống
 
 ```bash
 # PostgreSQL Cluster (Primary + Standby)
 kubectl apply -f k8s/postgres-cluster.yaml
-kubectl wait --for=condition=Ready cluster/nids-postgres --timeout=180s
+kubectl wait --for=condition=Ready cluster/mlops-nids-postgres --timeout=180s
 
 # FastAPI Server
 kubectl apply -f k8s/api-deployment.yaml
@@ -302,15 +297,15 @@ kubectl get pods,services,cronjob -o wide
 
 #### Bước 8: Cấu hình GitHub Secrets
 
-| Secret                  | Mô tả                                         |
-| ----------------------- | --------------------------------------------- |
-| `DOCKERHUB_USERNAME`    | Docker Hub username                           |
-| `DOCKERHUB_TOKEN`       | Docker Hub Access Token                       |
-| `AWS_ACCESS_KEY_ID`     | AWS IAM Access Key                            |
-| `AWS_SECRET_ACCESS_KEY` | AWS IAM Secret Key                            |
-| `KUBE_CONFIG`           | Nội dung file `~/.kube/config` từ Master Node |
-| `KAGGLE_USERNAME`       | Kaggle username                               |
-| `KAGGLE_KEY`            | Kaggle API Key                                |
+| Secret                  | Mô tả                                                    |
+| ----------------------- | -------------------------------------------------------- |
+| `DOCKERHUB_USERNAME`    | Docker Hub username                                      |
+| `DOCKERHUB_TOKEN`       | Docker Hub Access Token                                  |
+| `AWS_ACCESS_KEY_ID`     | AWS IAM Access Key                                       |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM Secret Key                                       |
+| `KUBE_CONFIG`           | Nội dung file `~/.kube/config` từ Master Node            |
+| `KAGGLE_USERNAME`       | Kaggle username                                          |
+| `KAGGLE_KEY`            | Kaggle API Key                                           |
 | `MLFLOW_TRACKING_URI`   | Public HTTPS URL, ví dụ `https://mlflow.your-domain.com` |
 
 ---
@@ -350,10 +345,10 @@ python orchestration/run_ai_pipeline.py --trigger manual
 
 ## 7. Tài liệu Liên quan
 
-| Tài liệu | Mô tả |
-|---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Kiến trúc chi tiết, diagrams, database schema |
-| [CHANGELOG.md](CHANGELOG.md) | Lịch sử phát triển theo từng giai đoạn |
+| Tài liệu                           | Mô tả                                              |
+| ---------------------------------- | -------------------------------------------------- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Kiến trúc chi tiết, diagrams, database schema      |
+| [CHANGELOG.md](CHANGELOG.md)       | Lịch sử phát triển theo từng giai đoạn             |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Quy tắc đóng góp, branch naming, commit convention |
 
 ---

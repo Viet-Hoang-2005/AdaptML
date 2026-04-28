@@ -1,3 +1,4 @@
+# ci_cd_pipeline.yml: GitHub Actions workflow để tự động hóa CI/CD cho MLOps NIDS System
 name: MLOps NIDS - CI/CD Pipeline
 
 on:
@@ -14,15 +15,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Đinh nghĩa biến môi trường dùng chung cho tất cả các job
 env:
   API_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-nids-api
-  MONITOR_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-evidently-monitor
-  SYNC_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-data-sync
+  MONITOR_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-nids-evidently
+  SYNC_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-nids-sync-data
+  DISPATCH_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mlops-nids-dispatch
 
 jobs:
   # JOB 1: Kiểm tra Chất lượng Code (Code Quality Gate)
   lint_and_test:
-    name: "🔍 Code Quality Check (Lint & Syntax)"
+    name: "Code Quality Check (Lint & Syntax)"
     runs-on: ubuntu-latest
 
     steps:
@@ -45,29 +48,29 @@ jobs:
 
       - name: Check for critical syntax errors (Flake8 Strict)
         # Chỉ chặn các lỗi nghiêm trọng: Syntax Error (E9), undefined name (F82),
-        # undefined variable (F63, F7) — không chặn warning style như dòng quá dài
+        # undefined variable (F63, F7) - không chặn warning style như dòng quá dài
         run: |
           pip install flake8 --quiet
-          echo "🔍 Checking syntax in api/src/..."
+          echo "Checking syntax in api/src/..."
           flake8 api/src/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          echo "🔍 Checking syntax in monitoring/..."
+          echo "Checking syntax in monitoring/..."
           flake8 monitoring/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          echo "✅ No critical syntax errors detected."
+          echo "No critical syntax errors detected."
 
       - name: Check valid imports for CI/CD scripts
         run: |
           pip install boto3 pandas sqlalchemy --quiet
-          echo "🔍 Checking .github/scripts/evaluate_model.py..."
-          python -c "import ast; ast.parse(open('.github/scripts/evaluate_model.py').read()); print('✅ evaluate_model.py OK')"
-          echo "🔍 Checking .github/scripts/update_reference_data.py..."
-          python -c "import ast; ast.parse(open('.github/scripts/update_reference_data.py').read()); print('✅ update_reference_data.py OK')"
+          echo "Checking .github/scripts/evaluate_model.py..."
+          python -c "import ast; ast.parse(open('.github/scripts/evaluate_model.py').read()); print('evaluate_model.py OK')"
+          echo "Checking .github/scripts/update_reference_data.py..."
+          python -c "import ast; ast.parse(open('.github/scripts/update_reference_data.py').read()); print('update_reference_data.py OK')"
 
   # JOB 2: Build & Push Docker Images lên Docker Hub
   build_and_push:
-    name: "🐳 Build Docker Images (API + Evidently)"
+    name: "Build Docker Images (API + Evidently)"
     needs: lint_and_test
     runs-on: ubuntu-latest
-    # Chỉ build khi push lên main — không build khi chỉ mở PR
+    # Chỉ build khi push lên main - không build khi chỉ mở PR
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
 
     steps:
@@ -82,8 +85,8 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # --- Build Image 1: FastAPI Server ---
-      - name: Build & Push Docker Image — FastAPI API Server
+      # Build Image 1: FastAPI Server
+      - name: Build & Push Docker Image - FastAPI API Server
         uses: docker/build-push-action@v5
         with:
           context: ./api
@@ -97,8 +100,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- Build Image 2: Evidently Drift Monitor ---
-      - name: Build & Push Docker Image — Evidently Drift Monitor
+      # Build Image 2: Evidently Drift Monitor
+      - name: Build & Push Docker Image - Evidently Drift Monitor
         uses: docker/build-push-action@v5
         with:
           context: ./monitoring
@@ -110,8 +113,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- Build Image 3: Reference Data Sync ---
-      - name: Build & Push Docker Image — Data Sync Script
+      # Build Image 3: Reference Data Sync
+      - name: Build & Push Docker Image - Data Sync Script
         uses: docker/build-push-action@v5
         with:
           context: ./.github/scripts
@@ -123,16 +126,30 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Build Image 4: MLflow Dispatcher
+      - name: Build & Push Docker Image - MLflow Dispatcher
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mlflow
+          file: ./mlflow/Dockerfile
+          push: true
+          tags: |
+            ${{ env.DISPATCH_IMAGE }}:${{ github.sha }}
+            ${{ env.DISPATCH_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Summary of built images
         run: |
-          echo "✅ Images pushed to Docker Hub:"
-          echo "   API:      ${{ env.API_IMAGE }}:${{ github.sha }}"
-          echo "   Monitor:  ${{ env.MONITOR_IMAGE }}:${{ github.sha }}"
-          echo "   Sync Job: ${{ env.SYNC_IMAGE }}:${{ github.sha }}"
+          echo "Images pushed to Docker Hub:"
+          echo "   API:        ${{ env.API_IMAGE }}:${{ github.sha }}"
+          echo "   Monitor:    ${{ env.MONITOR_IMAGE }}:${{ github.sha }}"
+          echo "   Sync Job:   ${{ env.SYNC_IMAGE }}:${{ github.sha }}"
+          echo "   Dispatcher: ${{ env.DISPATCH_IMAGE }}:${{ github.sha }}"
 
   # JOB 3: Deploy lên K3s (chỉ chạy trên nhánh main)
   deploy_to_k3s:
-    name: "🚀 Deploy to K3s (Rolling Update)"
+    name: "Deploy to K3s (Rolling Update)"
     needs: build_and_push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -145,51 +162,52 @@ jobs:
         with:
           kubeconfig: ${{ secrets.KUBE_CONFIG }}
 
-      - name: Apply Kubernetes Manifests (PostgreSQL + API + Jobs)
-        # kubectl apply --server-side: Sử dụng Server-Side Apply để tránh lỗi
-        # "field is immutable" khi apply lên deployment đang chạy
+      - name: Verify K3s Deployments Exist
+        # Không dùng kubectl apply ở đây vì nó sẽ ghi đè biến môi trường MODEL_VERSION do MLflow cấu hình.
+        # Hạ tầng YAML được apply thủ công 1 lần, GitHub Actions chỉ lo việc Update Source Code Image.
         run: |
-          echo "📦 Applying K8s manifests..."
-          kubectl apply -f k8s/postgres-cluster.yaml
-          kubectl apply -f k8s/api-deployment.yaml
-          kubectl apply -f k8s/redpanda-deployment.yaml
-          kubectl apply -f k8s/consumer-deployment.yaml
-          kubectl apply -f k8s/evidently-job.yaml
-          echo "✅ All manifests applied."
+          echo "Verifying core deployments exist in K3s..."
+          kubectl get deployment mlops-nids-api
+          kubectl get deployment mlops-nids-consumer
+          echo "Core deployments found. Proceeding to update images..."
 
       - name: Update latest image tag for API Deployment
-        # Ép Deployment dùng đúng image SHA vừa build — tránh K3s cache image cũ
+        # Ép Deployment dùng đúng image SHA vừa build - tránh K3s cache image cũ
         run: |
           kubectl set image deployment/mlops-nids-api \
             fastapi-server=${{ env.API_IMAGE }}:${{ github.sha }}
-          echo "🏷️  Updated image tag: ${{ github.sha }}"
+          echo "Updated image tag: ${{ github.sha }}"
 
       - name: Update latest image tag for Consumer
         run: |
           kubectl set image deployment/mlops-nids-consumer \
             consumer=${{ env.API_IMAGE }}:${{ github.sha }}
-          echo "🏷️  Updated Consumer image tag: ${{ github.sha }}"
+          echo "Updated Consumer image tag: ${{ github.sha }}"
+
+      - name: Update latest image tag for Dispatch CronJob
+        run: |
+          kubectl set image cronjob/mlops-nids-dispatch \
+            dispatcher=${{ env.DISPATCH_IMAGE }}:${{ github.sha }} || true
+          echo "Updated Dispatcher image tag (if exists)."
 
       - name: Wait for Rolling Update to complete (Zero-Downtime)
         run: |
-          echo "⏳ Waiting for API pods rolling update..."
+          echo "Waiting for API pods rolling update..."
           kubectl rollout status deployment/mlops-nids-api --timeout=300s
-          echo "✅ Rolling update completed successfully."
+          echo "Rolling update completed successfully."
 
       - name: Verify pod status after deployment
         run: |
-          echo "📋 Status of all pods:"
+          echo "Status of all pods:"
           kubectl get pods -o wide
           echo ""
-          echo "📋 Logs of API pod (last 20 lines):"
+          echo "Logs of API pod (last 20 lines):"
           kubectl logs -l app=mlops-nids-api --tail=20 || true
 
       - name: Send deployment success notification
         if: success()
         run: |
-          echo "==========================================="
-          echo "  ✅ CI/CD Deployment complete!"
-          echo "  📌 Commit:  ${{ github.sha }}"
-          echo "  📌 Author:  ${{ github.actor }}"
-          echo "  📌 Message: ${{ github.event.head_commit.message }}"
-          echo "==========================================="
+          echo "CI/CD Deployment complete!"
+          echo "Commit:  ${{ github.sha }}"
+          echo "Author:  ${{ github.actor }}"
+          echo "Message: ${{ github.event.head_commit.message }}"

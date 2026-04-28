@@ -1,19 +1,23 @@
+# mlops-nids-sync-data.yaml: Kubernetes Job để chạy script đồng bộ dữ liệu References Data cho PostgreSQL
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: reference-data-sync-job
+  name: mlops-nids-sync-data
+  annotations:
+    description: "Job to synchronize baseline reference data from S3 to PostgreSQL for data drift detection"
   namespace: default
-  # Dùng chú thích để đảm bảo job này được xóa trước khi chạy cái mới nếu cần, 
-  # tuy nhiên chúng ta sẽ dùng kubectl delete trong Pipeline trước.
 spec:
   # Số lần Pod được retry lại nếu script bị lỗi trước khi báo Failed toàn bộ Job
   backoffLimit: 2
   template:
     spec:
+      nodeSelector:
+        workload-type: worker
       restartPolicy: Never
       containers:
         - name: data-sync
-          image: tnvhoang/mlops-data-sync:latest # Tên chuẩn theo docker hub username
+          image: tnvhoang/mlops-nids-sync-data:latest # Tên chuẩn theo docker hub username
           imagePullPolicy: Always
           env:
             - name: AWS_DEFAULT_REGION
@@ -21,7 +25,7 @@ spec:
             - name: AWS_BUCKET_NAME
               value: "mlops-nids-artifacts"
             - name: DB_HOST
-              value: "nids-postgres-rw" # Địa chỉ Name Server Cluster IP nội bộ
+              value: "mlops-nids-postgres-rw" # Địa chỉ Name Server Cluster IP nội bộ
             - name: DB_NAME
               value: "mlops_nids_db"
             - name: DB_USER

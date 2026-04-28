@@ -1,3 +1,4 @@
+# drift_alert.yml: GitHub Actions workflow để gửi cảnh báo khi phát hiện Data drift
 name: MLOps NIDS - Drift Alert
 
 on:
@@ -8,6 +9,8 @@ jobs:
   notify_data_engineer:
     name: "Data Drift Alert"
     runs-on: ubuntu-latest
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
       - name: Build Alert Summary
@@ -22,9 +25,7 @@ jobs:
           echo "Phase 1 is alert-only. Retraining must be started by updating data_manifest.json on S3." >> $GITHUB_STEP_SUMMARY
 
       - name: Send Slack Alert
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: env.SLACK_WEBHOOK_URL != ''
         run: |
           python - <<'PY'
           import json
@@ -52,5 +53,5 @@ jobs:
           PY
 
       - name: Alert Channel Missing
-        if: ${{ secrets.SLACK_WEBHOOK_URL == '' }}
+        if: env.SLACK_WEBHOOK_URL == ''
         run: echo "SLACK_WEBHOOK_URL is not configured. Alert summary was recorded in GitHub Actions only."

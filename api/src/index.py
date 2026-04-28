@@ -1,4 +1,4 @@
-# index.py: FastAPI service cho MLOps NIDS System
+# index.py: FastAPI service phục vụ dự đoán và ghi log vào Redpanda
 import os
 import json
 import numpy as np
@@ -39,9 +39,9 @@ try:
         'client.id': 'fastapi-nids-producer',
         'linger.ms': 5  # Gom nhóm message để tăng tốc độ ghi
     })
-    print(f"🚀 Connected setup for Redpanda at {REDPANDA_BROKERS} - Topic: {KAFKA_TOPIC}")
+    print(f"Connected setup for Redpanda at {REDPANDA_BROKERS} - Topic: {KAFKA_TOPIC}")
 except Exception as e:
-    print(f"❌ Failed to setup Redpanda producer: {e}")
+    print(f"Failed to setup Redpanda producer: {e}")
     kafka_producer = None
 
 # 2. CẤU HÌNH ĐƯỜNG DẪN VÀ THAM SỐ (ĐỘNG HÓA)
@@ -63,14 +63,10 @@ try:
     with open(LABEL_PATH, 'r') as f:
         LABEL_CLASSES = json.load(f)
     
-    print("=" * 50)
-    print("🛡️   MLOps NIDS System - API Service")
-    print("=" * 50)
-
-    print(f"🤖 Loaded XGBoost Model {MODEL_VERSION.upper()} (expecting {len(EXPECTED_FEATURES)} features)")
-    print(f"🔖 Loaded Labels: {LABEL_CLASSES}")
+    print(f"Loaded XGBoost Model {MODEL_VERSION.upper()} (expecting {len(EXPECTED_FEATURES)} features)")
+    print(f"Loaded Labels: {LABEL_CLASSES}")
 except Exception as e:
-    print(f"❌ Error! Could not load model or labels. Details: {e}")
+    print(f"Error! Could not load model or labels. Details: {e}")
     model = LABEL_CLASSES = EXPECTED_FEATURES = None
 
 class NetworkTraffic(BaseModel):
@@ -79,7 +75,7 @@ class NetworkTraffic(BaseModel):
 # 4. HÀM CHẠY NGẦM (BACKGROUND TASK) ĐỂ LƯU REDPANDA
 def send_to_redpanda(features_dict: dict, predicted_label: str, confidence: float):
     if kafka_producer is None:
-        print("⚠️ Redpanda producer is not available. Skipping log.")
+        print("Redpanda producer is not available. Skipping log.")
         return
 
     try:
@@ -99,13 +95,13 @@ def send_to_redpanda(features_dict: dict, predicted_label: str, confidence: floa
         kafka_producer.poll(0) # Trigger async callback
         
     except Exception as e:
-        print(f"❌ Error in background task while sending to Redpanda: {e}")
+        print(f"Error in background task while sending to Redpanda: {e}")
 
 # Flush khi app shutdown (nếu muốn)
 @app.on_event("shutdown")
 def shutdown_event():
     if kafka_producer:
-        print("⏳ Flushing Redpanda messages...")
+        print("Flushing Redpanda messages...")
         kafka_producer.flush(timeout=5.0)
 
 # 5. API ENDPOINT
@@ -129,7 +125,7 @@ async def predict_intrusion(payload: NetworkTraffic, background_tasks: Backgroun
         if missing_cols:
             raise HTTPException(
                 status_code=400, 
-                detail=f"⚠️ Bad Request: Missing {len(missing_cols)} required features (e.g., {list(missing_cols)[:3]}...)"
+                detail=f"Bad Request: Missing {len(missing_cols)} required features (e.g., {list(missing_cols)[:3]}...)"
             )
 
         # Schema Alignment: Ép Pandas sắp xếp lại cột theo đúng thứ tự lúc Train
@@ -149,7 +145,7 @@ async def predict_intrusion(payload: NetworkTraffic, background_tasks: Backgroun
             for i in range(len(probas))
         }
 
-        print(f"⭐ Prediction Success: {results}")
+        print(f"Prediction Success: {results}")
 
         # Trích xuất lại dictionary đã được lọc đúng thứ tự và số lượng của EXPECTED_FEATURES
         validated_features = df_input.iloc[0].to_dict()

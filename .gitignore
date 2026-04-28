@@ -74,3 +74,5 @@ htmlcov/
 .terraform.lock.hcl
 terraform.tfvars
 .ssh/
+*.zip
+*.pem
