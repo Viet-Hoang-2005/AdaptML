@@ -1,3 +1,4 @@
+# s3_webhook_trigger.py: Lambda function để kích hoạt GitHub Actions khi data_manifest cập nhật trong S3
 import os
 import json
 import urllib.request
