@@ -129,8 +129,8 @@ but api-deployment.yaml was pulling label_nids_encoder_v1.pkl.
 refactor(db): split db_manager into rw and ro connection pools
 
 Support CloudNativePG dual-endpoint architecture:
-- engine_rw -> nids-postgres-rw (Primary, for INSERT)
-- engine_ro -> nids-postgres-ro (Standby, for SELECT)
+- engine_rw -> mlops-nids-postgres-rw (Primary, for INSERT)
+- engine_ro -> mlops-nids-postgres-ro (Standby, for SELECT)
 ```
 
 ```

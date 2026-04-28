@@ -22,7 +22,7 @@ Giai đoạn chuyển đổi từ kiến trúc "GitHub Actions làm nhạc trư�
   - Resource limits: `250m-1000m CPU`, `512Mi-2Gi RAM` — không ảnh hưởng etcd
   - AWS credentials từ Kubernetes Secret (`aws-secrets`)
 
-- **Khởi tạo MLflow Database** (`k8s/init-mlflow-db.yaml`):
+- **Khởi tạo MLflow Database** (`k8s/mlflow-init-job.yaml`):
   - Kubernetes Job chạy 1 lần duy nhất khi setup hạ tầng
   - Tạo database `mlflow`, user `mlflow` với password `mlflow_password`
   - Retry loop `pg_isready` (60s timeout) — đợi CloudNativePG Primary sẵn sàng

@@ -7,6 +7,8 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![XGBoost](https://img.shields.io/badge/XGBoost-F1%3E99%25-FF6600?style=flat-square)](https://xgboost.readthedocs.io)
+[![MLflow](https://img.shields.io/badge/MLflow-2.x-0194E2?style=flat-square&logo=mlflow&logoColor=white)](https://mlflow.org)
+[![Evidently AI](https://img.shields.io/badge/Evidently_AI-Drift-6D31FF?style=flat-square)](https://evidentlyai.com)
 [![Kubernetes](https://img.shields.io/badge/K3s-v1.34-326CE5?style=flat-square&logo=kubernetes&logoColor=white)](https://k3s.io)
 [![AWS](https://img.shields.io/badge/AWS-Terraform-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -100,7 +102,7 @@ mlops-nids-system/
 │   │   ├── retrain_pipeline.yml      # Chỉ trigger Kaggle retrain (fire-and-forget)
 │   │   ├── trigger_drift_check.yml   # Lắng nghe Webhook từ Consumer để chạy Evidently
 │   │   └── deploy_from_mlflow.yml    # Nhận RUN_ID từ MLflow để Deploy API lên K3s
-├── orchestration/
+├── mlflow/
 │   ├── dispatch_production_model.py  # Đọc MLflow Registry, bắn Webhook Deploy
 │   └── requirements.txt
 ├── api/
@@ -111,7 +113,7 @@ mlops-nids-system/
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── monitoring/
-│   ├── detect_drift.py               # Evidently AI + nids-postgres-ro
+│   ├── detect_drift.py               # Evidently AI + mlops-nids-postgres-ro
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── kaggle/
@@ -267,7 +269,7 @@ kubectl create secret generic tunnel-token \
 #### Bước 5: Khởi tạo MLflow Database (chi 1 lan)
 
 ```bash
-kubectl apply -f k8s/init-mlflow-db.yaml
+kubectl apply -f k8s/mlflow-init-job.yaml
 kubectl wait --for=condition=complete job/mlflow-db-init --timeout=120s
 ```
 
@@ -281,27 +283,12 @@ kubectl get pods -l app=mlflow-server
 # Truy cap: https://mlflow.your-domain.com
 ```
 
-MLflow chạy nội bộ trong K3s và được expose ra ngoài theo kiến trúc:
-
-`Cloudflare Tunnel -> Nginx -> mlflow-service`
-
-Kaggle và GitHub phải truy cập bằng public HTTPS URL, ví dụ:
-
-```bash
-MLFLOW_TRACKING_URI=https://mlflow.your-domain.com
-```
-
-Không sử dụng:
-
-- `http://localhost:5001`
-- `http://<master-node-ip>:30000`
-
 #### Bước 7: Deploy toàn bộ hệ thống
 
 ```bash
 # PostgreSQL Cluster (Primary + Standby)
 kubectl apply -f k8s/postgres-cluster.yaml
-kubectl wait --for=condition=Ready cluster/nids-postgres --timeout=180s
+kubectl wait --for=condition=Ready cluster/mlops-nids-postgres --timeout=180s
 
 # FastAPI Server
 kubectl apply -f k8s/api-deployment.yaml

@@ -22,12 +22,12 @@ flowchart TB
             API[FastAPI NIDS Server<br/>2 Replicas]
             REDPANDA[Redpanda Cluster<br/>Message Broker]
             CONSUMER[NIDS Consumer<br/>Batch DB Writer]
-            
+
             subgraph CNPG["CloudNativePG PostgreSQL HA"]
                 PG_PRIMARY[(Primary Node<br/>READ + WRITE)]
                 PG_STANDBY[(Standby Node<br/>READ-ONLY)]
             end
-            
+
             EVIDENTLY[Evidently AI<br/>Event-driven Job]
         end
 
@@ -44,24 +44,24 @@ flowchart TB
     USER -->|POST /predict| ALB
     LOCUST -->|Stress Test| ALB
     ALB --> API
-    
+
     API -->|Produce Message| REDPANDA
     REDPANDA -->|Consume Batch| CONSUMER
     CONSUMER -->|Batch INSERT| PG_PRIMARY
     CONSUMER -->|Threshold reached| GH_DRIFT
-    
+
     PG_PRIMARY -.->|Streaming Replication| PG_STANDBY
     EVIDENTLY -->|SELECT Production + Reference| PG_STANDBY
-    
+
     GH_DRIFT -->|kubectl apply| EVIDENTLY
     EVIDENTLY -->|Webhook: data_drift_detected| GH_RETRAIN
-    
+
     S3 -->|Object Created| LAMBDA
     LAMBDA -->|Webhook: data_manifest_updated| GH_RETRAIN
-    
+
     GH_RETRAIN -->|Kaggle API| TRAIN[Kaggle Compute]
     TRAIN -->|Upload artifacts| S3
-    
+
     GH_CICD -->|Docker Build + Push| API
     GH_CICD -->|Docker Build + Push| CONSUMER
 ```
@@ -113,16 +113,16 @@ flowchart LR
 ```mermaid
 flowchart LR
     subgraph W1["Worker Node 1"]
-        PRIMARY[("nids-postgres-1<br/>PRIMARY<br/>READ + WRITE")]
+        PRIMARY[("mlops-nids-postgres-1<br/>PRIMARY<br/>READ + WRITE")]
     end
 
     subgraph W2["Worker Node 2"]
-        STANDBY[("nids-postgres-2<br/>STANDBY<br/>READ-ONLY")]
+        STANDBY[("mlops-nids-postgres-2<br/>STANDBY<br/>READ-ONLY")]
     end
 
     subgraph SERVICES["K8s Services (tự động tạo bởi Operator)"]
-        RW_SVC["nids-postgres-rw<br/>→ Primary"]
-        RO_SVC["nids-postgres-ro<br/>→ Load-balanced"]
+        RW_SVC["mlops-nids-postgres-rw<br/>→ Primary"]
+        RO_SVC["mlops-nids-postgres-ro<br/>→ Load-balanced"]
     end
 
     PRIMARY -->|WAL Streaming<br/>Replication| STANDBY
@@ -295,26 +295,26 @@ ap-southeast-1 (Singapore)
 
 Việc chuyển đổi từ ghi log trực tiếp sang mô hình **Data Streaming (Redpanda)** mang lại các ưu điểm vượt trội:
 
-| Đặc điểm | Ghi trực tiếp (Cũ) | Data Streaming (Mới) | Lý do cải thiện |
-|---|---|---|---|
-| **Latency** | Phụ thuộc vào tốc độ phản hồi của DB | < 5ms (ghi vào RAM broker) | API không phải chờ DB xử lý logic INSERT phức tạp. |
-| **Throughput** | Bị giới hạn bởi số lượng connection pool | Hàng trăm nghìn tin nhắn/giây | Redpanda xử lý I/O theo mô hình đĩa tuần tự (Sequential I/O) cực nhanh. |
-| **Độ bền dữ liệu** | Có thể mất data nếu DB sập khi đang log | Được lưu trữ an toàn trên Broker | Redpanda lưu message vào đĩa trước khi Consumer lấy đi, tránh mất dữ liệu. |
-| **Khả năng mở rộng** | Khó mở rộng vì DB gắn chặt với API | Dễ dàng tăng số lượng Consumer | Có thể chạy nhiều Consumer song song để đẩy dữ liệu vào nhiều đích khác nhau. |
+| Đặc điểm             | Ghi trực tiếp (Cũ)                       | Data Streaming (Mới)             | Lý do cải thiện                                                               |
+| -------------------- | ---------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------- |
+| **Latency**          | Phụ thuộc vào tốc độ phản hồi của DB     | < 5ms (ghi vào RAM broker)       | API không phải chờ DB xử lý logic INSERT phức tạp.                            |
+| **Throughput**       | Bị giới hạn bởi số lượng connection pool | Hàng trăm nghìn tin nhắn/giây    | Redpanda xử lý I/O theo mô hình đĩa tuần tự (Sequential I/O) cực nhanh.       |
+| **Độ bền dữ liệu**   | Có thể mất data nếu DB sập khi đang log  | Được lưu trữ an toàn trên Broker | Redpanda lưu message vào đĩa trước khi Consumer lấy đi, tránh mất dữ liệu.    |
+| **Khả năng mở rộng** | Khó mở rộng vì DB gắn chặt với API       | Dễ dàng tăng số lượng Consumer   | Có thể chạy nhiều Consumer song song để đẩy dữ liệu vào nhiều đích khác nhau. |
 
 ---
 
 ## 6. Mục tiêu Hiệu năng (Performance SLA)
 
-| Chỉ số | Mục tiêu | Cơ chế đạt được |
-| --- | --- | --- |
-| **Độ trễ API Inference** | < 100ms | Model cache trong RAM (emptyDir Volume) |
-| **Bảo toàn Dữ liệu** | 100% requests được ghi log | Async Background Task trong FastAPI |
-| **Downtime khi Deploy** | 0% | Rolling Update + Init Container |
-| **Phục hồi DB khi sập** | < 60 giây | CloudNativePG Auto Failover |
-| **Chu kỳ Retrain** | < 2 giờ | Kaggle GPU/CPU -> S3 -> K3s |
-| **Phát hiện Drift** | Hằng ngày 0h UTC | Evidently CronJob |
-| **MLflow Query** | < 1s | PostgreSQL backend (dùng chung với nids_db) |
+| Chỉ số                   | Mục tiêu                   | Cơ chế đạt được                             |
+| ------------------------ | -------------------------- | ------------------------------------------- |
+| **Độ trễ API Inference** | < 100ms                    | Model cache trong RAM (emptyDir Volume)     |
+| **Bảo toàn Dữ liệu**     | 100% requests được ghi log | Async Background Task trong FastAPI         |
+| **Downtime khi Deploy**  | 0%                         | Rolling Update + Init Container             |
+| **Phục hồi DB khi sập**  | < 60 giây                  | CloudNativePG Auto Failover                 |
+| **Chu kỳ Retrain**       | < 2 giờ                    | Kaggle GPU/CPU -> S3 -> K3s                 |
+| **Phát hiện Drift**      | Hằng ngày 0h UTC           | Evidently CronJob                           |
+| **MLflow Query**         | < 1s                       | PostgreSQL backend (dùng chung với nids_db) |
 
 ---
 
@@ -322,15 +322,15 @@ Việc chuyển đổi từ ghi log trực tiếp sang mô hình **Data Streamin
 
 ### 6.1. Stages
 
-| Stage | Ý nghĩa |
-| --- | --- |
-| **Staging** | Model mới train, đang trong quá trình đánh giá |
+| Stage          | Ý nghĩa                                           |
+| -------------- | ------------------------------------------------- |
+| **Staging**    | Model mới train, đang trong quá trình đánh giá    |
 | **Production** | Model hiện đang phục vụ inference trên production |
-| **Archived** | Model cũ đã bị thay thế, giữ lại để so sánh |
+| **Archived**   | Model cũ đã bị thay thế, giữ lại để so sánh       |
 
 ### 6.2. Backend
 
-- **PostgreSQL (CloudNativePG)** (recommend): Dùng chung cluster `nids-postgres`, tạo database `mlflow` riêng biệt
+- **PostgreSQL (CloudNativePG)** (recommend): Dùng chung cluster `mlops-nids-postgres`, tạo database `mlflow` riêng biệt
 - MLflow artifact root: `s3://mlops-nids-artifacts/mlflow-artifacts/` (không lưu trên volume)
 
 ### 6.3. Truy cập MLflow UI
@@ -358,17 +358,17 @@ Lưu ý:
 
 ## 7. So sánh Before vs After (Orchestration)
 
-| Tiêu chí | Before (GitHub Actions Orchestrator) | After (MLflow-Centric Orchestrator) |
-|---|---|---|
-| **Nhạc trưởng** | GitHub Actions (4 jobs nối tiếp) | `run_ai_pipeline.py` (Local Python) |
-| **Trigger** | CRON + Webhook (Evidently) + Manual | Webhook (`deploy_new_champion`) + Manual |
-| **Kaggle API** | GitHub Actions poll (trong job) | Local script poll (ngoài CI/CD) |
-| **Metrics storage** | File JSON: S3 + GitHub Artifacts + repo | MLflow Model Registry (PostgreSQL) |
-| **Evaluation** | `evaluate_model.py` đọc JSON từ S3/Artifacts | `mlflow_evaluation_gate.py` query MLflow trực tiếp |
-| **Stage transition** | jq sửa data_manifest.json | `client.transition_model_version_stage()` |
-| **MODEL_VERSION** | Hardcoded trong YAML, hoặc jq đọc manifest | Từ `client_payload.model_version` webhook |
-| **GitHub Jobs** | 4 jobs (retrain + eval + deploy + sync) | 2 jobs (deploy + sync) |
-| **Pipeline complexity** | Cao (nhiều I/O file, nhiều nguồn sự thật) | Thấp (chỉ deploy, không suy nghĩ) |
+| Tiêu chí                | Before (GitHub Actions Orchestrator)         | After (MLflow-Centric Orchestrator)                |
+| ----------------------- | -------------------------------------------- | -------------------------------------------------- |
+| **Nhạc trưởng**         | GitHub Actions (4 jobs nối tiếp)             | `run_ai_pipeline.py` (Local Python)                |
+| **Trigger**             | CRON + Webhook (Evidently) + Manual          | Webhook (`deploy_new_champion`) + Manual           |
+| **Kaggle API**          | GitHub Actions poll (trong job)              | Local script poll (ngoài CI/CD)                    |
+| **Metrics storage**     | File JSON: S3 + GitHub Artifacts + repo      | MLflow Model Registry (PostgreSQL)                 |
+| **Evaluation**          | `evaluate_model.py` đọc JSON từ S3/Artifacts | `mlflow_evaluation_gate.py` query MLflow trực tiếp |
+| **Stage transition**    | jq sửa data_manifest.json                    | `client.transition_model_version_stage()`          |
+| **MODEL_VERSION**       | Hardcoded trong YAML, hoặc jq đọc manifest   | Từ `client_payload.model_version` webhook          |
+| **GitHub Jobs**         | 4 jobs (retrain + eval + deploy + sync)      | 2 jobs (deploy + sync)                             |
+| **Pipeline complexity** | Cao (nhiều I/O file, nhiều nguồn sự thật)    | Thấp (chỉ deploy, không suy nghĩ)                  |
 
 ---
 
