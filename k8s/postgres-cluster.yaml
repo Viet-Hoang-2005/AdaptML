@@ -37,13 +37,13 @@ spec:
     nodeSelector:
       workload-type: worker
     enablePodAntiAffinity: true
-    topologyKey: kubernetes.io/ip-10-0-2-221
+    topologyKey: kubernetes.io/hostname
 
   # Tuning PostgreSQL parameters cho MLflow workload
   postgresql:
     parameters:
-      shared_buffers: "1024MB"
-      effective_cache_size: "3072MB"
+      shared_buffers: "256MB"
+      effective_cache_size: "768MB"
       work_mem: "32MB"
       maintenance_work_mem: "256MB"
       max_connections: "200"
