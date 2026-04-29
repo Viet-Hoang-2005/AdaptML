@@ -10,8 +10,7 @@ metadata:
   annotations:
     description: "CloudNativePG cluster for MLflow metadata and NIDS baseline data storage"
 spec:
-  nodeSelector:
-    workload-type: worker
+
 
   # Chạy single-node để bring-up MLflow/PostgreSQL trước.
   instances: 1
@@ -35,6 +34,8 @@ spec:
 
   # Khi mở rộng lại nhiều instance, anti-affinity giúp tách các pod ra khác node.
   affinity:
+    nodeSelector:
+      workload-type: worker
     enablePodAntiAffinity: true
     topologyKey: kubernetes.io/ip-10-0-2-221
 
