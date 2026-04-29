@@ -2,15 +2,36 @@
 import os
 import json
 import urllib.request
+import boto3
+
+def get_secret():
+    secret_name = "mlops/github-secrets"
+    region_name = os.environ.get("AWS_REGION", "ap-southeast-1")
+    
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name
+    )
+    
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+        return json.loads(get_secret_value_response['SecretString'])
+    except Exception as e:
+        print(f"Error retrieving secret: {e}")
+        return None
 
 def lambda_handler(event, context):
-    # Nạp biến môi trường cấu hình GitHub từ Lambda
-    github_repo = os.environ.get("GITHUB_REPO")
-    github_token = os.environ.get("GITHUB_TOKEN")
-
-    if not github_repo or not github_token:
-        print("Missing GITHUB_REPO or GITHUB_TOKEN environment variables")
-        return {"statusCode": 500, "body": "Configuration error"}
+    # Kéo cấu hình GitHub trực tiếp từ Két sắt AWS
+    secrets = get_secret()
+    if not secrets or 'GITHUB_REPO' not in secrets or 'GITHUB_TOKEN' not in secrets:
+        print("Missing GITHUB_REPO or GITHUB_TOKEN from Secrets Manager")
+        return {"statusCode": 500, "body": "Configuration error: Missing Secrets"}
+        
+    github_repo = secrets['GITHUB_REPO']
+    github_token = secrets['GITHUB_TOKEN']
 
     # Trích xuất thông tin từ S3 event
     try:

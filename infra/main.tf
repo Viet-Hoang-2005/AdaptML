@@ -226,7 +226,8 @@ resource "aws_instance" "worker_nodes" {
     volume_size = 20
     volume_type = "gp3"
   }
-  tags = { Name = "mlops-worker-${count.index + 1}" }
+  iam_instance_profile = aws_iam_instance_profile.worker_profile.name
+  tags                 = { Name = "mlops-worker-${count.index + 1}" }
 }
 
 # 4. LOAD BALANCER & TARGET GROUP
@@ -334,6 +335,25 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# Cấp quyền đọc Secrets Manager cho Lambda
+data "aws_iam_policy_document" "lambda_secrets_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue"
+    ]
+    resources = [
+      aws_secretsmanager_secret.github_secrets.arn
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "lambda_secrets_policy_attach" {
+  name   = "mlops-lambda-secrets-policy"
+  role   = aws_iam_role.lambda_exec_role.id
+  policy = data.aws_iam_policy_document.lambda_secrets_policy.json
+}
+
 # Nén code Lambda thành file zip
 data "archive_file" "lambda_zip" {
   type        = "zip"
@@ -350,13 +370,6 @@ resource "aws_lambda_function" "github_webhook_lambda" {
   runtime          = "python3.10"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
-  # Biến môi trường GitHub cho Lambda
-  environment {
-    variables = {
-      GITHUB_REPO  = var.github_repo
-      GITHUB_TOKEN = var.github_token
-    }
-  }
 }
 
 # Cho phép S3 invoke Lambda
@@ -381,7 +394,156 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
   depends_on = [aws_lambda_permission.allow_s3_invocation]
 }
 
-# 7. OUTPUTS
+# 7. AWS SECRETS MANAGER & IAM FOR K3S WORKERS
+# Tạo IAM Role cho Worker Nodes
+data "aws_iam_policy_document" "ec2_assume_role" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role" "worker_role" {
+  name               = "mlops-worker-role"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+}
+
+# Tạo Policy cho phép đọc Secrets Manager
+data "aws_iam_policy_document" "secrets_read_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "worker_secrets_policy" {
+  name        = "mlops-worker-secrets-policy"
+  description = "Allow K3s worker nodes to read secrets from AWS Secrets Manager"
+  policy      = data.aws_iam_policy_document.secrets_read_policy.json
+}
+
+resource "aws_iam_role_policy_attachment" "worker_secrets_attach" {
+  role       = aws_iam_role.worker_role.name
+  policy_arn = aws_iam_policy.worker_secrets_policy.arn
+}
+
+# Tạo Instance Profile để gắn vào EC2
+resource "aws_iam_instance_profile" "worker_profile" {
+  name = "mlops-worker-profile"
+  role = aws_iam_role.worker_role.name
+}
+
+# Khởi tạo các khung Secrets trên AWS Secrets Manager
+resource "aws_secretsmanager_secret" "aws_secrets" {
+  name        = "mlops/aws-secrets"
+  description = "AWS Credentials for MLOps K3s"
+}
+
+resource "aws_secretsmanager_secret" "postgres_secrets" {
+  name        = "mlops/postgres-secrets"
+  description = "PostgreSQL Credentials"
+}
+
+resource "aws_secretsmanager_secret" "github_secrets" {
+  name        = "mlops/github-secrets"
+  description = "GitHub Webhook Token"
+}
+
+resource "aws_secretsmanager_secret" "mlflow_basic_auth" {
+  name        = "mlops/mlflow-basic-auth"
+  description = "MLflow htpasswd auth"
+}
+
+resource "aws_secretsmanager_secret" "tunnel_token" {
+  name        = "mlops/tunnel-token"
+  description = "Cloudflare Tunnel Token"
+}
+
+# 8. GITHUB ACTIONS OIDC & SECRETS MANAGER
+# Khởi tạo khung Secret cho GitHub Actions
+resource "aws_secretsmanager_secret" "github_actions_secrets" {
+  name        = "mlops/github-actions-secrets"
+  description = "Secrets for GitHub Actions CI/CD pipeline (DockerHub, Kaggle, Slack, Kubeconfig)"
+}
+
+# Tạo OIDC Provider cho GitHub
+resource "aws_iam_openid_connect_provider" "github_actions" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["1c58a3a8518e8759bf075b76b750d4f2df264fcd", "6938fd4d98bab03faadb97b34396831e3780aea1"]
+}
+
+# Tạo IAM Role cho GitHub Actions
+data "aws_iam_policy_document" "github_actions_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      # Giới hạn chỉ Repository này mới được quyền dùng Role
+      values = ["repo:Viet-Hoang-2005/MLOps-nids-system:*"]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions_role" {
+  name               = "mlops-github-actions-role"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+}
+
+# Cấp quyền đọc Secret và S3 cho Role
+data "aws_iam_policy_document" "github_actions_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue"
+    ]
+    resources = [
+      aws_secretsmanager_secret.github_actions_secrets.arn
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket"
+    ]
+    resources = [
+      aws_s3_bucket.artifacts_bucket.arn,
+      "${aws_s3_bucket.artifacts_bucket.arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_policy_attach" {
+  name   = "mlops-github-actions-policy"
+  role   = aws_iam_role.github_actions_role.id
+  policy = data.aws_iam_policy_document.github_actions_policy.json
+}
+
+# 9. OUTPUTS
 output "master_public_ip" {
   description = "Public IP for SSH access to Master Node"
   value       = aws_instance.master_node.public_ip
@@ -395,4 +557,9 @@ output "load_balancer_dns" {
 output "s3_bucket_name" {
   description = "Model Storage Bucket"
   value       = aws_s3_bucket.artifacts_bucket.id
+}
+
+output "github_actions_role_arn" {
+  description = "IAM Role ARN to configure in GitHub Variables"
+  value       = aws_iam_role.github_actions_role.arn
 }
