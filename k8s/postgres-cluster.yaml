@@ -16,16 +16,14 @@ spec:
   instances: 1
   enableSuperuserAccess: true
   imageName: ghcr.io/cloudnative-pg/postgresql:15
-  superuserSecret:
-    name: nids-postgres-superuser-secret
 
   # Khởi tạo database và application owner
   bootstrap:
     initdb:
-      database: nids_db
+      database: mlops_nids_db
       owner: postgres
       secret:
-        name: nids-postgres-app-secret
+        name: postgres-secrets
 
   # Cấu hình Storage cho mỗi instance
   storage:
