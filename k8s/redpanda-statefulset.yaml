@@ -27,11 +27,15 @@ spec:
         command:
         - redpanda
         - start
-        - --smp 1
-        - --memory 2G 
+        - --smp
+        - "1"
+        - --memory
+        - 2G
         - --overprovisioned
-        - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
-        - --advertise-kafka-addr internal://redpanda-service:9092,external://localhost:19092
+        - --kafka-addr
+        - internal://0.0.0.0:9092,external://0.0.0.0:19092
+        - --advertise-kafka-addr
+        - internal://redpanda-service:9092,external://localhost:19092
         ports:
         - containerPort: 9092
           name: kafka

@@ -60,7 +60,7 @@ spec:
 
               # Tạo hoặc đồng bộ hóa vai trò mlflow
               psql -v ON_ERROR_STOP=1 -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres <<'SQL'
-              DO $$
+              DO \$\$
               BEGIN
                 IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'mlflow') THEN
                   CREATE ROLE mlflow LOGIN PASSWORD 'mlflow_password';
@@ -68,7 +68,7 @@ spec:
                   ALTER ROLE mlflow WITH LOGIN PASSWORD 'mlflow_password';
                 END IF;
               END
-              $$;
+              \$\$;
               SQL
 
               # CREATE DATABASE không được chạy trong transaction block, nên kiểm tra riêng
