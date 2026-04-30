@@ -27,15 +27,13 @@ spec:
         command:
         - redpanda
         - start
+        - --overprovisioned
         - --smp
         - "1"
         - --memory
         - 1G
-        - --overprovisioned
-        - --kafka-addr
-        - PLAINTEXT://0.0.0.0:9092
-        - --advertise-kafka-addr
-        - PLAINTEXT://redpanda-service:9092
+        - --reserve-memory
+        - 0M
         ports:
         - containerPort: 9092
           name: kafka
