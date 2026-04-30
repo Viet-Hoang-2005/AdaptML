@@ -53,7 +53,6 @@ spec:
               value: "ap-southeast-1"
             - name: AWS_BUCKET_NAME
               value: "mlops-nids-artifacts"
-          # Dùng shell để expand các biến môi trường từ Secret tại runtime
           command:
             - /bin/sh
             - -c
@@ -63,7 +62,7 @@ spec:
                 --port 5000 \
                 --allowed-hosts "mlflow.mlops-nids-nt114.id.vn,mlflow.mlops-nids-nt114.id.vn:443,localhost,127.0.0.1,mlflow-service,mlflow-service.default.svc.cluster.local" \
                 --cors-allowed-origins "https://mlflow.mlops-nids-nt114.id.vn" \
-                --backend-store-uri "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@mlops-nids-postgres-rw:5432/mlflow" \
+                --backend-store-uri "postgresql://mlflow:mlflow_password@mlops-nids-postgres-rw:5432/mlflow" \
                 --default-artifact-root "s3://${AWS_BUCKET_NAME}/mlflow-artifacts/"
           resources:
             requests:
