@@ -32,9 +32,6 @@ spec:
         - --memory
         - 1G
         - --overprovisioned
-        - --node-id
-        - "0"
-        - --check=false
         - --kafka-addr
         - PLAINTEXT://0.0.0.0:9092
         - --advertise-kafka-addr
