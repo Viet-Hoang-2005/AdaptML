@@ -21,6 +21,11 @@ spec:
     spec:
       nodeSelector:
         workload-type: worker
+      initContainers:
+        - name: init-kafka-topic
+          image: docker.redpanda.com/redpandadata/redpanda:v23.3.21
+          command: ["/bin/sh", "-c"]
+          args: ["rpk topic create nids_production_data --brokers redpanda-service:9092 || true"]
       containers:
         - name: consumer
           # Xài image của API (thư viện confluent-kafka nằm chung)
