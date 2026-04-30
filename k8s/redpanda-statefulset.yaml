@@ -24,8 +24,7 @@ spec:
       containers:
       - name: redpanda
         image: docker.redpanda.com/redpandadata/redpanda:v23.3.21
-        command:
-        - redpanda
+        args:
         - start
         - --overprovisioned
         - --smp
