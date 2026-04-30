@@ -53,6 +53,9 @@ spec:
               value: "ap-southeast-1"
             - name: AWS_BUCKET_NAME
               value: "mlops-nids-artifacts"
+            # Tổng hợp URI kết nối PostgreSQL từ các biến trên
+            - name: DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@mlops-nids-postgres-rw:5432/mlflow"
           # Cấu hình lệnh khởi động MLflow Server với backend store là PostgreSQL và artifact store là S3
           args:
             - mlflow
@@ -66,7 +69,7 @@ spec:
             - --cors-allowed-origins
             - https://mlflow.mlops-nids-nt114.id.vn
             - --backend-store-uri
-            - postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@mlops-nids-postgres-rw:5432/mlflow
+            - $(DATABASE_URL)
             - --default-artifact-root
             - s3://$(AWS_BUCKET_NAME)/mlflow-artifacts/
           resources:
