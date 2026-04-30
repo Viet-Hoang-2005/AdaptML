@@ -53,25 +53,18 @@ spec:
               value: "ap-southeast-1"
             - name: AWS_BUCKET_NAME
               value: "mlops-nids-artifacts"
-            # Tổng hợp URI kết nối PostgreSQL từ các biến trên
-            - name: DATABASE_URL
-              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@mlops-nids-postgres-rw:5432/mlflow"
-          # Cấu hình lệnh khởi động MLflow Server với backend store là PostgreSQL và artifact store là S3
-          args:
-            - mlflow
-            - server
-            - --host
-            - "0.0.0.0"
-            - --port
-            - "5000"
-            - --allowed-hosts
-            - mlflow.mlops-nids-nt114.id.vn,mlflow.mlops-nids-nt114.id.vn:443,localhost,127.0.0.1,mlflow-service,mlflow-service.default.svc.cluster.local
-            - --cors-allowed-origins
-            - https://mlflow.mlops-nids-nt114.id.vn
-            - --backend-store-uri
-            - $(DATABASE_URL)
-            - --default-artifact-root
-            - s3://$(AWS_BUCKET_NAME)/mlflow-artifacts/
+          # Dùng shell để expand các biến môi trường từ Secret tại runtime
+          command:
+            - /bin/sh
+            - -c
+            - |
+              exec mlflow server \
+                --host 0.0.0.0 \
+                --port 5000 \
+                --allowed-hosts "mlflow.mlops-nids-nt114.id.vn,mlflow.mlops-nids-nt114.id.vn:443,localhost,127.0.0.1,mlflow-service,mlflow-service.default.svc.cluster.local" \
+                --cors-allowed-origins "https://mlflow.mlops-nids-nt114.id.vn" \
+                --backend-store-uri "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@mlops-nids-postgres-rw:5432/mlflow" \
+                --default-artifact-root "s3://${AWS_BUCKET_NAME}/mlflow-artifacts/"
           resources:
             requests:
               cpu: 250m
