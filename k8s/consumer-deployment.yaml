@@ -42,6 +42,8 @@ spec:
                   key: GITHUB_TOKEN
             - name: DB_HOST_RW
               value: "mlops-nids-postgres-rw"
+            - name: DB_HOST_RO
+              value: "mlops-nids-postgres-ro"
             - name: DB_HOST
               value: "mlops-nids-postgres-rw"
             - name: DB_PORT
