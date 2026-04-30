@@ -58,18 +58,12 @@ spec:
 
               echo "Starting MLflow Database Initialization"
 
-              # Tạo hoặc đồng bộ hóa vai trò mlflow
-              psql -v ON_ERROR_STOP=1 -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres <<'SQL'
-              DO \$\$
-              BEGIN
-                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'mlflow') THEN
-                  CREATE ROLE mlflow LOGIN PASSWORD 'mlflow_password';
-                ELSE
-                  ALTER ROLE mlflow WITH LOGIN PASSWORD 'mlflow_password';
-                END IF;
-              END
-              \$\$;
-              SQL
+              # Tạo role mlflow nếu chưa có (bỏ qua lỗi nếu đã tồn tại)
+              psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres \
+                -c "CREATE ROLE mlflow LOGIN PASSWORD 'mlflow_password';" 2>/dev/null || true
+              # Đảm bảo role đã có đúng quyền LOGIN và mật khẩu
+              psql -v ON_ERROR_STOP=1 -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres \
+                -c "ALTER ROLE mlflow WITH LOGIN PASSWORD 'mlflow_password';"
 
               # CREATE DATABASE không được chạy trong transaction block, nên kiểm tra riêng
               if [ "$(psql -v ON_ERROR_STOP=1 -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'mlflow'")" != "1" ]; then
