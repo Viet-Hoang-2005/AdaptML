@@ -21,6 +21,11 @@ spec:
     spec:
       nodeSelector:
         workload-type: worker
+      initContainers:
+        - name: init-kafka-topic
+          image: docker.redpanda.com/redpandadata/redpanda:v23.3.21
+          command: ["/bin/sh", "-c"]
+          args: ["rpk topic create nids_production_data --brokers redpanda-service:9092 || true"]
       containers:
         - name: consumer
           # Xài image của API (thư viện confluent-kafka nằm chung)
@@ -42,6 +47,8 @@ spec:
                   key: GITHUB_TOKEN
             - name: DB_HOST_RW
               value: "mlops-nids-postgres-rw"
+            - name: DB_HOST_RO
+              value: "mlops-nids-postgres-ro"
             - name: DB_HOST
               value: "mlops-nids-postgres-rw"
             - name: DB_PORT

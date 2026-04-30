@@ -34,6 +34,8 @@ spec:
                   value: "http://mlflow-service.default.svc.cluster.local:5000"
                 - name: MLFLOW_MODEL_NAME
                   value: "NIDS-XGBoost"
+                - name: PRODUCTION_ALIAS
+                  value: "production"
                 
                 # 2. Cấu hình kết nối tới GitHub Actions
                 - name: GITHUB_REPO
