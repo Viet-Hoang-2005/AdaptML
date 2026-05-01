@@ -14,6 +14,8 @@ from pydantic import BaseModel
 from typing import Dict
 from datetime import datetime
 from confluent_kafka import Producer
+from prometheus_client import Counter, Histogram, Gauge
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # 1. KHỞI TẠO FASTAPI
 app = FastAPI(
@@ -28,6 +30,32 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# 1.1. PROMETHEUS MONITORING
+# Tự động expose /metrics endpoint với đầy đủ HTTP metrics (latency, request count, error rate)
+Instrumentator().instrument(app).expose(app)
+
+# Custom NIDS Metrics: Đếm số phân loại theo từng loại traffic
+nids_predictions_counter = Counter(
+    "nids_predictions_total",
+    "Total number of predictions by traffic class",
+    ["label", "model_version"]
+)
+
+# Phân phối điểm tin cậy (Confidence Score) theo từng nhãn
+nids_confidence_histogram = Histogram(
+    "nids_prediction_confidence",
+    "Distribution of model prediction confidence scores",
+    ["label"],
+    buckets=[0.5, 0.7, 0.8, 0.9, 0.95, 0.99, 1.0]
+)
+
+# Gauge thông tin model đang active (dùng trong Grafana để biết version nào đang chạy)
+nids_active_model_info = Gauge(
+    "nids_active_model_info",
+    "Information about the currently loaded model version",
+    ["model_version"]
 )
 
 # Cấu hình Redpanda Producer
@@ -65,6 +93,9 @@ try:
     
     print(f"Loaded XGBoost Model {MODEL_VERSION.upper()} (expecting {len(EXPECTED_FEATURES)} features)")
     print(f"Loaded Labels: {LABEL_CLASSES}")
+    
+    # Đánh dấu model version đang chạy trên Prometheus Gauge
+    nids_active_model_info.labels(model_version=MODEL_VERSION).set(1)
 except Exception as e:
     print(f"Error! Could not load model or labels. Details: {e}")
     model = LABEL_CLASSES = EXPECTED_FEATURES = None
@@ -146,6 +177,13 @@ async def predict_intrusion(payload: NetworkTraffic, background_tasks: Backgroun
         }
 
         print(f"Prediction Success: {results}")
+
+        # Cập nhật Prometheus metrics sau mỗi lần predict thành công
+        nids_predictions_counter.labels(
+            label=predicted_label,
+            model_version=MODEL_VERSION
+        ).inc()
+        nids_confidence_histogram.labels(label=predicted_label).observe(confidence)
 
         # Trích xuất lại dictionary đã được lọc đúng thứ tự và số lượng của EXPECTED_FEATURES
         validated_features = df_input.iloc[0].to_dict()
