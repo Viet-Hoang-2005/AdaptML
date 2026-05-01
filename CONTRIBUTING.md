@@ -114,8 +114,6 @@ feat(api): add GET / health check endpoint returning model version
 
 - Returns {"status": "healthy", "model_version": "v1"}
 - Used by ALB readinessProbe and Kubernetes liveness check
-
-Closes #15
 ```
 
 ```
