@@ -17,8 +17,10 @@ flowchart TB
 
     subgraph AWS_INFRA["Hạ tầng AWS (Terraform)"]
         ALB[Application Load Balancer<br/>Public Endpoint]
+        ASM[AWS Secrets Manager<br/>Vault: Két sắt bảo mật]
 
         subgraph K3S["K3s Production Cluster (1 Master + 2 Workers)"]
+            ESO[External Secrets Operator<br/>Secret Synchronizer]
             API[FastAPI NIDS Server<br/>2 Replicas]
             REDPANDA[Redpanda Cluster<br/>Message Broker]
             CONSUMER[NIDS Consumer<br/>Batch DB Writer]
@@ -49,6 +51,8 @@ flowchart TB
     REDPANDA -->|Consume Batch| CONSUMER
     CONSUMER -->|Batch INSERT| PG_PRIMARY
     CONSUMER -->|Threshold reached| GH_DRIFT
+    ASM -->|IAM Role| ESO
+    ESO -->|K8s Secrets| API
 
     PG_PRIMARY -.->|Streaming Replication| PG_STANDBY
     EVIDENTLY -->|SELECT Production + Reference| PG_STANDBY
@@ -165,41 +169,49 @@ flowchart TB
     EVIDENTLY -->|Có| WEBHOOK
 ```
 
-### 2.4. Lớp Orchestration (Local Orchestrator)
+### 2.4. Lớp Orchestration (GitHub Actions + CronJob)
 
-**THAY ĐỔI LỚN:** Thay vì GitHub Actions làm nhạc trưởng (4 jobs), `run_ai_pipeline.py` chạy **LOCAL** (hoặc trên server riêng) làm nhạc trưởng của toàn bộ pipeline.
+Toàn bộ pipeline được điều phối bởi **GitHub Actions Workflows** và một **K8s CronJob** chạy trong cluster, không cần script local.
 
-#### Luồng Retrain: run_ai_pipeline.py (Sequence Diagram)
+#### Luồng Retrain & Deploy đầy đủ (Sequence Diagram)
 
 ```mermaid
 sequenceDiagram
-    participant E as Evidently CronJob
-    participant ORCH as run_ai_pipeline.py<br/>(Local Orchestrator)
+    participant EVD as Evidently K8s Job
+    participant GH_DRIFT as trigger_drift_check.yml
+    participant GH_RETRAIN as retrain_pipeline.yml
     participant K as Kaggle Compute
-    participant S as AWS S3
-    participant MLF as MLflow Server<br/>(Cloudflare Tunnel -> Nginx -> ClusterIP)
-    participant GATE as mlflow_evaluation_gate.py
-    participant GA as GitHub Actions
-    participant P as K3s Cluster
-    participant DB as PostgreSQL Primary
+    participant MLF as MLflow Server
+    participant HUMAN as Data Scientist (HitL)
+    participant CRON as dispatch_production_model.py<br/>(K8s CronJob / 5 phút)
+    participant GH_DEPLOY as deploy_from_mlflow.yml
+    participant K3S as K3s Cluster
+    participant S3 as AWS S3
 
-    E->>ORCH: 1. drift detected → gọi script
-    ORCH->>K: 2. kaggle kernels push (train.py)
-    K-->>K: 3. train.py: Load CSV từ S3<br/>XGBoost + RandomizedSearchCV
-    K->>S: 4. Upload artifact .pkl<br/>s3://.../models/vN/
-    ORCH->>S: 5. kaggle kernels output<br/>Tải artifact về local
-    ORCH->>MLF: 6. mlflow.start_run()<br/>mlflow.log_metrics(f1=0.999)
-    ORCH->>MLF: 7. mlflow.register_model()<br/>version N → Stage: Staging
-    MLF-->>ORCH: Registered: NIDS-XGBoost / vN / Staging
-    ORCH->>GATE: 8. mlflow_evaluation_gate.py<br/>query Production vs Staging
-    GATE-->>GATE: 9. evaluate_challenger():<br/>F1_challenger >= F1_champion ?
-    GATE->>MLF: 10. transition(vN, "Production")<br/>transition(vN-1, "Archived")
-    GATE-->>ORCH: 11. APPROVED
-    ORCH->>S: 12. aws s3 sync models/vN/<br/>Init Container cần kéo về
-    ORCH->>GA: 13. POST /dispatches<br/>event_type: deploy_new_champion<br/>client_payload: {model_version: N}
-    GA->>P: 14. kubectl set env MODEL_VERSION=N
-    GA->>P: 15. kubectl rollout restart → Zero-Downtime
-    P->>DB: 16. sync_reference_data<br/>TRUNCATE + INSERT dataset mới
+    Note over EVD,GH_DRIFT: Trigger 1: Drift Detection
+    EVD->>GH_DRIFT: Webhook: data_drift_detected
+    GH_DRIFT->>EVD: kubectl replace --force evidently-job.yaml
+    EVD->>GH_RETRAIN: Webhook: drift confirmed → trigger retrain
+
+    Note over S3,GH_RETRAIN: Trigger 2: Data Manifest Update
+    S3->>GH_RETRAIN: Lambda → Webhook: data_manifest_updated
+
+    GH_RETRAIN->>S3: 1. Load data_manifest.json
+    GH_RETRAIN->>K: 2. kaggle kernels push (train.py)
+    K-->>K: 3. XGBoost training trên Kaggle GPU
+    K->>MLF: 4. mlflow.log_metrics() + mlflow.register_model()<br/>→ Stage: Staging
+    K->>S3: 5. Upload deployment_exports/ (model.pkl + label.json)
+
+    HUMAN->>MLF: 6. Assign alias "production" (HitL)
+
+    CRON->>MLF: 7. get_model_version_by_alias("production")
+    MLF-->>CRON: RUN_ID + MODEL_VERSION
+    CRON->>GH_DEPLOY: 8. repository_dispatch<br/>event: mlflow_production_selected
+
+    GH_DEPLOY->>K3S: 9. kubectl set env RUN_ID + MODEL_VERSION
+    GH_DEPLOY->>K3S: 10. kubectl rollout restart → Rolling Update
+    K3S->>S3: 11. Init Container: aws s3 cp model.pkl
+    GH_DEPLOY->>K3S: 12. kubectl replace sync-data-job.yaml
 ```
 
 ### 2.5. Cơ chế Zero-Downtime Deployment (Init Container)
@@ -272,11 +284,12 @@ ap-southeast-1 (Singapore)
 │   └── Private Subnet 1a (10.0.2.0/24) - Worker Nodes
 │
 ├── EC2 Instances
-│   ├── ip-10-0-1-219  - t3.medium: K3s Master (control-plane)
-│   │                       ★ MLflow chạy nội bộ trong K3s, public qua Cloudflare Tunnel -> Nginx
-│   │                       ★ Backend: CloudNativePG PostgreSQL (dùng chung cluster)
-│   ├── ip-10-0-2-244  - t3.medium: K3s Worker 1 + Postgres PRIMARY
-│   └── ip-10-0-2-8    - t3.medium: K3s Worker 2 + Postgres STANDBY
+│   ├── ip-10-0-1-219  - t3.small:  K3s Master (control-plane only)
+│   ├── ip-10-0-2-244  - t3.large:  K3s Worker 1 + Postgres PRIMARY
+│   │                       ★ MLflow chạy nội bộ trong K3s trên Worker Node
+│   │                       ★ Public qua Cloudflare Tunnel -> Nginx
+│   │                       ★ Backend: CloudNativePG PostgreSQL
+│   └── ip-10-0-2-8    - t3.large:  K3s Worker 2 + Postgres STANDBY
 │
 ├── Application Load Balancer (mlops-api-lb)
 │   └── Listener :80 → Target Group → Worker Port 80 (Traefik Ingress)
@@ -312,64 +325,42 @@ Việc chuyển đổi từ ghi log trực tiếp sang mô hình **Data Streamin
 | **Bảo toàn Dữ liệu**     | 100% requests được ghi log | Async Background Task trong FastAPI         |
 | **Downtime khi Deploy**  | 0%                         | Rolling Update + Init Container             |
 | **Phục hồi DB khi sập**  | < 60 giây                  | CloudNativePG Auto Failover                 |
-| **Chu kỳ Retrain**       | < 2 giờ                    | Kaggle GPU/CPU -> S3 -> K3s                 |
-| **Phát hiện Drift**      | Hằng ngày 0h UTC           | Evidently CronJob                           |
-| **MLflow Query**         | < 1s                       | PostgreSQL backend (dùng chung với nids_db) |
+| **Chu kỳ Retrain**       | < 2 giờ                    | Kaggle GPU → MLflow Registry → K3s          |
+| **Phát hiện Drift**      | Theo ngưỡng bản ghi        | Evidently Job (kích hoạt qua Webhook)       |
+| **Dispatch Model mới**   | Mỗi 5 phút                 | K8s CronJob: dispatch_production_model.py   |
+| **MLflow Query**         | < 1s                       | PostgreSQL backend (database: mlflow riêng) |
 
 ---
 
-## 6. MLflow Model Registry — Chi tiết
+## 7. MLflow Model Registry — Chi tiết
 
-### 6.1. Stages
+### 7.1. Vòng đời Model
 
-| Stage          | Ý nghĩa                                           |
-| -------------- | ------------------------------------------------- |
-| **Staging**    | Model mới train, đang trong quá trình đánh giá    |
-| **Production** | Model hiện đang phục vụ inference trên production |
-| **Archived**   | Model cũ đã bị thay thế, giữ lại để so sánh       |
+| Stage          | Ý nghĩa                                                          | Ai thực hiện           |
+| -------------- | ---------------------------------------------------------------- | ---------------------- |
+| **Staging**    | Model vừa được đăng ký sau khi train xong trên Kaggle            | `train.py` tự động     |
+| **Production** | Model được chọn phục vụ inference, được gán alias `"production"` | Data Scientist (HitL)  |
+| **Archived**   | Model cũ đã bị thay thế bởi phiên bản mới, giữ lại để rollback   | Tự động khi deploy mới |
 
-### 6.2. Backend
+### 7.2. Backend
 
-- **PostgreSQL (CloudNativePG)** (recommend): Dùng chung cluster `mlops-nids-postgres`, tạo database `mlflow` riêng biệt
-- MLflow artifact root: `s3://mlops-nids-artifacts/mlflow-artifacts/` (không lưu trên volume)
+- **Tracking Server**: `mlflow-deployment.yaml` → chạy trên K3s Worker, protected bởi Nginx Basic Auth (`mlflow-nginx.yaml`)
+- **Database backend**: CloudNativePG PostgreSQL cluster, database `mlflow` riêng biệt (tạo bởi `mlflow-init-job.yaml`)
+- **Artifact store**: `s3://mlops-nids-artifacts/mlflow-artifacts/` — model binaries, metadata, params
+- **Public access**: Cloudflare Tunnel → Nginx → ClusterIP Service (`mlflow-service:5000`)
 
-### 6.3. Truy cập MLflow UI
+### 7.3. Truy cập MLflow UI
 
 ```
-# Sau khi deploy:
-# - k8s/mlflow-deployment.yaml
-# - k8s/mlflow-nginx.yaml
-# - k8s/cloudflared-tunnel.yaml
-https://mlflow.your-domain.com
+https://mlflow.mlops-nids-nt114.id.vn
 
+# Credentials: Basic Auth từ secret mlflow-basic-auth (AWS Secrets Manager)
 # Các chức năng:
-# - Experiments: xem tất cả các run với params, metrics, artifacts
-# - Models: xem Registry với các version + stage
-# - Compare: so sánh các run với nhau
+# - Experiments: xem tất cả runs với params, metrics, artifacts
+# - Models: NIDS-XGBoost Registry với version + alias
+# - Compare: so sánh F1/accuracy giữa các runs
 ```
 
-Lưu ý:
-
-- `MLFLOW_TRACKING_URI` phải là public HTTPS URL.
-- Kaggle không được dùng `localhost`.
-- Kaggle cũng không được dùng master-node NodePort.
-
 ---
 
-## 7. So sánh Before vs After (Orchestration)
-
-| Tiêu chí                | Before (GitHub Actions Orchestrator)         | After (MLflow-Centric Orchestrator)                |
-| ----------------------- | -------------------------------------------- | -------------------------------------------------- |
-| **Nhạc trưởng**         | GitHub Actions (4 jobs nối tiếp)             | `run_ai_pipeline.py` (Local Python)                |
-| **Trigger**             | CRON + Webhook (Evidently) + Manual          | Webhook (`deploy_new_champion`) + Manual           |
-| **Kaggle API**          | GitHub Actions poll (trong job)              | Local script poll (ngoài CI/CD)                    |
-| **Metrics storage**     | File JSON: S3 + GitHub Artifacts + repo      | MLflow Model Registry (PostgreSQL)                 |
-| **Evaluation**          | `evaluate_model.py` đọc JSON từ S3/Artifacts | `mlflow_evaluation_gate.py` query MLflow trực tiếp |
-| **Stage transition**    | jq sửa data_manifest.json                    | `client.transition_model_version_stage()`          |
-| **MODEL_VERSION**       | Hardcoded trong YAML, hoặc jq đọc manifest   | Từ `client_payload.model_version` webhook          |
-| **GitHub Jobs**         | 4 jobs (retrain + eval + deploy + sync)      | 2 jobs (deploy + sync)                             |
-| **Pipeline complexity** | Cao (nhiều I/O file, nhiều nguồn sự thật)    | Thấp (chỉ deploy, không suy nghĩ)                  |
-
----
-
-_Last updated: 2026-04-11 - UIT · NT114 · MLOps NIDS System Project_
+_Last updated: 2026-05-01 - UIT · NT114 · MLOps NIDS System Project_
