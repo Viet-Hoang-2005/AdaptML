@@ -1,0 +1,144 @@
+# grafana-alertrules.yaml: Cấu hình PrometheusRule với các ngưỡng cảnh báo cho hệ thống NIDS
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nids-alert-rules
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    # Nhóm 1: API Health
+    - name: nids.api.health
+      rules:
+        # Cảnh báo khi API latency p95 vượt 100ms liên tục 3 phút
+        - alert: HighAPILatency
+          expr: |
+            histogram_quantile(0.95,
+              rate(http_request_duration_seconds_bucket{handler="/predict"}[5m])
+            ) > 0.1
+          for: 3m
+          labels:
+            severity: warning
+            team: mlops
+          annotations:
+            summary: "API /predict latency vượt ngưỡng 100ms"
+            description: "p95 latency hiện tại là {{ $value | humanizeDuration }}. Kiểm tra tài nguyên Pod và kết nối Redpanda."
+
+        # Cảnh báo khi error rate vượt 1%
+        - alert: HighAPIErrorRate
+          expr: |
+            rate(http_requests_total{status=~"5.."}[5m]) /
+            rate(http_requests_total[5m]) > 0.01
+          for: 2m
+          labels:
+            severity: critical
+            team: mlops
+          annotations:
+            summary: "API Error Rate vượt 1%"
+            description: "Error rate hiện tại: {{ $value | humanizePercentage }}. Xem log: kubectl logs -l app=mlops-nids-api"
+
+        # Cảnh báo khi API pod không còn running
+        - alert: APIPodsUnavailable
+          expr: kube_deployment_status_replicas_available{deployment="mlops-nids-api"} < 1
+          for: 1m
+          labels:
+            severity: critical
+            team: mlops
+          annotations:
+            summary: "Không còn API pod nào đang chạy!"
+            description: "Deployment mlops-nids-api có 0 replica available. Kiểm tra ngay."
+
+    # Nhóm 2: NIDS Security Events
+    - name: nids.security
+      rules:
+        # Cảnh báo khi phát hiện DDoS traffic đột biến (tấn công thực)
+        - alert: DDoSSpikeDetected
+          expr: |
+            rate(nids_predictions_total{label="DDoS"}[2m]) > 50
+          for: 1m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: "DDoS Traffic Spike Detected!"
+            description: "Hệ thống đang phát hiện {{ $value | humanize }} DDoS predictions/giây. Có thể đang bị tấn công thực!"
+
+        # Cảnh báo khi PortScan tăng đột biến (giai đoạn trinh sát mạng)
+        - alert: PortScanActivityDetected
+          expr: |
+            rate(nids_predictions_total{label="PortScan"}[5m]) > 20
+          for: 2m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: "PortScan Activity Tăng Cao"
+            description: "{{ $value | humanize }} PortScan predictions/giây trong 5 phút qua."
+
+        # Cảnh báo khi confidence score trung bình quá thấp (model có thể đang xử lý data lạ)
+        - alert: LowModelConfidence
+          expr: |
+            histogram_quantile(0.5,
+              rate(nids_prediction_confidence_bucket[10m])
+            ) < 0.7
+          for: 5m
+          labels:
+            severity: warning
+            team: mlops
+          annotations:
+            summary: "Model confidence score trung bình < 70%"
+            description: "Model đang không tự tin với dữ liệu đầu vào. Có thể cần kiểm tra Data Drift."
+
+    # Nhóm 3: Database Health
+    - name: nids.database
+      rules:
+        # Cảnh báo khi PostgreSQL exporter không phản hồi (Primary hoặc Standby sập)
+        - alert: PostgresDown
+          expr: pg_up{job="postgres-exporter"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: infrastructure
+          annotations:
+            summary: "PostgreSQL không phản hồi!"
+            description: "postgres-exporter không thể kết nối DB. Kiểm tra CloudNativePG cluster ngay."
+
+        # Cảnh báo khi số connections gần đạt max_connections
+        - alert: PostgresHighConnections
+          expr: |
+            sum(pg_stat_activity_count) by (datname) > 80
+          for: 5m
+          labels:
+            severity: warning
+            team: infrastructure
+          annotations:
+            summary: "PostgreSQL connections cao bất thường"
+            description: "Database {{ $labels.datname }} có {{ $value }} connections active."
+
+    # Nhóm 4: Infrastructure
+    - name: nids.infrastructure
+      rules:
+        # Cảnh báo khi RAM Worker Node vượt 85%
+        - alert: NodeHighMemoryUsage
+          expr: |
+            (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+          for: 5m
+          labels:
+            severity: warning
+            team: infrastructure
+          annotations:
+            summary: "Worker Node RAM > 85%"
+            description: "Node {{ $labels.instance }} đang dùng {{ $value | humanize }}% RAM."
+
+        # Cảnh báo khi disk vượt 80%
+        - alert: NodeDiskAlmostFull
+          expr: |
+            (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 80
+          for: 10m
+          labels:
+            severity: warning
+            team: infrastructure
+          annotations:
+            summary: "Disk Node gần đầy (>80%)"
+            description: "Node {{ $labels.instance }}: {{ $value | humanize }}% disk đã sử dụng."
