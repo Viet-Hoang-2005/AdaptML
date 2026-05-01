@@ -1,29 +1,46 @@
 ---
 name: mlops-nids-monitoring
-description: Phương pháp tính toán Error / Drift và logic của Webhook.
+description: Phương pháp phát hiện Data Drift bằng Evidently AI và logic Webhook kích hoạt retraining.
 ---
 
 # Data Drift Monitoring bằng Evidently AI
 
-Script giám sát trạng thái Data Drift tĩnh `monitoring/detect_drift.py` được đóng gói trong Docker Container và Deploy dưới dạng hệ thống K3s `Job`. Thay vì chạy định kỳ (CronJob), Job này được khởi chạy tự động (Event-Driven) thông qua Webhook từ Redpanda Consumer khi số lượng dữ liệu sản xuất vượt ngưỡng.
+## 1. Kiến trúc Tổng thể
 
-## 1. Bối Cảnh So Sánh
+Script `monitoring/detect_drift.py` được đóng gói trong Docker và chạy dưới dạng **K8s Job** (không phải CronJob). Job được kích hoạt theo cơ chế **Event-Driven**:
 
-- **Dữ liệu tham chiếu (Reference):** Lưu trữ trong `nids_reference_data`. Bảng này được đồng bộ từ S3 thông qua Github Action script `update_reference_data.py`.
-- **Dữ liệu sản xuất (Production):** Lưu trữ trong `nids_production_data`. Chứa nhật ký dự đoán từ FastAPI trong 24 giờ qua.
-- **Tối ưu hóa hiệu suất:** Để hỗ trợ xử lý lượng dữ liệu khổng lồ (Big Data), script sử dụng kỹ thuật **DB-level sampling** (`TABLESAMPLE SYSTEM`) trực tiếp trong PostgreSQL khi số lượng bản ghi vượt quá `100,000`. Điều này giúp tiết kiệm tài nguyên RAM đáng kể mà vẫn đảm bảo tính đại diện thống kê.
+```
+Consumer (nids_production_data vượt ngưỡng)
+    → Webhook → trigger_drift_check.yml (GitHub Actions)
+    → kubectl replace --force evidently-job.yaml
+    → detect_drift.py chạy và phân tích
+```
 
-## 2. Công nghệ Phân tích (v0.4.15 Stable)
+## 2. Nguồn Dữ liệu So Sánh
 
-- Sử dụng thư viện **Evidently AI phiên bản 0.4.15** (Bản ổn định nhất cho cấu trúc JSON Report hiện tại). 
-- **DataDriftPreset:** Tự động thực hiện các kiểm định thống kê (KS-test cho tham số liên tục, Chi-Square cho tham số phân loại).
-- **Threshold:** Ngưỡng cảnh báo mặc định là `0.6` (60% thuộc tính bị lệch). 
-- **Lưu ý Schema:** Cần giữ lại nhãn dự đoán `Predicted_Label` để Evidently có thể phát hiện sự thay đổi trong bản chất của các cuộc tấn công mạng mới.
+- **Reference Data (`nids_reference_data`):** Dữ liệu training ban đầu, được nạp vào PostgreSQL bởi `sync-data-job.yaml` (GitHub Actions `deploy_from_mlflow.yml` kích hoạt sau mỗi lần deploy model mới).
+- **Production Data (`nids_production_data`):** Nhật ký inference trong 24 giờ qua từ FastAPI, ghi bởi Consumer.
+- **Tối ưu hóa Big Data:** Khi bản ghi vượt 100,000, script dùng `TABLESAMPLE SYSTEM` trực tiếp trong PostgreSQL để sampling — tiết kiệm RAM mà vẫn đảm bảo tính đại diện.
 
-## 3. Webhook Action Logic
+## 3. Công nghệ & Ngưỡng (Evidently AI v0.4.15)
 
-- Khi phát hiện Drift, script gửi một HTTP POST Request tới GitHub API (`repository_dispatch`).
-- Trường `event_type`: `data_drift_detected`.
-- Workflow `trigger_drift_check.yml` sẽ lắng nghe sự kiện này và chạy K8s Job Evidently.
-- **Human-in-the-Loop (HitL) Retraining**: Nếu Evidently xác nhận có Data Drift, thay vì tự động gọi Kaggle retrain rủi ro cao, hệ thống sẽ gửi Cảnh báo (Email/Slack) cho Data Engineer.
-- Data Engineer chuẩn bị tập dữ liệu mới, upload S3 và cập nhật `data_manifest.json`. Lúc này S3 Event mới gọi Lambda để kích hoạt quá trình Continuous Training.
+- **DataDriftPreset:** KS-test cho feature liên tục, Chi-Square cho feature phân loại.
+- **Ngưỡng cảnh báo:** `0.6` (60% features bị drift).
+- **Đọc từ:** `DB_HOST_RO` (`mlops-nids-postgres-ro`) — endpoint Read-Only để không ảnh hưởng Primary.
+
+## 4. Luồng Webhook sau khi phát hiện Drift
+
+### 4.1 Bắn cảnh báo Slack
+- Script gọi `drift_alert.yml` (GitHub Actions) → Gửi Slack message với thống kê chi tiết.
+
+### 4.2 Kích hoạt Retraining
+- Script gửi `repository_dispatch` với `event_type: data_drift_detected` → kích hoạt `retrain_pipeline.yml`.
+- **Lưu ý:** Retraining từ drift vẫn dùng `data_manifest.json` hiện tại trên S3 để xác định dataset. Data Engineer có thể upload manifest mới trước khi drift để train với data tốt hơn.
+
+## 5. Phân biệt 2 Webhook Endpoint
+
+| Webhook | event_type | Kích hoạt workflow |
+|---|---|---|
+| Consumer đếm ngưỡng | `trigger_drift_check` | `trigger_drift_check.yml` (chạy Evidently Job) |
+| Evidently phát hiện drift | `data_drift_detected` | `drift_alert.yml` + `retrain_pipeline.yml` |
+| Lambda (S3 manifest) | `data_manifest_updated` | `retrain_pipeline.yml` |
