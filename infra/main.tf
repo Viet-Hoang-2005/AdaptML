@@ -53,9 +53,16 @@ resource "aws_internet_gateway" "igw" {
   tags   = { Name = "mlops-igw" }
 }
 
-# Elastic IP
+# Elastic IP cho NAT Gateway
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
+}
+
+# Elastic IP cố định cho Master Node
+resource "aws_eip" "master_eip" {
+  domain   = "vpc"
+  instance = aws_instance.master_node.id
+  tags     = { Name = "mlops-master-eip" }
 }
 
 # NAT Gateway
@@ -207,7 +214,7 @@ resource "aws_instance" "master_node" {
   key_name               = "mlops-keypair"
 
   root_block_device {
-    volume_size = 20
+    volume_size = 40
     volume_type = "gp3"
   }
   tags = { Name = "mlops-master-node" }
@@ -223,7 +230,7 @@ resource "aws_instance" "worker_nodes" {
   key_name               = "mlops-keypair"
 
   root_block_device {
-    volume_size = 20
+    volume_size = 40
     volume_type = "gp3"
   }
   iam_instance_profile = aws_iam_instance_profile.worker_profile.name
@@ -546,7 +553,7 @@ resource "aws_iam_role_policy" "github_actions_policy_attach" {
 # 9. OUTPUTS
 output "master_public_ip" {
   description = "Public IP for SSH access to Master Node"
-  value       = aws_instance.master_node.public_ip
+  value       = aws_eip.master_eip.public_ip
 }
 
 output "load_balancer_dns" {
