@@ -63,6 +63,8 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | 8   | **Zero-downtime deployment** Rolling update + Kéo model bằng RUN_ID từ MLflow | GitHub Actions + K3s       |
 | 9   | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời         | Locust                     |
 | 10  | **Zero-trust & Keyless Security** - Xác thực OIDC, loại bỏ mật khẩu tĩnh      | AWS OIDC + Secrets Manager |
+| 11  | **Full-stack Observability** - Giám sát API, DB, Redpanda và ML metrics       | Prometheus + Grafana       |
+| 12  | **Smart Alerting** - Cảnh báo DDoS, Latency cao qua Slack                     | AlertManager + Slack       |
 
 ---
 
@@ -91,6 +93,7 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | **Orchestration**      | K3s (Kubernetes)                           |
 | **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)     |
 | **Secrets Mgmt**       | AWS Secrets Manager + External Secrets Op  |
+| **Observability**      | Prometheus + Grafana + AlertManager        |
 
 ---
 
@@ -100,17 +103,17 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 mlops-nids-system/
 │
 ├── .github/workflows/
-│   ├── ci_cd_pipeline.yml          # Build Docker Image -> Push Docker Hub -> Rolling Deploy K3s
-│   ├── retrain_pipeline.yml        # Nhận Webhook -> Tải dữ liệu S3 -> Kích hoạt Kaggle Kernel
-│   ├── deploy_from_mlflow.yml      # Nhận RUN_ID từ Dispatch -> Rolling Update API trên K3s
-│   ├── trigger_drift_check.yml     # Lắng nghe Webhook từ Consumer -> Chạy Evidently Job
-│   └── drift_alert.yml             # Gửi Slack Alert khi phát hiện Data Drift
+│   ├── ci_cd_pipeline.yml           # Build Docker Image -> Push Docker Hub -> Rolling Deploy K3s
+│   ├── retrain_pipeline.yml         # Nhận Webhook -> Tải dữ liệu S3 -> Kích hoạt Kaggle Kernel
+│   ├── deploy_from_mlflow.yml       # Nhận RUN_ID từ Dispatch -> Rolling Update API trên K3s
+│   ├── trigger_drift_check.yml      # Lắng nghe Webhook từ Consumer -> Chạy Evidently Job
+│   └── drift_alert.yml              # Gửi Slack Alert khi phát hiện Data Drift
 │
 ├── api/
 │   ├── src/
-│   │   ├── index.py                # FastAPI: POST /predict -> Ghi vào Redpanda
-│   │   ├── consumer.py             # Redpanda Consumer: Batch insert DB -> Bắn Drift Webhook
-│   │   └── db_manager.py           # Dual-endpoint SQLAlchemy: engine_rw + engine_ro
+│   │   ├── index.py                 # FastAPI: POST /predict -> Ghi vào Redpanda
+│   │   ├── consumer.py              # Redpanda Consumer: Batch insert DB -> Bắn Drift Webhook
+│   │   └── db_manager.py            # Dual-endpoint SQLAlchemy: engine_rw + engine_ro
 │   ├── Dockerfile
 │   └── requirements.txt
 │
@@ -142,7 +145,13 @@ mlops-nids-system/
 │   ├── cluster-secret-store.yaml    # ESO ClusterSecretStore: Kết nối K3s với AWS Secrets Manager
 │   ├── external-secrets.yaml        # ExternalSecret: Đồng bộ 6 nhóm Secret từ AWS về K3s
 │   ├── sync-data-job.yaml           # One-time Job: Nạp Reference Data vào PostgreSQL
-│   └── eso-install.sh               # Script cài đặt External Secrets Operator qua Helm
+│   ├── eso-install.sh               # Script cài đặt External Secrets Operator qua Helm
+│   ├── monitoring-install.sh        # Script cài đặt Prometheus & Grafana Stack
+│   ├── api-servicemonitor.yaml      # Cấu hình Prometheus scrape FastAPI
+│   ├── redpanda-servicemonitor.yaml # Cấu hình Prometheus scrape Redpanda
+│   ├── postgres-exporter.yaml       # Exporter cho PostgreSQL (RO endpoint)
+│   ├── grafana-alertrules.yaml      # Định nghĩa luật cảnh báo (DDoS, Latency...)
+│   └── grafana-cloudflared.yaml     # Expose Grafana Dashboard ra internet
 │
 ├── infra/
 │   ├── main.tf                      # Terraform: VPC + EC2 + ALB + S3 + Lambda + IAM + OIDC
@@ -228,11 +237,12 @@ python web/src/test_api.py
 locust -f web/src/locustfile.py --host=http://localhost:5000
 ```
 
-API Swagger UI: `http://localhost:5000/docs`
-Locust Dashboard: `http://localhost:8089`
-Redpanda Console: `http://localhost:8080`
-MLflow Tracking Server: `http://localhost:5001`
-PostgreSQL: `localhost:5432`
+API Swagger UI: `http://localhost:5000/docs`  
+Locust Dashboard: `http://localhost:8089`  
+Redpanda Console: `http://localhost:8080`  
+MLflow Tracking Server: `http://localhost:5001`  
+Grafana Dashboard: `http://localhost:3000`  
+PostgreSQL: `http://localhost:5432`
 
 ---
 
@@ -402,6 +412,22 @@ kubectl apply -f k8s/consumer-deployment.yaml
 kubectl apply -f k8s/evidently-job.yaml
 ```
 
+8. Triển khai Hệ thống Giám sát (Observability)
+
+```bash
+# Cài đặt Prometheus Stack (Prometheus + Grafana)
+bash k8s/monitoring-install.sh
+
+# Triển khai các ServiceMonitor và Exporters
+kubectl apply -f k8s/postgres-exporter.yaml
+kubectl apply -f k8s/api-servicemonitor.yaml
+kubectl apply -f k8s/redpanda-servicemonitor.yaml
+
+# Cấu hình Alerting và Expose Dashboard
+kubectl apply -f k8s/grafana-alertrules.yaml
+kubectl apply -f k8s/grafana-cloudflared.yaml
+```
+
 ---
 
 ### 6.3 Kiểm thử Toàn bộ Pipeline (Demo Hội đồng)
@@ -515,6 +541,19 @@ Xác nhận API đang chạy model phiên bản mới:
 curl http://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com/health
 # Mong đợi: {"status": "ok", "model_version": "v2", ...}
 ```
+
+#### Giai đoạn 5: Kiểm tra Giám sát & Cảnh báo (Observability)
+
+1. Truy cập Grafana Dashboard:
+   - URL: `https://grafana.mlops-nids-nt114.id.vn`
+   - Đăng nhập bằng credentials trong AWS Secrets Manager (`mlflow-basic-auth`).
+2. Quan sát các Dashboard quan trọng:
+   - **NIDS Performance:** Theo dõi `nids_predictions_total` và `nids_prediction_confidence`.
+   - **FastAPI Overview:** Theo dõi Request Latency (p95) và Error Rate.
+   - **PostgreSQL / Redpanda:** Theo dõi sức khỏe database và message queue.
+3. Thử nghiệm Cảnh báo (Slack):
+   - Chạy Locust với số lượng user cực lớn để tạo traffic "DDoS" giả lập.
+   - Mong đợi: Nhận thông báo Slack từ AlertManager: `[FIRING] DDoSSpikeDetected`.
 
 ---
 

@@ -76,3 +76,6 @@ terraform.tfvars
 .ssh/
 *.zip
 *.pem
+
+# K3s
+config
