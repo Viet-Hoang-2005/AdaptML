@@ -16,8 +16,9 @@ helm upgrade --install ${RELEASE_NAME} prometheus-community/kube-prometheus-stac
   --namespace ${NAMESPACE} \
   --create-namespace \
   --set grafana.adminPassword="${GRAFANA_PASSWORD}" \
-  --set prometheus.prometheusSpec.retention=15d \
-  --set prometheus.prometheusSpec.scrapeInterval=15s \
+  --set prometheus.prometheusSpec.retention=3d \
+  --set prometheus.prometheusSpec.scrapeInterval=30s \
+  --set prometheus.prometheusSpec.resources.limits.memory=1500Mi \
   --set "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName=local-path" \
   --set "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=10Gi" \
   --set grafana.persistence.enabled=true \
