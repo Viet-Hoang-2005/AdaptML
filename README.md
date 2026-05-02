@@ -269,7 +269,7 @@ terraform apply
   "KAGGLE_API_TOKEN": "<your-kaggle-api-token>",
   "SLACK_WEBHOOK_URL": "<your-slack-webhook-url>",
   "MLFLOW_TRACKING_URI": "<your-mlflow-tracking-uri>",
-  "KUBE_CONFIG_BASE64": "<your-kube-config-base64>"
+  "KUBE_CONFIG": "<your-kube-config-base64>"
 }
 ```
 
@@ -435,24 +435,24 @@ kubectl apply -f k8s/grafana-cloudflared.yaml
 #### Giai đoạn 0: Xác nhận hệ thống sẵn sàng
 
 ```bash
-# Kiểm tra trạng thái các pod
+# 1. Kiểm tra trạng thái các pod
 kubectl get pods,svc,cronjob
 
-# Kiểm tra init container đã kéo model từ S3
+# 2. Kiểm tra init container đã kéo model từ S3
 kubectl logs <api-pod-name> -c aws-s3-model-sync
 ```
 
 #### Giai đoạn 1: Kiểm thử API Service
 
 ```bash
-# Theo dõi Consumer ghi dữ liệu vào DB
+# 1. Theo dõi Consumer ghi dữ liệu vào DB
 kubectl logs -f -l app=mlops-nids-consumer
 
-# Bắn tải với Locust (chạy trên máy local)
+# 2. Bắn tải với Locust (chạy trên máy local)
 cd "MLOps-nids-system"
 locust -f web/src/locustfile.py --host=http://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com
 
-# Kết nối PostgreSQL để đếm số bản ghi đã ghi
+# 3. Kết nối PostgreSQL để đếm số bản ghi đã ghi
 kubectl exec -it mlops-nids-postgres-1 -- psql -U postgres -d mlops_nids_db \
   -c "SELECT COUNT(*), label FROM nids_production_data GROUP BY label ORDER BY label;"
 ```
@@ -460,41 +460,41 @@ kubectl exec -it mlops-nids-postgres-1 -- psql -U postgres -d mlops_nids_db \
 #### Giai đoạn 2: Kiểm thử phát hiện Data Drift
 
 ```bash
-# Xóa job cũ và chạy lại job kiểm tra drift ngay lập tức
+# 1. Xóa job cũ và chạy lại job kiểm tra drift ngay lập tức
 kubectl replace --force -f k8s/evidently-job.yaml
 
-# Theo dõi kết quả kiểm tra
+# 2. Theo dõi kết quả kiểm tra
 kubectl logs -f -l app=evidently-data-drift
 ```
 
 #### Giai đoạn 3: Kiểm thử Continuous Training Pipeline
 
-Upload `data_manifest.json` lên S3 để kích hoạt Lambda:
+1. Upload `data_manifest.json` lên S3 để kích hoạt Lambda:
 
 ```bash
 aws s3 cp data_manifest.json s3://mlops-nids-artifacts/data_manifest.json
 ```
 
-Xác nhận Lambda đã nhận event (trên AWS Console):
+2. Xác nhận Lambda đã nhận event (trên AWS Console):
 
 ```
 AWS Console -> Lambda -> s3-webhook-trigger -> Monitor -> View CloudWatch Logs
 Mong đợi: "Successfully triggered GitHub Actions retraining workflow"
 ```
 
-Theo dõi GitHub Actions Retrain Pipeline:
+3. Theo dõi GitHub Actions Retrain Pipeline:
 
 ```
 GitHub Repo -> Tab Actions -> "MLOps NIDS - Controlled Retraining Pipeline"
 ```
 
-Quan sát quá trình Retraining:
+4. Quan sát quá trình Retraining:
 
 ```
 Setup -> Download Data from S3 -> Train on Kaggle GPU -> Quality Gate -> Register to MLflow
 ```
 
-Xem model mới xuất hiện trên MLflow Registry:
+5. Xem model mới xuất hiện trên MLflow Registry:
 
 ```
 MLflowUI (https://mlflow.mlops-nids-nt114.id.vn) -> Models -> NIDS-XGBoost
@@ -504,13 +504,13 @@ Kết quả mong đợi: Model mới ở stage `Staging` với metrics F1 > 0.99
 
 #### Giai đoạn 4: Demo Zero-Downtime Deployment
 
-Promote model lên `Production` trên MLflow UI:
+1. Promote model lên `Production` trên MLflow UI:
 
 ```
 MLflow UI -> Models -> NIDS-XGBoost -> Phiên bản mới -> Assign alias "production"
 ```
 
-Dispatch CronJob tự phát hiện model mới và kích hoạt deploy:
+2. Dispatch CronJob tự phát hiện model mới và kích hoạt deploy:
 
 ```bash
 # Ép CronJob chạy ngay
@@ -520,13 +520,13 @@ kubectl logs -f -l job-name=dispatch-manual-<timestamp>
 
 Mong đợi: `Production model found -> Dispatching deploy workflow to GitHub...`
 
-Theo dõi GitHub Actions Deploy:
+3. Theo dõi GitHub Actions Deploy:
 
 ```
 GitHub Repo -> Tab Actions -> "Deploy Production Model from MLflow"
 ```
 
-Quan sát Rolling Update không gián đoạn (giữ Locust chạy xuyên suốt):
+4. Quan sát Rolling Update không gián đoạn (giữ Locust chạy xuyên suốt):
 
 ```bash
 # Quan sát quá trình pod cũ -> pod mới mà không có downtime
@@ -535,7 +535,7 @@ kubectl get pods -l app=mlops-nids-api -w
 
 Mong đợi trên Locust Dashboard: **Failure rate vẫn = 0%** trong toàn bộ quá trình rolling update.
 
-Xác nhận API đang chạy model phiên bản mới:
+5. Xác nhận API đang chạy model phiên bản mới:
 
 ```bash
 curl http://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com/health
@@ -545,15 +545,20 @@ curl http://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com/health
 #### Giai đoạn 5: Kiểm tra Giám sát & Cảnh báo (Observability)
 
 1. Truy cập Grafana Dashboard:
-   - URL: `https://grafana.mlops-nids-nt114.id.vn`
-   - Đăng nhập bằng credentials trong AWS Secrets Manager (`mlflow-basic-auth`).
+
+- URL: `https://grafana.mlops-nids-nt114.id.vn`
+- Đăng nhập bằng credentials trong AWS Secrets Manager (`mlflow-basic-auth`).
+
 2. Quan sát các Dashboard quan trọng:
-   - **NIDS Performance:** Theo dõi `nids_predictions_total` và `nids_prediction_confidence`.
-   - **FastAPI Overview:** Theo dõi Request Latency (p95) và Error Rate.
-   - **PostgreSQL / Redpanda:** Theo dõi sức khỏe database và message queue.
+
+- **NIDS Performance:** Theo dõi `nids_predictions_total` và `nids_prediction_confidence`.
+- **FastAPI Overview:** Theo dõi Request Latency (p95) và Error Rate.
+- **PostgreSQL / Redpanda:** Theo dõi sức khỏe database và message queue.
+
 3. Thử nghiệm Cảnh báo (Slack):
-   - Chạy Locust với số lượng user cực lớn để tạo traffic "DDoS" giả lập.
-   - Mong đợi: Nhận thông báo Slack từ AlertManager: `[FIRING] DDoSSpikeDetected`.
+
+- Chạy Locust với số lượng user cực lớn để tạo traffic "DDoS" giả lập.
+- Mong đợi: Nhận thông báo Slack từ AlertManager: `[FIRING] DDoSSpikeDetected`.
 
 ---
 
