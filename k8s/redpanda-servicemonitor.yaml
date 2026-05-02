@@ -15,7 +15,7 @@ spec:
     matchLabels:
       app: redpanda
   endpoints:
-    - port: admin             # Port 9644 của Redpanda Admin API (đặt tên trong Service)
+    - port: admin
       path: /metrics
       interval: 30s
       scrapeTimeout: 15s

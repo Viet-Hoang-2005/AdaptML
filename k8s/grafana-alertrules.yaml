@@ -22,8 +22,8 @@ spec:
             severity: warning
             team: mlops
           annotations:
-            summary: "API /predict latency vượt ngưỡng 100ms"
-            description: "p95 latency hiện tại là {{ $value | humanizeDuration }}. Kiểm tra tài nguyên Pod và kết nối Redpanda."
+            summary: "API /predict latency is above 100ms"
+            description: "The current p95 latency is {{ $value | humanizeDuration }}. Please check the Pod resources and Redpanda connection!"
 
         # Cảnh báo khi error rate vượt 1%
         - alert: HighAPIErrorRate
@@ -35,8 +35,8 @@ spec:
             severity: critical
             team: mlops
           annotations:
-            summary: "API Error Rate vượt 1%"
-            description: "Error rate hiện tại: {{ $value | humanizePercentage }}. Xem log: kubectl logs -l app=mlops-nids-api"
+            summary: "API Error Rate is above 1%"
+            description: "The current error rate is {{ $value | humanizePercentage }}. Please check the API logs!"
 
         # Cảnh báo khi API pod không còn running
         - alert: APIPodsUnavailable
@@ -46,8 +46,8 @@ spec:
             severity: critical
             team: mlops
           annotations:
-            summary: "Không còn API pod nào đang chạy!"
-            description: "Deployment mlops-nids-api có 0 replica available. Kiểm tra ngay."
+            summary: "API Pods unavailable"
+            description: "The API deployment has 0 available replicas. Please check immediately!"
 
     # Nhóm 2: NIDS Security Events
     - name: nids.security
@@ -61,8 +61,8 @@ spec:
             severity: critical
             team: security
           annotations:
-            summary: "DDoS Traffic Spike Detected!"
-            description: "Hệ thống đang phát hiện {{ $value | humanize }} DDoS predictions/giây. Có thể đang bị tấn công thực!"
+            summary: "DDoS Traffic Spike detected!"
+            description: "The system is detecting {{ $value | humanize }} DDoS predictions/second. It may be under real attack!"
 
         # Cảnh báo khi PortScan tăng đột biến (giai đoạn trinh sát mạng)
         - alert: PortScanActivityDetected
@@ -73,8 +73,8 @@ spec:
             severity: warning
             team: security
           annotations:
-            summary: "PortScan Activity Tăng Cao"
-            description: "{{ $value | humanize }} PortScan predictions/giây trong 5 phút qua."
+            summary: "PortScan activity detected!"
+            description: "{{ $value | humanize }} PortScan predictions/second in the last 5 minutes."
 
         # Cảnh báo khi confidence score trung bình quá thấp (model có thể đang xử lý data lạ)
         - alert: LowModelConfidence
@@ -87,8 +87,8 @@ spec:
             severity: warning
             team: mlops
           annotations:
-            summary: "Model confidence score trung bình < 70%"
-            description: "Model đang không tự tin với dữ liệu đầu vào. Có thể cần kiểm tra Data Drift."
+            summary: "Model Confidence Score < 70%"
+            description: "The model is not confident with the input data. It may need to check Data Drift!"
 
     # Nhóm 3: Database Health
     - name: nids.database
@@ -101,8 +101,8 @@ spec:
             severity: critical
             team: infrastructure
           annotations:
-            summary: "PostgreSQL không phản hồi!"
-            description: "postgres-exporter không thể kết nối DB. Kiểm tra CloudNativePG cluster ngay."
+            summary: "PostgreSQL is not responding!"
+            description: "postgres-exporter cannot connect to the database. Check the CloudNativePG cluster immediately!"
 
         # Cảnh báo khi số connections gần đạt max_connections
         - alert: PostgresHighConnections
@@ -113,8 +113,8 @@ spec:
             severity: warning
             team: infrastructure
           annotations:
-            summary: "PostgreSQL connections cao bất thường"
-            description: "Database {{ $labels.datname }} có {{ $value }} connections active."
+            summary: "PostgreSQL high connections"
+            description: "Database {{ $labels.datname }} has {{ $value }} active connections."
 
     # Nhóm 4: Infrastructure
     - name: nids.infrastructure
@@ -129,7 +129,7 @@ spec:
             team: infrastructure
           annotations:
             summary: "Worker Node RAM > 85%"
-            description: "Node {{ $labels.instance }} đang dùng {{ $value | humanize }}% RAM."
+            description: "Node {{ $labels.instance }} is using {{ $value | humanize }}% RAM."
 
         # Cảnh báo khi disk vượt 80%
         - alert: NodeDiskAlmostFull
@@ -140,5 +140,5 @@ spec:
             severity: warning
             team: infrastructure
           annotations:
-            summary: "Disk Node gần đầy (>80%)"
-            description: "Node {{ $labels.instance }}: {{ $value | humanize }}% disk đã sử dụng."
+            summary: "Node Disk almost full (> 80%)"
+            description: "Node {{ $labels.instance }}: {{ $value | humanize }}% disk usage."
