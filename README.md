@@ -455,7 +455,7 @@ kubectl apply -f k8s/api-hpa.yaml
 kubectl apply -f k8s/pod-disruption-budgets.yaml
 ```
 
-> API Documents: https://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com/docs  
+> API Documents: https://api.mlops-nids-nt114.id.vn/docs  
 > MLflow Server: https://mlflow.mlops-nids-nt114.id.vn  
 > Redpanda Console: https://redpanda.mlops-nids-nt114.id.vn  
 > K3s Dashboard: https://dashboard.mlops-nids-nt114.id.vn  
