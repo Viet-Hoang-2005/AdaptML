@@ -11,9 +11,6 @@
 [![Evidently AI](https://img.shields.io/badge/Evidently_AI-0.4.x-6D31FF?style=flat-square)](https://evidentlyai.com)
 [![Kubernetes](https://img.shields.io/badge/K3s-v1.34-326CE5?style=flat-square&logo=kubernetes&logoColor=white)](https://k3s.io)
 [![AWS](https://img.shields.io/badge/AWS-Terraform-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
-[![Prometheus](https://img.shields.io/badge/Prometheus-v2.x-E6522C?style=flat-square&logo=prometheus&logoColor=white)](https://prometheus.io)
-[![Grafana](https://img.shields.io/badge/Grafana-v10.x-F46800?style=flat-square&logo=grafana&logoColor=white)](https://grafana.com)
-[![KEDA](https://img.shields.io/badge/KEDA-v2.13-EF4B36?style=flat-square&logo=keda&logoColor=white)](https://keda.sh)
 
 **Học phần:** NT114 - Đồ án Chuyên ngành · Khoa Mạng máy tính và Truyền thông dữ liệu · UIT
 
