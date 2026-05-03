@@ -9,7 +9,7 @@ metadata:
   labels:
     app: postgres-exporter
   annotations:
-    description: "Prometheus exporter cho PostgreSQL CloudNativePG cluster"
+    description: "Prometheus exporter for PostgreSQL CloudNativePG cluster"
 spec:
   replicas: 1
   selector:

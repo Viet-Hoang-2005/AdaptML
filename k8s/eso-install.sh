@@ -1,6 +1,8 @@
 #!/bin/bash
 # k8s/eso-install.sh: Cài đặt External Secrets Operator vào cụm K3s bằng Helm
 
+set -e
+
 echo "[1/2] Start installing External Secrets Operator (ESO)..."
 
 # Thêm kho chứa Helm của ESO

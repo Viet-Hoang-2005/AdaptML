@@ -1,6 +1,7 @@
 #!/bin/bash
 # monitoring-install.sh: Cài đặt Prometheus + Grafana lên K3s qua Helm
 # Chạy từ máy có kết nối kubectl đến cluster
+
 set -e
 
 NAMESPACE="monitoring"
@@ -35,5 +36,5 @@ helm upgrade --install ${RELEASE_NAME} prometheus-community/kube-prometheus-stac
   --timeout 10m \
   --wait
 
-echo "[3/3] Installation completed!"
+echo "[3/3] Prometheus & Grafana installation completed!"
 kubectl get pods -n ${NAMESPACE}

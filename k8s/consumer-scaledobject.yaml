@@ -1,0 +1,26 @@
+# consumer-scaledobject.yaml: Tự động scale Pod Consumer dựa trên độ trễ (lag) của Redpanda Topic
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: mlops-nids-consumer-scaler
+  namespace: default
+  labels:
+    app: mlops-nids-consumer
+spec:
+  scaleTargetRef:
+    name: mlops-nids-consumer     # Tên Deployment cần scale
+  minReplicaCount: 1              # Luôn duy trì ít nhất 1 pod để xử lý
+  maxReplicaCount: 5              # Tối đa 5 pods khi traffic cực lớn
+  pollingInterval: 30             # Kiểm tra lag mỗi 30 giây
+  cooldownPeriod:  300            # Chờ 5 phút sau khi hết lag mới giảm số pod
+  triggers:
+    - type: kafka
+      metadata:
+        # Địa chỉ Redpanda Broker bên trong K3s
+        bootstrapServers: redpanda-0.redpanda.default.svc.cluster.local:9092
+        # Tên Topic cần giám sát
+        topic: nids_production_data
+        consumerGroup: nids-db-writer-group
+        # Ngưỡng kích hoạt: Cứ mỗi 2000 tin nhắn bị trễ (lag) thì tạo thêm 1 Pod
+        lagThreshold: "2000"
+        offsetResetPolicy: earliest

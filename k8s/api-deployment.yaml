@@ -20,6 +20,19 @@ spec:
     spec:
       nodeSelector:
         workload-type: worker
+      affinity:
+        podAntiAffinity:
+          # Chạy 2 replica API trên 2 worker node khác nhau (High Availability)
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - mlops-nids-api
+                topologyKey: "kubernetes.io/hostname"
       # Init Containers: Chạy trước FastAPI để kéo model từ S3
       initContainers:
         - name: aws-s3-model-sync
