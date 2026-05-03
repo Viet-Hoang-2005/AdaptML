@@ -11,6 +11,9 @@
 [![Evidently AI](https://img.shields.io/badge/Evidently_AI-0.4.x-6D31FF?style=flat-square)](https://evidentlyai.com)
 [![Kubernetes](https://img.shields.io/badge/K3s-v1.34-326CE5?style=flat-square&logo=kubernetes&logoColor=white)](https://k3s.io)
 [![AWS](https://img.shields.io/badge/AWS-Terraform-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
+[![Prometheus](https://img.shields.io/badge/Prometheus-v2.x-E6522C?style=flat-square&logo=prometheus&logoColor=white)](https://prometheus.io)
+[![Grafana](https://img.shields.io/badge/Grafana-v10.x-F46800?style=flat-square&logo=grafana&logoColor=white)](https://grafana.com)
+[![KEDA](https://img.shields.io/badge/KEDA-v2.13-EF4B36?style=flat-square&logo=keda&logoColor=white)](https://keda.sh)
 
 **Học phần:** NT114 - Đồ án Chuyên ngành · Khoa Mạng máy tính và Truyền thông dữ liệu · UIT
 
@@ -56,7 +59,7 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%             | XGBoost + CIC-IDS2017      |
 | 2   | **Low-latency inference** < 100ms, model nạp vào RAM                          | FastAPI + Uvicorn          |
 | 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer  | Redpanda + Consumer        |
-| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                      | CloudNativePG              |
+| 4   | **PostgreSQL HA** 2 Instances (Primary + Standby), auto failover < 60s        | CloudNativePG              |
 | 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu   | Evidently AI               |
 | 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên Kaggle GPU    | AWS Lambda + Kaggle        |
 | 7   | **Model Registry & HitL** - Quản lý vòng đời model và phê duyệt thủ công      | MLflow Registry            |
@@ -65,6 +68,7 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | 10  | **Zero-trust & Keyless Security** - Xác thực OIDC, loại bỏ mật khẩu tĩnh      | AWS OIDC + Secrets Manager |
 | 11  | **Full-stack Observability** - Giám sát API, DB, Redpanda và ML metrics       | Prometheus + Grafana       |
 | 12  | **Smart Alerting** - Cảnh báo DDoS, Latency cao qua Slack                     | AlertManager + Slack       |
+| 13  | **Event-driven Autoscaling** - Tự động scale Consumer theo độ trễ tin nhắn    | KEDA + Redpanda Lag        |
 
 ---
 
@@ -94,6 +98,7 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)     |
 | **Secrets Mgmt**       | AWS Secrets Manager + External Secrets Op  |
 | **Observability**      | Prometheus + Grafana + AlertManager        |
+| **Autoscaling**        | KEDA (Event-driven)                        |
 
 ---
 
@@ -133,25 +138,29 @@ mlops-nids-system/
 │
 ├── k8s/
 │   ├── api-deployment.yaml          # FastAPI (2 replicas) + Init Container kéo model từ S3
+│   ├── api-hpa.yaml                 # Tự động scale API dựa trên CPU
+│   ├── api-servicemonitor.yaml      # Cấu hình Prometheus scrape FastAPI
+│   ├── cloudflared-tunnel.yaml      # Cloudflare Tunnel: Expose MLflow, K3s Dashboard qua HTTPS
 │   ├── consumer-deployment.yaml     # NIDS Log Consumer
-│   ├── dispatch-cronjob.yaml        # CronJob chạy dispatch_production_model.py mỗi 5 phút
-│   ├── evidently-job.yaml           # Batch Job phát hiện Data Drift (trigger qua Webhook)
+│   ├── consumer-scaledobject.yaml   # Cấu hình Scale Consumer dựa trên Kafka lag
 │   ├── mlflow-deployment.yaml       # MLflow Tracking Server + PostgreSQL Backend + S3 Artifacts
 │   ├── mlflow-nginx.yaml            # Nginx Reverse Proxy + Basic Auth cho MLflow
 │   ├── mlflow-init-job.yaml         # One-time Job: Tạo role/database mlflow trong PostgreSQL
 │   ├── postgres-cluster.yaml        # CloudNativePG Cluster (Primary + Standby HA)
+│   ├── postgres-exporter.yaml       # Exporter cho PostgreSQL (RO endpoint)
 │   ├── redpanda-statefulset.yaml    # Redpanda Message Broker (Kafka-compatible)
-│   ├── cloudflared-tunnel.yaml      # Cloudflare Tunnel: Expose MLflow qua HTTPS không cần IP
+│   ├── redpanda-servicemonitor.yaml # Cấu hình Prometheus scrape Redpanda
+│   ├── grafana-alertrules.yaml      # Định nghĩa luật cảnh báo (DDoS, Latency...)
+│   ├── grafana-cloudflared.yaml     # Expose Grafana Dashboard ra internet
 │   ├── cluster-secret-store.yaml    # ESO ClusterSecretStore: Kết nối K3s với AWS Secrets Manager
 │   ├── external-secrets.yaml        # ExternalSecret: Đồng bộ 6 nhóm Secret từ AWS về K3s
+│   ├── dispatch-cronjob.yaml        # CronJob chạy dispatch_production_model.py mỗi 5 phút
+│   ├── evidently-job.yaml           # Batch Job phát hiện Data Drift (trigger qua Webhook)
 │   ├── sync-data-job.yaml           # One-time Job: Nạp Reference Data vào PostgreSQL
+│   ├── pod-disruption-budgets.yaml  # Bảo vệ service khi bảo trì node (kubectl drain)
+│   ├── keda-install.sh              # Script cài đặt KEDA (Autoscaling)
 │   ├── eso-install.sh               # Script cài đặt External Secrets Operator qua Helm
-│   ├── monitoring-install.sh        # Script cài đặt Prometheus & Grafana Stack
-│   ├── api-servicemonitor.yaml      # Cấu hình Prometheus scrape FastAPI
-│   ├── redpanda-servicemonitor.yaml # Cấu hình Prometheus scrape Redpanda
-│   ├── postgres-exporter.yaml       # Exporter cho PostgreSQL (RO endpoint)
-│   ├── grafana-alertrules.yaml      # Định nghĩa luật cảnh báo (DDoS, Latency...)
-│   └── grafana-cloudflared.yaml     # Expose Grafana Dashboard ra internet
+│   └── monitoring-install.sh        # Script cài đặt Prometheus & Grafana Stack
 │
 ├── infra/
 │   ├── main.tf                      # Terraform: VPC + EC2 + ALB + S3 + Lambda + IAM + OIDC
@@ -191,7 +200,7 @@ mlops-nids-system/
 
 | Thành phần | Tối thiểu                   | Khuyến nghị  |
 | ---------- | --------------------------- | ------------ |
-| Python     | 3.10                        | 3.10+        |
+| Python     | 3.10+                       | 3.12         |
 | Docker     | v24                         | Latest       |
 | RAM        | 4 GB                        | 8 GB         |
 | OS         | Windows 10+ / Ubuntu 20.04+ | Ubuntu 22.04 |
@@ -400,10 +409,11 @@ kubectl apply -f k8s/dispatch-cronjob.yaml
 6. Triển khai API & Consumer
 
 ```bash
-# Triển khai API Server
+# Triển khai API & Consumer
 kubectl apply -f k8s/api-deployment.yaml
-# Triển khai Consumer
 kubectl apply -f k8s/consumer-deployment.yaml
+kubectl apply -f k8s/pod-disruption-budgets.yaml
+kubectl apply -f k8s/api-hpa.yaml
 ```
 
 7. Kiểm tra Data drift
@@ -426,6 +436,10 @@ kubectl apply -f k8s/redpanda-servicemonitor.yaml
 # Cấu hình Alerting và Expose Dashboard
 kubectl apply -f k8s/grafana-alertrules.yaml
 kubectl apply -f k8s/grafana-cloudflared.yaml
+
+# 9. Cấu hình Autoscaling với KEDA
+bash k8s/keda-install.sh
+kubectl apply -f k8s/consumer-scaledobject.yaml
 ```
 
 ---

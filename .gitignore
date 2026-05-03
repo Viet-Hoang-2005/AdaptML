@@ -77,5 +77,5 @@ terraform.tfvars
 *.zip
 *.pem
 
-# K3s
-config
+# K3s Config
+.kube/
