@@ -345,7 +345,7 @@ resource "aws_s3_bucket_versioning" "artifacts_versioning" {
 }
 
 # 6. AWS LAMBDA & S3 EVENT NOTIFICATION
-# IAM Role cho Lambda
+# IAM Rule cho Lambda
 data "aws_iam_policy_document" "lambda_assume_role" {
   statement {
     effect = "Allow"
@@ -362,13 +362,13 @@ resource "aws_iam_role" "lambda_exec_role" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
-# Gán quyền thực thi Lambda cho IAM Role
+# Gán quyền IAM Rule cho Lambda thực thi
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_exec_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Cấp quyền đọc Secrets Manager cho Lambda
+# IAM Policy cho Lambda đọc Secrets Manager
 data "aws_iam_policy_document" "lambda_secrets_policy" {
   statement {
     effect = "Allow"
@@ -445,19 +445,36 @@ resource "aws_iam_role" "worker_role" {
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 }
 
-# Cấp quyền đọc/ghi S3 cho Worker Node
-resource "aws_iam_role_policy_attachment" "worker_s3_access" {
-  role       = aws_iam_role.worker_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+# Policy cho phép Worker Node đọc/ghi vào S3 Bucket của dự án
+data "aws_iam_policy_document" "worker_s3_policy_doc" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:DeleteObject"
+    ]
+    resources = [
+      aws_s3_bucket.artifacts_bucket.arn,
+      "${aws_s3_bucket.artifacts_bucket.arn}/*"
+    ]
+  }
 }
 
-# Cấp quyền đọc/ghi Secrets Manager cho Worker Node
-resource "aws_iam_role_policy_attachment" "worker_secrets_manager_access" {
-  role       = aws_iam_role.worker_role.name
-  policy_arn = "arn:aws:iam::aws:policy/SecretsManagerReadWrite"
+resource "aws_iam_policy" "worker_s3_policy" {
+  name        = "mlops-worker-s3-policy"
+  description = "Allow K3s worker nodes to read/write artifacts in project bucket"
+  policy      = data.aws_iam_policy_document.worker_s3_policy_doc.json
 }
 
-# Tạo Policy cho phép đọc Secrets Manager
+# Gắn policy đọc/ghi S3 vào Worker Role
+resource "aws_iam_role_policy_attachment" "worker_s3_attach" {
+  role       = aws_iam_role.worker_role.name
+  policy_arn = aws_iam_policy.worker_s3_policy.arn
+}
+
+# Tạo Policy cho phép Worker Node đọc Secrets Manager
 data "aws_iam_policy_document" "secrets_read_policy" {
   statement {
     effect = "Allow"
@@ -475,6 +492,7 @@ resource "aws_iam_policy" "worker_secrets_policy" {
   policy      = data.aws_iam_policy_document.secrets_read_policy.json
 }
 
+# Gắn quyền đọc secrets cho Worker Nodes
 resource "aws_iam_role_policy_attachment" "worker_secrets_attach" {
   role       = aws_iam_role.worker_role.name
   policy_arn = aws_iam_policy.worker_secrets_policy.arn
@@ -512,7 +530,7 @@ resource "aws_secretsmanager_secret" "tunnel_token" {
   description = "Cloudflare Tunnel Token"
 }
 
-# 8. GITHUB ACTIONS OIDC & SECRETS MANAGER
+# 8. GITHUB ACTIONS OIDC
 # Khởi tạo khung Secret cho GitHub Actions
 resource "aws_secretsmanager_secret" "github_actions_secrets" {
   name        = "mlops/github-actions-secrets"
