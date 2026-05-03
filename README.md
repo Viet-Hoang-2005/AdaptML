@@ -79,23 +79,23 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 
 ## 4. Công nghệ sử dụng ⚙️
 
-| Layer                  | Technology                                 |
-| ---------------------- | ------------------------------------------ |
-| **Machine Learning**   | XGBoost + Scikit-learn + Pandas + MLflow   |
-| **Model Serving**      | FastAPI + Uvicorn + Python 3.10            |
-| **Message Broker**     | Redpanda (Kafka-compatible)                |
-| **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy |
-| **Drift Monitoring**   | Evidently AI                               |
-| **Load Testing**       | Locust                                     |
-| **Compute Engine**     | Kaggle Kernels API                         |
-| **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda                |
-| **Container Registry** | Docker Hub                                 |
-| **Model Registry**     | MLflow + AWS S3                            |
-| **Orchestration**      | K3s (Kubernetes)                           |
-| **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)     |
-| **Secrets Mgmt**       | AWS Secrets Manager + External Secrets Op  |
-| **Observability**      | Prometheus + Grafana + AlertManager        |
-| **Autoscaling**        | KEDA (Event-driven)                        |
+| Layer                  | Technology                                  |
+| ---------------------- | ------------------------------------------- |
+| **Machine Learning**   | XGBoost + Scikit-learn + Pandas + MLflow    |
+| **Model Serving**      | FastAPI + Uvicorn + Python 3.10             |
+| **Message Broker**     | Redpanda (Kafka-compatible)                 |
+| **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy  |
+| **Drift Monitoring**   | Evidently AI                                |
+| **Load Testing**       | Locust                                      |
+| **Compute Engine**     | Kaggle Kernels API                          |
+| **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda                 |
+| **Container Registry** | Docker Hub                                  |
+| **Model Registry**     | MLflow + AWS S3                             |
+| **Orchestration**      | K3s (Kubernetes)                            |
+| **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)      |
+| **Secrets Mgmt**       | AWS Secrets Manager + External Secrets Op   |
+| **Observability**      | Prometheus + Grafana + AlertManager         |
+| **Autoscaling**        | KEDA (Event-driven) + HPA (CPU-utilization) |
 
 ---
 
@@ -243,12 +243,12 @@ python web/src/test_api.py
 locust -f web/src/locustfile.py --host=http://localhost:5000
 ```
 
-API Swagger UI: `http://localhost:5000/docs`  
-Locust Dashboard: `http://localhost:8089`  
-Redpanda Console: `http://localhost:8080`  
-MLflow Tracking Server: `http://localhost:5001`  
-Grafana Dashboard: `http://localhost:3000`  
-PostgreSQL: `http://localhost:5432`
+> API Documents: http://localhost:5000/docs  
+> Locust Dashboard: http://localhost:8089  
+> Redpanda Console: http://localhost:8080  
+> MLflow Server: http://localhost:5001  
+> Grafana Dashboard: http://localhost:3000  
+> PostgreSQL: http://localhost:5432
 
 ---
 
@@ -377,6 +377,7 @@ kubectl get secrets
 3. Triển khai CloudFlare Tunnel
 
 ```bash
+# Expore MLflow Server và K3s Dashboard bằng HTTPS
 kubectl apply -f k8s/cloudflared-tunnel.yaml
 ```
 
@@ -416,6 +417,7 @@ kubectl apply -f k8s/api-hpa.yaml
 7. Kiểm tra Data drift
 
 ```bash
+# Gọi Job Evidently (GitHub Action)
 kubectl apply -f k8s/evidently-job.yaml
 ```
 
@@ -430,14 +432,34 @@ kubectl apply -f k8s/postgres-exporter.yaml
 kubectl apply -f k8s/api-servicemonitor.yaml
 kubectl apply -f k8s/redpanda-servicemonitor.yaml
 
-# Cấu hình Alerting và Expose Dashboard
+# Cấu hình Alerting và Expose Grafana Dashboard
 kubectl apply -f k8s/grafana-alertrules.yaml
 kubectl apply -f k8s/grafana-cloudflared.yaml
+```
 
-# 9. Cấu hình Autoscaling với KEDA
+9. Cấu hình Autoscaling
+
+```bash
+# Autoscaling Consumer với KEDA
 bash k8s/keda-install.sh
 kubectl apply -f k8s/consumer-scaledobject.yaml
+
+# Autoscaling API với HPA
+kubectl apply -f k8s/api-hpa.yaml
 ```
+
+10. Bảo vệ các service khỏi downtime
+
+```bash
+# Tránh downtime khi cập nhật hệ thống kubectl drain
+kubectl apply -f k8s/pod-disruption-budgets.yaml
+```
+
+> API Documents: https://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com/docs  
+> MLflow Server: https://mlflow.mlops-nids-nt114.id.vn  
+> Redpanda Console: https://redpanda.mlops-nids-nt114.id.vn  
+> K3s Dashboard: https://dashboard.mlops-nids-nt114.id.vn  
+> Grafana Dashboard: https://grafana.mlops-nids-nt114.id.vn
 
 ---
 
