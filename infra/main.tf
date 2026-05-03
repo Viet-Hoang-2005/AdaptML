@@ -56,6 +56,7 @@ resource "aws_internet_gateway" "igw" {
 # Elastic IP cho NAT Gateway
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
+  tags   = { Name = "mlops-nat-eip" }
 }
 
 # Elastic IP cố định cho Master Node
@@ -121,6 +122,13 @@ resource "aws_security_group" "lb_sg" {
   ingress {
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -274,16 +282,34 @@ resource "aws_lb" "api_alb" {
   subnets            = [aws_subnet.public_1a.id, aws_subnet.public_1b.id]
 }
 
-# Listener HTTP
+# Listener HTTPS (Cổng 443)
+resource "aws_lb_listener" "https_listener" {
+  load_balancer_arn = aws_lb.api_alb.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate_validation.mlops_cert_validation.certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.worker_tg.arn
+  }
+}
+
+# Listener HTTP (Cổng 80) - Tự động chuyển hướng sang HTTPS
 resource "aws_lb_listener" "http_listener" {
   load_balancer_arn = aws_lb.api_alb.arn
   port              = "80"
   protocol          = "HTTP"
 
-  # Forward request đến Target Group của Worker Node
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.worker_tg.arn
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
@@ -419,6 +445,18 @@ resource "aws_iam_role" "worker_role" {
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 }
 
+# Cấp quyền đọc/ghi S3 cho Worker Node
+resource "aws_iam_role_policy_attachment" "worker_s3_access" {
+  role       = aws_iam_role.worker_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+# Cấp quyền đọc/ghi Secrets Manager cho Worker Node
+resource "aws_iam_role_policy_attachment" "worker_secrets_manager_access" {
+  role       = aws_iam_role.worker_role.name
+  policy_arn = "arn:aws:iam::aws:policy/SecretsManagerReadWrite"
+}
+
 # Tạo Policy cho phép đọc Secrets Manager
 data "aws_iam_policy_document" "secrets_read_policy" {
   statement {
@@ -550,7 +588,64 @@ resource "aws_iam_role_policy" "github_actions_policy_attach" {
   policy = data.aws_iam_policy_document.github_actions_policy.json
 }
 
-# 9. OUTPUTS
+# 9. DNS (Route 53)
+# Khởi tạo Hosted Zone cho tên miền
+resource "aws_route53_zone" "mlops_zone" {
+  name = "mlops-nids-nt114.id.vn"
+  tags = { Name = "mlops-nids-zone" }
+}
+
+# Tạo bản ghi A (Alias) trỏ sub-domain api về Load Balancer
+resource "aws_route53_record" "api_dns" {
+  zone_id = aws_route53_zone.mlops_zone.zone_id
+  name    = "api.mlops-nids-nt114.id.vn"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.api_alb.dns_name
+    zone_id                = aws_lb.api_alb.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# 10. SSL/TLS Certificate (ACM)
+# Yêu cầu chứng chỉ SSL
+resource "aws_acm_certificate" "mlops_cert" {
+  domain_name       = "api.mlops-nids-nt114.id.vn"
+  validation_method = "DNS"
+
+  tags = { Name = "mlops-api-cert" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Tạo bản ghi DNS để xác thực chứng chỉ (ACM Validation)
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.mlops_cert.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = aws_route53_zone.mlops_zone.zone_id
+}
+
+# Chờ xác thực chứng chỉ hoàn tất
+resource "aws_acm_certificate_validation" "mlops_cert_validation" {
+  certificate_arn         = aws_acm_certificate.mlops_cert.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
+
+# 11. OUTPUTS
 output "master_public_ip" {
   description = "Public IP for SSH access to Master Node"
   value       = aws_eip.master_eip.public_ip
@@ -569,4 +664,9 @@ output "s3_bucket_name" {
 output "github_actions_role_arn" {
   description = "IAM Role ARN to configure in GitHub Variables"
   value       = aws_iam_role.github_actions_role.arn
+}
+
+output "name_servers" {
+  description = "Name Servers to configure in your domain registrar"
+  value       = aws_route53_zone.mlops_zone.name_servers
 }
