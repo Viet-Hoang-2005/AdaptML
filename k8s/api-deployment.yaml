@@ -164,7 +164,7 @@ spec:
       port: 80
       targetPort: 5000
 
-# Ingress để expose API ra bên ngoài
+# Ingress chỉ đường tới API Service
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -173,7 +173,8 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - http:
+    - host: api.mlops-nids-nt114.id.vn
+      http:
         paths:
           - path: /
             pathType: Prefix
