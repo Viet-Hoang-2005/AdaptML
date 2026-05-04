@@ -16,8 +16,8 @@ spec:
   triggers:
     - type: kafka
       metadata:
-        # Địa chỉ Redpanda Broker bên trong K3s
-        bootstrapServers: redpanda-0.redpanda.default.svc.cluster.local:9092
+        # Địa chỉ Redpanda Service bên trong K3s
+        bootstrapServers: redpanda-service.default.svc.cluster.local:9092
         # Tên Topic cần giám sát
         topic: nids_production_data
         consumerGroup: nids-db-writer-group
