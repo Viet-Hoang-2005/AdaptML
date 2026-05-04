@@ -56,13 +56,16 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%             | XGBoost + CIC-IDS2017      |
 | 2   | **Low-latency inference** < 100ms, model nạp vào RAM                          | FastAPI + Uvicorn          |
 | 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer  | Redpanda + Consumer        |
-| 4   | **PostgreSQL HA** Primary + Standby, auto failover < 60s                      | CloudNativePG              |
+| 4   | **PostgreSQL HA** 2 Instances (Primary + Standby), auto failover < 60s        | CloudNativePG              |
 | 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu   | Evidently AI               |
 | 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên Kaggle GPU    | AWS Lambda + Kaggle        |
 | 7   | **Model Registry & HitL** - Quản lý vòng đời model và phê duyệt thủ công      | MLflow Registry            |
 | 8   | **Zero-downtime deployment** Rolling update + Kéo model bằng RUN_ID từ MLflow | GitHub Actions + K3s       |
 | 9   | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời         | Locust                     |
 | 10  | **Zero-trust & Keyless Security** - Xác thực OIDC, loại bỏ mật khẩu tĩnh      | AWS OIDC + Secrets Manager |
+| 11  | **Full-stack Observability** - Giám sát API, DB, Redpanda và ML metrics       | Prometheus + Grafana       |
+| 12  | **Smart Alerting** - Cảnh báo DDoS, Latency cao qua Slack                     | AlertManager + Slack       |
+| 13  | **Event-driven Autoscaling** - Tự động scale Consumer theo độ trễ tin nhắn    | KEDA + Redpanda Lag        |
 
 ---
 
@@ -76,21 +79,23 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 
 ## 4. Công nghệ sử dụng ⚙️
 
-| Layer                  | Technology                                 |
-| ---------------------- | ------------------------------------------ |
-| **Machine Learning**   | XGBoost + Scikit-learn + Pandas + MLflow   |
-| **Model Serving**      | FastAPI + Uvicorn + Python 3.10            |
-| **Message Broker**     | Redpanda (Kafka-compatible)                |
-| **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy |
-| **Drift Monitoring**   | Evidently AI                               |
-| **Load Testing**       | Locust                                     |
-| **Compute Engine**     | Kaggle Kernels API                         |
-| **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda                |
-| **Container Registry** | Docker Hub                                 |
-| **Model Registry**     | MLflow + AWS S3                            |
-| **Orchestration**      | K3s (Kubernetes)                           |
-| **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)     |
-| **Secrets Mgmt**       | AWS Secrets Manager + External Secrets Op  |
+| Layer                  | Technology                                  |
+| ---------------------- | ------------------------------------------- |
+| **Machine Learning**   | XGBoost + Scikit-learn + Pandas + MLflow    |
+| **Model Serving**      | FastAPI + Uvicorn + Python 3.10             |
+| **Message Broker**     | Redpanda (Kafka-compatible)                 |
+| **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy  |
+| **Drift Monitoring**   | Evidently AI                                |
+| **Load Testing**       | Locust                                      |
+| **Compute Engine**     | Kaggle Kernels API                          |
+| **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda                 |
+| **Container Registry** | Docker Hub                                  |
+| **Model Registry**     | MLflow + AWS S3                             |
+| **Orchestration**      | K3s (Kubernetes)                            |
+| **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)      |
+| **Secrets Mgmt**       | AWS Secrets Manager + External Secrets Op   |
+| **Observability**      | Prometheus + Grafana + AlertManager         |
+| **Autoscaling**        | KEDA (Event-driven) + HPA (CPU-utilization) |
 
 ---
 
@@ -100,17 +105,17 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 mlops-nids-system/
 │
 ├── .github/workflows/
-│   ├── ci_cd_pipeline.yml          # Build Docker Image -> Push Docker Hub -> Rolling Deploy K3s
-│   ├── retrain_pipeline.yml        # Nhận Webhook -> Tải dữ liệu S3 -> Kích hoạt Kaggle Kernel
-│   ├── deploy_from_mlflow.yml      # Nhận RUN_ID từ Dispatch -> Rolling Update API trên K3s
-│   ├── trigger_drift_check.yml     # Lắng nghe Webhook từ Consumer -> Chạy Evidently Job
-│   └── drift_alert.yml             # Gửi Slack Alert khi phát hiện Data Drift
+│   ├── ci_cd_pipeline.yml           # Build Docker Image -> Push Docker Hub -> Rolling Deploy K3s
+│   ├── retrain_pipeline.yml         # Nhận Webhook -> Tải dữ liệu S3 -> Kích hoạt Kaggle Kernel
+│   ├── deploy_from_mlflow.yml       # Nhận RUN_ID từ Dispatch -> Rolling Update API trên K3s
+│   ├── trigger_drift_check.yml      # Lắng nghe Webhook từ Consumer -> Chạy Evidently Job
+│   └── drift_alert.yml              # Gửi Slack Alert khi phát hiện Data Drift
 │
 ├── api/
 │   ├── src/
-│   │   ├── index.py                # FastAPI: POST /predict -> Ghi vào Redpanda
-│   │   ├── consumer.py             # Redpanda Consumer: Batch insert DB -> Bắn Drift Webhook
-│   │   └── db_manager.py           # Dual-endpoint SQLAlchemy: engine_rw + engine_ro
+│   │   ├── index.py                 # FastAPI: POST /predict -> Ghi vào Redpanda
+│   │   ├── consumer.py              # Redpanda Consumer: Batch insert DB -> Bắn Drift Webhook
+│   │   └── db_manager.py            # Dual-endpoint SQLAlchemy: engine_rw + engine_ro
 │   ├── Dockerfile
 │   └── requirements.txt
 │
@@ -130,19 +135,29 @@ mlops-nids-system/
 │
 ├── k8s/
 │   ├── api-deployment.yaml          # FastAPI (2 replicas) + Init Container kéo model từ S3
+│   ├── api-hpa.yaml                 # Tự động scale API dựa trên CPU
+│   ├── api-servicemonitor.yaml      # Cấu hình Prometheus scrape FastAPI
+│   ├── cloudflared-tunnel.yaml      # Cloudflare Tunnel: Expose MLflow, K3s Dashboard qua HTTPS
 │   ├── consumer-deployment.yaml     # NIDS Log Consumer
-│   ├── dispatch-cronjob.yaml        # CronJob chạy dispatch_production_model.py mỗi 5 phút
-│   ├── evidently-job.yaml           # Batch Job phát hiện Data Drift (trigger qua Webhook)
+│   ├── consumer-scaledobject.yaml   # Cấu hình Scale Consumer dựa trên Kafka lag
 │   ├── mlflow-deployment.yaml       # MLflow Tracking Server + PostgreSQL Backend + S3 Artifacts
 │   ├── mlflow-nginx.yaml            # Nginx Reverse Proxy + Basic Auth cho MLflow
 │   ├── mlflow-init-job.yaml         # One-time Job: Tạo role/database mlflow trong PostgreSQL
 │   ├── postgres-cluster.yaml        # CloudNativePG Cluster (Primary + Standby HA)
+│   ├── postgres-exporter.yaml       # Exporter cho PostgreSQL (RO endpoint)
 │   ├── redpanda-statefulset.yaml    # Redpanda Message Broker (Kafka-compatible)
-│   ├── cloudflared-tunnel.yaml      # Cloudflare Tunnel: Expose MLflow qua HTTPS không cần IP
+│   ├── redpanda-servicemonitor.yaml # Cấu hình Prometheus scrape Redpanda
+│   ├── grafana-alertrules.yaml      # Định nghĩa luật cảnh báo (DDoS, Latency...)
+│   ├── grafana-cloudflared.yaml     # Expose Grafana Dashboard ra internet
 │   ├── cluster-secret-store.yaml    # ESO ClusterSecretStore: Kết nối K3s với AWS Secrets Manager
 │   ├── external-secrets.yaml        # ExternalSecret: Đồng bộ 6 nhóm Secret từ AWS về K3s
+│   ├── dispatch-cronjob.yaml        # CronJob chạy dispatch_production_model.py mỗi 5 phút
+│   ├── evidently-job.yaml           # Batch Job phát hiện Data Drift (trigger qua Webhook)
 │   ├── sync-data-job.yaml           # One-time Job: Nạp Reference Data vào PostgreSQL
-│   └── eso-install.sh               # Script cài đặt External Secrets Operator qua Helm
+│   ├── pod-disruption-budgets.yaml  # Bảo vệ service khi bảo trì node (kubectl drain)
+│   ├── keda-install.sh              # Script cài đặt KEDA (Autoscaling)
+│   ├── eso-install.sh               # Script cài đặt External Secrets Operator qua Helm
+│   └── monitoring-install.sh        # Script cài đặt Prometheus & Grafana Stack
 │
 ├── infra/
 │   ├── main.tf                      # Terraform: VPC + EC2 + ALB + S3 + Lambda + IAM + OIDC
@@ -182,7 +197,7 @@ mlops-nids-system/
 
 | Thành phần | Tối thiểu                   | Khuyến nghị  |
 | ---------- | --------------------------- | ------------ |
-| Python     | 3.10                        | 3.10+        |
+| Python     | 3.10+                       | 3.12         |
 | Docker     | v24                         | Latest       |
 | RAM        | 4 GB                        | 8 GB         |
 | OS         | Windows 10+ / Ubuntu 20.04+ | Ubuntu 22.04 |
@@ -228,11 +243,12 @@ python web/src/test_api.py
 locust -f web/src/locustfile.py --host=http://localhost:5000
 ```
 
-API Swagger UI: `http://localhost:5000/docs`
-Locust Dashboard: `http://localhost:8089`
-Redpanda Console: `http://localhost:8080`
-MLflow Tracking Server: `http://localhost:5001`
-PostgreSQL: `localhost:5432`
+> API Documents: http://localhost:5000/docs  
+> Locust Dashboard: http://localhost:8089  
+> Redpanda Console: http://localhost:8080  
+> MLflow Server: http://localhost:5001  
+> Grafana Dashboard: http://localhost:3000  
+> PostgreSQL: http://localhost:5432
 
 ---
 
@@ -259,7 +275,7 @@ terraform apply
   "KAGGLE_API_TOKEN": "<your-kaggle-api-token>",
   "SLACK_WEBHOOK_URL": "<your-slack-webhook-url>",
   "MLFLOW_TRACKING_URI": "<your-mlflow-tracking-uri>",
-  "KUBE_CONFIG_BASE64": "<your-kube-config-base64>"
+  "KUBE_CONFIG": "<your-kube-config-base64>"
 }
 ```
 
@@ -303,7 +319,7 @@ terraform apply
 
 ```json
 {
-  "auth": "<your-mlflow-basic-auth-base64>"
+  "auth": "<your-mlflow-basic-auth>"
 }
 ```
 
@@ -344,8 +360,15 @@ kubectl get nodes
 ```bash
 # Cài đặt CloudNativePG
 kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.22/releases/cnpg-1.22.0.yaml
+
 # Cài đặt External Secrets Operator
 bash k8s/eso-install.sh
+
+# Cài đặt Prometheus Stack (Prometheus + Grafana)
+bash k8s/monitoring-install.sh
+
+# Cài đặt KEDA
+bash k8s/keda-install.sh
 ```
 
 2. Kích hoạt hệ thống Bảo mật
@@ -354,6 +377,7 @@ bash k8s/eso-install.sh
 # Đồng bộ Secret từ AWS về K3s
 kubectl apply -f k8s/cluster-secret-store.yaml
 kubectl apply -f k8s/external-secrets.yaml
+
 # Kiểm tra các secrets
 kubectl get secrets
 ```
@@ -361,6 +385,7 @@ kubectl get secrets
 3. Triển khai CloudFlare Tunnel
 
 ```bash
+# Expore MLflow Server và K3s Dashboard bằng HTTPS
 kubectl apply -f k8s/cloudflared-tunnel.yaml
 ```
 
@@ -369,8 +394,10 @@ kubectl apply -f k8s/cloudflared-tunnel.yaml
 ```bash
 # Khởi chạy cụm PostgreSQL HA
 kubectl apply -f k8s/postgres-cluster.yaml
+
 # Chạy Job insert dữ liệu References Data
 kubectl apply -f k8s/sync-data-job.yaml
+
 # Khởi chạy Redpanda (Kafka)
 kubectl apply -f k8s/redpanda-statefulset.yaml
 ```
@@ -380,9 +407,11 @@ kubectl apply -f k8s/redpanda-statefulset.yaml
 ```bash
 # Chạy Job tạo bảng dữ liệu cho MLflow (chỉ chạy 1 lần)
 kubectl apply -f k8s/mlflow-init-job.yaml
+
 # Triển khai MLflow Server + Nginx Bảo mật + Cloudflare Tunnel
 kubectl apply -f k8s/mlflow-deployment.yaml
 kubectl apply -f k8s/mlflow-nginx.yaml
+
 # Chạy lịch trình kiểm tra Model mới tự động mỗi 5 phút
 kubectl apply -f k8s/dispatch-cronjob.yaml
 ```
@@ -390,17 +419,53 @@ kubectl apply -f k8s/dispatch-cronjob.yaml
 6. Triển khai API & Consumer
 
 ```bash
-# Triển khai API Server
+# Triển khai API & Consumer
 kubectl apply -f k8s/api-deployment.yaml
-# Triển khai Consumer
 kubectl apply -f k8s/consumer-deployment.yaml
 ```
 
 7. Kiểm tra Data drift
 
 ```bash
+# Gọi Job Evidently (GitHub Action)
 kubectl apply -f k8s/evidently-job.yaml
 ```
+
+8. Triển khai Hệ thống Giám sát (Observability)
+
+```bash
+# Triển khai các ServiceMonitor và Exporters
+kubectl apply -f k8s/postgres-exporter.yaml
+kubectl apply -f k8s/api-servicemonitor.yaml
+kubectl apply -f k8s/redpanda-servicemonitor.yaml
+
+# Cấu hình Alerting và Expose Grafana Dashboard
+kubectl apply -f k8s/grafana-alertrules.yaml
+kubectl apply -f k8s/grafana-cloudflared.yaml
+```
+
+9. Cấu hình Autoscaling
+
+```bash
+# Autoscaling Consumer với KEDA
+kubectl apply -f k8s/consumer-scaledobject.yaml
+
+# Autoscaling API với HPA
+kubectl apply -f k8s/api-hpa.yaml
+```
+
+10. Bảo vệ các service khỏi downtime
+
+```bash
+# Tránh downtime khi cập nhật hệ thống kubectl drain
+kubectl apply -f k8s/pod-disruption-budgets.yaml
+```
+
+> API Documents: https://api.mlops-nids-nt114.id.vn/docs  
+> MLflow Server: https://mlflow.mlops-nids-nt114.id.vn  
+> Redpanda Console: https://redpanda.mlops-nids-nt114.id.vn  
+> K3s Dashboard: https://dashboard.mlops-nids-nt114.id.vn  
+> Grafana Dashboard: https://grafana.mlops-nids-nt114.id.vn
 
 ---
 
@@ -409,24 +474,24 @@ kubectl apply -f k8s/evidently-job.yaml
 #### Giai đoạn 0: Xác nhận hệ thống sẵn sàng
 
 ```bash
-# Kiểm tra trạng thái các pod
+# 1. Kiểm tra trạng thái các pod
 kubectl get pods,svc,cronjob
 
-# Kiểm tra init container đã kéo model từ S3
+# 2. Kiểm tra init container đã kéo model từ S3
 kubectl logs <api-pod-name> -c aws-s3-model-sync
 ```
 
 #### Giai đoạn 1: Kiểm thử API Service
 
 ```bash
-# Theo dõi Consumer ghi dữ liệu vào DB
+# 1. Theo dõi Consumer ghi dữ liệu vào DB
 kubectl logs -f -l app=mlops-nids-consumer
 
-# Bắn tải với Locust (chạy trên máy local)
+# 2. Bắn tải với Locust (chạy trên máy local)
 cd "MLOps-nids-system"
 locust -f web/src/locustfile.py --host=http://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com
 
-# Kết nối PostgreSQL để đếm số bản ghi đã ghi
+# 3. Kết nối PostgreSQL để đếm số bản ghi đã ghi
 kubectl exec -it mlops-nids-postgres-1 -- psql -U postgres -d mlops_nids_db \
   -c "SELECT COUNT(*), label FROM nids_production_data GROUP BY label ORDER BY label;"
 ```
@@ -434,41 +499,41 @@ kubectl exec -it mlops-nids-postgres-1 -- psql -U postgres -d mlops_nids_db \
 #### Giai đoạn 2: Kiểm thử phát hiện Data Drift
 
 ```bash
-# Xóa job cũ và chạy lại job kiểm tra drift ngay lập tức
+# 1. Xóa job cũ và chạy lại job kiểm tra drift ngay lập tức
 kubectl replace --force -f k8s/evidently-job.yaml
 
-# Theo dõi kết quả kiểm tra
+# 2. Theo dõi kết quả kiểm tra
 kubectl logs -f -l app=evidently-data-drift
 ```
 
 #### Giai đoạn 3: Kiểm thử Continuous Training Pipeline
 
-Upload `data_manifest.json` lên S3 để kích hoạt Lambda:
+1. Upload `data_manifest.json` lên S3 để kích hoạt Lambda:
 
 ```bash
 aws s3 cp data_manifest.json s3://mlops-nids-artifacts/data_manifest.json
 ```
 
-Xác nhận Lambda đã nhận event (trên AWS Console):
+2. Xác nhận Lambda đã nhận event (trên AWS Console):
 
 ```
 AWS Console -> Lambda -> s3-webhook-trigger -> Monitor -> View CloudWatch Logs
 Mong đợi: "Successfully triggered GitHub Actions retraining workflow"
 ```
 
-Theo dõi GitHub Actions Retrain Pipeline:
+3. Theo dõi GitHub Actions Retrain Pipeline:
 
 ```
 GitHub Repo -> Tab Actions -> "MLOps NIDS - Controlled Retraining Pipeline"
 ```
 
-Quan sát quá trình Retraining:
+4. Quan sát quá trình Retraining:
 
 ```
 Setup -> Download Data from S3 -> Train on Kaggle GPU -> Quality Gate -> Register to MLflow
 ```
 
-Xem model mới xuất hiện trên MLflow Registry:
+5. Xem model mới xuất hiện trên MLflow Registry:
 
 ```
 MLflowUI (https://mlflow.mlops-nids-nt114.id.vn) -> Models -> NIDS-XGBoost
@@ -478,13 +543,13 @@ Kết quả mong đợi: Model mới ở stage `Staging` với metrics F1 > 0.99
 
 #### Giai đoạn 4: Demo Zero-Downtime Deployment
 
-Promote model lên `Production` trên MLflow UI:
+1. Promote model lên `Production` trên MLflow UI:
 
 ```
 MLflow UI -> Models -> NIDS-XGBoost -> Phiên bản mới -> Assign alias "production"
 ```
 
-Dispatch CronJob tự phát hiện model mới và kích hoạt deploy:
+2. Dispatch CronJob tự phát hiện model mới và kích hoạt deploy:
 
 ```bash
 # Ép CronJob chạy ngay
@@ -494,13 +559,13 @@ kubectl logs -f -l job-name=dispatch-manual-<timestamp>
 
 Mong đợi: `Production model found -> Dispatching deploy workflow to GitHub...`
 
-Theo dõi GitHub Actions Deploy:
+3. Theo dõi GitHub Actions Deploy:
 
 ```
 GitHub Repo -> Tab Actions -> "Deploy Production Model from MLflow"
 ```
 
-Quan sát Rolling Update không gián đoạn (giữ Locust chạy xuyên suốt):
+4. Quan sát Rolling Update không gián đoạn (giữ Locust chạy xuyên suốt):
 
 ```bash
 # Quan sát quá trình pod cũ -> pod mới mà không có downtime
@@ -509,12 +574,30 @@ kubectl get pods -l app=mlops-nids-api -w
 
 Mong đợi trên Locust Dashboard: **Failure rate vẫn = 0%** trong toàn bộ quá trình rolling update.
 
-Xác nhận API đang chạy model phiên bản mới:
+5. Xác nhận API đang chạy model phiên bản mới:
 
 ```bash
 curl http://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com/health
 # Mong đợi: {"status": "ok", "model_version": "v2", ...}
 ```
+
+#### Giai đoạn 5: Kiểm tra Giám sát & Cảnh báo (Observability)
+
+1. Truy cập Grafana Dashboard:
+
+- URL: `https://grafana.mlops-nids-nt114.id.vn`
+- Đăng nhập bằng credentials trong AWS Secrets Manager (`mlflow-basic-auth`).
+
+2. Quan sát các Dashboard quan trọng:
+
+- **NIDS Performance:** Theo dõi `nids_predictions_total` và `nids_prediction_confidence`.
+- **FastAPI Overview:** Theo dõi Request Latency (p95) và Error Rate.
+- **PostgreSQL / Redpanda:** Theo dõi sức khỏe database và message queue.
+
+3. Thử nghiệm Cảnh báo (Slack):
+
+- Chạy Locust với số lượng user cực lớn để tạo traffic "DDoS" giả lập.
+- Mong đợi: Nhận thông báo Slack từ AlertManager: `[FIRING] DDoSSpikeDetected`.
 
 ---
 

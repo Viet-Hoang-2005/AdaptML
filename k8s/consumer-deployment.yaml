@@ -21,6 +21,18 @@ spec:
     spec:
       nodeSelector:
         workload-type: worker
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - mlops-nids-consumer
+                topologyKey: "kubernetes.io/hostname"
       initContainers:
         - name: init-kafka-topic
           image: docker.redpanda.com/redpandadata/redpanda:v23.3.21

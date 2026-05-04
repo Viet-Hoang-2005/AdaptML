@@ -284,12 +284,12 @@ ap-southeast-1 (Singapore)
 │   └── Private Subnet 1a (10.0.2.0/24) - Worker Nodes
 │
 ├── EC2 Instances
-│   ├── ip-10-0-1-219  - t3.small:  K3s Master (control-plane only)
-│   ├── ip-10-0-2-244  - t3.large:  K3s Worker 1 + Postgres PRIMARY
+│   ├── ip-10-0-1-61    - t3.small:  K3s Master (control-plane only)
+│   ├── ip-10-0-2-193   - t3.large:  K3s Worker 1 + Postgres PRIMARY
 │   │                       ★ MLflow chạy nội bộ trong K3s trên Worker Node
 │   │                       ★ Public qua Cloudflare Tunnel -> Nginx
 │   │                       ★ Backend: CloudNativePG PostgreSQL
-│   └── ip-10-0-2-8    - t3.large:  K3s Worker 2 + Postgres STANDBY
+│   └── ip-10-0-2-114   - t3.large:  K3s Worker 2 + Postgres STANDBY
 │
 ├── Application Load Balancer (mlops-api-lb)
 │   └── Listener :80 → Target Group → Worker Port 80 (Traefik Ingress)

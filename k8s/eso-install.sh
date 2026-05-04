@@ -1,7 +1,9 @@
 #!/bin/bash
 # k8s/eso-install.sh: Cài đặt External Secrets Operator vào cụm K3s bằng Helm
 
-echo "Start installing External Secrets Operator (ESO)..."
+set -e
+
+echo "[1/2] Start installing External Secrets Operator (ESO)..."
 
 # Thêm kho chứa Helm của ESO
 helm repo add external-secrets https://charts.external-secrets.io
@@ -14,4 +16,5 @@ helm install external-secrets \
     --create-namespace \
     --set installCRDs=true
 
-echo "ESO installation complete! Run the command 'kubectl get pods -n external-secrets' to check."
+echo "[2/2] ESO installation complete!"
+kubectl get pods -n external-secrets

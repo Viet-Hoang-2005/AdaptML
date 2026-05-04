@@ -53,9 +53,17 @@ resource "aws_internet_gateway" "igw" {
   tags   = { Name = "mlops-igw" }
 }
 
-# Elastic IP
+# Elastic IP cho NAT Gateway
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
+  tags   = { Name = "mlops-nat-eip" }
+}
+
+# Elastic IP cố định cho Master Node
+resource "aws_eip" "master_eip" {
+  domain   = "vpc"
+  instance = aws_instance.master_node.id
+  tags     = { Name = "mlops-master-eip" }
 }
 
 # NAT Gateway
@@ -114,6 +122,13 @@ resource "aws_security_group" "lb_sg" {
   ingress {
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -207,7 +222,7 @@ resource "aws_instance" "master_node" {
   key_name               = "mlops-keypair"
 
   root_block_device {
-    volume_size = 20
+    volume_size = 40
     volume_type = "gp3"
   }
   tags = { Name = "mlops-master-node" }
@@ -223,7 +238,7 @@ resource "aws_instance" "worker_nodes" {
   key_name               = "mlops-keypair"
 
   root_block_device {
-    volume_size = 20
+    volume_size = 40
     volume_type = "gp3"
   }
   iam_instance_profile = aws_iam_instance_profile.worker_profile.name
@@ -238,15 +253,16 @@ resource "aws_lb_target_group" "worker_tg" {
   protocol = "HTTP"
   vpc_id   = aws_vpc.mlops_vpc.id
 
-  # Cấu hình health check kiểm tra trạng thái API
+  # Cấu hình health check trỏ vào Traefik Ping Endpoint
   health_check {
-    path                = "/"
+    path                = "/ping"
     protocol            = "HTTP"
     port                = "traffic-port"
     healthy_threshold   = 3
     unhealthy_threshold = 3
     timeout             = 5
     interval            = 15
+    matcher             = "200"
   }
 }
 
@@ -267,16 +283,34 @@ resource "aws_lb" "api_alb" {
   subnets            = [aws_subnet.public_1a.id, aws_subnet.public_1b.id]
 }
 
-# Listener HTTP
+# Listener HTTPS (Cổng 443)
+resource "aws_lb_listener" "https_listener" {
+  load_balancer_arn = aws_lb.api_alb.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate_validation.mlops_cert_validation.certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.worker_tg.arn
+  }
+}
+
+# Listener HTTP (Cổng 80) - Tự động chuyển hướng sang HTTPS
 resource "aws_lb_listener" "http_listener" {
   load_balancer_arn = aws_lb.api_alb.arn
   port              = "80"
   protocol          = "HTTP"
 
-  # Forward request đến Target Group của Worker Node
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.worker_tg.arn
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
@@ -312,7 +346,7 @@ resource "aws_s3_bucket_versioning" "artifacts_versioning" {
 }
 
 # 6. AWS LAMBDA & S3 EVENT NOTIFICATION
-# IAM Role cho Lambda
+# IAM Rule cho Lambda
 data "aws_iam_policy_document" "lambda_assume_role" {
   statement {
     effect = "Allow"
@@ -329,13 +363,13 @@ resource "aws_iam_role" "lambda_exec_role" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
-# Gán quyền thực thi Lambda cho IAM Role
+# Gán quyền IAM Rule cho Lambda thực thi
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_exec_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Cấp quyền đọc Secrets Manager cho Lambda
+# IAM Policy cho Lambda đọc Secrets Manager
 data "aws_iam_policy_document" "lambda_secrets_policy" {
   statement {
     effect = "Allow"
@@ -412,7 +446,36 @@ resource "aws_iam_role" "worker_role" {
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 }
 
-# Tạo Policy cho phép đọc Secrets Manager
+# Policy cho phép Worker Node đọc/ghi vào S3 Bucket của dự án
+data "aws_iam_policy_document" "worker_s3_policy_doc" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:DeleteObject"
+    ]
+    resources = [
+      aws_s3_bucket.artifacts_bucket.arn,
+      "${aws_s3_bucket.artifacts_bucket.arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "worker_s3_policy" {
+  name        = "mlops-worker-s3-policy"
+  description = "Allow K3s worker nodes to read/write artifacts in project bucket"
+  policy      = data.aws_iam_policy_document.worker_s3_policy_doc.json
+}
+
+# Gắn policy đọc/ghi S3 vào Worker Role
+resource "aws_iam_role_policy_attachment" "worker_s3_attach" {
+  role       = aws_iam_role.worker_role.name
+  policy_arn = aws_iam_policy.worker_s3_policy.arn
+}
+
+# Tạo Policy cho phép Worker Node đọc Secrets Manager
 data "aws_iam_policy_document" "secrets_read_policy" {
   statement {
     effect = "Allow"
@@ -430,6 +493,7 @@ resource "aws_iam_policy" "worker_secrets_policy" {
   policy      = data.aws_iam_policy_document.secrets_read_policy.json
 }
 
+# Gắn quyền đọc secrets cho Worker Nodes
 resource "aws_iam_role_policy_attachment" "worker_secrets_attach" {
   role       = aws_iam_role.worker_role.name
   policy_arn = aws_iam_policy.worker_secrets_policy.arn
@@ -467,7 +531,7 @@ resource "aws_secretsmanager_secret" "tunnel_token" {
   description = "Cloudflare Tunnel Token"
 }
 
-# 8. GITHUB ACTIONS OIDC & SECRETS MANAGER
+# 8. GITHUB ACTIONS OIDC
 # Khởi tạo khung Secret cho GitHub Actions
 resource "aws_secretsmanager_secret" "github_actions_secrets" {
   name        = "mlops/github-actions-secrets"
@@ -543,10 +607,67 @@ resource "aws_iam_role_policy" "github_actions_policy_attach" {
   policy = data.aws_iam_policy_document.github_actions_policy.json
 }
 
-# 9. OUTPUTS
+# 9. DNS (Route 53)
+# Khởi tạo Hosted Zone cho tên miền
+resource "aws_route53_zone" "mlops_zone" {
+  name = "api.mlops-nids-nt114.id.vn"
+  tags = { Name = "mlops-api-subzone" }
+}
+
+# Tạo bản ghi A (Alias) tại gốc của subdomain zone trỏ về Load Balancer
+resource "aws_route53_record" "api_dns" {
+  zone_id = aws_route53_zone.mlops_zone.zone_id
+  name    = aws_route53_zone.mlops_zone.name
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.api_alb.dns_name
+    zone_id                = aws_lb.api_alb.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# 10. SSL/TLS Certificate (ACM)
+# Yêu cầu chứng chỉ SSL
+resource "aws_acm_certificate" "mlops_cert" {
+  domain_name       = "api.mlops-nids-nt114.id.vn"
+  validation_method = "DNS"
+
+  tags = { Name = "mlops-api-cert" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Tạo bản ghi DNS để xác thực chứng chỉ (ACM Validation)
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.mlops_cert.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = aws_route53_zone.mlops_zone.zone_id
+}
+
+# Chờ xác thực chứng chỉ hoàn tất
+resource "aws_acm_certificate_validation" "mlops_cert_validation" {
+  certificate_arn         = aws_acm_certificate.mlops_cert.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
+
+# 11. OUTPUTS
 output "master_public_ip" {
   description = "Public IP for SSH access to Master Node"
-  value       = aws_instance.master_node.public_ip
+  value       = aws_eip.master_eip.public_ip
 }
 
 output "load_balancer_dns" {
@@ -562,4 +683,9 @@ output "s3_bucket_name" {
 output "github_actions_role_arn" {
   description = "IAM Role ARN to configure in GitHub Variables"
   value       = aws_iam_role.github_actions_role.arn
+}
+
+output "name_servers" {
+  description = "Name Servers to configure in your domain registrar"
+  value       = aws_route53_zone.mlops_zone.name_servers
 }

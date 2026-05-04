@@ -20,6 +20,19 @@ spec:
     spec:
       nodeSelector:
         workload-type: worker
+      affinity:
+        podAntiAffinity:
+          # Chạy 2 replica API trên 2 worker node khác nhau (High Availability)
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - mlops-nids-api
+                topologyKey: "kubernetes.io/hostname"
       # Init Containers: Chạy trước FastAPI để kéo model từ S3
       initContainers:
         - name: aws-s3-model-sync
@@ -53,16 +66,6 @@ spec:
               value: "mlops-nids-artifacts"
             - name: AWS_DEFAULT_REGION
               value: "ap-southeast-1"
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: aws-secrets
-                  key: AWS_ACCESS_KEY_ID
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: aws-secrets
-                  key: AWS_SECRET_ACCESS_KEY
           volumeMounts:
             - name: model-volume
               mountPath: /models
@@ -77,6 +80,8 @@ spec:
           env:
             - name: REDPANDA_BROKERS
               value: "redpanda-service:9092"
+            - name: AWS_BUCKET_NAME
+              value: "mlops-nids-artifacts"
             - name: MODEL_VERSION
               value: "v1"
             - name: EXPERIMENT_ID
@@ -151,7 +156,7 @@ spec:
       port: 80
       targetPort: 5000
 
-# Ingress để expose API ra bên ngoài
+# Ingress chỉ đường tới API Service
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -160,7 +165,8 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - http:
+    - host: api.mlops-nids-nt114.id.vn
+      http:
         paths:
           - path: /
             pathType: Prefix

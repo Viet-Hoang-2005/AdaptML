@@ -1,0 +1,48 @@
+# pod-disruption-budgets.yaml: Bảo vệ các service khỏi downtime khi bảo trì node (kubectl drain)
+# 1. PDB cho API NIDS
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mlops-nids-api-pdb
+  namespace: default
+spec:
+  minAvailable: 1 # Luôn giữ ít nhất 1 Pod phục vụ Inference
+  selector:
+    matchLabels:
+      app: mlops-nids-api
+---
+# 2. PDB cho Cloudflare Tunnel
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloudflared-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cloudflared
+---
+# 3. PDB cho MLflow Server
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mlflow-server-pdb
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: mlflow-server
+---
+# 4. PDB cho MLflow Nginx Proxy
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mlflow-nginx-pdb
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: mlflow-nginx
+---

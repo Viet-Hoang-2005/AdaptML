@@ -10,10 +10,9 @@ metadata:
   annotations:
     description: "CloudNativePG cluster for MLflow metadata and NIDS baseline data storage"
 spec:
-
-
-  # Chạy single-node để bring-up MLflow/PostgreSQL trước.
-  instances: 1
+  # Chạy 2 instances để đảm bảo tính sẵn sàng cao (High Availability)
+  # Node 1: Primary (RW), Node 2: Standby (RO)
+  instances: 2
   enableSuperuserAccess: true
   imageName: ghcr.io/cloudnative-pg/postgresql:15
 

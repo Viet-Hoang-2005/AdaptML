@@ -15,3 +15,7 @@ requests==2.31.0
 
 # --- Message Queue (Kafka/Redpanda) ---
 confluent-kafka==2.3.0
+
+# --- Monitoring & Observability ---
+prometheus-client==0.20.0
+prometheus-fastapi-instrumentator==6.1.0
