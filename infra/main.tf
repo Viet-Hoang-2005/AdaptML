@@ -609,14 +609,14 @@ resource "aws_iam_role_policy" "github_actions_policy_attach" {
 # 9. DNS (Route 53)
 # Khởi tạo Hosted Zone cho tên miền
 resource "aws_route53_zone" "mlops_zone" {
-  name = "mlops-nids-nt114.id.vn"
-  tags = { Name = "mlops-nids-zone" }
+  name = "api.mlops-nids-nt114.id.vn"
+  tags = { Name = "mlops-api-subzone" }
 }
 
-# Tạo bản ghi A (Alias) trỏ sub-domain api về Load Balancer
+# Tạo bản ghi A (Alias) tại gốc của subdomain zone trỏ về Load Balancer
 resource "aws_route53_record" "api_dns" {
   zone_id = aws_route53_zone.mlops_zone.zone_id
-  name    = "api.mlops-nids-nt114.id.vn"
+  name    = aws_route53_zone.mlops_zone.name
   type    = "A"
 
   alias {
