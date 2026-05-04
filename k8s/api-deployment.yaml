@@ -80,6 +80,8 @@ spec:
           env:
             - name: REDPANDA_BROKERS
               value: "redpanda-service:9092"
+            - name: AWS_BUCKET_NAME
+              value: "mlops-nids-artifacts"
             - name: MODEL_VERSION
               value: "v1"
             - name: EXPERIMENT_ID
@@ -88,7 +90,7 @@ spec:
               value: "unknown"
             - name: DB_HOST_RW
               value: "mlops-nids-postgres-rw"
-            - name: DB_HOST
+            - name: DB_HOSTĂ
               value: "mlops-nids-postgres-rw"
             - name: DB_PORT
               value: "5432"
