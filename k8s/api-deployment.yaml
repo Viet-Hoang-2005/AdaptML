@@ -90,7 +90,7 @@ spec:
               value: "unknown"
             - name: DB_HOST_RW
               value: "mlops-nids-postgres-rw"
-            - name: DB_HOSTĂ
+            - name: DB_HOST
               value: "mlops-nids-postgres-rw"
             - name: DB_PORT
               value: "5432"
