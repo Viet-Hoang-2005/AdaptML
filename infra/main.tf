@@ -253,15 +253,16 @@ resource "aws_lb_target_group" "worker_tg" {
   protocol = "HTTP"
   vpc_id   = aws_vpc.mlops_vpc.id
 
-  # Cấu hình health check kiểm tra trạng thái API
+  # Cấu hình health check trỏ vào Traefik Ping Endpoint
   health_check {
-    path                = "/"
+    path                = "/ping"
     protocol            = "HTTP"
     port                = "traffic-port"
     healthy_threshold   = 3
     unhealthy_threshold = 3
     timeout             = 5
     interval            = 15
+    matcher             = "200"
   }
 }
 
