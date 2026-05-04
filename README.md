@@ -319,7 +319,7 @@ terraform apply
 
 ```json
 {
-  "auth": "<your-mlflow-basic-auth-base64>"
+  "auth": "<your-mlflow-basic-auth>"
 }
 ```
 
@@ -360,8 +360,15 @@ kubectl get nodes
 ```bash
 # Cài đặt CloudNativePG
 kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.22/releases/cnpg-1.22.0.yaml
+
 # Cài đặt External Secrets Operator
 bash k8s/eso-install.sh
+
+# Cài đặt Prometheus Stack (Prometheus + Grafana)
+bash k8s/monitoring-install.sh
+
+# Cài đặt KEDA
+bash k8s/keda-install.sh
 ```
 
 2. Kích hoạt hệ thống Bảo mật
@@ -370,6 +377,7 @@ bash k8s/eso-install.sh
 # Đồng bộ Secret từ AWS về K3s
 kubectl apply -f k8s/cluster-secret-store.yaml
 kubectl apply -f k8s/external-secrets.yaml
+
 # Kiểm tra các secrets
 kubectl get secrets
 ```
@@ -386,8 +394,10 @@ kubectl apply -f k8s/cloudflared-tunnel.yaml
 ```bash
 # Khởi chạy cụm PostgreSQL HA
 kubectl apply -f k8s/postgres-cluster.yaml
+
 # Chạy Job insert dữ liệu References Data
 kubectl apply -f k8s/sync-data-job.yaml
+
 # Khởi chạy Redpanda (Kafka)
 kubectl apply -f k8s/redpanda-statefulset.yaml
 ```
@@ -397,9 +407,11 @@ kubectl apply -f k8s/redpanda-statefulset.yaml
 ```bash
 # Chạy Job tạo bảng dữ liệu cho MLflow (chỉ chạy 1 lần)
 kubectl apply -f k8s/mlflow-init-job.yaml
+
 # Triển khai MLflow Server + Nginx Bảo mật + Cloudflare Tunnel
 kubectl apply -f k8s/mlflow-deployment.yaml
 kubectl apply -f k8s/mlflow-nginx.yaml
+
 # Chạy lịch trình kiểm tra Model mới tự động mỗi 5 phút
 kubectl apply -f k8s/dispatch-cronjob.yaml
 ```
@@ -410,8 +422,6 @@ kubectl apply -f k8s/dispatch-cronjob.yaml
 # Triển khai API & Consumer
 kubectl apply -f k8s/api-deployment.yaml
 kubectl apply -f k8s/consumer-deployment.yaml
-kubectl apply -f k8s/pod-disruption-budgets.yaml
-kubectl apply -f k8s/api-hpa.yaml
 ```
 
 7. Kiểm tra Data drift
@@ -424,9 +434,6 @@ kubectl apply -f k8s/evidently-job.yaml
 8. Triển khai Hệ thống Giám sát (Observability)
 
 ```bash
-# Cài đặt Prometheus Stack (Prometheus + Grafana)
-bash k8s/monitoring-install.sh
-
 # Triển khai các ServiceMonitor và Exporters
 kubectl apply -f k8s/postgres-exporter.yaml
 kubectl apply -f k8s/api-servicemonitor.yaml
@@ -441,7 +448,6 @@ kubectl apply -f k8s/grafana-cloudflared.yaml
 
 ```bash
 # Autoscaling Consumer với KEDA
-bash k8s/keda-install.sh
 kubectl apply -f k8s/consumer-scaledobject.yaml
 
 # Autoscaling API với HPA

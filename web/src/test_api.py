@@ -3,13 +3,18 @@ import os
 import pandas as pd
 import requests
 import time
+from dotenv import load_dotenv
 
 # 1. CẤU HÌNH ĐƯỜNG DẪN VÀ ENDPOINT
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TEST_CSV_PATH = os.path.join(ROOT_DIR, 'data', 'test_data.csv')
 
-# Đọc API_URL từ biến môi trường để linh hoạt giữa môi trường local và K3s production
-API_URL = os.environ.get("API_URL", "http://localhost:5000/predict")
+# Tự động load biến môi trường từ file .env
+load_dotenv(os.path.join(ROOT_DIR, '.env'))
+
+# Đọc API_URL và đảm bảo nó trỏ đúng vào endpoint /predict
+base_url = os.environ.get("API_URL", "http://localhost:5000").rstrip('/')
+API_URL = f"{base_url}/predict"
 
 def api_test_continuous(samples_per_class=1):
     print(f"🚀 STARTING CONTINUOUS API INFERENCE TEST...")
