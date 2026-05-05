@@ -54,7 +54,7 @@ jobs:
       - name: Push Kaggle Training Kernel
         env:
           KAGGLE_USERNAME: ${{ env.SECRETS_KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ env.SECRETS_KAGGLE_API_TOKEN }}
+          KAGGLE_API_TOKEN: ${{ env.SECRETS_KAGGLE_API_TOKEN }}
           MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
           TARGET_CSV: ${{ steps.read_manifest.outputs.target_csv }}
           AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
@@ -62,10 +62,26 @@ jobs:
           MLFLOW_TRACKING_URI: ${{ env.SECRETS_MLFLOW_TRACKING_URI }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
         run: |
-          pip install kaggle --quiet
+          if [ -z "$KAGGLE_API_TOKEN" ]; then
+            echo "Missing required environment variable: KAGGLE_API_TOKEN"
+            exit 1
+          fi
+
+          if [ -z "$MLFLOW_TRACKING_URI" ]; then
+            echo "Missing required environment variable: MLFLOW_TRACKING_URI"
+            exit 1
+          fi
+
+          pip install "kaggle>=1.8.0,<2.0.0" --quiet
+          kaggle --version
+
           mkdir -p ~/.kaggle
-          echo '{"username":"${{ env.SECRETS_KAGGLE_USERNAME }}","key":"${{ env.SECRETS_KAGGLE_API_TOKEN }}"}' > ~/.kaggle/kaggle.json
-          chmod 600 ~/.kaggle/kaggle.json
+          printf '%s' "$KAGGLE_API_TOKEN" > ~/.kaggle/access_token
+          chmod 600 ~/.kaggle/access_token
+
+          echo "Testing Kaggle authentication before kernel push..."
+          kaggle kernels list --mine --page-size 1 >/dev/null
+          echo "Kaggle authentication succeeded."
 
           jq \
             --arg csv "$TARGET_CSV" \
