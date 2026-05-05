@@ -8,7 +8,7 @@ on:
       # Chỉ trigger khi có thay đổi ở những folder quan trọng
       # Thay đổi docs (README, ARCHITECTURE...) KHÔNG kích hoạt build
       - 'api/**'
-      - 'monitoring/**'
+      - 'evidently/**'
       - 'k8s/**'
       - 'docker-compose.yml'
   pull_request:
@@ -50,8 +50,8 @@ jobs:
           pip install flake8 --quiet
           echo "Checking syntax in api/src/..."
           flake8 api/src/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          echo "Checking syntax in monitoring/..."
-          flake8 monitoring/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          echo "Checking syntax in evidently/..."
+          flake8 evidently/ --count --select=E9,F63,F7,F82 --show-source --statistics
           echo "No critical syntax errors detected."
 
       - name: Check valid imports for CI/CD scripts
