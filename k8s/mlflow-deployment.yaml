@@ -50,11 +50,16 @@ spec:
                 secretKeyRef:
                   name: postgres-secrets
                   key: MLFLOW_DB_PASSWORD
+            - name: MLFLOW_FLASK_SERVER_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlflow-credentials
+                  key: MLFLOW_FLASK_SERVER_SECRET_KEY
           command:
             - /bin/sh
             - -c
             - |
-              pip install "mlflow[auth]" psycopg2-binary
+              pip install --no-cache-dir "mlflow[auth]" psycopg2-binary
               exec mlflow server \
                 --host 0.0.0.0 \
                 --port 5000 \
