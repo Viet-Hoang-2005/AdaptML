@@ -32,7 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1.1. PROMETHEUS MONITORING
+# 2. PROMETHEUS MONITORING
 # Tự động expose /metrics endpoint với đầy đủ HTTP metrics (latency, request count, error rate)
 Instrumentator().instrument(app).expose(app)
 
@@ -58,6 +58,7 @@ nids_active_model_info = Gauge(
     ["model_version"]
 )
 
+# 3. KHỞI TẠO REDPANDA PRODUCER
 # Cấu hình Redpanda Producer
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
 KAFKA_TOPIC = "nids_production_data"
@@ -72,7 +73,7 @@ except Exception as e:
     print(f"Failed to setup Redpanda producer: {e}")
     kafka_producer = None
 
-# 2. CẤU HÌNH ĐƯỜNG DẪN VÀ THAM SỐ (ĐỘNG HÓA)
+# 4. CẤU HÌNH ĐƯỜNG DẪN VÀ THAM SỐ (ĐỘNG HÓA)
 # Bắt biến môi trường MODEL_VERSION
 MODEL_VERSION = os.environ.get('MODEL_VERSION', 'v1')
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -81,7 +82,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 MODEL_PATH = os.path.join(ROOT_DIR, 'models', MODEL_VERSION, f'xgb_nids_model_{MODEL_VERSION}.pkl')
 LABEL_PATH = os.path.join(ROOT_DIR, 'models', MODEL_VERSION, f'label_classes_{MODEL_VERSION}.json')
 
-# 3. LOAD MODEL VÀ ĐỌC FILE CẤU HÌNH FEATURES
+# 5. LOAD MODEL VÀ ĐỌC FILE CẤU HÌNH FEATURES
 try:
     # Load model XGBoost đã train
     model = joblib.load(MODEL_PATH)
@@ -103,7 +104,7 @@ except Exception as e:
 class NetworkTraffic(BaseModel):
     features: Dict[str, float]
 
-# 4. HÀM CHẠY NGẦM (BACKGROUND TASK) ĐỂ LƯU REDPANDA
+# 6. HÀM CHẠY NGẦM (BACKGROUND TASK) ĐỂ LƯU REDPANDA
 def send_to_redpanda(features_dict: dict, predicted_label: str, confidence: float):
     if kafka_producer is None:
         print("Redpanda producer is not available. Skipping log.")
@@ -135,7 +136,7 @@ def shutdown_event():
         print("Flushing Redpanda messages...")
         kafka_producer.flush(timeout=5.0)
 
-# 5. API ENDPOINT
+# 7. API ENDPOINT
 # Endpoint kiểm tra sức khỏe của API, trả về trạng thái và version của model đang chạy.
 @app.get("/")
 async def health_check():
