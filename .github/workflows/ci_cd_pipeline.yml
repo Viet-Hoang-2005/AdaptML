@@ -6,11 +6,11 @@ on:
     branches: [main]
     paths:
       # Chỉ trigger khi có thay đổi ở những folder quan trọng
-      # Thay đổi docs (README, ARCHITECTURE...) KHÔNG kích hoạt build
       - 'api/**'
       - 'evidently/**'
+      - 'mlflow/**'
       - 'k8s/**'
-      - 'docker-compose.yml'
+      - '.github/scripts/**'
   pull_request:
     branches: [main]
   workflow_dispatch:
