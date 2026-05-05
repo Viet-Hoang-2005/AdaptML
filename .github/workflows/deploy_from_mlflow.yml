@@ -63,7 +63,7 @@ jobs:
       - name: Setup Kubeconfig
         run: |
           mkdir -p ~/.kube
-          echo "${{ env.KUBE_CONFIG }}" | base64 --decode > ~/.kube/config
+          echo "${{ env.SECRETS_KUBE_CONFIG }}" | base64 --decode > ~/.kube/config
           chmod 600 ~/.kube/config
 
       - name: Update API Deployment Model Version

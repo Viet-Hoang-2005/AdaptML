@@ -53,18 +53,18 @@ jobs:
 
       - name: Push Kaggle Training Kernel
         env:
-          KAGGLE_USERNAME: ${{ env.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ env.KAGGLE_KEY }}
+          KAGGLE_USERNAME: ${{ env.SECRETS_KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ env.SECRETS_KAGGLE_API_TOKEN }}
           MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
           TARGET_CSV: ${{ steps.read_manifest.outputs.target_csv }}
           AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
           S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
-          MLFLOW_TRACKING_URI: ${{ env.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_URI: ${{ env.SECRETS_MLFLOW_TRACKING_URI }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
         run: |
           pip install kaggle --quiet
           mkdir -p ~/.kaggle
-          echo '{"username":"${{ env.KAGGLE_USERNAME }}","key":"${{ env.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
+          echo '{"username":"${{ env.SECRETS_KAGGLE_USERNAME }}","key":"${{ env.SECRETS_KAGGLE_API_TOKEN }}"}' > ~/.kaggle/kaggle.json
           chmod 600 ~/.kaggle/kaggle.json
 
           jq \
