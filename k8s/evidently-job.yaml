@@ -56,8 +56,8 @@ spec:
           # Cấu hình tài nguyên cho container Evidently
           resources:
             requests:
-              memory: "256Mi"
               cpu: "200m"
+              memory: "256Mi"
             limits:
-              memory: "768Mi"
               cpu: "500m"
+              memory: "1Gi"
