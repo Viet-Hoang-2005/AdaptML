@@ -38,22 +38,29 @@ from sklearn.utils.class_weight import compute_sample_weight
 # Tắt cảnh báo FutureWarning
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-# Hàm lấy secret key từ Kaggle
-def load_secret(secret_name: str, *, required: bool = False) -> str | None:
-    try:
-        return USER_SECRETS.get_secret(secret_name)
-    except Exception as exc:
-        if required:
-            raise RuntimeError(f"Missing required Kaggle secret: {secret_name}") from exc
-        print(f"Optional secret {secret_name} not found: {exc}")
-        return None
-
 # Hàm lấy biến môi trường
 def get_required_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
         raise RuntimeError(f"Missing required environment variable: {name}")
     return value
+
+def load_secret(secret_name: str, *, required: bool = False) -> str | None:
+    # Ưu tiên env nếu runtime đã inject sẵn secret, rồi fallback sang Kaggle Secrets.
+    # Không ghi secret vào kernel-metadata.json để tránh lộ thông tin nhạy cảm.
+    value = os.environ.get(secret_name, "").strip()
+    if value:
+        return value
+
+    try:
+        return USER_SECRETS.get_secret(secret_name)
+    except Exception as exc:
+        if required:
+            raise RuntimeError(
+                f"Missing required Kaggle secret or environment variable: {secret_name}"
+            ) from exc
+        print(f"Optional secret/env {secret_name} not found: {exc}")
+        return None
 
 # Nạp secrets và cấu hình môi trường AWS, MLflow
 USER_SECRETS = UserSecretsClient()
