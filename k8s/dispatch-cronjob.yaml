@@ -35,7 +35,7 @@ spec:
                 - name: MLFLOW_MODEL_NAME
                   value: "NIDS-XGBoost"
                 - name: PRODUCTION_ALIAS
-                  value: "production"
+                  value: "Production"
                 
                 # 2. Cấu hình kết nối tới GitHub Actions
                 - name: GITHUB_REPO
