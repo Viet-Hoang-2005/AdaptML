@@ -41,6 +41,7 @@ spec:
             - tunnel
             - --no-autoupdate
             - run
+          # Biến môi trường cung cấp token từ Secret cho Cloudflared
           env:
             - name: TUNNEL_TOKEN
               valueFrom:

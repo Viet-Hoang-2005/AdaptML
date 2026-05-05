@@ -40,11 +40,11 @@ spec:
                   key: POSTGRES_PASSWORD
 
             # Cấu hình Drift Detection
-            # Ngưỡng 50%: Nếu hơn một nửa số feature bị drift -> kích hoạt Retrain
+            # Ngưỡng 50%: Nếu hơn một nửa số feature bị drift
             - name: DRIFT_THRESHOLD
               value: "0.5"
 
-            # GitHub Webhook để kích hoạt retrain_pipeline.yml
+            # GitHub Webhook để kích hoạt drift_alert workflow
             - name: GITHUB_REPO
               value: "Viet-Hoang-2005/MLOps-nids-system"
             - name: GITHUB_TOKEN

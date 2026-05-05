@@ -93,21 +93,21 @@ spec:
     # Nhóm 3: Database Health
     - name: nids.database
       rules:
-        # Cảnh báo khi PostgreSQL exporter không phản hồi (Primary hoặc Standby sập)
+        # Cảnh báo khi PostgreSQL Pod down
         - alert: PostgresDown
-          expr: pg_up{job="postgres-exporter"} == 0
+          expr: cnpg_pg_up == 0
           for: 1m
           labels:
             severity: critical
             team: infrastructure
           annotations:
             summary: "PostgreSQL is not responding!"
-            description: "postgres-exporter cannot connect to the database. Check the CloudNativePG cluster immediately!"
+            description: "A CloudNativePG instance is down. Check the database cluster immediately!"
 
         # Cảnh báo khi số connections gần đạt max_connections
         - alert: PostgresHighConnections
           expr: |
-            sum(pg_stat_activity_count) by (datname) > 80
+            sum(cnpg_pg_stat_database_numbackends) by (datname) > 80
           for: 5m
           labels:
             severity: warning
