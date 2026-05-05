@@ -22,29 +22,24 @@ description: Hướng dẫn quản trị Kubernetes manifests, PostgreSQL HA, Se
 - Failover: Standby được promote tự động trong 5–60 giây khi Primary mất kết nối.
 - Services tự động tạo bởi Operator: `mlops-nids-postgres-rw` (→ Primary), `mlops-nids-postgres-ro` (→ load-balanced).
 
-## 3. Secret Management (Zero-Trust: ESO + AWS Secrets Manager)
+## 3. Secret Management & Security (Hardening)
 
-**KHÔNG dùng** hardcode credential, ConfigMap, hoặc GitHub Secrets cho dữ liệu nhạy cảm.
+**Nguyên tắc:** Sử dụng **IAM Instance Profile** cho Worker Nodes để truy cập S3/Secrets Manager. **Hạn chế tối đa** việc sử dụng Access Key tĩnh trong các manifest.
 
-### Luồng đồng bộ Secret:
-```
-AWS Secrets Manager (mlops/*) → ESO ClusterSecretStore → ExternalSecret CRD → K8s Secret → Pod env
-```
+### Luồng bảo mật:
 
-### Các manifest liên quan:
-- `k8s/eso-install.sh` — Cài đặt External Secrets Operator qua Helm.
-- `k8s/cluster-secret-store.yaml` — Kết nối ESO với AWS Secrets Manager (apiVersion: `external-secrets.io/v1`).
-- `k8s/external-secrets.yaml` — Định nghĩa 6 ExternalSecret objects đồng bộ từ AWS.
+- **IAM Role**: Gán trực tiếp cho EC2 qua Terraform, cho phép Pods (như Init Container) gọi API AWS mà không cần credentials.
+- **External Secrets (ESO)**: Chỉ dùng để đồng bộ các thông tin không thuộc AWS (như Postgres Password, Tunnel Token, MLflow Auth).
 
-### Các Secret được sync:
-| AWS Secret Name | K8s Secret Name | Dùng cho |
-|---|---|---|
-| `mlops/postgres-secrets` | `postgres-secrets` | CloudNativePG credentials |
-| `mlops/aws-secrets` | `aws-secrets` | Init Container kéo model S3 |
-| `mlops/github-secrets` | `github-secrets` | Lambda + Dispatch CronJob → GitHub |
-| `mlops/github-actions-secrets` | `github-actions-secrets` | CI/CD: DockerHub, Kaggle, Slack, KubeConfig |
-| `mlops/tunnel-token` | `cloudflare-tunnel-token` | Cloudflare Tunnel |
-| `mlflow-basic-auth` | `mlflow-basic-auth` | Nginx Basic Auth cho MLflow UI |
+### Các Secret được sync qua ESO:
+
+| AWS Secret Name                | K8s Secret Name           | Dùng cho                                    |
+| ------------------------------ | ------------------------- | ------------------------------------------- |
+| `mlops/postgres-secrets`       | `postgres-secrets`        | CloudNativePG credentials                   |
+| `mlops/github-secrets`         | `github-secrets`          | Lambda + Dispatch CronJob → GitHub          |
+| `mlops/github-actions-secrets` | `github-actions-secrets`  | CI/CD: DockerHub, Kaggle, Slack, KubeConfig |
+| `mlops/tunnel-token`           | `cloudflare-tunnel-token` | Cloudflare Tunnel (MLflow/Grafana)          |
+| `mlflow-basic-auth`            | `mlflow-basic-auth`       | Nginx Basic Auth cho MLflow UI (và Grafana) |
 
 ## 4. MLflow Stack trên K3s
 
@@ -56,7 +51,8 @@ AWS Secrets Manager (mlops/*) → ESO ClusterSecretStore → ExternalSecret CRD 
 
 ## 5. Troubleshooting
 
-- **API `psycopg2.OperationalError`:** Kiểm tra `DB_HOST_RW/RO` — chỉ có service `mlops-nids-postgres-rw`, `mlops-nids-postgres-ro`, `mlops-nids-postgres-r`.
+- **Init Container fail (403 Forbidden):** Kiểm tra IAM Role gán cho EC2. Đảm bảo Policy cho phép `s3:GetObject` trên đúng bucket.
+- **ExternalSecret không sync:** Kiểm tra `kubectl get clustersecretstore` và `kubectl describe externalsecret <name>`.
 - **Init Container fail:** `kubectl logs <api-pod> -c aws-s3-model-sync` — kiểm tra `RUN_ID`, `EXPERIMENT_ID`, `MODEL_VERSION` có đúng với đường dẫn S3 không.
-- **ExternalSecret không sync:** Kiểm tra `kubectl get clustersecretstore` và `kubectl describe externalsecret <name>` — apiVersion phải là `external-secrets.io/v1`.
+- **API `psycopg2.OperationalError`:** Kiểm tra service `mlops-nids-postgres-rw`. Đảm bảo secret `postgres-secrets` đã được sync thành công.
 - **MLflow kết nối DB thất bại:** Xem `kubectl logs -l app=mlflow-server` — thường do mlflow user chưa được tạo (chạy lại `mlflow-init-job.yaml`).

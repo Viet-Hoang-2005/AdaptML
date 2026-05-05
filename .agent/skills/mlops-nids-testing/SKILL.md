@@ -26,13 +26,13 @@ docker-compose logs -f consumer
 - KPI: `Latency < 100ms`.
 - Đổi target qua biến môi trường:
   - Local: `API_URL=http://localhost:5000`
-  - Production: `API_URL=http://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com`
+  - Production: `API_URL=https://api.mlops-nids-nt114.id.vn` (Tự động load từ file `.env`)
 
 ## 3. Stress Test & Drift Simulation (`web/src/locustfile.py`)
 
 ```bash
 # Chạy từ thư mục gốc dự án
-locust -f web/src/locustfile.py --host=http://mlops-api-lb-226955044.ap-southeast-1.elb.amazonaws.com
+locust -f web/src/locustfile.py --host=https://api.mlops-nids-nt114.id.vn
 ```
 
 Dashboard: `http://localhost:8089` — Khuyến nghị: 50 users, spawn rate 10.
@@ -45,11 +45,11 @@ Dashboard: `http://localhost:8089` — Khuyến nghị: 50 users, spawn rate 10.
 
 | Giai đoạn | Lệnh chính | Kết quả mong đợi |
 |---|---|---|
-| **0 - Sẵn sàng** | `kubectl get pods,svc,cronjob` | Tất cả `Running` |
-| **1 - Inference** | Locust 50 users + `kubectl logs -f consumer` | Latency < 100ms, Consumer INSERT batch |
-| **2 - Drift** | `kubectl replace --force -f k8s/evidently-job.yaml` | Log: `DRIFT DETECTED` |
-| **3 - Retrain** | `aws s3 cp data_manifest.json s3://mlops-nids-artifacts/` | Lambda → GitHub Actions → Kaggle |
-| **4 - Deploy** | Gán alias `production` trên MLflow UI | CronJob dispatch → Rolling Update |
+| **0 - Sẵn sàng** | `kubectl get pods -A` | Các namespace `monitoring`, `external-secrets` xanh |
+| **1 - Inference** | `python web/src/test_api.py` | Latency < 100ms, Model v1 trả kết quả |
+| **2 - Drift** | `kubectl apply -f k8s/evidently-job.yaml` | Evidently Job phân tích Reference vs Production |
+| **3 - Retrain** | `aws s3 cp data_manifest.json s3://<your-bucket>/` | S3 Event → Lambda → GitHub Actions |
+| **4 - Deploy** | MLflow UI -> Assign "production" alias | Pod mới được rollout tự động |
 
 **Xác nhận DB sau test:**
 ```bash

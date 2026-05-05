@@ -39,10 +39,11 @@ Quy trình:
 
 ## 5. Deploy Pipeline (`deploy_from_mlflow.yml`)
 
-1. Nhận dispatch từ CronJob.
-2. Dùng OIDC xác thực AWS, lấy secrets từ AWS Secrets Manager.
-3. `kubectl set env deployment/mlops-nids-api RUN_ID=... EXPERIMENT_ID=... MODEL_VERSION=...`
-4. `kubectl rollout restart deployment/mlops-nids-api` — Rolling Update Zero-Downtime.
+1. **Trigger**: Nhận lệnh điều phối từ CronJob hoặc Data Scientist kích hoạt thủ công.
+2. **Security**: Sử dụng **GitHub OIDC** để xác thực với AWS mà không cần Access Key. GitHub Action sẽ `AssumeRole` tới `mlops-github-actions-role` (ARN được cấu hình trong GitHub Variables).
+3. **Secret Retrieval**: Kéo các thông tin cấu hình (như Slack Webhook, DockerHub) từ **AWS Secrets Manager** (`mlops/github-actions-secrets`).
+4. **Update**: `kubectl set env deployment/mlops-nids-api RUN_ID=... EXPERIMENT_ID=... MODEL_VERSION=...`
+5. **Rollout**: `kubectl rollout restart deployment/mlops-nids-api` — Thực hiện chiến lược Rolling Update Zero-Downtime.
 5. Init Container kéo model mới từ S3 về `emptyDir`.
 6. Trigger `sync-data-job.yaml` để đồng bộ `nids_reference_data` mới vào PostgreSQL.
 
