@@ -35,7 +35,7 @@ spec:
       containers:
         - name: mlflow
           # Sử dụng image chính thức của MLflow từ GitHub Container Registry
-          image: ghcr.io/mlflow/mlflow:latest
+          image: ghcr.io/mlflow/mlflow:v3.11.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
@@ -59,7 +59,7 @@ spec:
             - /bin/sh
             - -c
             - |
-              pip install --no-cache-dir "mlflow[auth]" psycopg2-binary
+              pip install "mlflow[auth]==3.11.1" psycopg2-binary boto3
               exec mlflow server \
                 --host 0.0.0.0 \
                 --port 5000 \
@@ -71,10 +71,10 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              memory: 512Mi
             limits:
               cpu: 500m
-              memory: 1Gi
+              memory: 2Gi
 
 # Service để expose MLflow Server nội bộ trong cluster
 ---
