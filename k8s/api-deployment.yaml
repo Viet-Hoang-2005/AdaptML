@@ -1,4 +1,4 @@
-# api-deployment.yaml: Triển khai FastAPI NIDS lên K3s với Init Container kéo model từ S3.
+# api-deployment.yaml: Triển khai FastAPI phục vụ predict với Init Container kéo model từ S3
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -19,7 +19,7 @@ spec:
         app: mlops-nids-api
     spec:
       nodeSelector:
-        workload-type: worker
+        workload-type: worker # Chỉ chạy trên máy worker
       affinity:
         podAntiAffinity:
           # Chạy 2 replica API trên 2 worker node khác nhau (High Availability)
@@ -66,6 +66,7 @@ spec:
               value: "mlops-nids-artifacts"
             - name: AWS_DEFAULT_REGION
               value: "ap-southeast-1"
+          # Mount volume để chia sẻ model đã tải về với App Container
           volumeMounts:
             - name: model-volume
               mountPath: /models
@@ -76,7 +77,7 @@ spec:
           image: tnvhoang/mlops-nids-api:latest
           imagePullPolicy: Always # Luôn kéo image mới nhất từ registry
           ports:
-            - containerPort: 5000
+            - containerPort: 5000 # FastAPI chạy trên cổng 5000
           env:
             - name: REDPANDA_BROKERS
               value: "redpanda-service:9092"
@@ -151,8 +152,10 @@ spec:
   selector:
     app: mlops-nids-api
   type: ClusterIP
+  # Cổng 80 của Service sẽ chuyển tiếp đến cổng 5000 của FastAPI trong pod
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 80
       targetPort: 5000
 
@@ -165,6 +168,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
+    # Chỉ định hostname để truy cập API
     - host: api.mlops-nids-nt114.id.vn
       http:
         paths:

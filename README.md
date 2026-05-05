@@ -144,7 +144,8 @@ mlops-nids-system/
 │   ├── mlflow-nginx.yaml            # Nginx Reverse Proxy + Basic Auth cho MLflow
 │   ├── mlflow-init-job.yaml         # One-time Job: Tạo role/database mlflow trong PostgreSQL
 │   ├── postgres-cluster.yaml        # CloudNativePG Cluster (Primary + Standby HA)
-│   ├── postgres-exporter.yaml       # Exporter cho PostgreSQL (RO endpoint)
+│   ├── postgres-podmonitor.yaml     # Scrape metrics trực tiếp từ Pod PostgreSQL (port 9187)
+│   ├── ebs-gp3-storageclass.yaml   # StorageClass AWS EBS gp3 cho Database persistence
 │   ├── redpanda-statefulset.yaml    # Redpanda Message Broker (Kafka-compatible)
 │   ├── redpanda-servicemonitor.yaml # Cấu hình Prometheus scrape Redpanda
 │   ├── grafana-alertrules.yaml      # Định nghĩa luật cảnh báo (DDoS, Latency...)
@@ -294,7 +295,8 @@ terraform apply
 {
   "POSTGRES_USER": "<your-postgres-user>",
   "POSTGRES_PASSWORD": "<your-postgres-password>",
-  "POSTGRES_DB": "<your-postgres-db>"
+  "POSTGRES_DB": "<your-postgres-db>",
+  "MLFLOW_DB_PASSWORD": "<your-mlflow-db-password>"
 }
 ```
 
@@ -392,10 +394,13 @@ kubectl apply -f k8s/cloudflared-tunnel.yaml
 4. Triển khai Database & Message Queue
 
 ```bash
+# Khởi tạo StorageClass AWS EBS gp3
+kubectl apply -f k8s/ebs-gp3-storageclass.yaml
+
 # Khởi chạy cụm PostgreSQL HA
 kubectl apply -f k8s/postgres-cluster.yaml
 
-# Chạy Job insert dữ liệu References Data
+# Chạy Job update dữ liệu Reference Data
 kubectl apply -f k8s/sync-data-job.yaml
 
 # Khởi chạy Redpanda (Kafka)
@@ -434,8 +439,8 @@ kubectl apply -f k8s/evidently-job.yaml
 8. Triển khai Hệ thống Giám sát (Observability)
 
 ```bash
-# Triển khai các ServiceMonitor và Exporters
-kubectl apply -f k8s/postgres-exporter.yaml
+# Triển khai các ServiceMonitor và PodMonitor
+kubectl apply -f k8s/postgres-podmonitor.yaml
 kubectl apply -f k8s/api-servicemonitor.yaml
 kubectl apply -f k8s/redpanda-servicemonitor.yaml
 

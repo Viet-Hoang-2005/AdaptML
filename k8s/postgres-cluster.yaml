@@ -26,7 +26,7 @@ spec:
 
   # Cấu hình Storage cho mỗi instance
   storage:
-    storageClass: local-path
+    storageClass: ebs-gp3
     size: 10Gi
 
   # Khi mở rộng lại nhiều instance, anti-affinity giúp tách các pod ra khác node.

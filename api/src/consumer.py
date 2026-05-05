@@ -3,6 +3,7 @@ import os
 import json
 import time
 import requests
+import signal
 import pandas as pd
 from confluent_kafka import Consumer, KafkaError
 from db_manager import save_dataframe_to_db, get_production_data_count
@@ -13,6 +14,15 @@ KAFKA_TOPIC = "nids_production_data"
 EVIDENTLY_TRIGGER_THRESHOLD = int(os.environ.get('EVIDENTLY_TRIGGER_THRESHOLD', '100'))
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+
+# Cờ báo hiệu trạng thái hoạt động
+RUNNING = True
+
+# Hàm xử lý tín hiệu dừng
+def handle_sigterm(*args):
+    global RUNNING
+    print("Received SIGTERM. Shutting down gracefully...")
+    RUNNING = False
 
 # Hàm gửi Webhook kích hoạt GitHub Action tạo Evidently Drift Check
 def trigger_github_webhook(count: int):
@@ -60,6 +70,10 @@ def check_threshold_and_trigger(last_triggered_count: int) -> int:
 
 # Hàm main để chạy Consumer liên tục lắng nghe Redpanda và xử lý dữ liệu
 def main():
+    # Đăng ký handler cho SIGTERM và SIGINT
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    signal.signal(signal.SIGINT, handle_sigterm)
+
     # Cấu hình Kafka Consumer
     conf = {
         'bootstrap.servers': REDPANDA_BROKERS,
@@ -78,9 +92,9 @@ def main():
     current_batch = []
     last_triggered_count = get_production_data_count() # Lấy số lượng ban đầu để tránh trigger ngay lúc bật
     print(f"Initial DB record count: {last_triggered_count}")
-    
+
     try:
-        while True:
+        while RUNNING:
             # Liên tục lắng nghe (poll) với timeout 1 giây
             msg = consumer.poll(timeout=1.0)
             

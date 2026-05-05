@@ -1,6 +1,6 @@
 ---
 name: mlops-nids-monitoring
-description: Phương pháp phát hiện Data Drift bằng Evidently AI và logic Webhook kích hoạt retraining.
+description: Phương pháp phát hiện Data Drift bằng Evidently AI và Giám sát hạ tầng bằng Prometheus Stack trên K3s.
 ---
 
 # Data Drift Monitoring bằng Evidently AI
@@ -43,4 +43,18 @@ Consumer (nids_production_data vượt ngưỡng)
 |---|---|---|
 | Consumer đếm ngưỡng | `trigger_drift_check` | `trigger_drift_check.yml` (chạy Evidently Job) |
 | Evidently phát hiện drift | `data_drift_detected` | `drift_alert.yml` + `retrain_pipeline.yml` |
-| Lambda (S3 manifest) | `data_manifest_updated` | `retrain_pipeline.yml` |
+
+## 6. Infrastructure Monitoring (Prometheus Stack)
+
+Hệ thống sử dụng **Kube-Prometheus-Stack** để giám sát tài nguyên và hiệu năng.
+
+### 6.1 ServiceMonitors & Exporters
+Các thành phần được giám sát qua Custom Resource `ServiceMonitor`:
+- **API Monitor**: Quét metrics từ FastAPI (qua thư viện `prometheus-fastapi-instrumentator`).
+- **Postgres Monitor**: Quét metrics từ `postgres-exporter` (kết nối tới PostgreSQL HA).
+- **Redpanda Monitor**: Quét trực tiếp port admin `9644` của Redpanda.
+
+### 6.2 Visualization & Alerting
+- **Grafana**: Hiển thị Dashboard. Được expose bảo mật qua Cloudflare Tunnel.
+- **PrometheusRules**: Định nghĩa các luật cảnh báo (`grafana-alertrules.yaml`) như: `HighCpuUsage`, `ApiLatencyHigh`, `PostgresConnectionCritical`.
+- **Alertmanager**: Gửi cảnh báo tới các kênh như Slack khi các luật trên bị vi phạm.

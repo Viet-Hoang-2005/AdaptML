@@ -342,24 +342,23 @@ Việc chuyển đổi từ ghi log trực tiếp sang mô hình **Data Streamin
 | **Production** | Model được chọn phục vụ inference, được gán alias `"production"` | Data Scientist (HitL)  |
 | **Archived**   | Model cũ đã bị thay thế bởi phiên bản mới, giữ lại để rollback   | Tự động khi deploy mới |
 
-### 7.2. Backend
+### 7.2. Public Access & Security (Cloudflare Tunnel)
 
-- **Tracking Server**: `mlflow-deployment.yaml` → chạy trên K3s Worker, protected bởi Nginx Basic Auth (`mlflow-nginx.yaml`)
-- **Database backend**: CloudNativePG PostgreSQL cluster, database `mlflow` riêng biệt (tạo bởi `mlflow-init-job.yaml`)
-- **Artifact store**: `s3://mlops-nids-artifacts/mlflow-artifacts/` — model binaries, metadata, params
-- **Public access**: Cloudflare Tunnel → Nginx → ClusterIP Service (`mlflow-service:5000`)
+Thay vì mở NodePort hoặc sử dụng nhiều Tunnel riêng lẻ, hệ thống sử dụng **duy nhất một cụm Cloudflare Tunnel** (`cloudflared-tunnel.yaml`) để expose các Dashboard nội bộ ra internet:
 
-### 7.3. Truy cập MLflow UI
+- **Unified Routing**: Một Tunnel ID duy nhất xử lý nhiều Public Hostnames.
+- **Cross-Namespace Routing**: Nhờ mạng phẳng của K8s, Tunnel Pod trong namespace `default` có thể trỏ tới:
+    - `mlflow.mlops-nids-nt114.id.vn` -> `http://mlflow-service:5000`
+    - `grafana.mlops-nids-nt114.id.vn` -> `http://monitoring-grafana.monitoring.svc.cluster.local:80`
+- **Security**: Toàn bộ traffic được mã hóa TLS từ Edge của Cloudflare đến Tunnel Pod, không cần mở port trên Firewall của AWS.
 
-```
-https://mlflow.mlops-nids-nt114.id.vn
+### 7.3. Truy cập Dashboard
 
-# Credentials: Basic Auth từ secret mlflow-basic-auth (AWS Secrets Manager)
-# Các chức năng:
-# - Experiments: xem tất cả runs với params, metrics, artifacts
-# - Models: NIDS-XGBoost Registry với version + alias
-# - Compare: so sánh F1/accuracy giữa các runs
-```
+| Dịch vụ | URL | Authentication |
+|---|---|---|
+| **MLflow UI** | `https://mlflow.mlops-nids-nt114.id.vn` | Nginx Basic Auth |
+| **Grafana** | `https://grafana.mlops-nids-nt114.id.vn` | Grafana Internal Auth |
+
 
 ---
 

@@ -14,11 +14,13 @@ Khi tương tác với hệ thống MLOps NIDS, hãy nhớ các nguyên tắc ki
 - Trong K3s, một **Init-Container** (`amazon/aws-cli`) dùng biến môi trường `RUN_ID`, `EXPERIMENT_ID`, `MODEL_VERSION` được inject bởi GitHub Actions (`deploy_from_mlflow.yml`) để kéo file `.pkl` và `label_classes.json` về `emptyDir` volume.
 - Khi có model mới, GitHub Actions dùng `kubectl set env` cập nhật biến version rồi `kubectl rollout restart deployment` — Pod mới chạy song song với Pod cũ cho đến khi sẵn sàng.
 
-## 2. API Routing & Load Balancing
+## 2. API Routing & DNS Delegation
 
-- Traffic từ client đi qua **AWS ALB (t3.large Worker Nodes)**, cổng 80.
-- Tại Worker Node, **Traefik Ingress** (tích hợp sẵn K3s) điều hướng vào **FastAPI Pods** qua Service `ClusterIP`.
-- API chạy 2 replicas để đảm bảo High Availability trong quá trình Rolling Update.
+- **Root Domain (`mlops-nids-nt114.id.vn`)**: Được quản lý bởi Cloudflare.
+- **Subdomain Delegation**: Subdomain `api.mlops-nids-nt114.id.vn` được ủy quyền cho **AWS Route 53** (qua bản ghi NS tại Cloudflare).
+- **Traffic Flow**: Client -> Route 53 (Alias A Record) -> AWS ALB -> Traefik Ingress (Port 80) -> FastAPI Pods.
+- **MLflow và Grafana Dashboard**: Được expose qua Cloudflare Tunnel -> Nginx -> MLflow Pod và Grafana Pod.
+- **SSL/TLS**: Chứng chỉ được quản lý bởi AWS ACM (Xác thực qua DNS trong Route 53).
 
 ## 3. Streaming & Async Logging (Redpanda)
 
@@ -45,9 +47,13 @@ Khi tương tác với hệ thống MLOps NIDS, hãy nhớ các nguyên tắc ki
 - Bảng chính: `nids_production_data` (log inference), `nids_reference_data` (baseline training data).
 - MLflow dùng database `mlflow` riêng biệt trong cùng cluster PostgreSQL.
 
-## 7. Hạ tầng AWS
+## 7. Hạ tầng AWS & Security (Hardening)
 
-- **Master Node:** `t3.small` (10.0.1.x) — control-plane only
-- **Worker Node 1:** `t3.large` (10.0.2.x) — API, Consumer, MLflow, Postgres PRIMARY
-- **Worker Node 2:** `t3.large` (10.0.2.x) — Redpanda, Postgres STANDBY
-- **MLflow** chạy trên Worker Node, được expose qua Cloudflare Tunnel → Nginx → ClusterIP Service.
+- **IAM Instance Profile**: Worker Nodes sử dụng IAM Role thay vì Access Key tĩnh. Role này cho phép đọc/ghi S3 và đọc Secrets Manager.
+- **Master Node**: `t3.small` (10.0.1.x) — control-plane only.
+- **Worker Nodes**: `t3.large` (10.0.2.x) — chạy các workload nặng. AMI được cố định (Pinned) để tránh downtime khi Terraform update.
+
+## 8. Health Check Mechanism
+
+- **ALB Health Check**: Trỏ vào endpoint `/ping` của Traefik (thông qua `HelmChartConfig` của K3s).
+- **Logic**: AWS ALB (Port 80) -> Traefik `/ping` (200 OK) -> Đánh dấu Node Healthy. Cơ chế này tách biệt giữa trạng thái hạ tầng và trạng thái ứng dụng.
