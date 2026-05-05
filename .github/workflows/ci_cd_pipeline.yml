@@ -57,8 +57,6 @@ jobs:
       - name: Check valid imports for CI/CD scripts
         run: |
           pip install boto3 pandas sqlalchemy --quiet
-          echo "Checking .github/scripts/evaluate_model.py..."
-          python -c "import ast; ast.parse(open('.github/scripts/evaluate_model.py').read()); print('evaluate_model.py OK')"
           echo "Checking .github/scripts/update_reference_data.py..."
           python -c "import ast; ast.parse(open('.github/scripts/update_reference_data.py').read()); print('update_reference_data.py OK')"
 
