@@ -161,7 +161,7 @@ def run_drift_analysis(reference_df, production_df):
 
 # 5. KÍCH HOẠT GITHUB ACTIONS VIA WEBHOOK
 def trigger_github_webhook(drift_summary):
-    print("[4/4] DRIFT DETECTED! Triggering GitHub alert workflow...")
+    print("[4/4] Triggering GitHub alert workflow...")
 
     if not GITHUB_TOKEN:
         print("GITHUB_TOKEN not configured - skipping webhook.")
@@ -243,8 +243,9 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print(f"[3/4] Evaluating results (threshold: {DRIFT_THRESHOLD:.0%})...")
-    if drift_summary["dataset_drift"]:
+    share = drift_summary["share_drifted_features"]
+    if share >= DRIFT_THRESHOLD:
+        print(f"Drift detected! Rate {share:.2%} exceeds threshold {DRIFT_THRESHOLD:.2%}.")
         trigger_github_webhook(drift_summary)
     else:
-        share = drift_summary["share_drifted_features"]
-        print(f"Drift rate {share:.2%} is below the allowed threshold. System is stable.")
+        print(f"Drift rate {share:.2%} is below the allowed threshold! System is stable.")
