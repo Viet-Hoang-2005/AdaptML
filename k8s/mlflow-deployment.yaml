@@ -1,4 +1,6 @@
 # mlflow-deployment.yaml: Deployment và Service cho MLflow Tracking Server
+# Required before apply:
+# kubectl create secret generic mlflow-auth-secrets -n default --from-literal=MLFLOW_FLASK_SERVER_SECRET_KEY="$(openssl rand -hex 32)"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -35,7 +37,7 @@ spec:
       containers:
         - name: mlflow
           # Sử dụng image chính thức của MLflow từ GitHub Container Registry
-          image: ghcr.io/mlflow/mlflow:latest
+          image: ghcr.io/mlflow/mlflow:v3.11.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
@@ -50,24 +52,31 @@ spec:
                 secretKeyRef:
                   name: postgres-secrets
                   key: MLFLOW_DB_PASSWORD
+            - name: MLFLOW_FLASK_SERVER_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlflow-auth-secrets
+                  key: MLFLOW_FLASK_SERVER_SECRET_KEY
           command:
             - /bin/sh
             - -c
             - |
+              pip install "mlflow[auth]==3.11.1" psycopg2-binary boto3
               exec mlflow server \
                 --host 0.0.0.0 \
                 --port 5000 \
-                --allowed-hosts "mlflow.mlops-nids-nt114.id.vn,mlflow.mlops-nids-nt114.id.vn:443,localhost,127.0.0.1,mlflow-service,mlflow-service.default.svc.cluster.local,mlflow-service.default.svc.cluster.local:5000" \
+                --app-name basic-auth \
+                --allowed-hosts "mlflow.mlops-nids-nt114.id.vn,mlflow.mlops-nids-nt114.id.vn:443,localhost,127.0.0.1,mlflow-service,mlflow-service:5000,mlflow-service.default.svc.cluster.local,mlflow-service.default.svc.cluster.local:5000" \
                 --cors-allowed-origins "https://mlflow.mlops-nids-nt114.id.vn" \
                 --backend-store-uri "postgresql://mlflow:${MLFLOW_DB_PASSWORD}@mlops-nids-postgres-rw:5432/mlflow" \
                 --default-artifact-root "s3://${AWS_BUCKET_NAME}/mlflow-artifacts/"
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              memory: 512Mi
             limits:
-              cpu: 500m
-              memory: 1Gi
+              cpu: 1000m
+              memory: 2Gi
 
 # Service để expose MLflow Server nội bộ trong cluster
 ---

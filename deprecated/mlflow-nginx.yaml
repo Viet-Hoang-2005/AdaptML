@@ -1,4 +1,9 @@
 # mlflow-nginx.yaml: Triển khai Nginx làm reverse proxy cho MLflow với Basic Authentication
+# Deprecated: MLflow now uses Native Auth directly behind Cloudflare Tunnel.
+# Do not apply this manifest in the current deployment path.
+#
+# Rollback only: move this file back to k8s/mlflow-nginx.yaml and point the
+# Cloudflare public hostname to mlflow-nginx-service:8080.
 ---
 apiVersion: v1
 kind: ConfigMap
