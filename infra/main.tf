@@ -499,6 +499,12 @@ resource "aws_iam_role_policy_attachment" "worker_secrets_attach" {
   policy_arn = aws_iam_policy.worker_secrets_policy.arn
 }
 
+# Gắn quyền cho EBS CSI Driver để tự động cấp phát ổ cứng AWS EBS
+resource "aws_iam_role_policy_attachment" "worker_ebs_csi_attach" {
+  role       = aws_iam_role.worker_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
 # Tạo Instance Profile để gắn vào EC2
 resource "aws_iam_instance_profile" "worker_profile" {
   name = "mlops-worker-profile"
