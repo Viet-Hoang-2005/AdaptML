@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  trigger_kaggle_training:
-    name: Trigger Kaggle Training Job
+  trigger_sagemaker_training:
+    name: Trigger SageMaker Training Job
     runs-on: ubuntu-latest
 
     steps:
@@ -52,10 +52,9 @@ jobs:
             AUTH, mlops/mlflow-basic-auth
           parse-json-secrets: true
 
-      - name: Push Kaggle Training Kernel
+      - name: Trigger SageMaker Training Job
         env:
-          KAGGLE_USERNAME: ${{ env.SECRETS_KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ env.SECRETS_KAGGLE_API_TOKEN }}
+          AWS_SAGEMAKER_ROLE_ARN: ${{ vars.AWS_SAGEMAKER_ROLE_ARN }}
           MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
           TARGET_CSV: ${{ steps.read_manifest.outputs.target_csv }}
           AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
@@ -65,39 +64,8 @@ jobs:
           MLFLOW_TRACKING_USERNAME: ${{ env.AUTH_MLFLOW_TRACKING_USERNAME }}
           MLFLOW_TRACKING_PASSWORD: ${{ env.AUTH_MLFLOW_TRACKING_PASSWORD }}
         run: |
-          pip install kaggle --quiet
-          mkdir -p ~/.kaggle
-          echo '{"username":"${{ env.SECRETS_KAGGLE_USERNAME }}","key":"${{ env.SECRETS_KAGGLE_API_TOKEN }}"}' > ~/.kaggle/kaggle.json
-          chmod 600 ~/.kaggle/kaggle.json
+          pip install boto3 sagemaker --quiet
+          python .github/scripts/trigger_sagemaker.py
 
-          jq \
-            --arg csv "$TARGET_CSV" \
-            --arg ver "$MODEL_VERSION" \
-            --arg bucket "$AWS_BUCKET_NAME" \
-            --arg prefix "$S3_TRAINING_DATA_PREFIX" \
-            --arg mlflow_uri "$MLFLOW_TRACKING_URI" \
-            --arg model_name "$MLFLOW_MODEL_NAME" \
-            --arg aws_key "$AWS_ACCESS_KEY_ID" \
-            --arg aws_secret "$AWS_SECRET_ACCESS_KEY" \
-            --arg aws_token "$AWS_SESSION_TOKEN" \
-            --arg mlflow_user "$MLFLOW_TRACKING_USERNAME" \
-            --arg mlflow_pass "$MLFLOW_TRACKING_PASSWORD" \
-            '.environment_variables.TARGET_CSV = $csv
-            | .environment_variables.MODEL_VERSION = $ver
-            | .environment_variables.AWS_BUCKET_NAME = $bucket
-            | .environment_variables.S3_TRAINING_DATA_PREFIX = $prefix
-            | .environment_variables.MLFLOW_TRACKING_URI = $mlflow_uri
-            | .environment_variables.MLFLOW_MODEL_NAME = $model_name
-            | .environment_variables.AWS_ACCESS_KEY_ID = $aws_key
-            | .environment_variables.AWS_SECRET_ACCESS_KEY = $aws_secret
-            | .environment_variables.AWS_SESSION_TOKEN = $aws_token
-            | .environment_variables.MLFLOW_TRACKING_USERNAME = $mlflow_user
-            | .environment_variables.MLFLOW_TRACKING_PASSWORD = $mlflow_pass
-            | .environment_variables.AWS_DEFAULT_REGION = "ap-southeast-1"' \
-            kaggle/kernel-metadata.json > /tmp/kernel-metadata.json
-
-          mv /tmp/kernel-metadata.json kaggle/kernel-metadata.json
-          kaggle kernels push -p kaggle/
-
-          echo "Kaggle training job triggered successfully."
+          echo "SageMaker training job triggered successfully."
           echo "This workflow is fire-and-forget by design."
