@@ -82,6 +82,11 @@ jobs:
             exit 1
           fi
 
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$AWS_SESSION_TOKEN" ]; then
+            echo "Missing required AWS STS credentials from GitHub OIDC"
+            exit 1
+          fi
+
           pip install "kaggle>=1.8.0,<2.0.0" --quiet
           kaggle --version
 
@@ -120,6 +125,30 @@ jobs:
             kaggle/kernel-metadata.json > /tmp/kernel-metadata.json
 
           mv /tmp/kernel-metadata.json kaggle/kernel-metadata.json
+
+          for key in \
+            TARGET_CSV \
+            MODEL_VERSION \
+            AWS_BUCKET_NAME \
+            S3_TRAINING_DATA_PREFIX \
+            MLFLOW_TRACKING_URI \
+            MLFLOW_MODEL_NAME \
+            AWS_ACCESS_KEY_ID \
+            AWS_SECRET_ACCESS_KEY \
+            AWS_SESSION_TOKEN \
+            MLFLOW_TRACKING_USERNAME \
+            MLFLOW_TRACKING_PASSWORD \
+            AWS_DEFAULT_REGION
+          do
+            if [ -z "$(jq -r --arg key "$key" '.environment_variables[$key] // empty' kaggle/kernel-metadata.json)" ]; then
+              echo "Missing generated kernel metadata environment variable: $key"
+              exit 1
+            fi
+          done
+
+          echo "Generated kernel metadata environment variable keys:"
+          jq -r '.environment_variables | keys[]' kaggle/kernel-metadata.json | sort
+
           kaggle kernels push -p kaggle/
 
           echo "Kaggle training job triggered successfully."
