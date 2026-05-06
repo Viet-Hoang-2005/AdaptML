@@ -40,7 +40,9 @@ jobs:
           echo "Phase 1 is alert-only. Retraining must be started by updating data_manifest.json on S3." >> $GITHUB_STEP_SUMMARY
 
       - name: Send Slack Alert
-        if: env.SLACK_WEBHOOK_URL != ''
+        if: env.SECRETS_SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ env.SECRETS_SLACK_WEBHOOK_URL }}
         run: |
           python - <<'PY'
           import json
@@ -68,5 +70,5 @@ jobs:
           PY
 
       - name: Alert Channel Missing
-        if: env.SLACK_WEBHOOK_URL == ''
+        if: env.SECRETS_SLACK_WEBHOOK_URL == ''
         run: echo "SLACK_WEBHOOK_URL is not configured. Alert summary was recorded in GitHub Actions only."

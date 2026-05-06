@@ -1,4 +1,6 @@
 # mlflow-deployment.yaml: Deployment và Service cho MLflow Tracking Server
+# Required before apply:
+# kubectl create secret generic mlflow-auth-secrets -n default --from-literal=MLFLOW_FLASK_SERVER_SECRET_KEY="$(openssl rand -hex 32)"
 ---
 apiVersion: apps/v1
 kind: Deployment

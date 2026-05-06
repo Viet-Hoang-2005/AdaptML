@@ -80,7 +80,7 @@ jobs:
         run: |
           echo "Triggering Reference Data Sync Job to update Baseline Data for drift detection..."
           kubectl delete job mlops-nids-sync-data --ignore-not-found
-          kubectl apply -f k8s/mlops-nids-sync-data.yaml
+          kubectl apply -f k8s/sync-data-job.yaml
           echo "Reference Data Sync Job started."
 
       - name: Verify Running System
