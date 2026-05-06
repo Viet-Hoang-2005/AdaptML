@@ -44,6 +44,13 @@ jobs:
           echo "  target_csv=$TARGET_CSV"
           echo "  model_version=$MODEL_VERSION"
 
+      - name: Fetch Secrets from AWS
+        uses: aws-actions/aws-secretsmanager-get-secrets@v2
+        with:
+          secret-ids: |
+            SECRETS, mlops/github-actions-secrets
+          parse-json-secrets: true
+
       - name: Trigger SageMaker Training Job
         env:
           AWS_SAGEMAKER_ROLE_ARN: ${{ vars.AWS_SAGEMAKER_ROLE_ARN }}
@@ -53,21 +60,9 @@ jobs:
           S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
         run: |
-          aws secretsmanager get-secret-value \
-            --region "$AWS_DEFAULT_REGION" \
-            --secret-id mlops/github-actions-secrets \
-            --output json > /tmp/github-actions-secret-response.json
-
-          read_secret() {
-            python -c 'import json, sys; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); value=data.get(sys.argv[1]) or ""; print(value)' "$1"
-          }
-
-          echo "Available github-actions secret keys:"
-          python -c 'import json; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); print("\n".join(sorted(data.keys())))'
-
-          export MLFLOW_TRACKING_URI="$(read_secret MLFLOW_TRACKING_URI)"
-          export MLFLOW_TRACKING_USERNAME="$(read_secret MLFLOW_TRACKING_USERNAME)"
-          export MLFLOW_TRACKING_PASSWORD="$(read_secret MLFLOW_TRACKING_PASSWORD)"
+          export MLFLOW_TRACKING_URI="${SECRETS_MLFLOW_TRACKING_URI:-}"
+          export MLFLOW_TRACKING_USERNAME="${SECRETS_MLFLOW_TRACKING_USERNAME:-}"
+          export MLFLOW_TRACKING_PASSWORD="${SECRETS_MLFLOW_TRACKING_PASSWORD:-}"
 
           if [ -z "$MLFLOW_TRACKING_URI" ] || [ "$MLFLOW_TRACKING_URI" = "None" ] || [ "$MLFLOW_TRACKING_URI" = "null" ]; then
             echo "Missing required environment variable: MLFLOW_TRACKING_URI"
