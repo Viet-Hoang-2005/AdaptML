@@ -44,13 +44,6 @@ jobs:
           echo "  target_csv=$TARGET_CSV"
           echo "  model_version=$MODEL_VERSION"
 
-      - name: Fetch Secrets from AWS
-        uses: aws-actions/aws-secretsmanager-get-secrets@v2
-        with:
-          secret-ids: |
-            SECRETS, mlops/github-actions-secrets
-          parse-json-secrets: true
-
       - name: Push Kaggle Training Kernel
         env:
           MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
@@ -59,13 +52,21 @@ jobs:
           S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
         run: |
-          SECRETS_JSON=$(jq -rc 'if type == "string" then fromjson else . end' <<< "$SECRETS")
+          aws secretsmanager get-secret-value \
+            --region "$AWS_DEFAULT_REGION" \
+            --secret-id mlops/github-actions-secrets \
+            --query SecretString \
+            --output text > /tmp/github-actions-secrets.json
 
-          KAGGLE_USERNAME=$(jq -r '.KAGGLE_USERNAME // empty' <<< "$SECRETS_JSON")
-          KAGGLE_API_TOKEN=$(jq -r '.KAGGLE_API_TOKEN // empty' <<< "$SECRETS_JSON")
-          MLFLOW_TRACKING_URI=$(jq -r '.MLFLOW_TRACKING_URI // empty' <<< "$SECRETS_JSON")
-          MLFLOW_TRACKING_USERNAME=$(jq -r '.MLFLOW_TRACKING_USERNAME // empty' <<< "$SECRETS_JSON")
-          MLFLOW_TRACKING_PASSWORD=$(jq -r '.MLFLOW_TRACKING_PASSWORD // empty' <<< "$SECRETS_JSON")
+          read_secret() {
+            python -c 'import json, sys; data=json.load(open("/tmp/github-actions-secrets.json", encoding="utf-8-sig")); print(data.get(sys.argv[1], ""))' "$1"
+          }
+
+          KAGGLE_USERNAME=$(read_secret KAGGLE_USERNAME)
+          KAGGLE_API_TOKEN=$(read_secret KAGGLE_API_TOKEN)
+          MLFLOW_TRACKING_URI=$(read_secret MLFLOW_TRACKING_URI)
+          MLFLOW_TRACKING_USERNAME=$(read_secret MLFLOW_TRACKING_USERNAME)
+          MLFLOW_TRACKING_PASSWORD=$(read_secret MLFLOW_TRACKING_PASSWORD)
 
           if [ -z "$KAGGLE_API_TOKEN" ]; then
             echo "Missing required environment variable: KAGGLE_API_TOKEN"
