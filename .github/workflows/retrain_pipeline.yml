@@ -53,17 +53,20 @@ jobs:
 
       - name: Push Kaggle Training Kernel
         env:
-          KAGGLE_USERNAME: ${{ env.SECRETS_KAGGLE_USERNAME }}
-          KAGGLE_API_TOKEN: ${{ env.SECRETS_KAGGLE_API_TOKEN }}
           MODEL_VERSION: ${{ steps.read_manifest.outputs.model_version }}
           TARGET_CSV: ${{ steps.read_manifest.outputs.target_csv }}
           AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
           S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
-          MLFLOW_TRACKING_URI: ${{ env.SECRETS_MLFLOW_TRACKING_URI }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
-          MLFLOW_TRACKING_USERNAME: ${{ env.SECRETS_MLFLOW_TRACKING_USERNAME }}
-          MLFLOW_TRACKING_PASSWORD: ${{ env.SECRETS_MLFLOW_TRACKING_PASSWORD }}
         run: |
+          SECRETS_JSON=$(jq -rc 'if type == "string" then fromjson else . end' <<< "$SECRETS")
+
+          KAGGLE_USERNAME=$(jq -r '.KAGGLE_USERNAME // empty' <<< "$SECRETS_JSON")
+          KAGGLE_API_TOKEN=$(jq -r '.KAGGLE_API_TOKEN // empty' <<< "$SECRETS_JSON")
+          MLFLOW_TRACKING_URI=$(jq -r '.MLFLOW_TRACKING_URI // empty' <<< "$SECRETS_JSON")
+          MLFLOW_TRACKING_USERNAME=$(jq -r '.MLFLOW_TRACKING_USERNAME // empty' <<< "$SECRETS_JSON")
+          MLFLOW_TRACKING_PASSWORD=$(jq -r '.MLFLOW_TRACKING_PASSWORD // empty' <<< "$SECRETS_JSON")
+
           if [ -z "$KAGGLE_API_TOKEN" ]; then
             echo "Missing required environment variable: KAGGLE_API_TOKEN"
             exit 1
@@ -71,6 +74,11 @@ jobs:
 
           if [ -z "$MLFLOW_TRACKING_URI" ]; then
             echo "Missing required environment variable: MLFLOW_TRACKING_URI"
+            exit 1
+          fi
+
+          if [ -z "$MLFLOW_TRACKING_USERNAME" ] || [ -z "$MLFLOW_TRACKING_PASSWORD" ]; then
+            echo "Missing required MLflow auth variables"
             exit 1
           fi
 
