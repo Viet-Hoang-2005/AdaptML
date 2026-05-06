@@ -59,7 +59,7 @@ jobs:
             --output json > /tmp/github-actions-secret-response.json
 
           read_secret() {
-            python -c 'import json, sys; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); print(data.get(sys.argv[1], ""))' "$1"
+            python -c 'import json, sys; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); value=data.get(sys.argv[1]) or ""; print(value)' "$1"
           }
 
           echo "Available github-actions secret keys:"
@@ -69,7 +69,7 @@ jobs:
           export MLFLOW_TRACKING_USERNAME="$(read_secret MLFLOW_TRACKING_USERNAME)"
           export MLFLOW_TRACKING_PASSWORD="$(read_secret MLFLOW_TRACKING_PASSWORD)"
 
-          if [ -z "$MLFLOW_TRACKING_URI" ]; then
+          if [ -z "$MLFLOW_TRACKING_URI" ] || [ "$MLFLOW_TRACKING_URI" = "None" ] || [ "$MLFLOW_TRACKING_URI" = "null" ]; then
             echo "Missing required environment variable: MLFLOW_TRACKING_URI"
             exit 1
           fi

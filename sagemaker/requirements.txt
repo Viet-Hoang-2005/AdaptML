@@ -1,5 +1,6 @@
-mlflow
-xgboost
-pandas
-scikit-learn
+mlflow==3.1.4
+xgboost==2.1.4
+pandas>=1.5.3,<2.3
+scikit-learn==1.2.1
 boto3
+protobuf>=3.20.2,<=3.20.3

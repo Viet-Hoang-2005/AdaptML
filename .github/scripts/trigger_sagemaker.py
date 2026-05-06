@@ -3,17 +3,23 @@ import boto3
 from sagemaker.sklearn.estimator import SKLearn
 from sagemaker.session import Session
 
+def get_required_env(name):
+    value = os.environ.get(name, "").strip()
+    if not value or value.lower() in {"none", "null"}:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
 def main():
     # Khởi tạo các biến môi trường cấu hình từ GitHub Actions
-    role_arn = os.environ["AWS_SAGEMAKER_ROLE_ARN"]
-    bucket = os.environ["AWS_BUCKET_NAME"]
-    prefix = os.environ["S3_TRAINING_DATA_PREFIX"]
-    target_csv = os.environ["TARGET_CSV"]
-    model_version = os.environ["MODEL_VERSION"]
-    mlflow_uri = os.environ["MLFLOW_TRACKING_URI"]
-    mlflow_user = os.environ["MLFLOW_TRACKING_USERNAME"]
-    mlflow_pass = os.environ["MLFLOW_TRACKING_PASSWORD"]
-    mlflow_model_name = os.environ["MLFLOW_MODEL_NAME"]
+    role_arn = get_required_env("AWS_SAGEMAKER_ROLE_ARN")
+    bucket = get_required_env("AWS_BUCKET_NAME")
+    prefix = get_required_env("S3_TRAINING_DATA_PREFIX")
+    target_csv = get_required_env("TARGET_CSV")
+    model_version = get_required_env("MODEL_VERSION")
+    mlflow_uri = get_required_env("MLFLOW_TRACKING_URI")
+    mlflow_user = get_required_env("MLFLOW_TRACKING_USERNAME")
+    mlflow_pass = get_required_env("MLFLOW_TRACKING_PASSWORD")
+    mlflow_model_name = get_required_env("MLFLOW_MODEL_NAME")
     region = os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1")
 
     # Khởi tạo SageMaker Session
