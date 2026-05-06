@@ -10,6 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY dispatch_production_model.py .
 
 CMD ["python", "dispatch_production_model.py"]

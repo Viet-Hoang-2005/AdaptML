@@ -34,15 +34,3 @@ spec:
     matchLabels:
       app: mlflow-server
 ---
-# 4. PDB cho MLflow Nginx Proxy
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: mlflow-nginx-pdb
-  namespace: default
-spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app: mlflow-nginx
----

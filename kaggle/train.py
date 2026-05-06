@@ -28,7 +28,6 @@ import mlflow.xgboost
 import pandas as pd
 from xgboost import XGBClassifier
 from mlflow.tracking import MlflowClient 
-from kaggle_secrets import UserSecretsClient
 from scipy.stats import randint, uniform
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, train_test_split
@@ -38,44 +37,23 @@ from sklearn.utils.class_weight import compute_sample_weight
 # Tắt cảnh báo FutureWarning
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-# Hàm lấy biến môi trường
+# Cấu hình biến môi trường AWS
+# Các biến này đã được tiêm vào qua kernel-metadata.json từ GitHub Actions
 def get_required_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
         raise RuntimeError(f"Missing required environment variable: {name}")
     return value
 
-def load_secret(secret_name: str, *, required: bool = False) -> str | None:
-    # Ưu tiên env nếu runtime đã inject sẵn secret, rồi fallback sang Kaggle Secrets.
-    # Không ghi secret vào kernel-metadata.json để tránh lộ thông tin nhạy cảm.
-    value = os.environ.get(secret_name, "").strip()
-    if value:
-        return value
+# Đảm bảo AWS STS Credentials có sẵn
+get_required_env("AWS_ACCESS_KEY_ID")
+get_required_env("AWS_SECRET_ACCESS_KEY")
+get_required_env("AWS_SESSION_TOKEN")
+os.environ["AWS_DEFAULT_REGION"] = os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1")
 
-    try:
-        return USER_SECRETS.get_secret(secret_name)
-    except Exception as exc:
-        if required:
-            raise RuntimeError(
-                f"Missing required Kaggle secret or environment variable: {secret_name}"
-            ) from exc
-        print(f"Optional secret/env {secret_name} not found: {exc}")
-        return None
-
-# Nạp secrets và cấu hình môi trường AWS, MLflow
-USER_SECRETS = UserSecretsClient()
-
-os.environ["AWS_ACCESS_KEY_ID"] = load_secret("AWS_ACCESS_KEY_ID", required=True)
-os.environ["AWS_SECRET_ACCESS_KEY"] = load_secret("AWS_SECRET_ACCESS_KEY", required=True)
-os.environ["AWS_DEFAULT_REGION"] = load_secret("AWS_DEFAULT_REGION", required=True)
-
-mlflow_username = load_secret("MLFLOW_TRACKING_USERNAME")
-mlflow_password = load_secret("MLFLOW_TRACKING_PASSWORD")
-
-if mlflow_username:
-    os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_username
-if mlflow_password:
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_password
+# Đảm bảo MLflow Credentials có sẵn (được tiêm qua kernel-metadata.json)
+get_required_env("MLFLOW_TRACKING_USERNAME")
+get_required_env("MLFLOW_TRACKING_PASSWORD")
 
 # Cấu hình tham số từ biến môi trường
 MODEL_VERSION = get_required_env("MODEL_VERSION")

@@ -37,8 +37,15 @@ def main():
     github_token = os.environ.get("GITHUB_TOKEN")
     event_type = os.environ.get("GITHUB_DEPLOY_EVENT", "mlflow_production_selected")
 
+    mlflow_username = os.environ.get("MLFLOW_TRACKING_USERNAME")
+    mlflow_password = os.environ.get("MLFLOW_TRACKING_PASSWORD")
+
     if not github_repo or not github_token:
         raise ValueError("Error: Missing environment variables GITHUB_REPO or GITHUB_TOKEN!")
+
+    if not mlflow_username or not mlflow_password:
+        print("Warning: MLFLOW_TRACKING_USERNAME or MLFLOW_TRACKING_PASSWORD is not set. MLflow connection might fail if Basic Auth is enabled.")
+
 
     # Thiết lập MLflow client
     if tracking_uri:

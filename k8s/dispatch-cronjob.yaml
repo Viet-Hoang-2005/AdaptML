@@ -35,7 +35,17 @@ spec:
                 - name: MLFLOW_MODEL_NAME
                   value: "NIDS-XGBoost"
                 - name: PRODUCTION_ALIAS
-                  value: "Production"
+                  value: "production"
+                - name: MLFLOW_TRACKING_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: mlflow-credentials
+                      key: MLFLOW_TRACKING_USERNAME
+                - name: MLFLOW_TRACKING_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: mlflow-credentials
+                      key: MLFLOW_TRACKING_PASSWORD
                 
                 # 2. Cấu hình kết nối tới GitHub Actions
                 - name: GITHUB_REPO

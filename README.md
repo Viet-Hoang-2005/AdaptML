@@ -275,7 +275,6 @@ terraform apply
   "KAGGLE_USERNAME": "<your-kaggle-username>",
   "KAGGLE_API_TOKEN": "<your-kaggle-api-token>",
   "SLACK_WEBHOOK_URL": "<your-slack-webhook-url>",
-  "MLFLOW_TRACKING_URI": "<your-mlflow-tracking-uri>",
   "KUBE_CONFIG": "<your-kube-config-base64>"
 }
 ```
@@ -317,11 +316,13 @@ terraform apply
 }
 ```
 
-6. Secret Name: `mlflow-basic-auth` (Dành cho MLflow Basic Auth)
+6. Secret Name: `mlops/mlflow-basic-auth` (Dành cho MLflow Basic Auth)
 
 ```json
 {
-  "auth": "<your-mlflow-basic-auth>"
+  "MLFLOW_TRACKING_URI": "<your-mlflow-tracking-uri>",
+  "MLFLOW_TRACKING_USERNAME": "<your-mlflow-tracking-username>",
+  "MLFLOW_TRACKING_PASSWORD": "<your-mlflow-tracking-password>"
 }
 ```
 
