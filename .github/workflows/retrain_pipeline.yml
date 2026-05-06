@@ -44,13 +44,6 @@ jobs:
           echo "  target_csv=$TARGET_CSV"
           echo "  model_version=$MODEL_VERSION"
 
-      - name: Fetch Secrets from AWS
-        uses: aws-actions/aws-secretsmanager-get-secrets@v2
-        with:
-          secret-ids: |
-            SECRETS, mlops/github-actions-secrets
-          parse-json-secrets: true
-
       - name: Trigger SageMaker Training Job
         env:
           AWS_SAGEMAKER_ROLE_ARN: ${{ vars.AWS_SAGEMAKER_ROLE_ARN }}
@@ -59,10 +52,20 @@ jobs:
           AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
           S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
-          MLFLOW_TRACKING_URI: ${{ env.SECRETS_MLFLOW_TRACKING_URI }}
-          MLFLOW_TRACKING_USERNAME: ${{ env.SECRETS_MLFLOW_TRACKING_USERNAME }}
-          MLFLOW_TRACKING_PASSWORD: ${{ env.SECRETS_MLFLOW_TRACKING_PASSWORD }}
         run: |
+          aws secretsmanager get-secret-value \
+            --region "$AWS_DEFAULT_REGION" \
+            --secret-id mlops/github-actions-secrets \
+            --output json > /tmp/github-actions-secret-response.json
+
+          read_secret() {
+            python -c 'import json, sys; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); print(data.get(sys.argv[1], ""))' "$1"
+          }
+
+          export MLFLOW_TRACKING_URI="$(read_secret MLFLOW_TRACKING_URI)"
+          export MLFLOW_TRACKING_USERNAME="$(read_secret MLFLOW_TRACKING_USERNAME)"
+          export MLFLOW_TRACKING_PASSWORD="$(read_secret MLFLOW_TRACKING_PASSWORD)"
+
           if [ -z "$MLFLOW_TRACKING_URI" ]; then
             echo "Missing required environment variable: MLFLOW_TRACKING_URI"
             exit 1
