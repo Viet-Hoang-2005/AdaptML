@@ -529,7 +529,7 @@ resource "aws_secretsmanager_secret" "github_secrets" {
 
 resource "aws_secretsmanager_secret" "mlflow_basic_auth" {
   name        = "mlops/mlflow-basic-auth"
-  description = "MLflow htpasswd auth"
+  description = "MLflow Native Authentication"
 }
 
 resource "aws_secretsmanager_secret" "tunnel_token" {
@@ -605,6 +605,25 @@ data "aws_iam_policy_document" "github_actions_policy" {
       "${aws_s3_bucket.artifacts_bucket.arn}/*"
     ]
   }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "sagemaker:CreateTrainingJob",
+      "sagemaker:DescribeTrainingJob"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "iam:PassRole"
+    ]
+    resources = [
+      aws_iam_role.sagemaker_execution_role.arn
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "github_actions_policy_attach" {
@@ -670,7 +689,43 @@ resource "aws_acm_certificate_validation" "mlops_cert_validation" {
   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 }
 
-# 11. OUTPUTS
+# 11. AWS SAGEMAKER FOR TRAINING
+# Tạo IAM Role cho SageMaker
+data "aws_iam_policy_document" "sagemaker_assume_role" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["sagemaker.amazonaws.com"]
+    }
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role" "sagemaker_execution_role" {
+  name               = "mlops-sagemaker-execution-role"
+  assume_role_policy = data.aws_iam_policy_document.sagemaker_assume_role.json
+}
+
+# Gắn managed policy AmazonSageMakerFullAccess
+resource "aws_iam_role_policy_attachment" "sagemaker_full_access" {
+  role       = aws_iam_role.sagemaker_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+}
+
+# Gắn policy đọc/ghi S3 (dùng lại policy của Worker)
+resource "aws_iam_role_policy_attachment" "sagemaker_s3_attach" {
+  role       = aws_iam_role.sagemaker_execution_role.name
+  policy_arn = aws_iam_policy.worker_s3_policy.arn
+}
+
+# Gắn policy đọc Secrets Manager (dùng lại policy của Worker)
+resource "aws_iam_role_policy_attachment" "sagemaker_secrets_attach" {
+  role       = aws_iam_role.sagemaker_execution_role.name
+  policy_arn = aws_iam_policy.worker_secrets_policy.arn
+}
+
+# 12. OUTPUTS
 output "master_public_ip" {
   description = "Public IP for SSH access to Master Node"
   value       = aws_eip.master_eip.public_ip
@@ -689,6 +744,11 @@ output "s3_bucket_name" {
 output "github_actions_role_arn" {
   description = "IAM Role ARN to configure in GitHub Variables"
   value       = aws_iam_role.github_actions_role.arn
+}
+
+output "sagemaker_execution_role_arn" {
+  description = "IAM Role ARN to configure in GitHub Variables for SageMaker"
+  value       = aws_iam_role.sagemaker_execution_role.arn
 }
 
 output "name_servers" {
