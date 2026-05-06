@@ -62,6 +62,9 @@ jobs:
             python -c 'import json, sys; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); print(data.get(sys.argv[1], ""))' "$1"
           }
 
+          echo "Available github-actions secret keys:"
+          python -c 'import json; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); print("\n".join(sorted(data.keys())))'
+
           export MLFLOW_TRACKING_URI="$(read_secret MLFLOW_TRACKING_URI)"
           export MLFLOW_TRACKING_USERNAME="$(read_secret MLFLOW_TRACKING_USERNAME)"
           export MLFLOW_TRACKING_PASSWORD="$(read_secret MLFLOW_TRACKING_PASSWORD)"
