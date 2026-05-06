@@ -64,7 +64,7 @@ jobs:
           MLFLOW_TRACKING_USERNAME: ${{ env.AUTH_MLFLOW_TRACKING_USERNAME }}
           MLFLOW_TRACKING_PASSWORD: ${{ env.AUTH_MLFLOW_TRACKING_PASSWORD }}
         run: |
-          pip install boto3 sagemaker --quiet
+          pip install boto3 "sagemaker<3.0.0" --quiet
           python .github/scripts/trigger_sagemaker.py
 
           echo "SageMaker training job triggered successfully."

@@ -45,7 +45,10 @@ def main():
         py_version="py3",
         sagemaker_session=sagemaker_session,
         environment=training_env,
-        base_job_name=f"mlops-nids-{model_version.replace('.', '-')}"
+        base_job_name=f"mlops-nids-{model_version.replace('.', '-')}",
+        use_spot_instances=True,
+        max_run=3600,
+        max_wait=7200
     )
 
     # Đường dẫn thư mục chứa dữ liệu trên S3
