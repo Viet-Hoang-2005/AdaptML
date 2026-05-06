@@ -63,7 +63,7 @@ flowchart TB
     S3 -->|Object Created| LAMBDA
     LAMBDA -->|Webhook: data_manifest_updated| GH_RETRAIN
 
-    GH_RETRAIN -->|Kaggle API| TRAIN[Kaggle Compute]
+    GH_RETRAIN -->|SageMaker SDK| TRAIN[SageMaker Training Job]
     TRAIN -->|Upload artifacts| S3
 
     GH_CICD -->|Docker Build + Push| API
@@ -180,7 +180,7 @@ sequenceDiagram
     participant EVD as Evidently K8s Job
     participant GH_DRIFT as trigger_drift_check.yml
     participant GH_RETRAIN as retrain_pipeline.yml
-    participant K as Kaggle Compute
+    participant SM as SageMaker Training
     participant MLF as MLflow Server
     participant HUMAN as Data Scientist (HitL)
     participant CRON as dispatch_production_model.py<br/>(K8s CronJob / 5 phút)
@@ -197,10 +197,10 @@ sequenceDiagram
     S3->>GH_RETRAIN: Lambda → Webhook: data_manifest_updated
 
     GH_RETRAIN->>S3: 1. Load data_manifest.json
-    GH_RETRAIN->>K: 2. kaggle kernels push (train.py)
-    K-->>K: 3. XGBoost training trên Kaggle GPU
-    K->>MLF: 4. mlflow.log_metrics() + mlflow.register_model()<br/>→ Stage: Staging
-    K->>S3: 5. Upload deployment_exports/ (model.pkl + label.json)
+    GH_RETRAIN->>SM: 2. Trigger SageMaker Spot Job (trigger_sagemaker.py)
+    SM-->>SM: 3. XGBoost training trên SageMaker Spot Instance
+    SM->>MLF: 4. mlflow.log_metrics() + mlflow.register_model()<br/>→ Stage: Staging
+    SM->>S3: 5. Upload deployment_exports/ (model.pkl + label.json)
 
     HUMAN->>MLF: 6. Assign alias "production" (HitL)
 
@@ -325,7 +325,7 @@ Việc chuyển đổi từ ghi log trực tiếp sang mô hình **Data Streamin
 | **Bảo toàn Dữ liệu**     | 100% requests được ghi log | Async Background Task trong FastAPI         |
 | **Downtime khi Deploy**  | 0%                         | Rolling Update + Init Container             |
 | **Phục hồi DB khi sập**  | < 60 giây                  | CloudNativePG Auto Failover                 |
-| **Chu kỳ Retrain**       | < 2 giờ                    | Kaggle GPU → MLflow Registry → K3s          |
+| **Chu kỳ Retrain**       | < 2 giờ                    | SageMaker Spot → MLflow Registry → K3s      |
 | **Phát hiện Drift**      | Theo ngưỡng bản ghi        | Evidently Job (kích hoạt qua Webhook)       |
 | **Dispatch Model mới**   | Mỗi 5 phút                 | K8s CronJob: dispatch_production_model.py   |
 | **MLflow Query**         | < 1s                       | PostgreSQL backend (database: mlflow riêng) |
@@ -338,7 +338,7 @@ Việc chuyển đổi từ ghi log trực tiếp sang mô hình **Data Streamin
 
 | Stage          | Ý nghĩa                                                          | Ai thực hiện           |
 | -------------- | ---------------------------------------------------------------- | ---------------------- |
-| **Staging**    | Model vừa được đăng ký sau khi train xong trên Kaggle            | `train.py` tự động     |
+| **Staging**    | Model vừa được đăng ký sau khi train xong trên SageMaker         | `train.py` tự động     |
 | **Production** | Model được chọn phục vụ inference, được gán alias `"production"` | Data Scientist (HitL)  |
 | **Archived**   | Model cũ đã bị thay thế bởi phiên bản mới, giữ lại để rollback   | Tự động khi deploy mới |
 
@@ -348,17 +348,16 @@ Thay vì mở NodePort hoặc sử dụng nhiều Tunnel riêng lẻ, hệ thố
 
 - **Unified Routing**: Một Tunnel ID duy nhất xử lý nhiều Public Hostnames.
 - **Cross-Namespace Routing**: Nhờ mạng phẳng của K8s, Tunnel Pod trong namespace `default` có thể trỏ tới:
-    - `mlflow.mlops-nids-nt114.id.vn` -> `http://mlflow-service:5000`
-    - `grafana.mlops-nids-nt114.id.vn` -> `http://monitoring-grafana.monitoring.svc.cluster.local:80`
+  - `mlflow.mlops-nids-nt114.id.vn` -> `http://mlflow-service:5000`
+  - `grafana.mlops-nids-nt114.id.vn` -> `http://monitoring-grafana.monitoring.svc.cluster.local:80`
 - **Security**: Toàn bộ traffic được mã hóa TLS từ Edge của Cloudflare đến Tunnel Pod, không cần mở port trên Firewall của AWS.
 
 ### 7.3. Truy cập Dashboard
 
-| Dịch vụ | URL | Authentication |
-|---|---|---|
-| **MLflow UI** | `https://mlflow.mlops-nids-nt114.id.vn` | Nginx Basic Auth |
-| **Grafana** | `https://grafana.mlops-nids-nt114.id.vn` | Grafana Internal Auth |
-
+| Dịch vụ       | URL                                      | Authentication        |
+| ------------- | ---------------------------------------- | --------------------- |
+| **MLflow UI** | `https://mlflow.mlops-nids-nt114.id.vn`  | Nginx Basic Auth      |
+| **Grafana**   | `https://grafana.mlops-nids-nt114.id.vn` | Grafana Internal Auth |
 
 ---
 
