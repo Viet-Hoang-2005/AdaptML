@@ -49,7 +49,6 @@ jobs:
         with:
           secret-ids: |
             SECRETS, mlops/github-actions-secrets
-            AUTH, mlops/mlflow-basic-auth
           parse-json-secrets: true
 
       - name: Trigger SageMaker Training Job
@@ -60,7 +59,20 @@ jobs:
           AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
           S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
+          MLFLOW_TRACKING_URI: ${{ env.SECRETS_MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ env.SECRETS_MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ env.SECRETS_MLFLOW_TRACKING_PASSWORD }}
         run: |
+          if [ -z "$MLFLOW_TRACKING_URI" ]; then
+            echo "Missing required environment variable: MLFLOW_TRACKING_URI"
+            exit 1
+          fi
+
+          if [ -z "$MLFLOW_TRACKING_USERNAME" ] || [ -z "$MLFLOW_TRACKING_PASSWORD" ]; then
+            echo "Missing required MLflow auth variables"
+            exit 1
+          fi
+
           pip install boto3 "sagemaker<3.0.0" --quiet
           python .github/scripts/trigger_sagemaker.py
 
