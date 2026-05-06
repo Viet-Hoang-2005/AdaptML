@@ -598,7 +598,8 @@ data "aws_iam_policy_document" "github_actions_policy" {
     effect = "Allow"
     actions = [
       "s3:GetObject",
-      "s3:ListBucket"
+      "s3:ListBucket",
+      "s3:PutObject"
     ]
     resources = [
       aws_s3_bucket.artifacts_bucket.arn,

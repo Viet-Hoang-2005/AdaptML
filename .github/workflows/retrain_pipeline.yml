@@ -44,14 +44,6 @@ jobs:
           echo "  target_csv=$TARGET_CSV"
           echo "  model_version=$MODEL_VERSION"
 
-      - name: Fetch Secrets from AWS
-        uses: aws-actions/aws-secretsmanager-get-secrets@v2
-        with:
-          secret-ids: |
-            SECRETS, mlops/github-actions-secrets
-            AUTH, mlops/mlflow-basic-auth
-          parse-json-secrets: true
-
       - name: Trigger SageMaker Training Job
         env:
           AWS_SAGEMAKER_ROLE_ARN: ${{ vars.AWS_SAGEMAKER_ROLE_ARN }}
@@ -59,11 +51,34 @@ jobs:
           TARGET_CSV: ${{ steps.read_manifest.outputs.target_csv }}
           AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
           S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
-          MLFLOW_TRACKING_URI: ${{ env.AUTH_MLFLOW_TRACKING_URI }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
-          MLFLOW_TRACKING_USERNAME: ${{ env.AUTH_MLFLOW_TRACKING_USERNAME }}
-          MLFLOW_TRACKING_PASSWORD: ${{ env.AUTH_MLFLOW_TRACKING_PASSWORD }}
         run: |
+          aws secretsmanager get-secret-value \
+            --region "$AWS_DEFAULT_REGION" \
+            --secret-id mlops/github-actions-secrets \
+            --output json > /tmp/github-actions-secret-response.json
+
+          read_secret() {
+            python -c 'import json, sys; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); value=data.get(sys.argv[1]) or ""; print(value)' "$1"
+          }
+
+          echo "Available github-actions secret keys:"
+          python -c 'import json; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); print("\n".join(sorted(data.keys())))'
+
+          export MLFLOW_TRACKING_URI="$(read_secret MLFLOW_TRACKING_URI)"
+          export MLFLOW_TRACKING_USERNAME="$(read_secret MLFLOW_TRACKING_USERNAME)"
+          export MLFLOW_TRACKING_PASSWORD="$(read_secret MLFLOW_TRACKING_PASSWORD)"
+
+          if [ -z "$MLFLOW_TRACKING_URI" ] || [ "$MLFLOW_TRACKING_URI" = "None" ] || [ "$MLFLOW_TRACKING_URI" = "null" ]; then
+            echo "Missing required environment variable: MLFLOW_TRACKING_URI"
+            exit 1
+          fi
+
+          if [ -z "$MLFLOW_TRACKING_USERNAME" ] || [ -z "$MLFLOW_TRACKING_PASSWORD" ]; then
+            echo "Missing required MLflow auth variables"
+            exit 1
+          fi
+
           pip install boto3 "sagemaker<3.0.0" --quiet
           python .github/scripts/trigger_sagemaker.py
 
