@@ -49,6 +49,7 @@ jobs:
         with:
           secret-ids: |
             SECRETS, mlops/github-actions-secrets
+            AUTH, mlops/mlflow-basic-auth
           parse-json-secrets: true
 
       - name: Push Kaggle Training Kernel
@@ -59,8 +60,10 @@ jobs:
           TARGET_CSV: ${{ steps.read_manifest.outputs.target_csv }}
           AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
           S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
-          MLFLOW_TRACKING_URI: ${{ env.SECRETS_MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_URI: ${{ env.AUTH_MLFLOW_TRACKING_URI }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
+          MLFLOW_TRACKING_USERNAME: ${{ env.AUTH_MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ env.AUTH_MLFLOW_TRACKING_PASSWORD }}
         run: |
           pip install kaggle --quiet
           mkdir -p ~/.kaggle
@@ -74,12 +77,23 @@ jobs:
             --arg prefix "$S3_TRAINING_DATA_PREFIX" \
             --arg mlflow_uri "$MLFLOW_TRACKING_URI" \
             --arg model_name "$MLFLOW_MODEL_NAME" \
+            --arg aws_key "$AWS_ACCESS_KEY_ID" \
+            --arg aws_secret "$AWS_SECRET_ACCESS_KEY" \
+            --arg aws_token "$AWS_SESSION_TOKEN" \
+            --arg mlflow_user "$MLFLOW_TRACKING_USERNAME" \
+            --arg mlflow_pass "$MLFLOW_TRACKING_PASSWORD" \
             '.environment_variables.TARGET_CSV = $csv
             | .environment_variables.MODEL_VERSION = $ver
             | .environment_variables.AWS_BUCKET_NAME = $bucket
             | .environment_variables.S3_TRAINING_DATA_PREFIX = $prefix
             | .environment_variables.MLFLOW_TRACKING_URI = $mlflow_uri
-            | .environment_variables.MLFLOW_MODEL_NAME = $model_name' \
+            | .environment_variables.MLFLOW_MODEL_NAME = $model_name
+            | .environment_variables.AWS_ACCESS_KEY_ID = $aws_key
+            | .environment_variables.AWS_SECRET_ACCESS_KEY = $aws_secret
+            | .environment_variables.AWS_SESSION_TOKEN = $aws_token
+            | .environment_variables.MLFLOW_TRACKING_USERNAME = $mlflow_user
+            | .environment_variables.MLFLOW_TRACKING_PASSWORD = $mlflow_pass
+            | .environment_variables.AWS_DEFAULT_REGION = "ap-southeast-1"' \
             kaggle/kernel-metadata.json > /tmp/kernel-metadata.json
 
           mv /tmp/kernel-metadata.json kaggle/kernel-metadata.json
