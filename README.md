@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![XGBoost](https://img.shields.io/badge/XGBoost-F1%3E99%25-FF6600?style=flat-square)](https://xgboost.readthedocs.io)
-[![MLflow](https://img.shields.io/badge/MLflow-2.x-0194E2?style=flat-square&logo=mlflow&logoColor=white)](https://mlflow.org)
+[![MLflow](https://img.shields.io/badge/MLflow-3.11.x-0194E2?style=flat-square&logo=mlflow&logoColor=white)](https://mlflow.org)
 [![Evidently AI](https://img.shields.io/badge/Evidently_AI-0.4.x-6D31FF?style=flat-square)](https://evidentlyai.com)
 [![Kubernetes](https://img.shields.io/badge/K3s-v1.34-326CE5?style=flat-square&logo=kubernetes&logoColor=white)](https://k3s.io)
 [![AWS](https://img.shields.io/badge/AWS-Terraform-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
@@ -51,21 +51,21 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 
 ## 2. Tính năng Cốt lõi ✨
 
-| #   | Tính năng                                                                     | Công nghệ                  |
-| --- | ----------------------------------------------------------------------------- | -------------------------- |
-| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%             | XGBoost + CIC-IDS2017      |
-| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                          | FastAPI + Uvicorn          |
-| 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer  | Redpanda + Consumer        |
-| 4   | **PostgreSQL HA** 2 Instances (Primary + Standby), auto failover < 60s        | CloudNativePG              |
-| 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu   | Evidently AI               |
-| 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên SageMaker Spot | AWS Lambda + SageMaker |
-| 7   | **Model Registry & HitL** - Quản lý vòng đời model và phê duyệt thủ công      | MLflow Registry            |
-| 8   | **Zero-downtime deployment** Rolling update + Kéo model bằng RUN_ID từ MLflow | GitHub Actions + K3s       |
-| 9   | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời         | Locust                     |
-| 10  | **Zero-trust & Keyless Security** - Xác thực OIDC, loại bỏ mật khẩu tĩnh      | AWS OIDC + Secrets Manager |
-| 11  | **Full-stack Observability** - Giám sát API, DB, Redpanda và ML metrics       | Prometheus + Grafana       |
-| 12  | **Smart Alerting** - Cảnh báo DDoS, Latency cao qua Slack                     | AlertManager + Slack       |
-| 13  | **Event-driven Autoscaling** - Tự động scale Consumer theo độ trễ tin nhắn    | KEDA + Redpanda Lag        |
+| #   | Tính năng                                                                      | Công nghệ                  |
+| --- | ------------------------------------------------------------------------------ | -------------------------- |
+| 1   | **Phân loại tấn công mạng** BENIGN / DDoS / PortScan với F1 > 99%              | XGBoost + CIC-IDS2017      |
+| 2   | **Low-latency inference** < 100ms, model nạp vào RAM                           | FastAPI + Uvicorn          |
+| 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer   | Redpanda + Consumer        |
+| 4   | **PostgreSQL HA** 2 Instances (Primary + Standby), auto failover < 60s         | CloudNativePG              |
+| 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu    | Evidently AI               |
+| 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên SageMaker Spot | AWS Lambda + SageMaker     |
+| 7   | **Model Registry & HitL** - Quản lý vòng đời model và phê duyệt thủ công       | MLflow Registry            |
+| 8   | **Zero-downtime deployment** Rolling update + Kéo model bằng RUN_ID từ MLflow  | GitHub Actions + K3s       |
+| 9   | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời          | Locust                     |
+| 10  | **Zero-trust & Keyless Security** - Xác thực OIDC, loại bỏ mật khẩu tĩnh       | AWS OIDC + Secrets Manager |
+| 11  | **Full-stack Observability** - Giám sát API, DB, Redpanda và ML metrics        | Prometheus + Grafana       |
+| 12  | **Smart Alerting** - Cảnh báo DDoS, Latency cao qua Slack                      | AlertManager + Slack       |
+| 13  | **Event-driven Autoscaling** - Tự động scale Consumer theo độ trễ tin nhắn     | KEDA + Redpanda Lag        |
 
 ---
 
@@ -87,7 +87,7 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy  |
 | **Drift Monitoring**   | Evidently AI                                |
 | **Load Testing**       | Locust                                      |
-| **Compute Engine**     | AWS SageMaker Training Jobs |
+| **Compute Engine**     | AWS SageMaker Training Jobs                 |
 | **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda                 |
 | **Container Registry** | Docker Hub                                  |
 | **Model Registry**     | MLflow + AWS S3                             |
