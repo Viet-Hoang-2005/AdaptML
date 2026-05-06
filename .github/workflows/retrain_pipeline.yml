@@ -55,11 +55,10 @@ jobs:
           aws secretsmanager get-secret-value \
             --region "$AWS_DEFAULT_REGION" \
             --secret-id mlops/github-actions-secrets \
-            --query SecretString \
-            --output text > /tmp/github-actions-secrets.json
+            --output json > /tmp/github-actions-secret-response.json
 
           read_secret() {
-            python -c 'import json, sys; data=json.load(open("/tmp/github-actions-secrets.json", encoding="utf-8-sig")); print(data.get(sys.argv[1], ""))' "$1"
+            python -c 'import json, sys; response=json.load(open("/tmp/github-actions-secret-response.json", encoding="utf-8-sig")); data=json.loads(response["SecretString"]); print(data.get(sys.argv[1], ""))' "$1"
           }
 
           KAGGLE_USERNAME=$(read_secret KAGGLE_USERNAME)
