@@ -1,0 +1,5 @@
+mlflow
+xgboost
+pandas
+scikit-learn
+boto3

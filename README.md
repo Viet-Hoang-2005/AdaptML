@@ -44,7 +44,7 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
         ▲                                           │
         │                                           │
         │                                           ▼
-    Kaggle + MLflow Registry ◄──── GitHub Actions (Retrain Pipeline) ◄──── AWS S3 + Lambda
+    SageMaker + MLflow Registry ◄──── GitHub Actions (Retrain Pipeline) ◄──── AWS S3 + Lambda
 ```
 
 ---
@@ -58,7 +58,7 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | 3   | **Event-driven streaming** chịu tải dữ liệu lớn với cơ chế Producer-Consumer  | Redpanda + Consumer        |
 | 4   | **PostgreSQL HA** 2 Instances (Primary + Standby), auto failover < 60s        | CloudNativePG              |
 | 5   | **Automated drift detection** tự động kích hoạt qua Webhook theo ngưỡng mẫu   | Evidently AI               |
-| 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên Kaggle GPU    | AWS Lambda + Kaggle        |
+| 6   | **Automated retraining** kích hoạt bởi S3/Evidently, train trên SageMaker Spot | AWS Lambda + SageMaker |
 | 7   | **Model Registry & HitL** - Quản lý vòng đời model và phê duyệt thủ công      | MLflow Registry            |
 | 8   | **Zero-downtime deployment** Rolling update + Kéo model bằng RUN_ID từ MLflow | GitHub Actions + K3s       |
 | 9   | **Load testing & drift simulation** giả lập DDoS / PortScan đồng thời         | Locust                     |
@@ -87,7 +87,7 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | **Database (HA)**      | PostgreSQL 15 + CloudNativePG + SQLAlchemy  |
 | **Drift Monitoring**   | Evidently AI                                |
 | **Load Testing**       | Locust                                      |
-| **Compute Engine**     | Kaggle Kernels API                          |
+| **Compute Engine**     | AWS SageMaker Training Jobs |
 | **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda                 |
 | **Container Registry** | Docker Hub                                  |
 | **Model Registry**     | MLflow + AWS S3                             |
@@ -106,10 +106,13 @@ mlops-nids-system/
 │
 ├── .github/workflows/
 │   ├── ci_cd_pipeline.yml           # Build Docker Image -> Push Docker Hub -> Rolling Deploy K3s
-│   ├── retrain_pipeline.yml         # Nhận Webhook -> Tải dữ liệu S3 -> Kích hoạt Kaggle Kernel
+│   ├── retrain_pipeline.yml         # Nhận Webhook -> Tải dữ liệu S3 -> Kích hoạt SageMaker Job
 │   ├── deploy_from_mlflow.yml       # Nhận RUN_ID từ Dispatch -> Rolling Update API trên K3s
 │   ├── trigger_drift_check.yml      # Lắng nghe Webhook từ Consumer -> Chạy Evidently Job
 │   └── drift_alert.yml              # Gửi Slack Alert khi phát hiện Data Drift
+│
+├── .github/scripts/
+│   └── trigger_sagemaker.py         # Script Python gọi AWS SDK để khởi tạo máy chủ huấn luyện
 │
 ├── api/
 │   ├── src/
@@ -129,9 +132,9 @@ mlops-nids-system/
 │   ├── Dockerfile
 │   └── requirements.txt
 │
-├── kaggle/
-│   ├── train.py                     # XGBoost Training: S3 Data -> MLflow Tracking + Artifact
-│   └── kernel-metadata.json         # Kaggle Kernel config (source, dataset, environment)
+├── sagemaker/
+│   ├── train.py                     # XGBoost Training: Đọc S3 trực tiếp -> MLflow Tracking
+│   └── requirements.txt             # Thư viện cần thiết cho môi trường SageMaker (XGBoost, MLflow)
 │
 ├── k8s/
 │   ├── api-deployment.yaml          # FastAPI (2 replicas) + Init Container kéo model từ S3
@@ -272,8 +275,6 @@ terraform apply
 {
   "DOCKERHUB_USERNAME": "<your-dockerhub-username>",
   "DOCKERHUB_TOKEN": "<your-dockerhub-token>",
-  "KAGGLE_USERNAME": "<your-kaggle-username>",
-  "KAGGLE_API_TOKEN": "<your-kaggle-api-token>",
   "SLACK_WEBHOOK_URL": "<your-slack-webhook-url>",
   "KUBE_CONFIG": "<your-kube-config-base64>"
 }
@@ -331,7 +332,8 @@ terraform apply
 1. Truy cập Website AWS -> **IAM** -> **Roles** -> **mlops-github-actions-role**
 2. Copy mã ARN vừa tìm được
 3. Vào GitHub Repo -> **Settings** -> **Secrets and variables** -> **Actions** -> "Variables".
-4. Tạo một biến mới tên là `AWS_ROLE_ARN` và dán giá trị ARN vào
+4. Tạo một biến mới tên là `AWS_ROLE_ARN` và dán giá trị ARN vào.
+5. Tạo thêm một biến nữa tên là `AWS_SAGEMAKER_ROLE_ARN` và dán ARN của SageMaker Execution Role (lấy từ output Terraform).
 
 #### Bước 4: Cài đặt K3s
 
@@ -536,7 +538,7 @@ GitHub Repo -> Tab Actions -> "MLOps NIDS - Controlled Retraining Pipeline"
 4. Quan sát quá trình Retraining:
 
 ```
-Setup -> Download Data from S3 -> Train on Kaggle GPU -> Quality Gate -> Register to MLflow
+Setup -> Download Data from S3 -> Trigger SageMaker Spot Job -> Quality Gate -> Register to MLflow
 ```
 
 5. Xem model mới xuất hiện trên MLflow Registry:

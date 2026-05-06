@@ -1,27 +1,10 @@
 # train.py: Huấn luyện mô hình ML phân loại tấn công mạng bằng XGBoost và giám sát bằng MLflow
-import importlib
 import json
 import os
-import subprocess
-import sys
 import warnings
 from datetime import datetime
 from time import sleep
 
-# Hàm đảm bảo các thư viện cần thiết đã được cài đặt
-def ensure_dependency(package_name: str) -> None:
-    try:
-        importlib.import_module(package_name)
-    except ImportError:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "--quiet", package_name]
-        )
-
-# Cài đặt thư viện mlflow (MLflow Tracking) và boto3 (AWS SDK)
-for dependency in ("mlflow", "boto3"):
-    ensure_dependency(dependency)
-
-import boto3
 import joblib
 import mlflow
 import mlflow.xgboost
@@ -37,21 +20,14 @@ from sklearn.utils.class_weight import compute_sample_weight
 # Tắt cảnh báo FutureWarning
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-# Cấu hình biến môi trường AWS
-# Các biến này đã được tiêm vào qua kernel-metadata.json từ GitHub Actions
+# Lấy cấu hình biến môi trường
 def get_required_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
         raise RuntimeError(f"Missing required environment variable: {name}")
     return value
 
-# Đảm bảo AWS STS Credentials có sẵn
-get_required_env("AWS_ACCESS_KEY_ID")
-get_required_env("AWS_SECRET_ACCESS_KEY")
-get_required_env("AWS_SESSION_TOKEN")
-os.environ["AWS_DEFAULT_REGION"] = os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1")
-
-# Đảm bảo MLflow Credentials có sẵn (được tiêm qua kernel-metadata.json)
+# Đảm bảo đã có MLflow Credentials
 get_required_env("MLFLOW_TRACKING_USERNAME")
 get_required_env("MLFLOW_TRACKING_PASSWORD")
 
@@ -64,7 +40,7 @@ MLFLOW_TRACKING_URI = get_required_env("MLFLOW_TRACKING_URI")
 MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "MLOps_NIDS_Training")
 MLFLOW_MODEL_NAME = os.environ.get("MLFLOW_MODEL_NAME", "NIDS-XGBoost")
 STAGING_ALIAS = os.environ.get("MLFLOW_STAGING_ALIAS", "Staging")
-OUTPUT_DIR = "/kaggle/working/models"
+OUTPUT_DIR = os.environ.get("SM_MODEL_DIR", "/opt/ml/model") # SageMaker Model Directory
 
 # Cấu hình MLflow tracking và registry URI
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -72,7 +48,7 @@ mlflow.set_registry_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
 print("=" * 60)
-print("Kaggle training configuration")
+print("SageMaker training configuration")
 print(f"MODEL_VERSION           : {MODEL_VERSION}")
 print(f"TARGET_CSV              : {TARGET_CSV}")
 print(f"AWS_BUCKET_NAME         : {AWS_BUCKET_NAME}")
@@ -85,34 +61,16 @@ print("=" * 60)
 
 # Hàm tải dữ liệu huấn luyện từ S3 hoặc local path
 def download_training_data(target_csv: str) -> str:
-    # Thiết lập đường dẫn tải xuống trong môi trường Kaggle
-    s3_download_path = os.path.join("/kaggle/working", target_csv)
-
-    # Cách 1: Tải dataset từ S3
-    print("Attempting to download training data from S3...")
-    try:
-        s3_client = boto3.client("s3")
-        s3_client.download_file(
-            AWS_BUCKET_NAME,
-            f"{S3_TRAINING_DATA_PREFIX}{target_csv}",
-            s3_download_path,
-        )
-        print(f"Downloaded dataset from S3: {s3_download_path}")
-        return s3_download_path
-    except Exception as exc:
-        print(f"Failed to download from S3: {exc}")
-
-    # Cách 2: Tìm kiếm dataset trong thư mục /kaggle/input/
-    print(f"Searching for {target_csv} inside /kaggle/input/...")
-    for dirname, _, filenames in os.walk("/kaggle/input"):
-        for filename in filenames:
-            if filename == target_csv:
-                local_csv_path = os.path.join(dirname, filename)
-                print(f"Found local dataset: {local_csv_path}")
-                return local_csv_path
-
+    # Trong môi trường SageMaker, dữ liệu được mount trực tiếp vào /opt/ml/input/data/train/
+    sagemaker_input_dir = os.environ.get("SM_CHANNEL_TRAIN", "/opt/ml/input/data/train")
+    local_csv_path = os.path.join(sagemaker_input_dir, target_csv)
+    
+    if os.path.exists(local_csv_path):
+        print(f"Found dataset at SageMaker input channel: {local_csv_path}")
+        return local_csv_path
+        
     raise FileNotFoundError(
-        f"Could not find {target_csv} in S3 or under /kaggle/input/."
+        f"Could not find {target_csv} at {sagemaker_input_dir}. Ensure S3 Data Channel is configured correctly."
     )
 
 # Hàm đệ quy liệt kê artifacts trong MLflow run để hỗ trợ debug khi đăng ký model thất bại
@@ -184,8 +142,8 @@ def register_model_to_mlflow(run_id: str, artifact_uri: str) -> tuple[str, str]:
             "model_version": MODEL_VERSION,
             "approval_status": "pending",
             "candidate_s3_prefix": candidate_s3_prefix,
-            "registered_by": "kaggle_train_py",
-            "training_source": "kaggle",
+            "registered_by": "sagemaker_train_py",
+            "training_source": "sagemaker",
             "mlflow_experiment_name": MLFLOW_EXPERIMENT_NAME,
             "staging_alias": STAGING_ALIAS,
         }
@@ -296,11 +254,11 @@ def main() -> None:
         mlflow.log_param("objective", xgb_params["objective"])
         mlflow.set_tags(
             {
-                "pipeline": "kaggle_retrain",
+                "pipeline": "sagemaker_retrain",
                 "approval_status": "pending",
                 "model_version": MODEL_VERSION,
                 "candidate_s3_prefix": f"s3://{AWS_BUCKET_NAME}/models/{MODEL_VERSION}/",
-                "training_source": "kaggle",
+                "training_source": "sagemaker",
             }
         )
 
