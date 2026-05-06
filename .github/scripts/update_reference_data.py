@@ -35,7 +35,7 @@ def load_manifest_from_s3(s3_client) -> dict:
     print(f"[2/4] Reading data manifest from s3://{AWS_BUCKET}/{MANIFEST_KEY}...")
     
     response = s3_client.get_object(Bucket=AWS_BUCKET, Key=MANIFEST_KEY)
-    manifest = json.loads(response['Body'].read().decode('utf-8'))
+    manifest = json.loads(response['Body'].read().decode('utf-8-sig'))
     
     print(f" Target dataset : {manifest['target_csv']}")
     print(f" Model version  : {manifest['model_version']}")
@@ -44,7 +44,7 @@ def load_manifest_from_s3(s3_client) -> dict:
 def load_manifest_local() -> dict:
     manifest_path = os.path.join(ROOT_DIR, MANIFEST_KEY)
     print(f" Fallback: Reading data manifest from local {manifest_path}...")
-    with open(manifest_path, 'r', encoding='utf-8') as f:
+    with open(manifest_path, 'r', encoding='utf-8-sig') as f:
         manifest = json.load(f)
     print(f" Target dataset : {manifest['target_csv']}")
     print(f" Model version  : {manifest['model_version']}")
