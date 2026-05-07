@@ -8,16 +8,18 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write # Cần để commit evidently-job.yaml vào Git
 
 jobs:
   run-drift-check:
-    name: "Trigger Evidently AI Data Drift Check on K3s"
+    name: "Trigger Evidently AI Data Drift Check via ArgoCD API"
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -32,56 +34,89 @@ jobs:
             SECRETS, mlops/github-actions-secrets
           parse-json-secrets: true
 
-      - name: Setup Kubeconfig
+      - name: Install yq (YAML processor)
         run: |
-          KUBE_CONFIG="${SECRETS_KUBE_CONFIG:-}"
-          if [ -z "$KUBE_CONFIG" ] || [ "$KUBE_CONFIG" = "None" ] || [ "$KUBE_CONFIG" = "null" ]; then
-            echo "Missing required secret: KUBE_CONFIG"
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Stamp trigger metadata into evidently-job.yaml
+        # Cập nhật annotation để tạo thay đổi thực sự trong Git
+        # ArgoCD sẽ nhận biết đây là bản Job mới cần apply lên K3s
+        run: |
+          TRIGGER_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          TRIGGER_SOURCE="${{ github.event.client_payload.trigger_source || github.event_name }}"
+          DATA_COUNT="${{ github.event.client_payload.current_data_count || 'manual' }}"
+
+          echo "Stamping Evidently Job with trigger info:"
+          echo "  trigger_time=$TRIGGER_TIME"
+          echo "  trigger_source=$TRIGGER_SOURCE"
+          echo "  data_count=$DATA_COUNT"
+
+          yq e -i \
+            '.metadata.annotations["mlops/trigger-time"] = "'"$TRIGGER_TIME"'"' \
+            k8s/jobs/evidently-job.yaml
+          yq e -i \
+            '.metadata.annotations["mlops/trigger-source"] = "'"$TRIGGER_SOURCE"'"' \
+            k8s/jobs/evidently-job.yaml
+          yq e -i \
+            '.metadata.annotations["mlops/data-count"] = "'"$DATA_COUNT"'"' \
+            k8s/jobs/evidently-job.yaml
+
+      - name: Commit & Push updated evidently-job.yaml
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/jobs/evidently-job.yaml
+          git diff --staged --quiet && echo "No changes to commit." && exit 0
+          git commit -m "chore(drift): Trigger Evidently drift check at $(date -u +'%Y-%m-%dT%H:%M:%SZ') [skip ci]"
+          git push
+
+      - name: Trigger ArgoCD to sync mlops-nids-jobs Application
+        # Gọi ArgoCD REST API để kích hoạt sync thủ công cho Application mlops-nids-jobs
+        # Không cần KUBECONFIG - ArgoCD sẽ thực hiện kubectl apply bên trong cluster
+        run: |
+          echo "Calling ArgoCD API to sync mlops-nids-jobs..."
+
+          HTTP_STATUS=$(curl -sk -o /tmp/argocd_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ env.SECRETS_ARGOCD_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://argocd.mlops-nids-nt114.id.vn/api/v1/applications/mlops-nids-jobs/sync" \
+            -d '{
+              "revision": "main",
+              "prune": false,
+              "dryRun": false,
+              "strategy": {
+                "hook": {
+                  "force": false
+                }
+              },
+              "resources": [
+                {
+                  "group": "batch",
+                  "kind": "Job",
+                  "name": "mlops-nids-evidently",
+                  "namespace": "default"
+                }
+              ]
+            }')
+
+          echo "ArgoCD API response (HTTP $HTTP_STATUS):"
+          cat /tmp/argocd_response.json
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "ArgoCD sync triggered successfully."
+          else
+            echo "Failed to trigger ArgoCD sync. HTTP status: $HTTP_STATUS"
             exit 1
           fi
 
-          echo "::add-mask::$KUBE_CONFIG"
-          mkdir -p ~/.kube
-          printf '%s' "$KUBE_CONFIG" | base64 --decode > ~/.kube/config
-          chmod 600 ~/.kube/config
-
-      - name: Trigger K8s Data Drift Check Job
+      - name: Summary
         run: |
-          echo "Starting Evidently AI Data Drift Check..."
-          echo "Triggered by: ${{ github.event.client_payload.trigger_source || github.event_name }}"
-          echo "Current data count: ${{ github.event.client_payload.current_data_count || 'manual' }}"
-          
-          # Xóa Job cũ nếu có (bỏ qua lỗi nếu chưa tồn tại)
-          kubectl delete job mlops-nids-evidently --ignore-not-found
-          
-          # Áp dụng file YAML để tạo Job mới
-          kubectl apply -f k8s/evidently-job.yaml
-          
-          echo "Waiting for K8s Job to start and monitoring logs..."
-          for attempt in $(seq 1 60); do
-            SUCCEEDED="$(kubectl get job mlops-nids-evidently -o jsonpath='{.status.succeeded}' 2>/dev/null || true)"
-            FAILED="$(kubectl get job mlops-nids-evidently -o jsonpath='{.status.failed}' 2>/dev/null || true)"
-
-            if [ "$SUCCEEDED" = "1" ]; then
-              echo "Evidently drift check job completed successfully."
-              kubectl logs job/mlops-nids-evidently --all-containers=true --tail=300 || true
-              kubectl get job mlops-nids-evidently
-              exit 0
-            fi
-
-            if [ -n "$FAILED" ] && [ "$FAILED" != "0" ]; then
-              echo "Evidently drift check job failed."
-              kubectl logs job/mlops-nids-evidently --all-containers=true --tail=300 || true
-              kubectl describe job mlops-nids-evidently
-              kubectl get pods -l job-name=mlops-nids-evidently -o wide
-              exit 1
-            fi
-
-            echo "Job still running; waiting 10s..."
-            sleep 10
-          done
-
-          echo "Timed out waiting for Evidently drift check job."
-          kubectl logs job/mlops-nids-evidently --all-containers=true --tail=300 || true
-          kubectl describe job mlops-nids-evidently
-          exit 1
+          echo "## Evidently AI Drift Check Triggered" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger source:** ${{ github.event.client_payload.trigger_source || github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Data count:** ${{ github.event.client_payload.current_data_count || 'manual' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ArgoCD is syncing the Evidently Job to K3s." >> $GITHUB_STEP_SUMMARY
+          echo "Monitor at: https://argocd.mlops-nids-nt114.id.vn" >> $GITHUB_STEP_SUMMARY

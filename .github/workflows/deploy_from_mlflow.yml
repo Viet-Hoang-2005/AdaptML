@@ -21,7 +21,7 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write # Cần để commit ngược Model Version vào Git cho ArgoCD sync
 
 env:
   AWS_BUCKET_NAME: mlops-nids-artifacts
@@ -30,11 +30,13 @@ env:
 
 jobs:
   deploy_to_k3s:
-    name: "Deploy MLflow Production Model to K3s"
+    name: "Deploy MLflow Production Model to K3s (GitOps)"
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve Model Version
         id: resolve_model_version
@@ -79,19 +81,6 @@ jobs:
             SECRETS, mlops/github-actions-secrets
           parse-json-secrets: true
 
-      - name: Setup Kubeconfig
-        run: |
-          KUBE_CONFIG="${SECRETS_KUBE_CONFIG:-}"
-          if [ -z "$KUBE_CONFIG" ] || [ "$KUBE_CONFIG" = "None" ] || [ "$KUBE_CONFIG" = "null" ]; then
-            echo "Missing required secret: KUBE_CONFIG"
-            exit 1
-          fi
-
-          echo "::add-mask::$KUBE_CONFIG"
-          mkdir -p ~/.kube
-          printf '%s' "$KUBE_CONFIG" | base64 --decode > ~/.kube/config
-          chmod 600 ~/.kube/config
-
       - name: Verify MLflow Artifacts in S3
         env:
           MODEL_VERSION: ${{ steps.resolve_model_version.outputs.model_version }}
@@ -107,55 +96,69 @@ jobs:
           echo "Verifying label artifact: $LABEL_ARTIFACT"
           aws s3 ls "$LABEL_ARTIFACT"
 
-      - name: Update API Deployment Model Version
+      - name: Install yq (YAML processor)
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update MODEL_VERSION, RUN_ID, EXPERIMENT_ID in k8s/apps/api-deployment.yaml
         env:
           MODEL_VERSION: ${{ steps.resolve_model_version.outputs.model_version }}
           RUN_ID: ${{ steps.resolve_model_version.outputs.run_id }}
           EXPERIMENT_ID: ${{ steps.resolve_model_version.outputs.experiment_id }}
         run: |
-          kubectl get deployment mlops-nids-api
-          kubectl set env deployment/mlops-nids-api \
-            --containers='*' \
-            MODEL_VERSION="$MODEL_VERSION" \
-            RUN_ID="$RUN_ID" \
-            EXPERIMENT_ID="$EXPERIMENT_ID"
+          echo "Updating api-deployment.yaml with:"
+          echo "  MODEL_VERSION=$MODEL_VERSION"
+          echo "  RUN_ID=$RUN_ID"
+          echo "  EXPERIMENT_ID=$EXPERIMENT_ID"
 
-          kubectl patch deployment mlops-nids-api --type='json' -p="[
-            {\"op\":\"replace\",\"path\":\"/spec/template/spec/initContainers/0/env/0/value\",\"value\":\"${MODEL_VERSION}\"},
-            {\"op\":\"replace\",\"path\":\"/spec/template/spec/initContainers/0/env/1/value\",\"value\":\"${EXPERIMENT_ID}\"},
-            {\"op\":\"replace\",\"path\":\"/spec/template/spec/initContainers/0/env/2/value\",\"value\":\"${RUN_ID}\"}
-          ]"
+          # Cập nhật Init Container envs (aws-s3-model-sync)
+          yq e -i \
+            '(.spec.template.spec.initContainers[] | select(.name == "aws-s3-model-sync") | .env[] | select(.name == "MODEL_VERSION") | .value) = "'"$MODEL_VERSION"'"' \
+            k8s/apps/api-deployment.yaml
+          yq e -i \
+            '(.spec.template.spec.initContainers[] | select(.name == "aws-s3-model-sync") | .env[] | select(.name == "EXPERIMENT_ID") | .value) = "'"$EXPERIMENT_ID"'"' \
+            k8s/apps/api-deployment.yaml
+          yq e -i \
+            '(.spec.template.spec.initContainers[] | select(.name == "aws-s3-model-sync") | .env[] | select(.name == "RUN_ID") | .value) = "'"$RUN_ID"'"' \
+            k8s/apps/api-deployment.yaml
 
-          kubectl rollout restart deployment/mlops-nids-api
-          kubectl rollout status deployment/mlops-nids-api --timeout=300s
+          # Cập nhật App Container envs (fastapi-server)
+          yq e -i \
+            '(.spec.template.spec.containers[] | select(.name == "fastapi-server") | .env[] | select(.name == "MODEL_VERSION") | .value) = "'"$MODEL_VERSION"'"' \
+            k8s/apps/api-deployment.yaml
+          yq e -i \
+            '(.spec.template.spec.containers[] | select(.name == "fastapi-server") | .env[] | select(.name == "EXPERIMENT_ID") | .value) = "'"$EXPERIMENT_ID"'"' \
+            k8s/apps/api-deployment.yaml
+          yq e -i \
+            '(.spec.template.spec.containers[] | select(.name == "fastapi-server") | .env[] | select(.name == "RUN_ID") | .value) = "'"$RUN_ID"'"' \
+            k8s/apps/api-deployment.yaml
 
-      - name: Verify API Health
+      - name: Commit & Push updated Model Version
         env:
           MODEL_VERSION: ${{ steps.resolve_model_version.outputs.model_version }}
+          RUN_ID: ${{ steps.resolve_model_version.outputs.run_id }}
         run: |
-          for attempt in $(seq 1 12); do
-            if curl -fsS "$API_BASE_URL/" > /tmp/api-health.json; then
-              cat /tmp/api-health.json
-              python -c 'import json, os; data=json.load(open("/tmp/api-health.json")); expected=os.environ["MODEL_VERSION"]; actual=data.get("model_version"); assert actual == expected, f"Expected model_version={expected}, got {actual}"'
-              exit 0
-            fi
-            echo "API health check failed; retrying in 10s..."
-            sleep 10
-          done
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/apps/api-deployment.yaml
+          git diff --staged --quiet && echo "No changes to commit." && exit 0
+          git commit -m "feat(model): Deploy $MODEL_VERSION (run: $RUN_ID) [skip ci]"
+          git push
 
-          echo "API health check did not pass after retries."
-          exit 1
-
-      - name: Trigger Reference Data Sync Job
+      - name: Summary
+        env:
+          MODEL_VERSION: ${{ steps.resolve_model_version.outputs.model_version }}
+          RUN_ID: ${{ steps.resolve_model_version.outputs.run_id }}
+          EXPERIMENT_ID: ${{ steps.resolve_model_version.outputs.experiment_id }}
         run: |
-          echo "Triggering Reference Data Sync Job to update Baseline Data for drift detection..."
-          kubectl delete job mlops-nids-sync-data --ignore-not-found
-          kubectl apply -f k8s/sync-data-job.yaml
-          echo "Reference Data Sync Job started."
-
-      - name: Verify Running System
-        run: |
-          kubectl get pods -l app=mlops-nids-api
-          kubectl logs -l app=mlops-nids-api -c aws-s3-model-sync --tail=80 || true
-          kubectl logs -l app=mlops-nids-api -c fastapi-server --tail=80 || true
-          kubectl get jobs
+          echo "## MLflow Model Deployment Triggered (GitOps)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Model Version | \`$MODEL_VERSION\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| MLflow Run ID | \`$RUN_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Experiment ID | \`$EXPERIMENT_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ArgoCD will auto-sync the new model version to K3s within ~3 minutes." >> $GITHUB_STEP_SUMMARY
+          echo "Monitor at: https://argocd.mlops-nids-nt114.id.vn" >> $GITHUB_STEP_SUMMARY

@@ -48,7 +48,7 @@ jobs:
         uses: aws-actions/aws-secretsmanager-get-secrets@v2
         with:
           secret-ids: |
-            SECRETS, mlops/github-actions-secrets
+            AUTH, mlops/mlflow-basic-auth
           parse-json-secrets: true
 
       - name: Trigger SageMaker Training Job
@@ -59,12 +59,11 @@ jobs:
           AWS_BUCKET_NAME: ${{ env.AWS_BUCKET_NAME }}
           S3_TRAINING_DATA_PREFIX: ${{ env.S3_TRAINING_DATA_PREFIX }}
           MLFLOW_MODEL_NAME: ${{ env.MLFLOW_MODEL_NAME }}
+          MLFLOW_TRACKING_URI: ${{ env.AUTH_MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ env.AUTH_MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ env.AUTH_MLFLOW_TRACKING_PASSWORD }}
         run: |
-          export MLFLOW_TRACKING_URI="${SECRETS_MLFLOW_TRACKING_URI:-}"
-          export MLFLOW_TRACKING_USERNAME="${SECRETS_MLFLOW_TRACKING_USERNAME:-}"
-          export MLFLOW_TRACKING_PASSWORD="${SECRETS_MLFLOW_TRACKING_PASSWORD:-}"
-
-          if [ -z "$MLFLOW_TRACKING_URI" ] || [ "$MLFLOW_TRACKING_URI" = "None" ] || [ "$MLFLOW_TRACKING_URI" = "null" ]; then
+          if [ -z "$MLFLOW_TRACKING_URI" ]; then
             echo "Missing required environment variable: MLFLOW_TRACKING_URI"
             exit 1
           fi
