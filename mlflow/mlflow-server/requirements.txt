@@ -1,0 +1,3 @@
+# Thư viện bổ sung cho MLflow Server (base image đã có sẵn mlflow==3.11.1)
+psycopg2-binary
+boto3
