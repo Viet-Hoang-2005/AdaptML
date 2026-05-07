@@ -582,7 +582,7 @@ resource "aws_iam_role" "github_actions_role" {
   assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
 }
 
-# Cấp quyền đọc Secret và S3 cho Role
+# Cấp quyền đọc Secret và S3 cho Role của GitHub Actions
 data "aws_iam_policy_document" "github_actions_policy" {
   statement {
     effect = "Allow"
@@ -590,7 +590,8 @@ data "aws_iam_policy_document" "github_actions_policy" {
       "secretsmanager:GetSecretValue"
     ]
     resources = [
-      aws_secretsmanager_secret.github_actions_secrets.arn
+      aws_secretsmanager_secret.github_actions_secrets.arn,
+      aws_secretsmanager_secret.mlflow_basic_auth.arn
     ]
   }
 
