@@ -1,5 +1,6 @@
 # pod-disruption-budgets.yaml: Bảo vệ các service khỏi downtime khi bảo trì node (kubectl drain)
 # 1. PDB cho API NIDS
+---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

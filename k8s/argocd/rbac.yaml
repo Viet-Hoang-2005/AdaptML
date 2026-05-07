@@ -1,0 +1,28 @@
+# rbac.yaml: Cấu hình Least Privilege cho GitHub Actions trong ArgoCD
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  # Tạo tài khoản github-actions với khả năng tạo API Key (apiKey)
+  accounts.github-actions: apiKey
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+data:
+  policy.csv: |
+    # Cấu trúc: p, role:<tên_role>, <resource>, <action>, <object>, <allow/deny>
+    
+    # 1. Định nghĩa Role github-actions:
+    # - Cho phép 'get' (xem) tất cả các ứng dụng để kiểm tra trạng thái
+    p, role:github-actions, applications, get, *, allow
+    # - CHỈ cho phép 'sync' (kích hoạt chạy) đối với 2 ứng dụng của hệ thống NIDS
+    p, role:github-actions, applications, sync, default/mlops-nids-jobs, allow
+    p, role:github-actions, applications, sync, default/mlops-nids-system, allow
+    
+    # 2. Gán Role github-actions cho tài khoản github-actions
+    g, github-actions, role:github-actions

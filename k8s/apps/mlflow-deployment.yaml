@@ -1,6 +1,4 @@
 # mlflow-deployment.yaml: Deployment và Service cho MLflow Tracking Server
-# Required before apply:
-# kubectl create secret generic mlflow-auth-secrets -n default --from-literal=MLFLOW_FLASK_SERVER_SECRET_KEY="$(openssl rand -hex 32)"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -36,9 +34,9 @@ spec:
                 topologyKey: "kubernetes.io/hostname"
       containers:
         - name: mlflow
-          # Sử dụng image chính thức của MLflow từ GitHub Container Registry
-          image: ghcr.io/mlflow/mlflow:v3.11.1
-          imagePullPolicy: IfNotPresent
+          # Dùng image đã được build sẵn thay vì pip install lúc runtime
+          image: tnvhoang/mlops-nids-mlflow:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 5000
               protocol: TCP
@@ -57,26 +55,25 @@ spec:
                 secretKeyRef:
                   name: mlflow-credentials
                   key: MLFLOW_FLASK_SERVER_SECRET_KEY
+          # Không còn pip install ở đây nữa - tất cả đã có trong image
           command:
-            - /bin/sh
-            - -c
-            - |
-              pip install "mlflow[auth]==3.11.1" psycopg2-binary boto3
-              exec mlflow server \
-                --host 0.0.0.0 \
-                --port 5000 \
-                --app-name basic-auth \
-                --allowed-hosts "mlflow.mlops-nids-nt114.id.vn,mlflow.mlops-nids-nt114.id.vn:443,localhost,127.0.0.1,mlflow-service,mlflow-service.default.svc.cluster.local,mlflow-service.default.svc.cluster.local:5000" \
-                --cors-allowed-origins "https://mlflow.mlops-nids-nt114.id.vn" \
-                --backend-store-uri "postgresql://mlflow:${MLFLOW_DB_PASSWORD}@mlops-nids-postgres-rw:5432/mlflow" \
-                --default-artifact-root "s3://${AWS_BUCKET_NAME}/mlflow-artifacts/"
+            - mlflow
+            - server
+            - --host=0.0.0.0
+            - --port=5000
+            - --app-name=basic-auth
+            - --allowed-hosts=mlflow.mlops-nids-nt114.id.vn,mlflow.mlops-nids-nt114.id.vn:443,localhost,127.0.0.1,mlflow-service,mlflow-service.default.svc.cluster.local,mlflow-service.default.svc.cluster.local:5000
+            - --cors-allowed-origins=https://mlflow.mlops-nids-nt114.id.vn
+            - --backend-store-uri=postgresql://mlflow:$(MLFLOW_DB_PASSWORD)@mlops-nids-postgres-rw:5432/mlflow
+            - --default-artifact-root=s3://$(AWS_BUCKET_NAME)/mlflow-artifacts/
           resources:
             requests:
               cpu: 100m
               memory: 512Mi
             limits:
               cpu: 500m
-              memory: 2Gi
+              memory: 1Gi
+
 
 # Service để expose MLflow Server nội bộ trong cluster
 ---
