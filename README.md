@@ -344,7 +344,8 @@ terraform apply
 {
   "MLFLOW_TRACKING_URI": "<your-mlflow-tracking-uri>",
   "MLFLOW_TRACKING_USERNAME": "<your-mlflow-tracking-username>",
-  "MLFLOW_TRACKING_PASSWORD": "<your-mlflow-tracking-password>"
+  "MLFLOW_TRACKING_PASSWORD": "<your-mlflow-tracking-password>",
+  "MLFLOW_FLASK_SERVER_SECRET_KEY": "<your-mlflow-flask-server-secret-key>"
 }
 ```
 
@@ -356,7 +357,7 @@ terraform apply
 4. Tạo một biến mới tên là `AWS_ROLE_ARN` và dán giá trị ARN vào.
 5. Tạo thêm một biến nữa tên là `AWS_SAGEMAKER_ROLE_ARN` và dán ARN của SageMaker Execution Role (lấy từ output Terraform).
 
-#### Bước 3b: Bật `Allow GitHub Actions to create and approve pull requests`
+#### Bước 3b: Bật Allow GitHub Actions to create and approve pull requests
 
 1. Vào GitHub Repo -> **Settings** -> **Actions** -> **General**.
 2. Scroll xuống phần **Workflow permissions**.
@@ -393,6 +394,9 @@ kubectl get nodes
 ```bash
 # Cài đặt CloudNativePG
 kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.22/releases/cnpg-1.22.0.yaml
+
+# Cài đặt CRDs
+ kubectl apply --server-side -f https://raw.githubusercontent.com/external-secrets/external-secrets/main/deploy/crds/bundle.yaml
 
 # Cài đặt External Secrets Operator
 bash k8s/scripts/eso-install.sh
@@ -517,6 +521,44 @@ kubectl apply -f k8s/apps/pod-disruption-budgets.yaml
 
 # Tạo Network Policy để tăng cường bảo mật
 kubectl apply -f k8s/apps/network-policy.yaml
+```
+
+12. Gỡ cài đặt hệ thống
+
+```bash
+# Xóa các Application để kích hoạt cơ chế tự dọn dẹp (Prune)
+kubectl delete -f k8s/argocd/application.yaml --ignore-not-found
+kubectl delete -f k8s/argocd/application-jobs.yaml --ignore-not-found
+
+# Xóa toàn bộ ArgoCD
+kubectl delete namespace argocd --ignore-not-found
+
+# Gỡ Prometheus Stack
+helm uninstall monitoring -n monitoring --ignore-not-found
+kubectl delete namespace monitoring --ignore-not-found
+
+# Gỡ KEDA
+helm uninstall keda -n keda --ignore-not-found
+kubectl delete namespace keda --ignore-not-found
+
+# Gỡ External Secrets Operator
+helm uninstall external-secrets -n external-secrets --ignore-not-found
+kubectl delete namespace external-secrets --ignore-not-found
+
+# Gỡ cài đặt CloudNativePG Operator
+kubectl delete -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.22/releases/cnpg-1.22.0.yaml --ignore-not-found
+
+# Xóa tất cả các workload thủ công (Jobs, Deployments, StatefulSets...)
+kubectl delete deployment,statefulset,daemonset,replicaset,job,cronjob --all -n default
+
+# Xóa Service, Ingress, HPA, PDB, Network Policy
+kubectl delete svc,ingress,hpa,pdb,networkpolicy --all -n default
+
+# Xóa cấu hình của Traefik Ping
+kubectl delete ingressroute traefik-ping-expose -n kube-system --ignore-not-found
+
+# Xóa Persistent Volume Claims (PVC) để giải phóng ổ cứng AWS EBS
+kubectl delete pvc --all -n default
 ```
 
 > API Documents: https://api.mlops-nids-nt114.id.vn/docs  
