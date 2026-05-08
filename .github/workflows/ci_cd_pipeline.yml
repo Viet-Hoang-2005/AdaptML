@@ -8,7 +8,7 @@ on:
       # Chỉ trigger khi có thay đổi ở những folder quan trọng
       - 'api/**'
       - 'evidently/**'
-      - 'mlflow/**'
+      - 'mlflow/**'        # Bao gồm cả mlflow-server/ và mlflow-client/
       - 'k8s/**'
       - '.github/scripts/**'
   pull_request:
@@ -93,6 +93,7 @@ jobs:
           echo "MONITOR_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-evidently" >> $GITHUB_ENV
           echo "SYNC_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-sync-data" >> $GITHUB_ENV
           echo "DISPATCH_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-dispatch" >> $GITHUB_ENV
+          echo "MLFLOW_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-mlflow" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -154,6 +155,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Build Image 5: MLflow Server (pre-installed dependencies)
+      - name: Build & Push Docker Image - MLflow Server
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mlflow/mlflow-server
+          file: ./mlflow/mlflow-server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.MLFLOW_IMAGE }}:${{ github.sha }}
+            ${{ env.MLFLOW_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Summary of built images
         run: |
           echo "Images pushed to Docker Hub:"
@@ -161,16 +175,22 @@ jobs:
           echo "   Monitor:    ${{ env.MONITOR_IMAGE }}:${{ github.sha }}"
           echo "   Sync Job:   ${{ env.SYNC_IMAGE }}:${{ github.sha }}"
           echo "   Dispatcher: ${{ env.DISPATCH_IMAGE }}:${{ github.sha }}"
+          echo "   MLflow:     ${{ env.MLFLOW_IMAGE }}:${{ github.sha }}"
 
-  # JOB 3: Deploy lên K3s (chỉ chạy trên nhánh main)
-  deploy_to_k3s:
-    name: "Deploy to K3s (Rolling Update)"
+  # JOB 3: Cập nhật Image Tag trong Git (GitOps - ArgoCD sẽ tự động sync vào K3s)
+  update_image_tag:
+    name: "Update Image Tag in Git (GitOps)"
     needs: build_and_push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write # Cần quyền này để push commit ngược lại repo
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Dùng token mặc định của GitHub Actions để có thể push ngược lại repo
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -190,58 +210,53 @@ jobs:
           echo "API_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-api" >> $GITHUB_ENV
           echo "DISPATCH_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-dispatch" >> $GITHUB_ENV
 
-      - name: Setup Kubeconfig
+      - name: Install yq (YAML processor)
         run: |
-          mkdir -p ~/.kube
-          echo "${{ env.SECRETS_KUBE_CONFIG }}" | base64 --decode > ~/.kube/config
-          chmod 600 ~/.kube/config
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
-      - name: Verify K3s Deployments Exist
-        # Không dùng kubectl apply ở đây vì nó sẽ ghi đè biến môi trường MODEL_VERSION do MLflow cấu hình.
-        # Hạ tầng YAML được apply thủ công 1 lần, GitHub Actions chỉ lo việc Update Source Code Image.
+      - name: Update API image tag in k8s/apps/api-deployment.yaml
         run: |
-          echo "Verifying core deployments exist in K3s..."
-          kubectl get deployment mlops-nids-api
-          kubectl get deployment mlops-nids-consumer
-          echo "Core deployments found. Proceeding to update images..."
+          NEW_TAG="${{ env.API_IMAGE }}:${{ github.sha }}"
+          echo "Updating API image to: $NEW_TAG"
+          yq e -i \
+            '(.spec.template.spec.containers[] | select(.name == "fastapi-server") | .image) = "'"$NEW_TAG"'"' \
+            k8s/apps/api-deployment.yaml
 
-      - name: Update latest image tag for API Deployment
-        # Ép Deployment dùng đúng image SHA vừa build - tránh K3s cache image cũ
+      - name: Update Consumer image tag in k8s/apps/consumer-deployment.yaml
         run: |
-          kubectl set image deployment/mlops-nids-api \
-            fastapi-server=${{ env.API_IMAGE }}:${{ github.sha }}
-          echo "Updated image tag: ${{ github.sha }}"
+          NEW_TAG="${{ env.API_IMAGE }}:${{ github.sha }}"
+          echo "Updating Consumer image to: $NEW_TAG"
+          yq e -i \
+            '(.spec.template.spec.containers[] | select(.name == "consumer") | .image) = "'"$NEW_TAG"'"' \
+            k8s/apps/consumer-deployment.yaml
 
-      - name: Update latest image tag for Consumer
+      - name: Update Dispatch CronJob image tag in k8s/apps/dispatch-cronjob.yaml
         run: |
-          kubectl set image deployment/mlops-nids-consumer \
-            consumer=${{ env.API_IMAGE }}:${{ github.sha }}
-          echo "Updated Consumer image tag: ${{ github.sha }}"
+          NEW_TAG="${{ env.DISPATCH_IMAGE }}:${{ github.sha }}"
+          echo "Updating Dispatcher image to: $NEW_TAG"
+          yq e -i \
+            '(.spec.jobTemplate.spec.template.spec.containers[] | select(.name == "dispatcher") | .image) = "'"$NEW_TAG"'"' \
+            k8s/apps/dispatch-cronjob.yaml
 
-      - name: Update latest image tag for Dispatch CronJob
+      - name: Commit & Push updated image tags
         run: |
-          kubectl set image cronjob/mlops-nids-dispatch \
-            dispatcher=${{ env.DISPATCH_IMAGE }}:${{ github.sha }} || true
-          echo "Updated Dispatcher image tag (if exists)."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/apps/api-deployment.yaml k8s/apps/consumer-deployment.yaml k8s/apps/dispatch-cronjob.yaml
+          git diff --staged --quiet && echo "No changes to commit." && exit 0
+          git commit -m "ci: Update image tags to ${{ github.sha }} [skip ci]"
+          git push
 
-      - name: Wait for Rolling Update to complete (Zero-Downtime)
+      - name: Summary
         run: |
-          echo "Waiting for API pods rolling update..."
-          kubectl rollout status deployment/mlops-nids-api --timeout=300s
-          echo "Rolling update completed successfully."
+          echo "## GitOps Deployment Triggered" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Image tags updated in Git. ArgoCD will auto-sync to K3s within ~3 minutes." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Image |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| API     | \`${{ env.API_IMAGE }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Consumer| \`${{ env.API_IMAGE }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dispatch| \`${{ env.DISPATCH_IMAGE }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
 
-      - name: Verify pod status after deployment
-        run: |
-          echo "Status of all pods:"
-          kubectl get pods -o wide
-          echo ""
-          echo "Logs of API pod (last 20 lines):"
-          kubectl logs -l app=mlops-nids-api --tail=20 || true
-
-      - name: Send deployment success notification
-        if: success()
-        run: |
-          echo "CI/CD Deployment complete!"
-          echo "Commit:  ${{ github.sha }}"
-          echo "Author:  ${{ github.actor }}"
-          echo "Message: ${{ github.event.head_commit.message }}"

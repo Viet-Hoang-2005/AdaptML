@@ -38,9 +38,13 @@ flowchart TB
     end
 
     subgraph CICD["CI/CD Orchestration (GitHub Actions)"]
-        GH_CICD[ci_cd_pipeline.yml<br/>Build → Deploy]
-        GH_RETRAIN[retrain_pipeline.yml<br/>Retrain → Evaluate → Deploy → Sync]
-        GH_DRIFT[trigger_drift_check.yml<br/>Run Evidently Job]
+        GH_CICD[ci_cd_pipeline.yml<br/>Build → Push → GitOps]
+        GH_RETRAIN[retrain_pipeline.yml<br/>Retrain → Evaluate → Sync]
+        GH_DRIFT[trigger_drift_check.yml<br/>GitOps Evidently Trigger]
+    end
+
+    subgraph GITOPS["GitOps Layer"]
+        ARGO[ArgoCD<br/>Auto-Sync (Pull-based)]
     end
 
     USER -->|POST /predict| ALB
@@ -57,7 +61,8 @@ flowchart TB
     PG_PRIMARY -.->|Streaming Replication| PG_STANDBY
     EVIDENTLY -->|SELECT Production + Reference| PG_STANDBY
 
-    GH_DRIFT -->|kubectl apply| EVIDENTLY
+    GH_DRIFT -->|git push k8s/jobs/evidently| ARGO
+    ARGO -->|kubectl apply Job| EVIDENTLY
     EVIDENTLY -->|Webhook: data_drift_detected| GH_RETRAIN
 
     S3 -->|Object Created| LAMBDA
@@ -66,8 +71,9 @@ flowchart TB
     GH_RETRAIN -->|SageMaker SDK| TRAIN[SageMaker Training Job]
     TRAIN -->|Upload artifacts| S3
 
-    GH_CICD -->|Docker Build + Push| API
-    GH_CICD -->|Docker Build + Push| CONSUMER
+    GH_CICD -->|git push k8s/apps/ image tag| ARGO
+    ARGO -->|kubectl apply| API
+    ARGO -->|kubectl apply| CONSUMER
 ```
 
 ---
@@ -185,12 +191,17 @@ sequenceDiagram
     participant HUMAN as Data Scientist (HitL)
     participant CRON as dispatch_production_model.py<br/>(K8s CronJob / 5 phút)
     participant GH_DEPLOY as deploy_from_mlflow.yml
+    participant GIT as Git Repo (k8s/apps/)
+    participant ARGO as ArgoCD
     participant K3S as K3s Cluster
     participant S3 as AWS S3
 
     Note over EVD,GH_DRIFT: Trigger 1: Drift Detection
     EVD->>GH_DRIFT: Webhook: data_drift_detected
-    GH_DRIFT->>EVD: kubectl replace --force evidently-job.yaml
+    GH_DRIFT->>GIT: git push (stamp timestamp → evidently-job.yaml)
+    ARGO->>GIT: Phát hiện commit mới
+    ARGO->>K3S: kubectl apply evidently-job.yaml
+    K3S->>EVD: Chạy lại Evidently Job
     EVD->>GH_RETRAIN: Webhook: drift confirmed → trigger retrain
 
     Note over S3,GH_RETRAIN: Trigger 2: Data Manifest Update
@@ -208,10 +219,11 @@ sequenceDiagram
     MLF-->>CRON: RUN_ID + MODEL_VERSION
     CRON->>GH_DEPLOY: 8. repository_dispatch<br/>event: mlflow_production_selected
 
-    GH_DEPLOY->>K3S: 9. kubectl set env RUN_ID + MODEL_VERSION
-    GH_DEPLOY->>K3S: 10. kubectl rollout restart → Rolling Update
-    K3S->>S3: 11. Init Container: aws s3 cp model.pkl
-    GH_DEPLOY->>K3S: 12. kubectl replace sync-data-job.yaml
+    GH_DEPLOY->>GIT: 9. yq update MODEL_VERSION/RUN_ID → k8s/apps/api-deployment.yaml
+    GH_DEPLOY->>GIT: 10. git commit & push [skip ci]
+    ARGO->>GIT: 11. Phát hiện commit mới
+    ARGO->>K3S: 12. Rolling Update (kubectl apply) → API Pod mới
+    K3S->>S3: 13. Init Container: aws s3 cp model.pkl
 ```
 
 ### 2.5. Cơ chế Zero-Downtime Deployment (Init Container)

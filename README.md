@@ -45,6 +45,10 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
         │                                           │
         │                                           ▼
     SageMaker + MLflow Registry ◄──── GitHub Actions (Retrain Pipeline) ◄──── AWS S3 + Lambda
+        │
+        │
+        ▼
+    ArgoCD (Auto-Sync -> K3s Cluster)
 ```
 
 ---
@@ -65,7 +69,6 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | 10  | **Zero-trust & Keyless Security** - Xác thực OIDC, loại bỏ mật khẩu tĩnh       | AWS OIDC + Secrets Manager |
 | 11  | **Full-stack Observability** - Giám sát API, DB, Redpanda và ML metrics        | Prometheus + Grafana       |
 | 12  | **Smart Alerting** - Cảnh báo DDoS, Latency cao qua Slack                      | AlertManager + Slack       |
-| 13  | **Event-driven Autoscaling** - Tự động scale Consumer theo độ trễ tin nhắn     | KEDA + Redpanda Lag        |
 
 ---
 
@@ -88,10 +91,10 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 | **Drift Monitoring**   | Evidently AI                                |
 | **Load Testing**       | Locust                                      |
 | **Compute Engine**     | AWS SageMaker Training Jobs                 |
-| **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda                 |
+| **CI/CD/CT/Orch**      | GitHub Actions + AWS Lambda + ArgoCD        |
 | **Container Registry** | Docker Hub                                  |
 | **Model Registry**     | MLflow + AWS S3                             |
-| **Orchestration**      | K3s (Kubernetes)                            |
+| **Orchestration**      | K3s (Kubernetes) + ArgoCD GitOps            |
 | **Infrastructure**     | Terraform + AWS (VPC + EC2 + ALB + S3)      |
 | **Secrets Mgmt**       | AWS Secrets Manager + External Secrets Op   |
 | **Observability**      | Prometheus + Grafana + AlertManager         |
@@ -105,90 +108,107 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 mlops-nids-system/
 │
 ├── .github/workflows/
-│   ├── ci_cd_pipeline.yml           # Build Docker Image -> Push Docker Hub -> Rolling Deploy K3s
-│   ├── retrain_pipeline.yml         # Nhận Webhook -> Tải dữ liệu S3 -> Kích hoạt SageMaker Job
-│   ├── deploy_from_mlflow.yml       # Nhận RUN_ID từ Dispatch -> Rolling Update API trên K3s
-│   ├── trigger_drift_check.yml      # Lắng nghe Webhook từ Consumer -> Chạy Evidently Job
-│   └── drift_alert.yml              # Gửi Slack Alert khi phát hiện Data Drift
+│   ├── ci_cd_pipeline.yml                # Build Docker Image -> Push Docker Hub -> GitOps
+│   ├── retrain_pipeline.yml              # Nhận Webhook -> Tải dữ liệu S3 -> Kích hoạt SageMaker Job
+│   ├── deploy_from_mlflow.yml            # Nhận RUN_ID -> Cập nhật k8s/apps/ -> ArgoCD tự sync
+│   ├── trigger_drift_check.yml           # Lắng nghe Webhook -> GitOps trigger Evidently Job
+│   └── drift_alert.yml                   # Gửi Slack Alert khi phát hiện Data Drift
 │
 ├── .github/scripts/
-│   └── trigger_sagemaker.py         # Script Python gọi AWS SDK để khởi tạo máy chủ huấn luyện
+│   ├── update_reference_data.py          # Cập nhật reference dataset trong postgresql
+│   ├── Dockerfile                        # Dockerfile cho script update_reference_data.py
+│   └── trigger_sagemaker.py              # Script gọi AWS SDK khởi tạo máy chủ huấn luyện
 │
 ├── api/
 │   ├── src/
-│   │   ├── index.py                 # FastAPI: POST /predict -> Ghi vào Redpanda
-│   │   ├── consumer.py              # Redpanda Consumer: Batch insert DB -> Bắn Drift Webhook
-│   │   └── db_manager.py            # Dual-endpoint SQLAlchemy: engine_rw + engine_ro
+│   │   ├── index.py                      # FastAPI: POST /predict -> Ghi vào Redpanda
+│   │   ├── consumer.py                   # Redpanda Consumer: Batch insert DB -> Bắn Drift Webhook
+│   │   └── db_manager.py                 # Dual-endpoint SQLAlchemy: engine_rw + engine_ro
 │   ├── Dockerfile
 │   └── requirements.txt
 │
 ├── mlflow/
-│   ├── dispatch_production_model.py # CronJob: Đọc MLflow Registry -> Bắn Deploy Webhook
-│   ├── Dockerfile
-│   └── requirements.txt
+│   ├── mlflow-client/
+│   │   ├── dispatch_production_model.py  # CronJob: Đọc MLflow Registry -> Bắn Deploy Webhook
+│   │   ├── Dockerfile
+│   │   └── requirements.txt
+│   └── mlflow-server/
+│       ├── Dockerfile                    # Đóng gói thêm thư viện cần thiết cho MLflow Server
+│       └── requirements.txt
 │
-├── monitoring/
-│   ├── detect_drift.py              # Evidently AI: Query DB -> So sánh với Baseline -> Report
+├── evidently/
+│   ├── detect_drift.py                   # Evidently AI: Query DB -> So sánh với Baseline -> Report
 │   ├── Dockerfile
 │   └── requirements.txt
 │
 ├── sagemaker/
-│   ├── train.py                     # XGBoost Training: Đọc S3 trực tiếp -> MLflow Tracking
-│   └── requirements.txt             # Thư viện cần thiết cho môi trường SageMaker (XGBoost, MLflow)
+│   ├── train.py                          # XGBoost Training: Đọc S3 trực tiếp -> MLflow Tracking
+│   └── requirements.txt                  # Thư viện cho môi trường SageMaker (XGBoost, MLflow)
 │
 ├── k8s/
-│   ├── api-deployment.yaml          # FastAPI (2 replicas) + Init Container kéo model từ S3
-│   ├── api-hpa.yaml                 # Tự động scale API dựa trên CPU
-│   ├── api-servicemonitor.yaml      # Cấu hình Prometheus scrape FastAPI
-│   ├── cloudflared-tunnel.yaml      # Cloudflare Tunnel: Expose MLflow, K3s Dashboard qua HTTPS
-│   ├── consumer-deployment.yaml     # NIDS Log Consumer
-│   ├── consumer-scaledobject.yaml   # Cấu hình Scale Consumer dựa trên Kafka lag
-│   ├── mlflow-deployment.yaml       # MLflow Tracking Server + PostgreSQL Backend + S3 Artifacts
-│   ├── mlflow-nginx.yaml            # Nginx Reverse Proxy + Basic Auth cho MLflow
-│   ├── mlflow-init-job.yaml         # One-time Job: Tạo role/database mlflow trong PostgreSQL
-│   ├── postgres-cluster.yaml        # CloudNativePG Cluster (Primary + Standby HA)
-│   ├── postgres-podmonitor.yaml     # Scrape metrics trực tiếp từ Pod PostgreSQL (port 9187)
-│   ├── ebs-gp3-storageclass.yaml   # StorageClass AWS EBS gp3 cho Database persistence
-│   ├── redpanda-statefulset.yaml    # Redpanda Message Broker (Kafka-compatible)
-│   ├── redpanda-servicemonitor.yaml # Cấu hình Prometheus scrape Redpanda
-│   ├── grafana-alertrules.yaml      # Định nghĩa luật cảnh báo (DDoS, Latency...)
-│   ├── grafana-cloudflared.yaml     # Expose Grafana Dashboard ra internet
-│   ├── cluster-secret-store.yaml    # ESO ClusterSecretStore: Kết nối K3s với AWS Secrets Manager
-│   ├── external-secrets.yaml        # ExternalSecret: Đồng bộ 6 nhóm Secret từ AWS về K3s
-│   ├── dispatch-cronjob.yaml        # CronJob chạy dispatch_production_model.py mỗi 5 phút
-│   ├── evidently-job.yaml           # Batch Job phát hiện Data Drift (trigger qua Webhook)
-│   ├── sync-data-job.yaml           # One-time Job: Nạp Reference Data vào PostgreSQL
-│   ├── pod-disruption-budgets.yaml  # Bảo vệ service khi bảo trì node (kubectl drain)
-│   ├── keda-install.sh              # Script cài đặt KEDA (Autoscaling)
-│   ├── eso-install.sh               # Script cài đặt External Secrets Operator qua Helm
-│   └── monitoring-install.sh        # Script cài đặt Prometheus & Grafana Stack
+│   ├── apps/                             # ArgoCD quản lý (auto-sync) - Thư mục chính của GitOps
+│   │   ├── api-deployment.yaml           # FastAPI (2 replicas) + Init Container kéo model từ S3
+│   │   ├── api-hpa.yaml                  # Tự động scale API dựa trên CPU
+│   │   ├── api-servicemonitor.yaml       # Cấu hình Prometheus scrape FastAPI
+│   │   ├── cloudflared-tunnel.yaml       # Cloudflare Tunnel: Expose MLflow, K3s Dashboard qua HTTPS
+│   │   ├── consumer-deployment.yaml      # NIDS Log Consumer
+│   │   ├── consumer-scaledobject.yaml    # Cấu hình Scale Consumer dựa trên Kafka lag
+│   │   ├── dispatch-cronjob.yaml         # CronJob đọc MLflow Model Registry -> Bắn Deploy Webhook
+│   │   ├── mlflow-deployment.yaml        # MLflow Tracking Server + PostgreSQL Backend + S3 Artifacts
+│   │   ├── postgres-cluster.yaml         # CloudNativePG Cluster (Primary + Standby HA)
+│   │   ├── postgres-podmonitor.yaml      # Scrape metrics trực tiếp từ Pod PostgreSQL
+│   │   ├── ebs-gp3-storageclass.yaml     # StorageClass AWS EBS gp3 cho Database persistence
+│   │   ├── redpanda-statefulset.yaml     # Redpanda Message Broker (Kafka-compatible)
+│   │   ├── redpanda-servicemonitor.yaml  # Cấu hình Prometheus scrape Redpanda
+│   │   ├── grafana-alertrules.yaml       # Định nghĩa luật cảnh báo (DDoS, Latency...)
+│   │   ├── cluster-secret-store.yaml     # ESO ClusterSecretStore: Kết nối K3s với AWS Secrets Manager
+│   │   ├── external-secrets.yaml         # ExternalSecret: Đồng bộ 6 nhóm Secret từ AWS về K3s
+│   │   ├── traefik-ping.yaml             # Expose endpoint /ping cho ALB health check
+│   │   ├── network-policy.yaml           # Zero-Trust Networking cho các service trong cụm K3s
+│   │   └── pod-disruption-budgets.yaml   # Bảo vệ service khi bảo trì node (kubectl drain)
+│   │
+│   ├── jobs/                             # One-time Jobs (chạy thủ công, KHÔNG do ArgoCD auto-sync)
+│   │   ├── evidently-job.yaml            # Batch Job phát hiện Data Drift (trigger qua GitOps)
+│   │   ├── sync-data-job.yaml            # One-time Job: Nạp Reference Data vào PostgreSQL
+│   │   └── mlflow-init-job.yaml          # One-time Job: Tạo role/database mlflow trong PostgreSQL
+│   │
+│   ├── scripts/                          # Script cài đặt Operator (chạy 1 lần thủ công)
+│   │   ├── argo-install.sh               # Script cài đặt ArgoCD lên K3s
+│   │   ├── keda-install.sh               # Script cài đặt KEDA (Autoscaling)
+│   │   ├── eso-install.sh                # Script cài đặt External Secrets Operator
+│   │   └── monitoring-install.sh         # Script cài đặt Prometheus & Grafana Stack
+│   │
+│   └── argocd/                           # Cấu hình ArgoCD
+│       ├── application.yaml              # ArgoCD Application quản lý toàn bộ k8s/apps/
+│       ├── application-jobs.yaml         # ArgoCD Application quản lý One-time Jobs
+│       └── rbac.yaml                     # RBAC cho ArgoCD Service Account
 │
 ├── infra/
-│   ├── main.tf                      # Terraform: VPC + EC2 + ALB + S3 + Lambda + IAM + OIDC
+│   ├── main.tf                           # Terraform: VPC + EC2 + ALB + S3 + Lambda + IAM + OIDC
 │   └── lambda/
-│       ├── s3_webhook_trigger.py    # Lambda: S3 Event -> Lấy Secret từ AWS -> Bắn GitHub Webhook
-│       └── s3_webhook_trigger.zip   # Lambda deployment package
+│       ├── s3_webhook_trigger.py         # Lambda: S3 Event -> Lấy Secret từ AWS -> Bắn GitHub Webhook
+│       └── s3_webhook_trigger.zip        # Lambda deployment package
 │
 ├── web/src/
-│   ├── test_api.py                  # Script test API: Đo latency + Đánh giá kết quả dự đoán
-│   └── locustfile.py                # Stress test: Giả lập traffic + Kích hoạt Data Drift
+│   ├── test_api.py                       # Script test API: Đo latency + Đánh giá kết quả dự đoán
+│   └── locustfile.py                     # Stress test: Giả lập traffic + Kích hoạt Data Drift
 │
 ├── models/
-│   ├── v1/                          # Model 2-class: BENIGN + DDoS
+│   ├── v1/                               # Model 2-class: BENIGN + DDoS
 │   │   ├── xgb_nids_model_v1.pkl
 │   │   ├── label_classes_v1.json
 │   │   └── metrics_v1.json
-│   └── v2/                          # Model 3-class: + PortScan
+│   └── v2/                               # Model 3-class: + PortScan
 │
 ├── data/
-│   ├── test_data.csv                # Dữ liệu kiểm thử API (đa nhãn)
-│   ├── train_2_classes.csv          # Dữ liệu huấn luyện 2 nhãn (BENIGN/DDoS)
-│   ├── train_3_classes.csv          # Dữ liệu huấn luyện 3 nhãn (BENIGN/DDoS/PortScan)
-│   └── drift_portscan.csv           # Dữ liệu giả lập drift PortScan
+│   ├── test_data.csv                     # Dữ liệu kiểm thử API (đa nhãn)
+│   ├── train_2_classes.csv               # Dữ liệu huấn luyện 2 nhãn (BENIGN/DDoS)
+│   ├── train_3_classes.csv               # Dữ liệu huấn luyện 3 nhãn (BENIGN/DDoS/PortScan)
+│   └── drift_portscan.csv                # Dữ liệu giả lập drift PortScan
 │
-├── data_manifest.json               # "Source of Truth": target_csv + model_version -> Trigger Lambda
-├── docker-compose.yml               # Môi trường phát triển local (API + DB + Redpanda + Evidently)
-└── .env.example                     # Template biến môi trường
+├── data_manifest.json                    # Source of Truth: target_csv + model_version -> Trigger Lambda
+├── docker-compose.yml                    # Môi trường phát triển local (API + DB + Redpanda + Evidently)
+└── .env.example                          # Template biến môi trường
 ```
 
 ---
@@ -276,7 +296,8 @@ terraform apply
   "DOCKERHUB_USERNAME": "<your-dockerhub-username>",
   "DOCKERHUB_TOKEN": "<your-dockerhub-token>",
   "SLACK_WEBHOOK_URL": "<your-slack-webhook-url>",
-  "KUBE_CONFIG": "<your-kube-config-base64>"
+  "KUBE_CONFIG": "<your-kube-config-base64>",
+  "ARGOCD_TOKEN": "<your-argocd-token>"
 }
 ```
 
@@ -335,6 +356,13 @@ terraform apply
 4. Tạo một biến mới tên là `AWS_ROLE_ARN` và dán giá trị ARN vào.
 5. Tạo thêm một biến nữa tên là `AWS_SAGEMAKER_ROLE_ARN` và dán ARN của SageMaker Execution Role (lấy từ output Terraform).
 
+#### Bước 3b: Bật `Allow GitHub Actions to create and approve pull requests`
+
+1. Vào GitHub Repo -> **Settings** -> **Actions** -> **General**.
+2. Scroll xuống phần **Workflow permissions**.
+3. Chọn **Read and write permissions** và tích **Allow GitHub Actions to create and approve pull requests**.
+4. Nhấn **Save**. (Cần thiết để GitHub Actions bot có thể commit image tag ngược lại repo)
+
 #### Bước 4: Cài đặt K3s
 
 ```bash
@@ -367,113 +395,136 @@ kubectl get nodes
 kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.22/releases/cnpg-1.22.0.yaml
 
 # Cài đặt External Secrets Operator
-bash k8s/eso-install.sh
+bash k8s/scripts/eso-install.sh
 
 # Cài đặt Prometheus Stack (Prometheus + Grafana)
-bash k8s/monitoring-install.sh
+bash k8s/scripts/monitoring-install.sh
 
 # Cài đặt KEDA
-bash k8s/keda-install.sh
+bash k8s/scripts/keda-install.sh
+
+# Cài đặt ArgoCD
+bash k8s/scripts/argo-install.sh
+
 ```
 
-2. Kích hoạt hệ thống Bảo mật
+2. Lấy các secret từ AWS Secrets Manager
 
 ```bash
 # Đồng bộ Secret từ AWS về K3s
-kubectl apply -f k8s/cluster-secret-store.yaml
-kubectl apply -f k8s/external-secrets.yaml
+kubectl apply -f k8s/apps/cluster-secret-store.yaml
+kubectl apply -f k8s/apps/external-secrets.yaml
 
 # Kiểm tra các secrets
 kubectl get secrets
 ```
 
-3. Triển khai CloudFlare Tunnel
+3. Triển khai ArgoCD
 
 ```bash
-# Expore MLflow Server và K3s Dashboard bằng HTTPS
-kubectl apply -f k8s/cloudflared-tunnel.yaml
+# Tạo RBAC cho github-actions
+kubectl apply -f k8s/argocd/rbac.yaml
+
+# Tạo Application resources để ArgoCD quản lý
+kubectl apply -f k8s/argocd/application.yaml
+kubectl apply -f k8s/argocd/application-jobs.yaml
+
+# Lấy mật khẩu admin
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode
 ```
 
-4. Triển khai Database & Message Queue
+4. Triển khai CloudFlare Tunnel
+
+```bash
+# Expore MLflow, Grafana, ArgoCD, Dashboard bằng HTTPS
+kubectl apply -f k8s/apps/cloudflared-tunnel.yaml
+```
+
+5. Triển khai Database & Message Queue
 
 ```bash
 # Khởi tạo StorageClass AWS EBS gp3
-kubectl apply -f k8s/ebs-gp3-storageclass.yaml
+kubectl apply -f k8s/apps/ebs-gp3-storageclass.yaml
 
 # Khởi chạy cụm PostgreSQL HA
-kubectl apply -f k8s/postgres-cluster.yaml
+kubectl apply -f k8s/apps/postgres-cluster.yaml
 
 # Chạy Job update dữ liệu Reference Data
-kubectl apply -f k8s/sync-data-job.yaml
+kubectl apply -f k8s/jobs/sync-data-job.yaml
 
 # Khởi chạy Redpanda (Kafka)
-kubectl apply -f k8s/redpanda-statefulset.yaml
+kubectl apply -f k8s/apps/redpanda-statefulset.yaml
 ```
 
-5. Triển khai MLflow Registry Server
+6. Triển khai MLflow Registry Server
 
 ```bash
 # Chạy Job tạo bảng dữ liệu cho MLflow (chỉ chạy 1 lần)
-kubectl apply -f k8s/mlflow-init-job.yaml
+kubectl apply -f k8s/jobs/mlflow-init-job.yaml
 
-# Triển khai MLflow Server + Nginx Bảo mật + Cloudflare Tunnel
-kubectl apply -f k8s/mlflow-deployment.yaml
-kubectl apply -f k8s/mlflow-nginx.yaml
+# Triển khai MLflow Server
+kubectl apply -f k8s/apps/mlflow-deployment.yaml
 
 # Chạy lịch trình kiểm tra Model mới tự động mỗi 5 phút
-kubectl apply -f k8s/dispatch-cronjob.yaml
+kubectl apply -f k8s/apps/dispatch-cronjob.yaml
 ```
 
-6. Triển khai API & Consumer
+7. Triển khai API & Consumer
 
 ```bash
 # Triển khai API & Consumer
-kubectl apply -f k8s/api-deployment.yaml
-kubectl apply -f k8s/consumer-deployment.yaml
+kubectl apply -f k8s/apps/api-deployment.yaml
+kubectl apply -f k8s/apps/consumer-deployment.yaml
 ```
 
-7. Kiểm tra Data drift
+8. Kiểm tra Data drift
 
 ```bash
 # Gọi Job Evidently (GitHub Action)
-kubectl apply -f k8s/evidently-job.yaml
+kubectl apply -f k8s/jobs/evidently-job.yaml
 ```
 
-8. Triển khai Hệ thống Giám sát (Observability)
+9. Triển khai Hệ thống Giám sát (Observability)
 
 ```bash
 # Triển khai các ServiceMonitor và PodMonitor
-kubectl apply -f k8s/postgres-podmonitor.yaml
-kubectl apply -f k8s/api-servicemonitor.yaml
-kubectl apply -f k8s/redpanda-servicemonitor.yaml
+kubectl apply -f k8s/apps/postgres-podmonitor.yaml
+kubectl apply -f k8s/apps/api-servicemonitor.yaml
+kubectl apply -f k8s/apps/redpanda-servicemonitor.yaml
 
-# Cấu hình Alerting và Expose Grafana Dashboard
-kubectl apply -f k8s/grafana-alertrules.yaml
-kubectl apply -f k8s/grafana-cloudflared.yaml
+# Cấu hình Grafana Alerting
+kubectl apply -f k8s/apps/grafana-alertrules.yaml
 ```
 
-9. Cấu hình Autoscaling
+10. Cấu hình Autoscaling
 
 ```bash
 # Autoscaling Consumer với KEDA
-kubectl apply -f k8s/consumer-scaledobject.yaml
+kubectl apply -f k8s/apps/consumer-scaledobject.yaml
 
 # Autoscaling API với HPA
-kubectl apply -f k8s/api-hpa.yaml
+kubectl apply -f k8s/apps/api-hpa.yaml
 ```
 
-10. Bảo vệ các service khỏi downtime
+11. Các cấu hình bổ sung
 
 ```bash
+# Expose endpoint /ping cho ALB health check
+kubectl apply -f k8s/apps/traefik-ping.yaml
+
 # Tránh downtime khi cập nhật hệ thống kubectl drain
-kubectl apply -f k8s/pod-disruption-budgets.yaml
+kubectl apply -f k8s/apps/pod-disruption-budgets.yaml
+
+# Tạo Network Policy để tăng cường bảo mật
+kubectl apply -f k8s/apps/network-policy.yaml
 ```
 
 > API Documents: https://api.mlops-nids-nt114.id.vn/docs  
 > MLflow Server: https://mlflow.mlops-nids-nt114.id.vn  
 > Redpanda Console: https://redpanda.mlops-nids-nt114.id.vn  
 > K3s Dashboard: https://dashboard.mlops-nids-nt114.id.vn  
-> Grafana Dashboard: https://grafana.mlops-nids-nt114.id.vn
+> Grafana Dashboard: https://grafana.mlops-nids-nt114.id.vn  
+> ArgoCD Dashboard: https://argocd.mlops-nids-nt114.id.vn
 
 ---
 

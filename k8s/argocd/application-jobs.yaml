@@ -1,0 +1,28 @@
+# application-jobs.yaml: ArgoCD Application cho One-time Jobs (manual sync only)
+# Khác với apps/, thư mục này KHÔNG auto-sync. GitHub Actions sẽ gọi API để kích hoạt.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mlops-nids-jobs
+  namespace: argocd
+  annotations:
+    description: "MLOps NIDS One-time Jobs - Manual sync triggered by GitHub Actions API"
+spec:
+  project: default
+
+  # Nguồn: Thư mục k8s/jobs/ (Jobs chạy thủ công theo yêu cầu)
+  source:
+    repoURL: https://github.com/Viet-Hoang-2005/MLOps-nids-system.git
+    targetRevision: main
+    path: k8s/jobs
+
+  # Đích: K3s Cluster (cùng Cluster với ArgoCD)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  # KHÔNG auto-sync - GitHub Actions sẽ gọi API để trigger thủ công
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - Replace=true    # Dùng Replace thay vì Apply để Jobs bị xóa và tạo lại mỗi lần sync

@@ -1,4 +1,5 @@
 # api-servicemonitor.yaml: Cấu hình Prometheus tự động scrape metrics từ FastAPI
+---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
