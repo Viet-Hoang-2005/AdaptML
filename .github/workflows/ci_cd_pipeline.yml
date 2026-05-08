@@ -8,7 +8,7 @@ on:
       # Chỉ trigger khi có thay đổi ở những folder quan trọng
       - 'api/**'
       - 'evidently/**'
-      - 'mlflow/**'        # Bao gồm cả mlflow-server/ và mlflow-client/
+      - 'mlflow/**'
       - 'k8s/**'
       - '.github/scripts/**'
   pull_request:

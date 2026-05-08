@@ -155,12 +155,6 @@ resource "aws_security_group" "master_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
-    from_port   = 6443
-    to_port     = 6443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
