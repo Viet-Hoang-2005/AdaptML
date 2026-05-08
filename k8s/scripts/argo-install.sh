@@ -8,7 +8,7 @@ kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 
 # Bước 2: Cài đặt ArgoCD bằng manifest chính thức
 echo "[2/7] Installing ArgoCD..."
-kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply --server-side --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
 # Bước 3: Cấu hình RBAC (Least Privilege)
 echo "[3/7] Applying RBAC configuration (Account: github-actions)..."
