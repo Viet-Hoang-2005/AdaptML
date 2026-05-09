@@ -1,12 +1,10 @@
 #!/bin/bash
 # monitoring-install.sh: Cài đặt Prometheus + Grafana lên K3s qua Helm
-# Chạy từ máy có kết nối kubectl đến cluster
 
 set -e
 
 NAMESPACE="monitoring"
 RELEASE_NAME="monitoring"
-GRAFANA_PASSWORD=$(kubectl get secret -n default mlflow-basic-auth -o jsonpath='{.data.auth}' | base64 -d | cut -d':' -f2 2>/dev/null || echo "admin")
 
 echo "[1/3] Add Helm repo prometheus-community..."
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -16,7 +14,6 @@ echo "[2/3] Install kube-prometheus-stack (Prometheus + Grafana + node-exporter 
 helm upgrade --install ${RELEASE_NAME} prometheus-community/kube-prometheus-stack \
   --namespace ${NAMESPACE} \
   --create-namespace \
-  --set grafana.adminPassword="${GRAFANA_PASSWORD}" \
   --set prometheus.prometheusSpec.retention=3d \
   --set prometheus.prometheusSpec.scrapeInterval=30s \
   --set prometheus.prometheusSpec.resources.limits.memory=1500Mi \

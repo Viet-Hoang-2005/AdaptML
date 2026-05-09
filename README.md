@@ -498,6 +498,9 @@ kubectl apply -f k8s/apps/redpanda-servicemonitor.yaml
 
 # Cấu hình Grafana Alerting
 kubectl apply -f k8s/apps/grafana-alertrules.yaml
+
+# Lấy mật khẩu đăng nhập lần đầu
+kubectl get secret --namespace monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
 ```
 
 10. Cấu hình Autoscaling
