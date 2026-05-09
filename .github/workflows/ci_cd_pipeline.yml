@@ -90,7 +90,7 @@ jobs:
       - name: Set Image Envs
         run: |
           echo "API_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-api" >> $GITHUB_ENV
-          echo "MONITOR_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-evidently" >> $GITHUB_ENV
+          echo "EVIDENTLY_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-evidently" >> $GITHUB_ENV
           echo "SYNC_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-sync-data" >> $GITHUB_ENV
           echo "DISPATCH_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-dispatch" >> $GITHUB_ENV
           echo "MLFLOW_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-mlflow" >> $GITHUB_ENV
@@ -124,8 +124,8 @@ jobs:
           file: ./evidently/Dockerfile
           push: true
           tags: |
-            ${{ env.MONITOR_IMAGE }}:${{ github.sha }}
-            ${{ env.MONITOR_IMAGE }}:latest
+            ${{ env.EVIDENTLY_IMAGE }}:${{ github.sha }}
+            ${{ env.EVIDENTLY_IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -172,8 +172,8 @@ jobs:
         run: |
           echo "Images pushed to Docker Hub:"
           echo "   API:        ${{ env.API_IMAGE }}:${{ github.sha }}"
-          echo "   Monitor:    ${{ env.MONITOR_IMAGE }}:${{ github.sha }}"
-          echo "   Sync Job:   ${{ env.SYNC_IMAGE }}:${{ github.sha }}"
+          echo "   Evidently:  ${{ env.EVIDENTLY_IMAGE }}:${{ github.sha }}"
+          echo "   Sync Data:  ${{ env.SYNC_IMAGE }}:${{ github.sha }}"
           echo "   Dispatcher: ${{ env.DISPATCH_IMAGE }}:${{ github.sha }}"
           echo "   MLflow:     ${{ env.MLFLOW_IMAGE }}:${{ github.sha }}"
 
@@ -216,6 +216,9 @@ jobs:
         run: |
           echo "API_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-api" >> $GITHUB_ENV
           echo "DISPATCH_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-dispatch" >> $GITHUB_ENV
+          echo "MLFLOW_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-mlflow" >> $GITHUB_ENV
+          echo "EVIDENTLY_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-evidently" >> $GITHUB_ENV
+          echo "SYNC_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-sync-data" >> $GITHUB_ENV
 
       - name: Install yq (YAML processor)
         run: |
@@ -246,24 +249,51 @@ jobs:
             '(.spec.jobTemplate.spec.template.spec.containers[] | select(.name == "dispatcher") | .image) = "'"$NEW_TAG"'"' \
             k8s/apps/dispatch-cronjob.yaml
 
+      - name: Update MLflow Server image tag in k8s/apps/mlflow-deployment.yaml
+        run: |
+          NEW_TAG="${{ env.MLFLOW_IMAGE }}:${{ github.sha }}"
+          echo "Updating MLflow image to: $NEW_TAG"
+          yq e -i \
+            '(.spec.template.spec.containers[] | select(.name == "mlflow") | .image) = "'"$NEW_TAG"'"' \
+            k8s/apps/mlflow-deployment.yaml
+
+      - name: Update Evidently Job image tag in k8s/jobs/evidently-job.yaml
+        run: |
+          NEW_TAG="${{ env.EVIDENTLY_IMAGE }}:${{ github.sha }}"
+          echo "Updating Evidently Job image to: $NEW_TAG"
+          yq e -i \
+            '(.spec.template.spec.containers[] | select(.name == "evidently-monitor") | .image) = "'"$NEW_TAG"'"' \
+            k8s/jobs/evidently-job.yaml
+
+      - name: Update Sync Data Job image tag in k8s/jobs/sync-data-job.yaml
+        run: |
+          NEW_TAG="${{ env.SYNC_IMAGE }}:${{ github.sha }}"
+          echo "Updating Sync Data Job image to: $NEW_TAG"
+          yq e -i \
+            '(.spec.template.spec.containers[] | select(.name == "sync-data") | .image) = "'"$NEW_TAG"'"' \
+            k8s/jobs/sync-data-job.yaml
+
       - name: Commit & Push updated image tags
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add k8s/apps/api-deployment.yaml k8s/apps/consumer-deployment.yaml k8s/apps/dispatch-cronjob.yaml
+          git add k8s/apps/api-deployment.yaml k8s/apps/consumer-deployment.yaml k8s/apps/dispatch-cronjob.yaml k8s/apps/mlflow-deployment.yaml k8s/jobs/evidently-job.yaml k8s/jobs/sync-data-job.yaml
           git diff --staged --quiet && echo "No changes to commit." && exit 0
           git commit -m "ci: Update image tags to ${{ github.sha }} [skip ci]"
           git push
 
       - name: Summary
         run: |
-          echo "## GitOps Deployment Triggered" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Image tags updated in Git. ArgoCD will auto-sync to K3s within ~3 minutes." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Service | Image |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| API     | \`${{ env.API_IMAGE }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Consumer| \`${{ env.API_IMAGE }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Dispatch| \`${{ env.DISPATCH_IMAGE }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ## GitOps Deployment Triggered
+          
+          | Service | Docker Image (SHA Tag) |
+          | :--- | :--- |
+          | **API Server** | \`${{ env.API_IMAGE }}:${{ github.sha }}\` |
+          | **Consumer**   | \`${{ env.API_IMAGE }}:${{ github.sha }}\` |
+          | **Dispatcher** | \`${{ env.DISPATCH_IMAGE }}:${{ github.sha }}\` |
+          | **MLflow**     | \`${{ env.MLFLOW_IMAGE }}:${{ github.sha }}\` |
+          | **Drift Monitor** | \`${{ env.EVIDENTLY_IMAGE }}:${{ github.sha }}\` |
+          | **Data Sync**  | \`${{ env.SYNC_IMAGE }}:${{ github.sha }}\` |
+          EOF
 
