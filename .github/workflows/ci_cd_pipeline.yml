@@ -11,6 +11,7 @@ on:
       - 'mlflow/**'
       - 'k8s/**'
       - '.github/scripts/**'
+      - '.github/workflows/ci_cd_pipeline.yml'
   pull_request:
     branches: [main]
   workflow_dispatch:
