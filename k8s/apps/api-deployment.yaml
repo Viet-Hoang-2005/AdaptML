@@ -73,7 +73,7 @@ spec:
       # App Container: FastAPI NIDS Server
       containers:
         - name: fastapi-server
-          image: tnvhoang/mlops-nids-api:303d01f1b309acefc1a9c52295ccaf128c753ded
+          image: tnvhoang/mlops-nids-api:34302d1e84d4444f1ea689446da94e3f559b374a
           imagePullPolicy: Always # Luôn kéo image mới nhất từ registry
           ports:
             - containerPort: 5000 # FastAPI chạy trên cổng 5000
