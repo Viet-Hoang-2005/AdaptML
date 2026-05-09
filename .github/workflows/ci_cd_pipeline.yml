@@ -319,17 +319,45 @@ jobs:
           git push
 
       - name: Summary
+        env:
+          # Lấy kết quả từ job detect_changes
+          API_CHANGED: ${{ needs.detect_changes.outputs.api }}
+          DISPATCH_CHANGED: ${{ needs.detect_changes.outputs.mlflow }}
+          MLFLOW_CHANGED: ${{ needs.detect_changes.outputs.mlflow }}
+          EVIDENTLY_CHANGED: ${{ needs.detect_changes.outputs.evidently }}
+          SYNC_CHANGED: ${{ needs.detect_changes.outputs.scripts }}
+          IS_MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
+          # Hàm helper để kiểm tra và in ra trạng thái chuẩn xác
+          get_display_tag() {
+            local changed=$1
+            local image_name=$2
+            # Nếu code có đổi hoặc bấm chạy thủ công
+            if [ "$changed" == "true" ] || [ "$IS_MANUAL" == "true" ]; then
+              echo "\`${image_name}:${{ github.sha }}\` (Updated)"
+            else
+              echo "*(Skipped - Unchanged)*"
+            fi
+          }
+
+          # Gọi hàm tính toán cho từng component
+          API_DISP=$(get_display_tag "$API_CHANGED" "${{ env.API_IMAGE }}")
+          DISPATCH_DISP=$(get_display_tag "$DISPATCH_CHANGED" "${{ env.DISPATCH_IMAGE }}")
+          MLFLOW_DISP=$(get_display_tag "$MLFLOW_CHANGED" "${{ env.MLFLOW_IMAGE }}")
+          EVIDENTLY_DISP=$(get_display_tag "$EVIDENTLY_CHANGED" "${{ env.EVIDENTLY_IMAGE }}")
+          SYNC_DISP=$(get_display_tag "$SYNC_CHANGED" "${{ env.SYNC_IMAGE }}")
+
+          # In ra bảng Markdown
           cat <<EOF >> $GITHUB_STEP_SUMMARY
-          ## GitOps Deployment Triggered
-          
+          ## GitOps Deployment Summary
+
           | Service | Docker Image (SHA Tag) |
           | :--- | :--- |
-          | **API Server** | \`${{ env.API_IMAGE }}:${{ github.sha }}\` |
-          | **Consumer**   | \`${{ env.API_IMAGE }}:${{ github.sha }}\` |
-          | **Dispatcher** | \`${{ env.DISPATCH_IMAGE }}:${{ github.sha }}\` |
-          | **MLflow**     | \`${{ env.MLFLOW_IMAGE }}:${{ github.sha }}\` |
-          | **Evidently**  | \`${{ env.EVIDENTLY_IMAGE }}:${{ github.sha }}\` |
-          | **Data Sync**  | \`${{ env.SYNC_IMAGE }}:${{ github.sha }}\` |
+          | **API Server** | $API_DISP |
+          | **Consumer** | $API_DISP |
+          | **Dispatcher** | $DISPATCH_DISP |
+          | **MLflow** | $MLFLOW_DISP |
+          | **Evidently** | $EVIDENTLY_DISP |
+          | **Data Sync** | $SYNC_DISP |
           EOF
 
