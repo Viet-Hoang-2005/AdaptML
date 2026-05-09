@@ -35,7 +35,7 @@ spec:
       containers:
         - name: mlflow
           # Dùng image đã được build sẵn thay vì pip install lúc runtime
-          image: tnvhoang/mlops-nids-mlflow:latest
+          image: tnvhoang/mlops-nids-mlflow:34302d1e84d4444f1ea689446da94e3f559b374a
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
@@ -73,8 +73,6 @@ spec:
             limits:
               cpu: 500m
               memory: 2Gi
-
-
 # Service để expose MLflow Server nội bộ trong cluster
 ---
 apiVersion: v1
@@ -91,3 +89,6 @@ spec:
     - port: 5000
       targetPort: 5000
       protocol: TCP
+  template:
+    spec:
+      containers: []
