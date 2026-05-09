@@ -185,6 +185,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: write # Cần quyền này để push commit ngược lại repo
+      id-token: write # Cần quyền này để tạo OIDC Token cho AWS
 
     steps:
       - uses: actions/checkout@v4
