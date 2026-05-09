@@ -535,7 +535,7 @@ resource "aws_secretsmanager_secret" "tunnel_token" {
 # Khởi tạo khung Secret cho GitHub Actions
 resource "aws_secretsmanager_secret" "github_actions_secrets" {
   name        = "mlops/github-actions-secrets"
-  description = "Secrets for GitHub Actions CI/CD pipeline (DockerHub, Slack, Kubeconfig)"
+  description = "Secrets for GitHub Actions CI/CD pipeline (DockerHub, Slack, ArgoCD)"
 }
 
 # Tạo OIDC Provider cho GitHub
@@ -585,7 +585,8 @@ data "aws_iam_policy_document" "github_actions_policy" {
     ]
     resources = [
       aws_secretsmanager_secret.github_actions_secrets.arn,
-      aws_secretsmanager_secret.mlflow_basic_auth.arn
+      aws_secretsmanager_secret.mlflow_basic_auth.arn,
+      aws_secretsmanager_secret.github_secrets.arn,
     ]
   }
 
