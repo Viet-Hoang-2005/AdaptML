@@ -9,7 +9,6 @@ on:
       - 'api/**'
       - 'evidently/**'
       - 'mlflow/**'
-      - 'k8s/**'
       - '.github/scripts/**'
       - '.github/workflows/ci_cd_pipeline.yml'
   pull_request:
@@ -189,16 +188,22 @@ jobs:
       id-token: write # Cần quyền này để tạo OIDC Token cho AWS
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          # Dùng token mặc định của GitHub Actions để có thể push ngược lại repo
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ap-southeast-1
+
+      - name: Fetch GitHub PAT from AWS
+        uses: aws-actions/aws-secretsmanager-get-secrets@v2
+        with:
+          secret-ids: |
+            GITHUB_SECRETS, mlops/github-secrets
+          parse-json-secrets: true
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ env.GITHUB_SECRETS_GITHUB_TOKEN }}
 
       - name: Fetch Secrets from AWS
         uses: aws-actions/aws-secretsmanager-get-secrets@v2
