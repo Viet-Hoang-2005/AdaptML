@@ -146,8 +146,8 @@ jobs:
       - name: Build & Push Docker Image - MLflow Dispatcher
         uses: docker/build-push-action@v5
         with:
-          context: ./mlflow
-          file: ./mlflow/Dockerfile
+          context: ./mlflow/mlflow-client
+          file: ./mlflow/mlflow-client/Dockerfile
           push: true
           tags: |
             ${{ env.DISPATCH_IMAGE }}:${{ github.sha }}
