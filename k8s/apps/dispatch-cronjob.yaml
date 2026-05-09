@@ -27,7 +27,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: dispatcher
-              image: tnvhoang/mlops-nids-dispatch:34302d1e84d4444f1ea689446da94e3f559b374a
+              image: tnvhoang/mlops-nids-dispatch:92c1790dcb0057200f5eb6272f3e1b590df28dcb
               imagePullPolicy: Always
               env:
                 # 1. Cấu hình kết nối tới MLflow Server (Nội bộ K3s)

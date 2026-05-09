@@ -41,7 +41,7 @@ spec:
       containers:
         - name: consumer
           # Xài image của API (thư viện confluent-kafka nằm chung)
-          image: tnvhoang/mlops-nids-api:34302d1e84d4444f1ea689446da94e3f559b374a
+          image: tnvhoang/mlops-nids-api:92c1790dcb0057200f5eb6272f3e1b590df28dcb
           imagePullPolicy: Always
           command: ["python", "src/consumer.py"]
           # Cấu hình biến môi trường cho Consumer

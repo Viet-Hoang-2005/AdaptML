@@ -35,7 +35,7 @@ spec:
       containers:
         - name: mlflow
           # Dùng image đã được build sẵn thay vì pip install lúc runtime
-          image: tnvhoang/mlops-nids-mlflow:34302d1e84d4444f1ea689446da94e3f559b374a
+          image: tnvhoang/mlops-nids-mlflow:92c1790dcb0057200f5eb6272f3e1b590df28dcb
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
