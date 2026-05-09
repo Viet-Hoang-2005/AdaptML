@@ -27,7 +27,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: dispatcher
-              image: tnvhoang/mlops-nids-dispatch:latest
+              image: tnvhoang/mlops-nids-dispatch:303d01f1b309acefc1a9c52295ccaf128c753ded
               imagePullPolicy: Always
               env:
                 # 1. Cấu hình kết nối tới MLflow Server (Nội bộ K3s)
@@ -47,7 +47,6 @@ spec:
                     secretKeyRef:
                       name: mlflow-credentials
                       key: MLFLOW_TRACKING_PASSWORD
-                
                 # 2. Cấu hình kết nối tới GitHub Actions
                 - name: GITHUB_REPO
                   value: "Viet-Hoang-2005/MLOps-nids-system"
@@ -56,7 +55,6 @@ spec:
                     secretKeyRef:
                       name: github-secrets
                       key: GITHUB_TOKEN
-                      
               resources:
                 requests:
                   cpu: "50m"

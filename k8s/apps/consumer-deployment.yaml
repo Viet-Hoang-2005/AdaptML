@@ -41,7 +41,7 @@ spec:
       containers:
         - name: consumer
           # Xài image của API (thư viện confluent-kafka nằm chung)
-          image: tnvhoang/mlops-nids-api:latest
+          image: tnvhoang/mlops-nids-api:303d01f1b309acefc1a9c52295ccaf128c753ded
           imagePullPolicy: Always
           command: ["python", "src/consumer.py"]
           # Cấu hình biến môi trường cho Consumer
@@ -77,7 +77,6 @@ spec:
                 secretKeyRef:
                   name: postgres-secrets
                   key: POSTGRES_PASSWORD
-
           # Cấu hình tài nguyên cho Consumer
           resources:
             requests:
