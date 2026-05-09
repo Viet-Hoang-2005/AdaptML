@@ -70,11 +70,10 @@ spec:
           volumeMounts:
             - name: model-volume
               mountPath: /models
-
       # App Container: FastAPI NIDS Server
       containers:
         - name: fastapi-server
-          image: tnvhoang/mlops-nids-api:latest
+          image: tnvhoang/mlops-nids-api:303d01f1b309acefc1a9c52295ccaf128c753ded
           imagePullPolicy: Always # Luôn kéo image mới nhất từ registry
           ports:
             - containerPort: 5000 # FastAPI chạy trên cổng 5000
@@ -107,12 +106,10 @@ spec:
                 secretKeyRef:
                   name: postgres-secrets
                   key: POSTGRES_PASSWORD
-
           # Mount volume chứa model đã được Init Container tải về
           volumeMounts:
             - name: model-volume
               mountPath: /models
-
           # Cấu hình tài nguyên cho API
           resources:
             requests:
@@ -121,7 +118,6 @@ spec:
             limits:
               cpu: 1000m
               memory: 1Gi
-
           # Kiểm tra pod sẵn sàng nhận traffic chưa
           readinessProbe:
             httpGet:
@@ -136,12 +132,10 @@ spec:
               port: 5000
             initialDelaySeconds: 30
             periodSeconds: 15
-
       # Volume để chia sẻ model giữa Init Container và App Container
       volumes:
         - name: model-volume
           emptyDir: {}
-
 # Service để load balance traffic đến các pod của API
 ---
 apiVersion: v1
@@ -158,7 +152,9 @@ spec:
       protocol: TCP
       port: 80
       targetPort: 5000
-
+  template:
+    spec:
+      containers: []
 # Ingress chỉ đường tới API Service
 ---
 apiVersion: networking.k8s.io/v1
@@ -179,3 +175,6 @@ spec:
                 name: api-service
                 port:
                   number: 80
+  template:
+    spec:
+      containers: []
