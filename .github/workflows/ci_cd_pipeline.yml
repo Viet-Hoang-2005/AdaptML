@@ -20,9 +20,34 @@ permissions:
   contents: read
 
 jobs:
+  # JOB 0: Phát hiện thành phần nào có sự thay đổi code
+  detect_changes:
+    name: "Detect Changed Components"
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      evidently: ${{ steps.filter.outputs.evidently }}
+      mlflow: ${{ steps.filter.outputs.mlflow }}
+      scripts: ${{ steps.filter.outputs.scripts }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Filter changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'api/**'
+            evidently:
+              - 'evidently/**'
+            mlflow:
+              - 'mlflow/**'
+            scripts:
+              - '.github/scripts/**'
   # JOB 1: Kiểm tra Chất lượng Code (Code Quality Gate)
   lint_and_test:
     name: "Code Quality Check (Lint & Syntax)"
+    needs: detect_changes
     runs-on: ubuntu-latest
 
     steps:
@@ -63,7 +88,7 @@ jobs:
   # JOB 2: Build & Push Docker Images lên Docker Hub
   build_and_push:
     name: "Build Docker Images (API + Evidently)"
-    needs: lint_and_test
+    needs: [lint_and_test, detect_changes]
     runs-on: ubuntu-latest
     # Chỉ build khi push lên main - không build khi chỉ mở PR
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -103,6 +128,7 @@ jobs:
 
       # Build Image 1: FastAPI Server
       - name: Build & Push Docker Image - FastAPI API Server
+        if: needs.detect_changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./api
@@ -118,6 +144,7 @@ jobs:
 
       # Build Image 2: Evidently Drift Monitor
       - name: Build & Push Docker Image - Evidently Drift Monitor
+        if: needs.detect_changes.outputs.evidently == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./evidently
@@ -131,6 +158,7 @@ jobs:
 
       # Build Image 3: Reference Data Sync
       - name: Build & Push Docker Image - Data Sync Script
+        if: needs.detect_changes.outputs.scripts == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./.github/scripts
@@ -144,6 +172,7 @@ jobs:
 
       # Build Image 4: MLflow Dispatcher
       - name: Build & Push Docker Image - MLflow Dispatcher
+        if: needs.detect_changes.outputs.mlflow == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./mlflow/mlflow-client
@@ -157,6 +186,7 @@ jobs:
 
       # Build Image 5: MLflow Server (pre-installed dependencies)
       - name: Build & Push Docker Image - MLflow Server
+        if: needs.detect_changes.outputs.mlflow == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./mlflow/mlflow-server
@@ -180,7 +210,7 @@ jobs:
   # JOB 3: Cập nhật Image Tag trong Git (GitOps - ArgoCD sẽ tự động sync vào K3s)
   update_image_tag:
     name: "Update Image Tag in Git (GitOps)"
-    needs: build_and_push
+    needs: [build_and_push, detect_changes]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     permissions:
@@ -226,6 +256,7 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
 
       - name: Update API image tag in k8s/apps/api-deployment.yaml
+        if: needs.detect_changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           NEW_TAG="${{ env.API_IMAGE }}:${{ github.sha }}"
           echo "Updating API image to: $NEW_TAG"
@@ -234,6 +265,7 @@ jobs:
             k8s/apps/api-deployment.yaml
 
       - name: Update Consumer image tag in k8s/apps/consumer-deployment.yaml
+        if: needs.detect_changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           NEW_TAG="${{ env.API_IMAGE }}:${{ github.sha }}"
           echo "Updating Consumer image to: $NEW_TAG"
@@ -242,6 +274,7 @@ jobs:
             k8s/apps/consumer-deployment.yaml
 
       - name: Update Dispatch CronJob image tag in k8s/apps/dispatch-cronjob.yaml
+        if: needs.detect_changes.outputs.mlflow == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           NEW_TAG="${{ env.DISPATCH_IMAGE }}:${{ github.sha }}"
           echo "Updating Dispatcher image to: $NEW_TAG"
@@ -250,6 +283,7 @@ jobs:
             k8s/apps/dispatch-cronjob.yaml
 
       - name: Update MLflow Server image tag in k8s/apps/mlflow-deployment.yaml
+        if: needs.detect_changes.outputs.mlflow == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           NEW_TAG="${{ env.MLFLOW_IMAGE }}:${{ github.sha }}"
           echo "Updating MLflow image to: $NEW_TAG"
@@ -258,6 +292,7 @@ jobs:
             k8s/apps/mlflow-deployment.yaml
 
       - name: Update Evidently Job image tag in k8s/jobs/evidently-job.yaml
+        if: needs.detect_changes.outputs.evidently == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           NEW_TAG="${{ env.EVIDENTLY_IMAGE }}:${{ github.sha }}"
           echo "Updating Evidently Job image to: $NEW_TAG"
@@ -266,6 +301,7 @@ jobs:
             k8s/jobs/evidently-job.yaml
 
       - name: Update Sync Data Job image tag in k8s/jobs/sync-data-job.yaml
+        if: needs.detect_changes.outputs.scripts == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           NEW_TAG="${{ env.SYNC_IMAGE }}:${{ github.sha }}"
           echo "Updating Sync Data Job image to: $NEW_TAG"
@@ -293,7 +329,7 @@ jobs:
           | **Consumer**   | \`${{ env.API_IMAGE }}:${{ github.sha }}\` |
           | **Dispatcher** | \`${{ env.DISPATCH_IMAGE }}:${{ github.sha }}\` |
           | **MLflow**     | \`${{ env.MLFLOW_IMAGE }}:${{ github.sha }}\` |
-          | **Drift Monitor** | \`${{ env.EVIDENTLY_IMAGE }}:${{ github.sha }}\` |
+          | **Evidently**  | \`${{ env.EVIDENTLY_IMAGE }}:${{ github.sha }}\` |
           | **Data Sync**  | \`${{ env.SYNC_IMAGE }}:${{ github.sha }}\` |
           EOF
 
