@@ -336,7 +336,7 @@ jobs:
             if [ "$changed" == "true" ] || [ "$IS_MANUAL" == "true" ]; then
               echo "\`${image_name}:${{ github.sha }}\` (Updated)"
             else
-              echo "*(Skipped - Unchanged)*"
+              echo "(Skipped - Unchanged)"
             fi
           }
 
