@@ -24,10 +24,10 @@ services:
       retries: 5
       start_period: 10s
 
-  # 2. FastAPI Inference Server
+  # 2. FastAPI Inference Server (Data Plane)
   api:
     build:
-      context: ./api
+      context: ./services/api/model-server
       dockerfile: Dockerfile
     container_name: mlops_nids_api
     restart: always
@@ -50,7 +50,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
       - ./models:/models # Mount thư mục models local vào container
-      - ./api:/app
+      - ./services/api/model-server:/app
     command: uvicorn src.index:app --host 0.0.0.0 --port 5000 --reload
     depends_on:
       postgres:
@@ -112,7 +112,7 @@ services:
   # 5. NIDS Log Consumer (đứng giữa Redpanda và PostgreSQL)
   consumer:
     build:
-      context: ./api
+      context: ./services/api/model-server
       dockerfile: Dockerfile
     container_name: mlops_nids_consumer
     restart: always
@@ -129,7 +129,7 @@ services:
       GITHUB_REPO: ${GITHUB_REPO}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
-      - ./api:/app
+      - ./services/api/model-server:/app
     command: python src/consumer.py
     depends_on:
       postgres:
@@ -175,12 +175,50 @@ services:
     networks:
       - mlops_nids_network
 
-# 8. Mạng nội bộ cho các container
+  # 8. Redis (OTP Cache)
+  redis:
+    image: redis:7-alpine
+    container_name: mlops_nids_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - mlops_nids_network
+
+  # 9. Django Control Plane (Auth & Users)
+  control_plane:
+    build:
+      context: ./services/api/control-plane
+      dockerfile: Dockerfile
+    container_name: mlops_nids_django
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DB_HOST: postgres
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      REDIS_URL: redis://redis:6379/1
+    volumes:
+      - ./services/api/control-plane:/app
+    command: python src/manage.py runserver 0.0.0.0:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - mlops_nids_network
+
+# Mạng nội bộ cho các container
 networks:
   mlops_nids_network:
     driver: bridge
 
-# 9. Volume để lưu trữ dữ liệu của PostgreSQL và Redpanda
+# Volume để lưu trữ dữ liệu của PostgreSQL và Redpanda
 volumes:
   mlops_nids_pgdata:
     external: false

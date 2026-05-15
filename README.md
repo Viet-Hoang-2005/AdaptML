@@ -74,7 +74,7 @@ FastAPI (Producer) ────► Redpanda (Message Queue) + Consumer (Batch DB
 
 ## 3. Kiến trúc Hệ thống 🏛️
 
-![MLOPs NIDS System Architecture](assets/pictures/MLOps-NIDS-Architecture.png)
+![MLOPs NIDS System Architecture](web/src/assets/pictures/MLOps-NIDS-Architecture.png)
 
 > Xem chi tiết kiến trúc và các diagram tại [ARCHITECTURE.md](ARCHITECTURE.md)
 
@@ -115,35 +115,32 @@ mlops-nids-system/
 │   └── drift_alert.yml                   # Gửi Slack Alert khi phát hiện Data Drift
 │
 ├── .github/scripts/
-│   ├── update_reference_data.py          # Cập nhật reference dataset trong postgresql
-│   ├── Dockerfile                        # Dockerfile cho script update_reference_data.py
-│   └── trigger_sagemaker.py              # Script gọi AWS SDK khởi tạo máy chủ huấn luyện
+│   ├── trigger_sagemaker.py              # Script gọi AWS SDK khởi tạo máy chủ huấn luyện
+│   └── clear_production_data.py          # Script dọn dẹp dữ liệu production sau kiểm thử
 │
-├── api/
-│   ├── src/
-│   │   ├── index.py                      # FastAPI: POST /predict -> Ghi vào Redpanda
-│   │   ├── consumer.py                   # Redpanda Consumer: Batch insert DB -> Bắn Drift Webhook
-│   │   └── db_manager.py                 # Dual-endpoint SQLAlchemy: engine_rw + engine_ro
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── mlflow/
-│   ├── mlflow-client/
-│   │   ├── dispatch_production_model.py  # CronJob: Đọc MLflow Registry -> Bắn Deploy Webhook
-│   │   ├── Dockerfile
+├── services/
+│   ├── api/
+│   │   ├── control-plane/                # Django: Auth, Users, Project Management
+│   │   │   └── src/                      # Source code Django (RS256 JWT, JWKS)
+│   │   ├── model-server/                 # FastAPI: Inference Server
+│   │   │   └── src/                      # Source code FastAPI (mlflow.pyfunc)
+│   │   └── test/                         # Locust Load Testing & API Testing
+│   │
+│   ├── evidently/                        # Evidently AI: Drift Detection
+│   │   ├── detect_drift.py               # Phân tích Reference vs Production Data
+│   │   ├── Dockerfile                    # Dockerfile cho Evidently Job
 │   │   └── requirements.txt
-│   └── mlflow-server/
-│       ├── Dockerfile                    # Đóng gói thêm thư viện cần thiết cho MLflow Server
-│       └── requirements.txt
-│
-├── evidently/
-│   ├── detect_drift.py                   # Evidently AI: Query DB -> So sánh với Baseline -> Report
-│   ├── Dockerfile
-│   └── requirements.txt
+│   │
+│   ├── mlflow/                           # MLflow Stack (Server & Client)
+│   │   ├── mlflow-server/                # MLflow Tracking Server Docker source
+│   │   └── mlflow-client/                # Client dispatch model production
+│   │
+│   └── sync-data/                        # Script: Đồng bộ reference data vào DB
+│       └── update_reference_data.py      # Tải data từ S3 -> INSERT Postgres
 │
 ├── sagemaker/
 │   ├── train.py                          # XGBoost Training: Đọc S3 trực tiếp -> MLflow Tracking
-│   └── requirements.txt                  # Thư viện cho môi trường SageMaker (XGBoost, MLflow)
+│   └── requirements.txt                  # Thư viện cho môi trường SageMaker
 │
 ├── k8s/
 │   ├── apps/                             # ArgoCD quản lý (auto-sync) - Thư mục chính của GitOps
@@ -151,7 +148,7 @@ mlops-nids-system/
 │   │   ├── api-hpa.yaml                  # Tự động scale API dựa trên CPU
 │   │   ├── api-servicemonitor.yaml       # Cấu hình Prometheus scrape FastAPI
 │   │   ├── cloudflared-tunnel.yaml       # Cloudflare Tunnel: Expose MLflow, K3s Dashboard qua HTTPS
-│   │   ├── consumer-deployment.yaml      # NIDS Log Consumer
+│   │   ├── consumer-deployment.yaml      # Consumer gom data từ Redpanda và push vào DB
 │   │   ├── consumer-scaledobject.yaml    # Cấu hình Scale Consumer dựa trên Kafka lag
 │   │   ├── dispatch-cronjob.yaml         # CronJob đọc MLflow Model Registry -> Bắn Deploy Webhook
 │   │   ├── mlflow-deployment.yaml        # MLflow Tracking Server + PostgreSQL Backend + S3 Artifacts
@@ -167,7 +164,7 @@ mlops-nids-system/
 │   │   ├── network-policy.yaml           # Zero-Trust Networking cho các service trong cụm K3s
 │   │   └── pod-disruption-budgets.yaml   # Bảo vệ service khi bảo trì node (kubectl drain)
 │   │
-│   ├── jobs/                             # One-time Jobs (chạy thủ công, KHÔNG do ArgoCD auto-sync)
+│   ├── jobs/                             # One-time Jobs (chạy thủ công, ArgoCD manual-sync)
 │   │   ├── evidently-job.yaml            # Batch Job phát hiện Data Drift (trigger qua GitOps)
 │   │   ├── sync-data-job.yaml            # One-time Job: Nạp Reference Data vào PostgreSQL
 │   │   └── mlflow-init-job.yaml          # One-time Job: Tạo role/database mlflow trong PostgreSQL
@@ -189,9 +186,7 @@ mlops-nids-system/
 │       ├── s3_webhook_trigger.py         # Lambda: S3 Event -> Lấy Secret từ AWS -> Bắn GitHub Webhook
 │       └── s3_webhook_trigger.zip        # Lambda deployment package
 │
-├── web/src/
-│   ├── test_api.py                       # Script test API: Đo latency + Đánh giá kết quả dự đoán
-│   └── locustfile.py                     # Stress test: Giả lập traffic + Kích hoạt Data Drift
+├── web/src/                              # Frontend: Giao diện cho hệ thống AI PaaS
 │
 ├── models/
 │   ├── v1/                               # Model 2-class: BENIGN + DDoS
@@ -207,7 +202,7 @@ mlops-nids-system/
 │   └── drift_portscan.csv                # Dữ liệu giả lập drift PortScan
 │
 ├── data_manifest.json                    # Source of Truth: target_csv + model_version -> Trigger Lambda
-├── docker-compose.yml                    # Môi trường phát triển local (API + DB + Redpanda + Evidently)
+├── docker-compose.yml                    # Môi trường phát triển local (API + DB + Redpanda + MLflow)
 └── .env.example                          # Template biến môi trường
 ```
 

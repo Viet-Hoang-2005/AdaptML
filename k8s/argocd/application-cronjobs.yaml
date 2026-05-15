@@ -1,0 +1,36 @@
+# application-cronjobs.yaml: ArgoCD Application quản lý các tài nguyên CronJob
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mlops-nids-cronjobs
+  namespace: argocd
+  annotations:
+    description: "MLOps NIDS System - Scheduled CronJobs"
+spec:
+  project: default
+
+  # Nguồn: GitHub Repo và thư mục k8s/cronjobs/
+  source:
+    repoURL: https://github.com/Viet-Hoang-2005/MLOps-nids-system.git
+    targetRevision: main
+    path: k8s/cronjobs
+
+  # Đích: K3s Cluster (cùng Cluster với ArgoCD)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  # Cấu hình đồng bộ tự động
+  syncPolicy:
+    automated:
+      selfHeal: true  
+      prune: true     
+    syncOptions:
+      - CreateNamespace=true      
+      - ApplyOutOfSyncOnly=true   
+      - ServerSideApply=true      
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2

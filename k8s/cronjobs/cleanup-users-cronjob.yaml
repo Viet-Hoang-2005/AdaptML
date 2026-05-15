@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-deleted-users
+  namespace: default
+  labels:
+    app: ai-paas
+    component: control-plane-cronjob
+spec:
+  # Chạy vào 00:00 (nửa đêm) mỗi ngày
+  schedule: "0 0 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          # Không restart nếu Job fail, để cronjob chạy lại vào ngày mai hoặc cảnh báo
+          restartPolicy: OnFailure
+          containers:
+          - name: django-cleanup
+            image: your-docker-registry.com/ai-paas-control-plane:latest
+            # Chạy lệnh management command thay vì runserver
+            command: ["python", "src/manage.py", "cleanup_users"]
+            envFrom:
+            - secretRef:
+                name: django-db-secret # Secret chứa DB_HOST, DB_USER, DB_PASSWORD
+            env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: REDPANDA_BROKERS
+              value: "mlops-nids-redpanda.default.svc.cluster.local:9092"
+            - name: AWS_S3_REGION_NAME
+              value: "ap-southeast-1"
+            - name: AWS_STORAGE_BUCKET_NAME
+              value: "mlops-nids-artifacts"
+            # boto3 sẽ tự động dùng IAM Role của EC2 (OIDC/IRSA) nên không cần AWS_ACCESS_KEY
