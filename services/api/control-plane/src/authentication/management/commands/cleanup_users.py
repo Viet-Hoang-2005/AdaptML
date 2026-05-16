@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 class Command(BaseCommand):
-    help = 'Quét và xóa vĩnh viễn các tài khoản bị khóa trên 30 ngày (bao gồm S3 artifacts)'
+    help = 'Scan and permanently delete accounts that have been locked for more than 30 days (including S3 artifacts).'
 
     def handle(self, *args, **kwargs):
         # Mốc thời gian 30 ngày trước
@@ -22,7 +22,7 @@ class Command(BaseCommand):
         expired_users = User.objects.filter(is_active=False, deleted_at__lte=cutoff_date)
         
         if not expired_users.exists():
-            self.stdout.write(self.style.SUCCESS("Không có tài khoản nào cần xóa vĩnh viễn hôm nay."))
+            self.stdout.write(self.style.SUCCESS("No accounts need to be permanently deleted today."))
             return
             
         # Khởi tạo Kafka Producer
@@ -37,7 +37,7 @@ class Command(BaseCommand):
         for user in expired_users:
             tenant_id = user.tenant_id
             email = user.email
-            self.stdout.write(f"Đang tiến hành xóa vĩnh viễn: {email} (Tenant: {tenant_id})")
+            self.stdout.write(f"Permanent deletion in progress: {email} (Tenant: {tenant_id})")
             
             # 1. Bắn sự kiện lên Redpanda (Để hệ thống khác biết tenant này đã bay màu hoàn toàn)
             event_payload = {
@@ -57,14 +57,14 @@ class Command(BaseCommand):
                 try:
                     s3.delete_object(Bucket=bucket_name, Key=user.avatar.name)
                 except Exception as e:
-                    logger.warning(f"Không thể xóa avatar {user.avatar.name}: {e}")
+                    logger.warning(f"Cannot delete avatar {user.avatar.name}: {e}")
             
             # 3. Cuối cùng: Xóa cứng khỏi PostgreSQL
             user.delete()
-            self.stdout.write(self.style.SUCCESS(f"Đã xóa thành công {email}"))
+            self.stdout.write(self.style.SUCCESS(f"Deleted successfully {email}"))
             
         producer.flush()
-        self.stdout.write(self.style.SUCCESS("Hoàn tất quy trình dọn dẹp hệ thống."))
+        self.stdout.write(self.style.SUCCESS("The system cleanup process is complete."))
 
     def _delete_s3_folder(self, s3_client, bucket_name, prefix):
         """Hàm hỗ trợ xóa toàn bộ objects trong một thư mục S3."""
@@ -87,6 +87,6 @@ class Command(BaseCommand):
             if len(delete_us['Objects']):
                 s3_client.delete_objects(Bucket=bucket_name, Delete=delete_us)
                 
-            self.stdout.write(f"Đã dọn dẹp S3 folder: s3://{bucket_name}/{prefix}")
+            self.stdout.write(f"The S3 folder has been cleaned up: s3://{bucket_name}/{prefix}")
         except Exception as e:
-            logger.error(f"Lỗi khi xóa S3 prefix {prefix}: {e}")
+            logger.error(f"Error when deleting S3 prefix {prefix}: {e}")

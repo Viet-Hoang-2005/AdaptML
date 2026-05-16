@@ -38,6 +38,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     email = models.EmailField(unique=True, db_index=True)
     full_name = models.CharField(max_length=255, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    pronouns = models.CharField(max_length=30, blank=True, null=True)
+    company = models.CharField(max_length=150, blank=True, null=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     field_of_work = models.CharField(max_length=100, blank=True, null=True)
     country = models.CharField(max_length=100, blank=True, null=True)
@@ -73,12 +76,32 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             
         super().save(*args, **kwargs)
         
-        # Đẩy/Cập nhật API Key lên Redis
-        if self.is_active and self.api_key:
-            cache.set(f"api_key:{self.api_key}", self.tenant_id, timeout=None)
-        elif not self.is_active and self.api_key:
-            # Thu hồi ngay lập tức nếu tài khoản bị khóa
-            cache.delete(f"api_key:{self.api_key}")
+        try:
+            # Đẩy/Cập nhật API Key lên Redis
+            if self.is_active and self.api_key:
+                cache.set(f"api_key:{self.api_key}", self.tenant_id, timeout=None)
+            elif not self.is_active and self.api_key:
+                # Thu hồi ngay lập tức nếu tài khoản bị khóa
+                cache.delete(f"api_key:{self.api_key}")
+        except Exception as e:
+            print(f"Failed to update API key in Redis: {e}")
+            # Dù Redis lỗi thì vẫn lưu user bình thường
 
     def __str__(self):
         return f"{self.email} ({self.tenant_id})"
+
+
+class UserAPIKey(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="api_keys")
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    key_prefix = models.CharField(max_length=24, db_index=True)
+    key_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.key_prefix})"

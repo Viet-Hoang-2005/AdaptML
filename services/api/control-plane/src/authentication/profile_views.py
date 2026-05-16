@@ -1,45 +1,66 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
+import json
+import os
+import secrets
+import uuid
+
+from confluent_kafka import Producer
+from django.contrib.auth.hashers import make_password
+from django.core.cache import cache
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .models import UserAPIKey
 from .otp_service import request_otp, verify_otp
-from django.utils import timezone
-from django.core.cache import cache
-from confluent_kafka import Producer
-import os
-import json
-import secrets
+
+PASSWORD_CHANGE_TOKEN_TTL_SECONDS = 600
+
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
+        avatar_url = ""
+        if user.avatar:
+            try:
+                avatar_url = user.avatar.url
+            except Exception:
+                avatar_url = str(user.avatar)
+
         return Response({
             "email": user.email,
             "full_name": user.full_name,
-            "avatar": user.avatar,
+            "description": user.description,
+            "pronouns": user.pronouns,
+            "company": user.company,
+            "avatar": avatar_url,
             "field_of_work": user.field_of_work,
             "country": user.country,
             "tenant_id": user.tenant_id,
             "auth_provider": user.auth_provider,
-            "date_joined": user.date_joined
+            "date_joined": user.date_joined,
         })
 
     def put(self, request):
         user = request.user
-        user.full_name = request.data.get('full_name', user.full_name)
-        
-        # Hỗ trợ nhận file ảnh từ Form-Data (request.FILES) hoặc URL (request.data)
-        avatar_file = request.FILES.get('avatar') or request.data.get('avatar')
+        user.full_name = request.data.get("full_name", user.full_name)
+        user.description = request.data.get("description", user.description)
+        user.pronouns = request.data.get("pronouns", user.pronouns)
+        user.company = request.data.get("company", user.company)
+
+        avatar_file = request.FILES.get("avatar") or request.data.get("avatar")
         if avatar_file:
             user.avatar = avatar_file
-            
-        user.field_of_work = request.data.get('field_of_work', user.field_of_work)
-        user.country = request.data.get('country', user.country)
+
+        user.field_of_work = request.data.get("field_of_work", user.field_of_work)
+        user.country = request.data.get("country", user.country)
         user.save()
-        
+
         return Response({"message": "Profile updated successfully."}, status=status.HTTP_200_OK)
+
 
 class PasswordChangeRequestView(APIView):
     permission_classes = [IsAuthenticated]
@@ -51,87 +72,202 @@ class PasswordChangeRequestView(APIView):
             if not sent:
                 return Response({"error": message}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             return Response({"message": f"OTP code has been sent: {user.email}"}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": f"Unable to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as exc:
+            return Response({"error": f"Unable to send email: {str(exc)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PasswordChangeVerifyOTPView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        otp_code = request.data.get("otp_code")
+
+        if not otp_code:
+            return Response({"error": "Missing OTP code."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not verify_otp(user.email, otp_code):
+            return Response({"error": "The OTP code is invalid or has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+        password_change_token = str(uuid.uuid4())
+        cache.set(
+            f"password_change_token:{password_change_token}",
+            user.email,
+            timeout=PASSWORD_CHANGE_TOKEN_TTL_SECONDS,
+        )
+
+        return Response({
+            "message": "OTP verified successfully.",
+            "password_change_token": password_change_token,
+        }, status=status.HTTP_200_OK)
+
 
 class PasswordChangeCompleteView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
-        otp_code = request.data.get('otp_code')
-        new_password = request.data.get('new_password')
-        
-        if not otp_code or not new_password:
-            return Response({"error": "Missing OTP code or new password."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        if verify_otp(user.email, otp_code):
+        otp_code = request.data.get("otp_code")
+        password_change_token = request.data.get("password_change_token")
+        new_password = request.data.get("new_password")
+
+        if not new_password:
+            return Response({"error": "Missing new password."}, status=status.HTTP_400_BAD_REQUEST)
+
+        token_key = f"password_change_token:{password_change_token}" if password_change_token else None
+        token_email = cache.get(token_key) if token_key else None
+
+        if (token_email and token_email == user.email) or (otp_code and verify_otp(user.email, otp_code)):
             user.set_password(new_password)
             user.save()
+            if token_key:
+                cache.delete(token_key)
             return Response({"message": "Password set successfully! You can now log in using Base Auth."}, status=status.HTTP_200_OK)
-            
-        return Response({"error": "The OTP code is invalid or has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"error": "The OTP code or password change token is invalid or has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class AccountDeleteView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request):
         user = request.user
-        # 1. Soft delete tại Django
         user.is_active = False
         user.deleted_at = timezone.now()
         user.save()
-        
-        # 2. Gửi sự kiện lên Redpanda để FastAPI scale replicas xuống 0
+
         try:
-            redpanda_brokers = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
-            producer = Producer({'bootstrap.servers': redpanda_brokers})
-            
+            redpanda_brokers = os.environ.get("REDPANDA_BROKERS", "localhost:19092")
+            producer = Producer({"bootstrap.servers": redpanda_brokers})
+
             event_payload = {
                 "event": "TENANT_SUSPENDED",
                 "tenant_id": user.tenant_id,
-                "action": "scale_to_zero"
+                "action": "scale_to_zero",
             }
-            
+
             producer.produce(
-                'ai_paas_control_events', 
-                key=user.tenant_id, 
-                value=json.dumps(event_payload)
+                "ai_paas_control_events",
+                key=user.tenant_id,
+                value=json.dumps(event_payload),
             )
             producer.flush(timeout=2.0)
-            
-        except Exception as e:
-            print(f"Failed to publish event to Redpanda: {e}")
-            # Dù Redpanda lỗi thì vẫn trả về 200 vì acc đã bị khóa ở Django
-            pass
-            
+
+        except Exception as exc:
+            print(f"Failed to publish event to Redpanda: {exc}")
+
         return Response({"message": "Your account has been disabled! API models will be paused."}, status=status.HTTP_200_OK)
+
 
 class APIKeyManagementView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Lấy API Key hiện tại."""
         user = request.user
+        keys = user.api_keys.filter(revoked_at__isnull=True)
         return Response({
-            "api_key": user.api_key,
-            "tenant_id": user.tenant_id
+            "tenant_id": user.tenant_id,
+            "api_keys": [
+                {
+                    "id": key.id,
+                    "name": key.name,
+                    "description": key.description,
+                    "key_prefix": key.key_prefix,
+                    "created_at": key.created_at,
+                }
+                for key in keys
+            ],
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
-        """Rotate (Tạo lại) API Key mới và thu hồi Key cũ."""
         user = request.user
-        
-        # Xóa key cũ trên Redis
-        if user.api_key:
-            cache.delete(f"api_key:{user.api_key}")
-            
-        # Sinh key mới
-        new_key = f"sk_live_{secrets.token_urlsafe(32)}"
-        user.api_key = new_key
-        user.save() # save() sẽ tự động cập nhật key mới lên Redis
-        
+        name = (request.data.get("name") or "").strip()
+        description = (request.data.get("description") or "").strip()
+
+        if not name:
+            return Response({"error": "API key name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_key = f"sk_live_{secrets.token_urlsafe(32)}"
+        key_prefix = raw_key[:16]
+
+        api_key = UserAPIKey.objects.create(
+            user=user,
+            name=name,
+            description=description,
+            key_prefix=key_prefix,
+            key_hash=make_password(raw_key),
+        )
+
+        cache.set(f"api_key:{raw_key}", user.tenant_id, timeout=None)
+
         return Response({
-            "message": "API key has been successfully changed! The old key has been revoked.",
-            "api_key": new_key
+            "message": "API key has been created. Store it now because it will only be shown once.",
+            "api_key": raw_key,
+            "key_prefix": key_prefix,
+            "id": api_key.id,
+            "name": api_key.name,
+            "description": api_key.description,
+        }, status=status.HTTP_201_CREATED)
+
+
+class APIKeyDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, key_id):
+        api_key = UserAPIKey.objects.filter(id=key_id, user=request.user, revoked_at__isnull=True).first()
+        if not api_key:
+            return Response({"error": "API key not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        name = (request.data.get("name") or "").strip()
+        description = (request.data.get("description") or "").strip()
+
+        if not name:
+            return Response({"error": "API key name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        api_key.name = name
+        api_key.description = description
+        api_key.save(update_fields=["name", "description"])
+
+        return Response({
+            "message": "API key updated successfully.",
+            "id": api_key.id,
+            "name": api_key.name,
+            "description": api_key.description,
+            "key_prefix": api_key.key_prefix,
+            "created_at": api_key.created_at,
+        }, status=status.HTTP_200_OK)
+
+    def delete(self, request, key_id):
+        api_key = UserAPIKey.objects.filter(id=key_id, user=request.user, revoked_at__isnull=True).first()
+        if not api_key:
+            return Response({"error": "API key not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        api_key.revoked_at = timezone.now()
+        api_key.save(update_fields=["revoked_at"])
+
+        return Response({"message": "API key deleted successfully."}, status=status.HTTP_200_OK)
+
+
+class APIKeyRegenerateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, key_id):
+        api_key = UserAPIKey.objects.filter(id=key_id, user=request.user, revoked_at__isnull=True).first()
+        if not api_key:
+            return Response({"error": "API key not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        raw_key = f"sk_live_{secrets.token_urlsafe(32)}"
+        api_key.key_prefix = raw_key[:16]
+        api_key.key_hash = make_password(raw_key)
+        api_key.save(update_fields=["key_prefix", "key_hash"])
+
+        cache.set(f"api_key:{raw_key}", request.user.tenant_id, timeout=None)
+
+        return Response({
+            "message": "API key regenerated. Store it now because it will only be shown once.",
+            "api_key": raw_key,
+            "id": api_key.id,
+            "name": api_key.name,
+            "description": api_key.description,
+            "key_prefix": api_key.key_prefix,
         }, status=status.HTTP_200_OK)

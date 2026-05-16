@@ -3,7 +3,7 @@ from .views import CustomTokenObtainPairView, CustomTokenRefreshView, JWKSView
 from .base_auth_views import RequestOTPView, VerifyOTPView, CompleteRegistrationView
 from .oauth2_views import GoogleOAuthView, GitHubOAuthView
 from .password_reset_views import PasswordResetCompleteView, PasswordResetRequestOTPView, PasswordResetVerifyOTPView
-from .profile_views import ProfileView, PasswordChangeRequestView, PasswordChangeCompleteView, AccountDeleteView, APIKeyManagementView
+from .profile_views import ProfileView, PasswordChangeRequestView, PasswordChangeVerifyOTPView, PasswordChangeCompleteView, AccountDeleteView, APIKeyManagementView, APIKeyDetailView, APIKeyRegenerateView
 
 urlpatterns = [
     # JWT & JWKS
@@ -28,7 +28,10 @@ urlpatterns = [
     # Profile & Quản lý tài khoản
     path('profile/me/', ProfileView.as_view(), name='profile_me'),
     path('profile/password-otp/', PasswordChangeRequestView.as_view(), name='password_change_otp'),
+    path('profile/password-otp/verify/', PasswordChangeVerifyOTPView.as_view(), name='password_change_verify_otp'),
     path('profile/change-password/', PasswordChangeCompleteView.as_view(), name='password_change_complete'),
     path('profile/api-key/', APIKeyManagementView.as_view(), name='api_key_manage'),
+    path('profile/api-key/<int:key_id>/', APIKeyDetailView.as_view(), name='api_key_detail'),
+    path('profile/api-key/<int:key_id>/regenerate/', APIKeyRegenerateView.as_view(), name='api_key_regenerate'),
     path('profile/delete/', AccountDeleteView.as_view(), name='account_delete'),
 ]
