@@ -14,6 +14,7 @@ import type {
   CreatedAPIKeyResponse,
   PasswordChangeVerifyResponse,
   PasswordResetVerifyResponse,
+  UpdateProfileAvatarRequest,
   UpdateProfileRequest,
   UserProfile,
 } from '../types/auth';
@@ -36,7 +37,21 @@ export const verifyOTP = async (payload: OTPVerifyRequest): Promise<OTPVerifyRes
 };
 
 export const completeRegistration = async (payload: CompleteRegistrationRequest): Promise<AuthResponse> => {
-  const { data } = await axiosInstance.post<AuthResponse>('/register/complete/', payload);
+  const formData = new FormData();
+  formData.append('registration_token', payload.registration_token);
+  formData.append('full_name', payload.full_name);
+  formData.append('field_of_work', payload.field_of_work);
+  formData.append('password', payload.password);
+
+  if (payload.avatar) {
+    formData.append('avatar', payload.avatar);
+  }
+
+  const { data } = await axiosInstance.post<AuthResponse>('/register/complete/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
   return data;
 };
 
@@ -87,6 +102,25 @@ export const getProfile = async (): Promise<UserProfile> => {
 
 export const updateProfile = async (payload: UpdateProfileRequest): Promise<MessageResponse> => {
   const { data } = await axiosInstance.put<MessageResponse>('/profile/me/', payload);
+  return data;
+};
+
+export const updateProfileAvatar = async (payload: UpdateProfileAvatarRequest): Promise<MessageResponse> => {
+  const formData = new FormData();
+
+  if (payload.avatar) {
+    formData.append('avatar', payload.avatar);
+  }
+
+  if (payload.remove_avatar) {
+    formData.append('remove_avatar', 'true');
+  }
+
+  const { data } = await axiosInstance.put<MessageResponse>('/profile/me/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
   return data;
 };
 

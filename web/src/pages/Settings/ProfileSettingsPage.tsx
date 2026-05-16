@@ -1,11 +1,15 @@
-import { BriefcaseBusiness, Building2, CalendarDays, ChevronDown, FileText, Fingerprint, Globe2, LockKeyhole, Mail, ShieldCheck, Tags, Trash2, UserRound } from 'lucide-react';
-import { useMemo } from 'react';
+import { BriefcaseBusiness, Building2, CalendarDays, Camera, ChevronDown, FileText, Fingerprint, Globe2, LockKeyhole, Mail, ShieldCheck, Tags, Trash2, UserRound } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { AvatarCropModal } from '../../components/ui/AvatarCropModal';
+import { AvatarOptionsModal } from '../../components/ui/AvatarOptionsModal';
+import { AvatarUploadModal } from '../../components/ui/AvatarUploadModal';
 import { Button } from '../../components/ui/Button';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { Input, InputPassword } from '../../components/ui/Input';
 import { OTPInput } from '../../components/ui/OTPInput';
 import { useProfileSettings } from '../../hooks/useProfileSettings';
+import { toast } from '../../lib/toast';
 import type { UserProfile } from '../../types/auth';
 import SettingsModal from './SettingsModal';
 
@@ -33,6 +37,8 @@ const getInitials = (profile: UserProfile | null) => {
 const readOnlyFieldClass =
   'cursor-default hover:border-gray-200 focus:border-gray-200';
 
+type AvatarModalState = 'closed' | 'upload' | 'options';
+
 export default function ProfileSettingsPage() {
   const {
     profile,
@@ -40,6 +46,7 @@ export default function ProfileSettingsPage() {
     editingProfile,
     loading,
     saving,
+    avatarSaving,
     profileChanged,
     passwordModalStep,
     newPassword,
@@ -58,30 +65,102 @@ export default function ProfileSettingsPage() {
     updateProfileField,
     handleSave,
     handleCancelEdit,
+    handleUpdateAvatar,
+    handleRemoveAvatar,
     openPasswordOTPModal,
     handleVerifyPasswordOTP,
     handleCompletePasswordChange,
     handleDeleteAccount,
   } = useProfileSettings();
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [avatarModal, setAvatarModal] = useState<AvatarModalState>('closed');
+  const [cropImage, setCropImage] = useState('');
   const initials = useMemo(() => getInitials(profile), [profile]);
+  const avatarPreview = profile?.avatar || '';
+
+  useEffect(() => {
+    return () => {
+      if (cropImage) URL.revokeObjectURL(cropImage);
+    };
+  }, [cropImage]);
+
+  const openAvatarModal = () => {
+    setAvatarModal(avatarPreview ? 'options' : 'upload');
+  };
+
+  const openAvatarPicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarSelection = (file?: File) => {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.warning('Please select an image file.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.warning('Avatar image must be 5MB or smaller.');
+      return;
+    }
+
+    if (cropImage) URL.revokeObjectURL(cropImage);
+    setAvatarModal('closed');
+    setCropImage(URL.createObjectURL(file));
+  };
+
+  const closeCropModal = () => {
+    if (cropImage) URL.revokeObjectURL(cropImage);
+    setCropImage('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const confirmAvatarCrop = async (file: File) => {
+    await handleUpdateAvatar(file);
+    closeCropModal();
+  };
+
+  const removeAvatar = async () => {
+    await handleRemoveAvatar();
+    setAvatarModal('closed');
+  };
 
   return (
     <div className="w-full space-y-6">
       <section className="rounded-lg border border-gray-200 bg-white">
         <div className="flex flex-col gap-5 border-b border-gray-100 px-6 py-6 md:flex-row md:items-center">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-xl font-bold text-white">
-            {profile?.avatar ? <img src={profile.avatar} alt="" className="h-full w-full object-cover" /> : initials}
-          </div>
+          <button
+            type="button"
+            onClick={openAvatarModal}
+            disabled={loading || avatarSaving}
+            className="group relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-xl font-bold text-white outline-none ring-offset-2 transition focus:ring-2 focus:ring-black disabled:cursor-not-allowed disabled:opacity-70"
+            aria-label="Update avatar"
+          >
+            {avatarPreview ? <img src={avatarPreview} alt="" className="h-full w-full object-cover" /> : initials}
+            <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
+              <Camera className="h-5 w-5 text-white" />
+            </span>
+          </button>
           <div className="min-w-0">
             <h2 className="truncate text-xl font-bold text-gray-900">
               {profile?.full_name || 'AI Engineer'}
             </h2>
             <p className="truncate text-sm text-gray-500">{profile?.email || 'Loading profile...'}</p>
             <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Avatar upload will be available in a later phase.
+              Click the avatar to upload, crop, change, or remove it.
             </p>
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => handleAvatarSelection(event.target.files?.[0])}
+          />
         </div>
 
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -334,6 +413,28 @@ export default function ProfileSettingsPage() {
         loading={deleteLoading}
         onCancel={() => setDeleteModalOpen(false)}
         onConfirm={handleDeleteAccount}
+      />
+
+      <AvatarUploadModal
+        open={avatarModal === 'upload'}
+        onClose={() => setAvatarModal('closed')}
+        onUpload={openAvatarPicker}
+      />
+
+      <AvatarOptionsModal
+        open={avatarModal === 'options'}
+        avatarPreview={avatarPreview}
+        onClose={() => setAvatarModal('closed')}
+        onRemove={removeAvatar}
+        onChange={openAvatarPicker}
+      />
+
+      <AvatarCropModal
+        imageSrc={cropImage}
+        loading={avatarSaving}
+        onClose={closeCropModal}
+        onConfirm={confirmAvatarCrop}
+        onError={() => toast.error('Unable to crop avatar. Please try another image.')}
       />
     </div>
   );

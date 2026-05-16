@@ -19,7 +19,6 @@ export interface CompleteRegistrationRequest {
   full_name: string;
   avatar?: File | null;
   field_of_work: string;
-  country: string;
   password: string;
 }
 
@@ -58,6 +57,11 @@ export interface UpdateProfileRequest {
   company: string;
   field_of_work: string;
   country: string;
+}
+
+export interface UpdateProfileAvatarRequest {
+  avatar?: File | null;
+  remove_avatar?: boolean;
 }
 
 export interface PasswordChangeVerifyResponse {

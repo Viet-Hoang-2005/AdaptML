@@ -6,6 +6,7 @@ import {
   getProfile,
   requestPasswordChangeOTP,
   updateProfile,
+  updateProfileAvatar,
   verifyPasswordChangeOTP,
 } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
@@ -91,6 +92,17 @@ export function useProfileSettings() {
     },
   });
 
+  const updateAvatarMutation = useMutation({
+    mutationFn: updateProfileAvatar,
+    onSuccess: async (_response, variables) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.profile });
+      toast.success(variables.remove_avatar ? 'Avatar removed successfully.' : 'Avatar updated successfully.');
+    },
+    onError: () => {
+      toast.error('Unable to update avatar.');
+    },
+  });
+
   const profileChanged = useMemo(
     () => editingProfile && JSON.stringify(draftFormValues) !== JSON.stringify(profileFormValues),
     [draftFormValues, editingProfile, profileFormValues],
@@ -121,6 +133,14 @@ export function useProfileSettings() {
   const handleCancelEdit = () => {
     setDraftFormValues(profileFormValues);
     setEditingProfile(false);
+  };
+
+  const handleUpdateAvatar = async (avatar: File) => {
+    await updateAvatarMutation.mutateAsync({ avatar });
+  };
+
+  const handleRemoveAvatar = async () => {
+    await updateAvatarMutation.mutateAsync({ remove_avatar: true });
   };
 
   const openPasswordOTPModal = async () => {
@@ -203,6 +223,7 @@ export function useProfileSettings() {
     editingProfile,
     loading: profileQuery.isLoading,
     saving: updateProfileMutation.isPending,
+    avatarSaving: updateAvatarMutation.isPending,
     profileChanged,
     passwordModalStep,
     otpCode,
@@ -222,6 +243,8 @@ export function useProfileSettings() {
     updateProfileField,
     handleSave,
     handleCancelEdit,
+    handleUpdateAvatar,
+    handleRemoveAvatar,
     openPasswordOTPModal,
     handleVerifyPasswordOTP,
     handleCompletePasswordChange,
