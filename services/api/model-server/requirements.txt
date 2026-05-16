@@ -14,7 +14,7 @@ python-dotenv==1.0.1
 sqlalchemy==2.0.25
 requests==2.31.0
 PyJWT==2.8.0
-cryptography==42.0.5
+cryptography==46.0.3
 redis==5.0.3
 
 # --- Message Queue (Kafka/Redpanda) ---
