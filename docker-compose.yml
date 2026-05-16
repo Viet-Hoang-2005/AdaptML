@@ -135,13 +135,13 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-southeast-1}
-      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME:-mlops-nids-artifacts}
+      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME:-mlops-paas-artifacts}
     command: >
       mlflow server 
       --host 0.0.0.0 
       --port 5000 
       --backend-store-uri postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME} 
-      --default-artifact-root s3://${AWS_BUCKET_NAME:-mlops-nids-artifacts}/mlflow-artifacts/
+      --default-artifact-root s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/
     depends_on:
       postgres:
         condition: service_healthy

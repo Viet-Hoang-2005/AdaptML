@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createAPIKey,
   deleteAPIKey,
@@ -6,57 +7,80 @@ import {
   regenerateAPIKey,
   updateAPIKey,
 } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 import { toast } from '../lib/toast';
 import type { APIKeyRecord, CreatedAPIKeyResponse } from '../types/auth';
 import type { KeyModalMode } from '../types/settings';
 
 export function useDeveloperSettings() {
-  const [apiKeys, setApiKeys] = useState<APIKeyRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
   const [modalMode, setModalMode] = useState<KeyModalMode | null>(null);
   const [editingKey, setEditingKey] = useState<APIKeyRecord | null>(null);
   const [apiKeyName, setApiKeyName] = useState('');
   const [apiKeyDescription, setApiKeyDescription] = useState('');
   const [createdApiKey, setCreatedApiKey] = useState<CreatedAPIKeyResponse | null>(null);
 
-  const loadAPIKeys = async (showLoading = true) => {
-    if (showLoading) {
-      setLoading(true);
-    }
-    try {
-      const response = await listAPIKeys();
-      setApiKeys(response.api_keys);
-    } catch {
-      toast.error('Unable to load API keys.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const apiKeysQuery = useQuery({
+    queryKey: queryKeys.apiKeys,
+    queryFn: listAPIKeys,
+  });
 
   useEffect(() => {
-    let mounted = true;
-    listAPIKeys()
-      .then((response) => {
-        if (mounted) {
-          setApiKeys(response.api_keys);
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          toast.error('Unable to load API keys.');
-        }
-      })
-      .finally(() => {
-        if (mounted) {
-          setLoading(false);
-        }
-      });
+    if (apiKeysQuery.isError) {
+      toast.error('Unable to load API keys.');
+    }
+  }, [apiKeysQuery.isError]);
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const refreshAPIKeys = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys });
+  };
+
+  const createAPIKeyMutation = useMutation({
+    mutationFn: createAPIKey,
+    onSuccess: async (response) => {
+      setCreatedApiKey(response);
+      closeEditModal();
+      await refreshAPIKeys();
+    },
+    onError: () => {
+      toast.error('Unable to create API key.');
+    },
+  });
+
+  const updateAPIKeyMutation = useMutation({
+    mutationFn: ({ id, name, description }: { id: number; name: string; description: string }) =>
+      updateAPIKey(id, { name, description }),
+    onSuccess: async () => {
+      toast.success('API key updated successfully.');
+      closeEditModal();
+      await refreshAPIKeys();
+    },
+    onError: () => {
+      toast.error('Unable to update API key.');
+    },
+  });
+
+  const deleteAPIKeyMutation = useMutation({
+    mutationFn: deleteAPIKey,
+    onSuccess: async () => {
+      toast.success('API key deleted successfully.');
+      await refreshAPIKeys();
+    },
+    onError: () => {
+      toast.error('Unable to delete API key.');
+    },
+  });
+
+  const regenerateAPIKeyMutation = useMutation({
+    mutationFn: regenerateAPIKey,
+    onSuccess: async (response) => {
+      setCreatedApiKey(response);
+      await refreshAPIKeys();
+    },
+    onError: () => {
+      toast.error('Unable to regenerate API key.');
+    },
+  });
 
   const openCreateModal = () => {
     setModalMode('create');
@@ -79,34 +103,23 @@ export function useDeveloperSettings() {
     setApiKeyDescription('');
   };
 
-  const handleSaveAPIKey = async () => {
+  const handleSaveAPIKey = () => {
     if (!apiKeyName.trim()) {
       toast.warning('Please enter an API key name.');
       return;
     }
 
-    setSaving(true);
-    try {
-      if (modalMode === 'create') {
-        const response = await createAPIKey({
-          name: apiKeyName.trim(),
-          description: apiKeyDescription.trim(),
-        });
-        setCreatedApiKey(response);
-      } else if (modalMode === 'edit' && editingKey) {
-        await updateAPIKey(editingKey.id, {
-          name: apiKeyName.trim(),
-          description: apiKeyDescription.trim(),
-        });
-        toast.success('API key updated successfully.');
-      }
-
-      closeEditModal();
-      await loadAPIKeys(false);
-    } catch {
-      toast.error(modalMode === 'create' ? 'Unable to create API key.' : 'Unable to update API key.');
-    } finally {
-      setSaving(false);
+    if (modalMode === 'create') {
+      createAPIKeyMutation.mutate({
+        name: apiKeyName.trim(),
+        description: apiKeyDescription.trim(),
+      });
+    } else if (modalMode === 'edit' && editingKey) {
+      updateAPIKeyMutation.mutate({
+        id: editingKey.id,
+        name: apiKeyName.trim(),
+        description: apiKeyDescription.trim(),
+      });
     }
   };
 
@@ -114,26 +127,14 @@ export function useDeveloperSettings() {
     const confirmed = window.confirm(`Delete API key "${apiKey.name}"?`);
     if (!confirmed) return;
 
-    try {
-      await deleteAPIKey(apiKey.id);
-      toast.success('API key deleted successfully.');
-      await loadAPIKeys(false);
-    } catch {
-      toast.error('Unable to delete API key.');
-    }
+    deleteAPIKeyMutation.mutate(apiKey.id);
   };
 
   const handleRegenerateAPIKey = async (apiKey: APIKeyRecord) => {
     const confirmed = window.confirm(`Regenerate API key "${apiKey.name}"? The old key value will no longer be shown.`);
     if (!confirmed) return;
 
-    try {
-      const response = await regenerateAPIKey(apiKey.id);
-      setCreatedApiKey(response);
-      await loadAPIKeys(false);
-    } catch {
-      toast.error('Unable to regenerate API key.');
-    }
+    regenerateAPIKeyMutation.mutate(apiKey.id);
   };
 
   const handleCopyCreatedKey = async () => {
@@ -146,9 +147,11 @@ export function useDeveloperSettings() {
     }
   };
 
+  const saving = createAPIKeyMutation.isPending || updateAPIKeyMutation.isPending;
+
   return {
-    apiKeys,
-    loading,
+    apiKeys: apiKeysQuery.data?.api_keys ?? [],
+    loading: apiKeysQuery.isLoading,
     saving,
     modalMode,
     apiKeyName,

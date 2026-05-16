@@ -1,8 +1,10 @@
 import { Bell, ChevronDown, Plus, Settings, LogOut, UserCircle, Moon, Sun } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { getProfile } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 import MLdriftLogo from '../../assets/icons/MLdrift.png';
 import type { UserProfile } from '../../types/auth';
 import { useModelSelection } from '../../pages/Dashboard/modelSelection';
@@ -21,29 +23,14 @@ export default function Header() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const { models, selectedModel, selectModel } = useModelSelection();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [themePreview, setThemePreview] = useState<'light' | 'dark'>('light');
 
-  useEffect(() => {
-    let mounted = true;
-    getProfile()
-      .then((data) => {
-        if (mounted) {
-          setProfile(data);
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setProfile(null);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
+  const { data: profile = null } = useQuery({
+    queryKey: queryKeys.profile,
+    queryFn: getProfile,
+  });
   const initials = useMemo(() => getInitials(profile), [profile]);
 
   return (

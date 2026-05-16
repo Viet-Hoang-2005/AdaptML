@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   completePasswordChange,
   deleteAccount,
@@ -7,8 +8,9 @@ import {
   updateProfile,
   verifyPasswordChangeOTP,
 } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 import { toast } from '../lib/toast';
-import type { UserProfile } from '../types/auth';
+import type { UpdateProfileRequest, UserProfile } from '../types/auth';
 import type { PasswordModalStep, ProfileFormValues } from '../types/settings';
 import { useAuth } from './useAuth';
 
@@ -32,12 +34,9 @@ const profileToForm = (profile: UserProfile): ProfileFormValues => ({
 
 export function useProfileSettings() {
   const { logout } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [formValues, setFormValues] = useState<ProfileFormValues>(emptyProfileForm);
-  const [initialFormValues, setInitialFormValues] = useState<ProfileFormValues>(emptyProfileForm);
+  const queryClient = useQueryClient();
+  const [draftFormValues, setDraftFormValues] = useState<ProfileFormValues>(emptyProfileForm);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [passwordModalStep, setPasswordModalStep] = useState<PasswordModalStep>('closed');
   const [otpCode, setOtpCode] = useState('');
   const [passwordChangeToken, setPasswordChangeToken] = useState('');
@@ -48,77 +47,79 @@ export function useProfileSettings() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    getProfile()
-      .then((data) => {
-        if (!mounted) return;
-        const nextForm = profileToForm(data);
-        setProfile(data);
-        setFormValues(nextForm);
-        setInitialFormValues(nextForm);
-      })
-      .catch(() => {
-        if (mounted) {
-          toast.error('Unable to load profile.');
-        }
-      })
-      .finally(() => {
-        if (mounted) {
-          setLoading(false);
-        }
-      });
+  const profileQuery = useQuery({
+    queryKey: queryKeys.profile,
+    queryFn: getProfile,
+  });
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const profile = profileQuery.data ?? null;
+  const profileFormValues = useMemo(
+    () => (profile ? profileToForm(profile) : emptyProfileForm),
+    [profile],
+  );
+  const formValues = editingProfile ? draftFormValues : profileFormValues;
+
+  useEffect(() => {
+    if (profileQuery.isError) {
+      toast.error('Unable to load profile.');
+    }
+  }, [profileQuery.isError]);
+
+  const updateProfileMutation = useMutation({
+    mutationFn: updateProfile,
+    onSuccess: (_response, variables: UpdateProfileRequest) => {
+      const updatedProfile = profile
+        ? {
+            ...profile,
+            full_name: variables.full_name,
+            description: variables.description,
+            pronouns: variables.pronouns,
+            company: variables.company,
+            field_of_work: variables.field_of_work,
+            country: variables.country,
+          }
+        : null;
+
+      if (updatedProfile) {
+        queryClient.setQueryData<UserProfile>(queryKeys.profile, updatedProfile);
+      }
+      setEditingProfile(false);
+      toast.success('Profile updated successfully.');
+    },
+    onError: () => {
+      toast.error('Unable to update profile.');
+    },
+  });
 
   const profileChanged = useMemo(
-    () => JSON.stringify(formValues) !== JSON.stringify(initialFormValues),
-    [formValues, initialFormValues],
+    () => editingProfile && JSON.stringify(draftFormValues) !== JSON.stringify(profileFormValues),
+    [draftFormValues, editingProfile, profileFormValues],
   );
 
   const updateProfileField = (field: keyof ProfileFormValues, value: string) => {
-    setFormValues((current) => ({ ...current, [field]: value }));
+    setDraftFormValues((current) => ({ ...current, [field]: value }));
+  };
+
+  const setProfileEditing = (editing: boolean) => {
+    if (editing) {
+      setDraftFormValues(profileFormValues);
+    }
+    setEditingProfile(editing);
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    try {
-      await updateProfile({
-        full_name: formValues.fullName,
-        description: formValues.description,
-        pronouns: formValues.pronouns,
-        company: formValues.company,
-        field_of_work: formValues.fieldOfWork,
-        country: formValues.country,
-      });
-      setProfile((current) =>
-        current
-          ? {
-              ...current,
-              full_name: formValues.fullName,
-              description: formValues.description,
-              pronouns: formValues.pronouns,
-              company: formValues.company,
-              field_of_work: formValues.fieldOfWork,
-              country: formValues.country,
-            }
-          : current,
-      );
-      setInitialFormValues(formValues);
-      setEditingProfile(false);
-      toast.success('Profile updated successfully.');
-    } catch {
-      toast.error('Unable to update profile.');
-    } finally {
-      setSaving(false);
-    }
+    updateProfileMutation.mutate({
+      full_name: formValues.fullName,
+      description: formValues.description,
+      pronouns: formValues.pronouns,
+      company: formValues.company,
+      field_of_work: formValues.fieldOfWork,
+      country: formValues.country,
+    });
   };
 
   const handleCancelEdit = () => {
-    setFormValues(initialFormValues);
+    setDraftFormValues(profileFormValues);
     setEditingProfile(false);
   };
 
@@ -187,6 +188,7 @@ export function useProfileSettings() {
     try {
       await deleteAccount();
       toast.success('Account deleted successfully.');
+      queryClient.clear();
       logout();
     } catch {
       toast.error('Unable to delete account.');
@@ -199,8 +201,8 @@ export function useProfileSettings() {
     profile,
     formValues,
     editingProfile,
-    loading,
-    saving,
+    loading: profileQuery.isLoading,
+    saving: updateProfileMutation.isPending,
     profileChanged,
     passwordModalStep,
     otpCode,
@@ -210,7 +212,7 @@ export function useProfileSettings() {
     passwordSendConfirmOpen,
     deleteModalOpen,
     deleteLoading,
-    setEditingProfile,
+    setEditingProfile: setProfileEditing,
     setOtpCode,
     setNewPassword,
     setConfirmPassword,
