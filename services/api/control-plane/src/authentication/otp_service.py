@@ -1,48 +1,67 @@
-import random
+import secrets
 import string
+
+from django.conf import settings
 from django.core.cache import cache
 from django.core.mail import send_mail
-from django.conf import settings
 
-def generate_otp(length=6):
-    """Sinh chuỗi số ngẫu nhiên làm mã OTP."""
-    return ''.join(random.choices(string.digits, k=length))
+OTP_LENGTH = 6
+OTP_TTL_SECONDS = 300
+OTP_RESEND_COOLDOWN_SECONDS = 60
+OTP_MAX_ATTEMPTS = 5
+
+def normalize_email(email):
+    return (email or "").strip().lower()
+
+def generate_otp(length=OTP_LENGTH):
+    return "".join(secrets.choice(string.digits) for _ in range(length))
 
 def send_otp_email(email, otp_code):
-    """Gửi email chứa mã OTP đến người dùng."""
-    subject = "AI PaaS - Mã Xác Nhận (OTP)"
-    message = f"Mã xác nhận của bạn là: {otp_code}. Mã này có hiệu lực trong 5 phút.\nVui lòng không chia sẻ mã này cho bất kỳ ai."
-    from_email = settings.EMAIL_HOST_USER
-    
+    subject = "AI PaaS - Verification Code"
+    message = (
+        f"Your verification code is: {otp_code}. "
+        "This code is valid for 5 minutes.\n"
+        "Please do not share this code with anyone."
+    )
+
     send_mail(
         subject,
         message,
-        from_email,
+        settings.EMAIL_HOST_USER,
         [email],
         fail_silently=False,
     )
 
 def request_otp(email):
-    """Sinh mã OTP, lưu vào Redis và gửi qua Email."""
+    email = normalize_email(email)
+    cooldown_key = f"otp_cooldown:{email}"
+
+    if cache.get(cooldown_key):
+        return False, "Please wait before requesting another OTP."
+
     otp_code = generate_otp()
-    
-    # Lưu vào Redis với TTL là 300 giây (5 phút)
-    cache_key = f"otp:{email}"
-    cache.set(cache_key, otp_code, timeout=300)
-    
-    # Gửi email
+    cache.set(f"otp:{email}", otp_code, timeout=OTP_TTL_SECONDS)
+    cache.delete(f"otp_attempts:{email}")
+    cache.set(cooldown_key, True, timeout=OTP_RESEND_COOLDOWN_SECONDS)
+
     send_otp_email(email, otp_code)
-    
-    return True
+    return True, "OTP sent successfully."
 
 def verify_otp(email, otp_code):
-    """Kiểm tra mã OTP từ Redis."""
-    cache_key = f"otp:{email}"
-    cached_otp = cache.get(cache_key)
-    
+    email = normalize_email(email)
+    attempts_key = f"otp_attempts:{email}"
+    attempts = int(cache.get(attempts_key) or 0)
+
+    if attempts >= OTP_MAX_ATTEMPTS:
+        return False
+
+    cached_otp = cache.get(f"otp:{email}")
+
     if cached_otp and str(cached_otp) == str(otp_code):
-        # Xác thực thành công -> Xóa mã OTP khỏi Redis để tránh tái sử dụng
-        cache.delete(cache_key)
+        cache.delete(f"otp:{email}")
+        cache.delete(attempts_key)
+        cache.delete(f"otp_cooldown:{email}")
         return True
-        
+
+    cache.set(attempts_key, attempts + 1, timeout=OTP_TTL_SECONDS)
     return False

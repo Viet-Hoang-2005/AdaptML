@@ -7,7 +7,7 @@ from django.core.cache import cache
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
-            raise ValueError('Email là bắt buộc')
+            raise ValueError('Email is required')
         email = self.normalize_email(email)
         
         # Tự động cấp tenant_id nếu chưa có
@@ -64,6 +64,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = []
 
     def save(self, *args, **kwargs):
+        if not self.tenant_id:
+            self.tenant_id = f"T-{uuid.uuid4().hex[:8].upper()}"
+
         # Tạo API Key tự động nếu chưa có
         if not self.api_key:
             self.api_key = f"sk_live_{secrets.token_urlsafe(32)}"

@@ -3,9 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .otp_service import request_otp, verify_otp
-from confluent_kafka import Producer
 from django.utils import timezone
 from django.core.cache import cache
+from confluent_kafka import Producer
 import os
 import json
 import secrets
@@ -39,7 +39,7 @@ class ProfileView(APIView):
         user.country = request.data.get('country', user.country)
         user.save()
         
-        return Response({"message": "Cập nhật hồ sơ thành công."}, status=status.HTTP_200_OK)
+        return Response({"message": "Profile updated successfully."}, status=status.HTTP_200_OK)
 
 class PasswordChangeRequestView(APIView):
     permission_classes = [IsAuthenticated]
@@ -47,10 +47,12 @@ class PasswordChangeRequestView(APIView):
     def post(self, request):
         user = request.user
         try:
-            request_otp(user.email)
-            return Response({"message": f"Mã OTP đã được gửi đến {user.email}"}, status=status.HTTP_200_OK)
+            sent, message = request_otp(user.email)
+            if not sent:
+                return Response({"error": message}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"message": f"OTP code has been sent: {user.email}"}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": f"Không thể gửi email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"Unable to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class PasswordChangeCompleteView(APIView):
     permission_classes = [IsAuthenticated]
@@ -61,14 +63,14 @@ class PasswordChangeCompleteView(APIView):
         new_password = request.data.get('new_password')
         
         if not otp_code or not new_password:
-            return Response({"error": "Thiếu mã OTP hoặc mật khẩu mới."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Missing OTP code or new password."}, status=status.HTTP_400_BAD_REQUEST)
             
         if verify_otp(user.email, otp_code):
             user.set_password(new_password)
             user.save()
-            return Response({"message": "Cài đặt mật khẩu thành công. Bây giờ bạn có thể đăng nhập bằng Base Auth."}, status=status.HTTP_200_OK)
+            return Response({"message": "Password set successfully! You can now log in using Base Auth."}, status=status.HTTP_200_OK)
             
-        return Response({"error": "Mã OTP không hợp lệ hoặc đã hết hạn."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "The OTP code is invalid or has expired."}, status=status.HTTP_400_BAD_REQUEST)
 
 class AccountDeleteView(APIView):
     permission_classes = [IsAuthenticated]
@@ -103,7 +105,7 @@ class AccountDeleteView(APIView):
             # Dù Redpanda lỗi thì vẫn trả về 200 vì acc đã bị khóa ở Django
             pass
             
-        return Response({"message": "Tài khoản của bạn đã bị vô hiệu hóa. Các Endpoint Model sẽ bị tạm dừng."}, status=status.HTTP_200_OK)
+        return Response({"message": "Your account has been disabled! API models will be paused."}, status=status.HTTP_200_OK)
 
 class APIKeyManagementView(APIView):
     permission_classes = [IsAuthenticated]
@@ -130,6 +132,6 @@ class APIKeyManagementView(APIView):
         user.save() # save() sẽ tự động cập nhật key mới lên Redis
         
         return Response({
-            "message": "API Key đã được thay đổi thành công. Key cũ đã bị thu hồi.",
+            "message": "API key has been successfully changed! The old key has been revoked.",
             "api_key": new_key
         }, status=status.HTTP_200_OK)

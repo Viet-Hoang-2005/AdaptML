@@ -17,16 +17,28 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_list(name, default=""):
+    value = os.environ.get(name, default)
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-jkuvk)=0cd6ye=&@rgazkhpkg34=&gqi224la&*4dqbz^^cg2+'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or 'django-insecure-local-dev-change-me'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DJANGO_DEBUG', True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,control_plane')
 
 
 # Application definition
@@ -40,12 +52,14 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'corsheaders',
     'storages',
     'authentication',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -119,9 +133,7 @@ USE_I18N = True
 
 USE_TZ = True
 
-# ========================================================
-# CẤU HÌNH BẢO MẬT JWT (RS256)
-# ========================================================
+# Cấu hình bảo mật JWT (RS256)
 from datetime import timedelta
 from authentication.utils import PRIVATE_KEY, PUBLIC_KEY
 
@@ -140,9 +152,12 @@ SIMPLE_JWT = {
     "AUDIENCE": "ai-paas",
     "ISSUER": "django-control-plane",
     "JWK_URL": None,
-    # Chèn 'kid' vào header của token khi ký
-    "JWS_HEADER_PARAMETERS": {"kid": "ai-paas-key-1"}, 
 }
+
+CORS_ALLOWED_ORIGINS = env_list(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:5173,http://127.0.0.1:5173',
+)
 
 
 # Static files (CSS, JavaScript, Images)
@@ -155,14 +170,10 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ========================================================
-# CẤU HÌNH CUSTOM USER MODEL
-# ========================================================
+# Cấu hình Custom User Model
 AUTH_USER_MODEL = 'authentication.CustomUser'
 
-# ========================================================
-# CẤU HÌNH REDIS CACHE (Lưu OTP)
-# ========================================================
+# Cấu hình Redis Cache (Lưu OTP)
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
@@ -173,26 +184,24 @@ CACHES = {
     }
 }
 
-# ========================================================
-# CẤU HÌNH GỬI EMAIL (Gmail SMTP)
-# ========================================================
+# Cấu hình gửi tin nhắn (Gmail SMTP)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '') # Khai báo trong .env
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '') # App password
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 
-# ========================================================
-# CẤU HÌNH GOOGLE/GITHUB OAUTH (Client ID để verify)
-# ========================================================
+# Cấu hình Google/GitHub OAuth (Client ID để verify)
 GOOGLE_OAUTH2_CLIENT_ID = os.environ.get('GOOGLE_OAUTH2_CLIENT_ID', '')
 GITHUB_OAUTH2_CLIENT_ID = os.environ.get('GITHUB_OAUTH2_CLIENT_ID', '')
 GITHUB_OAUTH2_CLIENT_SECRET = os.environ.get('GITHUB_OAUTH2_CLIENT_SECRET', '')
+GITHUB_OAUTH_REDIRECT_URI = os.environ.get(
+    'GITHUB_OAUTH_REDIRECT_URI',
+    'http://localhost:5173/oauth/github/callback',
+)
 
-# ========================================================
-# CẤU HÌNH LƯU TRỮ AWS S3 (cho Avatar & File)
-# ========================================================
+# Cấu hình lưu trữ AWS S3 (cho Avatar & File)
 # Lưu ý: Không khai báo AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY
 # boto3 sẽ tự động sử dụng IAM Role được gán cho EC2 instance (cấu hình trong main.tf)
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_BUCKET_NAME', 'mlops-nids-artifacts')

@@ -1,14 +1,14 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView
-from .views import CustomTokenObtainPairView, JWKSView
+from .views import CustomTokenObtainPairView, CustomTokenRefreshView, JWKSView
 from .base_auth_views import RequestOTPView, VerifyOTPView, CompleteRegistrationView
 from .oauth2_views import GoogleOAuthView, GitHubOAuthView
+from .password_reset_views import PasswordResetCompleteView, PasswordResetRequestOTPView, PasswordResetVerifyOTPView
 from .profile_views import ProfileView, PasswordChangeRequestView, PasswordChangeCompleteView, AccountDeleteView, APIKeyManagementView
 
 urlpatterns = [
     # JWT & JWKS
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('.well-known/jwks.json', JWKSView.as_view(), name='jwks'),
     
     # Base Auth (Đăng ký bằng OTP)
@@ -19,6 +19,11 @@ urlpatterns = [
     # OAuth2
     path('oauth/google/', GoogleOAuthView.as_view(), name='oauth_google'),
     path('oauth/github/', GitHubOAuthView.as_view(), name='oauth_github'),
+
+    # Forgot Password
+    path('password-reset/request-otp/', PasswordResetRequestOTPView.as_view(), name='password_reset_request_otp'),
+    path('password-reset/verify-otp/', PasswordResetVerifyOTPView.as_view(), name='password_reset_verify_otp'),
+    path('password-reset/complete/', PasswordResetCompleteView.as_view(), name='password_reset_complete'),
     
     # Profile & Quản lý tài khoản
     path('profile/me/', ProfileView.as_view(), name='profile_me'),
