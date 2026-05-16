@@ -8,7 +8,13 @@ import ForgotPasswordPage from './pages/Auth/ForgotPasswordPage';
 import ForgotPasswordOTPPage from './pages/Auth/ForgotPasswordOTPPage';
 import ForgotPasswordResetPage from './pages/Auth/ForgotPasswordResetPage';
 import GitHubCallbackPage from './pages/Auth/GitHubCallbackPage';
-import DashboardPage from './pages/Dashboard/DashboardPage';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import DashboardLayout from './pages/Dashboard/DashboardLayout';
+import HomeLayout from './pages/Home/HomeLayout';
+import DeveloperSettingsPage from './pages/Settings/DeveloperSettingsPage';
+import ProfileSettingsPage from './pages/Settings/ProfileSettingsPage';
+import SettingsLayout from './pages/Settings/SettingsLayout';
+import { dashboardPlaceholders, homePlaceholders } from './pages/Dashboard/DashboardPage';
 
 function App() {
   return (
@@ -26,7 +32,32 @@ function App() {
         <Route path="/oauth/github/callback" element={<GitHubCallbackPage />} />
 
         {/* Dashboard */}
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="home/model-api" replace />} />
+          <Route path="home" element={<HomeLayout />}>
+            <Route index element={<Navigate to="model-api" replace />} />
+            <Route path="model-api" element={homePlaceholders.modelApi} />
+            <Route path="benchmark" element={homePlaceholders.benchmark} />
+            <Route path="model-management" element={homePlaceholders.modelManagement} />
+          </Route>
+          <Route path="drift-monitoring" element={dashboardPlaceholders.driftMonitoring} />
+          <Route path="model-training" element={dashboardPlaceholders.modelTraining} />
+          <Route path="model-evolution" element={dashboardPlaceholders.modelEvolution} />
+          <Route path="notifications" element={dashboardPlaceholders.notifications} />
+          <Route path="settings" element={<SettingsLayout />}>
+            <Route index element={<Navigate to="profile" replace />} />
+            <Route path="profile" element={<ProfileSettingsPage />} />
+            <Route path="developer" element={<DeveloperSettingsPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/dashboard/home/model-api" replace />} />
+        </Route>
 
         {/* Default Redirect */}
         <Route path="*" element={<Navigate to="/login" replace />} />

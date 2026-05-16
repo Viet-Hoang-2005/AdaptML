@@ -15,12 +15,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantStyles: Record<ButtonVariant, string> = {
   primary: `
     bg-black text-white border-transparent transition-colors
-    hover:opacity-70 active:bg-gray-600
+    hover:opacity-70 active:bg-gray-400
     disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed
   `,
   secondary: `
-    bg-white text-gray-700 border-gray-200 transition-colors
-    hover:bg-gray-50 active:bg-gray-100
+    bg-white text-black border-gray-200 transition-colors
+    hover:bg-gray-200 active:bg-gray-400
     disabled:opacity-50 disabled:cursor-not-allowed
   `,
   ghost: `

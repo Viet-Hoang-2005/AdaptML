@@ -1,0 +1,352 @@
+import { BriefcaseBusiness, Building2, CalendarDays, ChevronDown, FileText, Fingerprint, Globe2, LockKeyhole, Mail, ShieldCheck, Tags, Trash2, UserRound } from 'lucide-react';
+import { useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { Button } from '../../components/ui/Button';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { Input, InputPassword } from '../../components/ui/Input';
+import { OTPInput } from '../../components/ui/OTPInput';
+import { useProfileSettings } from '../../hooks/useProfileSettings';
+import type { UserProfile } from '../../types/auth';
+import SettingsModal from './SettingsModal';
+
+const formatDate = (value?: string) => {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const getInitials = (profile: UserProfile | null) => {
+  const source = profile?.full_name || profile?.email || 'User';
+  return source
+    .split(/\s|@/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+};
+
+const readOnlyFieldClass =
+  'cursor-default hover:border-gray-200 focus:border-gray-200';
+
+export default function ProfileSettingsPage() {
+  const {
+    profile,
+    formValues,
+    editingProfile,
+    loading,
+    saving,
+    profileChanged,
+    passwordModalStep,
+    newPassword,
+    confirmPassword,
+    passwordActionLoading,
+    passwordSendConfirmOpen,
+    deleteModalOpen,
+    deleteLoading,
+    setEditingProfile,
+    setOtpCode,
+    setNewPassword,
+    setConfirmPassword,
+    setPasswordModalStep,
+    setPasswordSendConfirmOpen,
+    setDeleteModalOpen,
+    updateProfileField,
+    handleSave,
+    handleCancelEdit,
+    openPasswordOTPModal,
+    handleVerifyPasswordOTP,
+    handleCompletePasswordChange,
+    handleDeleteAccount,
+  } = useProfileSettings();
+
+  const initials = useMemo(() => getInitials(profile), [profile]);
+
+  return (
+    <div className="w-full space-y-6">
+      <section className="rounded-lg border border-gray-200 bg-white">
+        <div className="flex flex-col gap-5 border-b border-gray-100 px-6 py-6 md:flex-row md:items-center">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-xl font-bold text-white">
+            {profile?.avatar ? <img src={profile.avatar} alt="" className="h-full w-full object-cover" /> : initials}
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-bold text-gray-900">
+              {profile?.full_name || 'AI Engineer'}
+            </h2>
+            <p className="truncate text-sm text-gray-500">{profile?.email || 'Loading profile...'}</p>
+            <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Avatar upload will be available in a later phase.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-gray-900">Profile Information</h3>
+              {editingProfile ? (
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="md" onClick={handleCancelEdit}>
+                    Cancel
+                  </Button>
+                  <Button
+                    id="btn-save-profile"
+                    size="md"
+                    loading={saving}
+                    disabled={loading || !profileChanged}
+                    onClick={handleSave}
+                  >
+                    Save
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  id="btn-edit-profile"
+                  variant="secondary"
+                  size="md"
+                  onClick={() => setEditingProfile(true)}
+                  disabled={loading}
+                >
+                  Edit Profile
+                </Button>
+              )}
+            </div>
+            
+            <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                id="profile-full-name"
+                label="Full Name"
+                icon={<UserRound className="h-4 w-4 text-gray-400" />}
+                placeholder="Enter your full name"
+                value={formValues.fullName}
+                disabled={loading}
+                readOnly={!editingProfile}
+                tabIndex={!editingProfile ? -1 : undefined}
+                className={!editingProfile ? readOnlyFieldClass : ''}
+                onChange={(event) => updateProfileField('fullName', event.target.value)}
+              />
+              {editingProfile ? (
+                <label htmlFor="profile-pronouns" className="flex flex-col gap-2 text-sm font-medium text-gray-700">
+                  Pronouns
+                  <div className="relative">
+                    <Tags className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <select
+                      id="profile-pronouns"
+                      value={formValues.pronouns}
+                      disabled={loading}
+                      onChange={(event) => updateProfileField('pronouns', event.target.value)}
+                      className="h-14 w-full appearance-none rounded-2xl border border-gray-200 bg-white pl-10 pr-10 text-sm font-normal text-gray-800 outline-none transition-colors duration-200 hover:border-black focus:border-black disabled:bg-gray-50 disabled:text-gray-400"
+                    >
+                      <option value="">Don't specify</option>
+                      <option value="he/him">he/him</option>
+                      <option value="she/her">she/her</option>
+                      <option value="they/them">they/them</option>
+                      <option value="other">other</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                  </div>
+                </label>
+              ) : (
+                <Input
+                  id="profile-pronouns"
+                  label="Pronouns"
+                  icon={<Tags className="h-4 w-4 text-gray-400" />}
+                  value={formValues.pronouns || "Don't specify"}
+                  disabled={loading}
+                  readOnly
+                  tabIndex={-1}
+                  className={readOnlyFieldClass}
+                />
+              )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                id="profile-company"
+                label="Company"
+                icon={<Building2 className="h-4 w-4 text-gray-400" />}
+                placeholder="e.g. UIT"
+                value={formValues.company}
+                disabled={loading}
+                readOnly={!editingProfile}
+                tabIndex={!editingProfile ? -1 : undefined}
+                className={!editingProfile ? readOnlyFieldClass : ''}
+                onChange={(event) => updateProfileField('company', event.target.value)}
+              />
+              <Input
+                id="profile-field-of-work"
+                label="Field of Work"
+                icon={<BriefcaseBusiness className="h-4 w-4 text-gray-400" />}
+                placeholder="e.g. Machine Learning"
+                value={formValues.fieldOfWork}
+                disabled={loading}
+                readOnly={!editingProfile}
+                tabIndex={!editingProfile ? -1 : undefined}
+                className={!editingProfile ? readOnlyFieldClass : ''}
+                onChange={(event) => updateProfileField('fieldOfWork', event.target.value)}
+              />
+            </div>
+            
+            <Input
+              id="profile-country"
+              label="Country"
+              icon={<Globe2 className="h-4 w-4 text-gray-400" />}
+              placeholder="e.g. Vietnam"
+              value={formValues.country}
+              disabled={loading}
+              readOnly={!editingProfile}
+              tabIndex={!editingProfile ? -1 : undefined}
+              className={!editingProfile ? readOnlyFieldClass : ''}
+              onChange={(event) => updateProfileField('country', event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && handleSave()}
+            />
+            
+            <label htmlFor="profile-description" className="flex flex-col gap-2 text-sm font-medium text-gray-700">
+              Description
+              <div className="relative">
+                <FileText className="pointer-events-none absolute left-3 top-4 h-4 w-4 text-gray-400" />
+                <textarea
+                  id="profile-description"
+                  className={`text-sm text-gray-800 placeholder-gray-400 font-normal placeholder:font-normal min-h-24 w-full resize-none rounded-2xl border border-gray-200 bg-white py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-gray-50 disabled:text-gray-400 ${
+                    editingProfile ? 'hover:border-black focus:border-black' : 'cursor-default hover:border-gray-200 focus:border-gray-200'
+                  }`}
+                  placeholder="Tell us more about yourself"
+                  value={formValues.description}
+                  disabled={loading}
+                  readOnly={!editingProfile}
+                  tabIndex={!editingProfile ? -1 : undefined}
+                  onChange={(event) => updateProfileField('description', event.target.value)}
+                />
+              </div>
+            </label>
+
+            <div className="grid gap-3 pt-4 sm:grid-cols-2">
+              <Button
+                id="btn-change-password"
+                variant="secondary"
+                icon={<LockKeyhole className="h-4 w-4" />}
+                onClick={() => setPasswordSendConfirmOpen(true)}
+                disabled={loading}
+              >
+                Change Password
+              </Button>
+              <Button
+                id="btn-delete-account"
+                variant="danger"
+                icon={<Trash2 className="h-4 w-4" />}
+                onClick={() => setDeleteModalOpen(true)}
+                disabled={loading}
+              >
+                Delete Account
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h3 className="mb-4 text-sm font-bold text-gray-900">Account Details</h3>
+            <div className="space-y-3">
+              <ReadOnlyRow icon={<Mail className="h-4 w-4" />} label="Email" value={profile?.email || 'Unknown'} />
+              <ReadOnlyRow icon={<Fingerprint className="h-4 w-4" />} label="Tenant ID" value={profile?.tenant_id || 'Unknown'} />
+              <ReadOnlyRow icon={<ShieldCheck className="h-4 w-4" />} label="Provider" value={profile?.auth_provider || 'Unknown'} />
+              <ReadOnlyRow icon={<CalendarDays className="h-4 w-4" />} label="Joined" value={formatDate(profile?.date_joined)} />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <ConfirmModal
+        open={passwordSendConfirmOpen}
+        title="Send password change OTP?"
+        description={
+          <>
+            We will send a 6-digit OTP to{' '}
+            <span className="font-semibold text-gray-700">{profile?.email}</span> to verify this password change.
+          </>
+        }
+        confirmText="Send OTP"
+        loading={passwordActionLoading}
+        onCancel={() => setPasswordSendConfirmOpen(false)}
+        onConfirm={openPasswordOTPModal}
+      />
+
+      {passwordModalStep === 'otp' && (
+        <SettingsModal title="Verify OTP" onClose={() => setPasswordModalStep('closed')}>
+          <p className="mb-4 text-sm text-gray-500">
+            Enter the 6-digit OTP sent to <span className="font-semibold text-gray-700">{profile?.email}</span>.
+          </p>
+          <OTPInput
+            onComplete={(otp) => {
+              setOtpCode(otp);
+            }}
+            disabled={passwordActionLoading}
+          />
+          <div className="mt-6 flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setPasswordModalStep('closed')}>Cancel</Button>
+            <Button loading={passwordActionLoading} onClick={handleVerifyPasswordOTP}>Verify OTP</Button>
+          </div>
+        </SettingsModal>
+      )}
+
+      {passwordModalStep === 'password' && (
+        <SettingsModal title="Set New Password" onClose={() => setPasswordModalStep('closed')}>
+          <div className="space-y-4">
+            <InputPassword
+              id="input-change-new-password"
+              label="New Password"
+              placeholder="At least 8 characters"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+            <InputPassword
+              id="input-change-confirm-password"
+              label="Confirm Password"
+              placeholder="Re-enter your new password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && handleCompletePasswordChange()}
+            />
+          </div>
+          <div className="mt-6 flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setPasswordModalStep('closed')}>Cancel</Button>
+            <Button loading={passwordActionLoading} onClick={handleCompletePasswordChange}>Change Password</Button>
+          </div>
+        </SettingsModal>
+      )}
+
+      <ConfirmModal
+        open={deleteModalOpen}
+        title="Delete Account?"
+        tone="danger"
+        description={
+          <>
+            This will temporarily disable your account and pause related API model access. You will be signed out after deletion.
+            <br />
+            <br />
+            Are you sure you want to delete the account{' '}
+            <span className="font-semibold text-gray-700">{profile?.email}</span>?
+          </>
+        }
+        confirmText="Delete Account"
+        loading={deleteLoading}
+        onCancel={() => setDeleteModalOpen(false)}
+        onConfirm={handleDeleteAccount}
+      />
+    </div>
+  );
+}
+
+function ReadOnlyRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-md bg-white px-3 py-3">
+      <span className="mt-0.5 text-gray-400">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+        <p className="truncate text-sm font-semibold text-gray-800">{value}</p>
+      </div>
+    </div>
+  );
+}

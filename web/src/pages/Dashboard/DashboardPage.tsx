@@ -1,47 +1,57 @@
-import { LayoutDashboard, LogOut } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
-import { Button } from '../../components/ui/Button';
-import MLdriftLogo from '../../assets/icons/MLdrift.png';
+import { Activity, Boxes, Cpu, GitBranch, LineChart, Rocket, UploadCloud } from 'lucide-react';
+import PlaceholderPage from './PlaceholderPage';
 
-export default function DashboardPage() {
-  const { logout } = useAuth();
+export const homePlaceholders = {
+  modelApi: (
+    <PlaceholderPage
+      title="Model API"
+      description="Upload an MLflow MLmodel package, connect it to FastAPI, and monitor endpoint status from this workspace."
+      icon={<UploadCloud className="h-6 w-6" />}
+    />
+  ),
+  benchmark: (
+    <PlaceholderPage
+      title="Benchmark Model"
+      description="Upload a CSV dataset and send benchmark requests to the selected model endpoint to inspect API predictions."
+      icon={<Activity className="h-6 w-6" />}
+    />
+  ),
+  modelManagement: (
+    <PlaceholderPage
+      title="Model Management"
+      description="Review connected models, their generated API endpoints, and lifecycle state for the selected workspace."
+      icon={<Boxes className="h-6 w-6" />}
+    />
+  ),
+};
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={MLdriftLogo} alt="MLdrift" className="w-8 h-8" />
-            <span className="text-xl font-bold text-gray-800">MLdrift</span>
-          </div>
-          <Button
-            variant="ghost"
-            size="md"
-            icon={<LogOut className="w-4 h-4" />}
-            onClick={logout}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            Logout
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content - Placeholder */}
-      <main className="max-w-7xl mx-auto px-6 py-16">
-        <div className="flex flex-col items-center justify-center text-center">
-          <div className="mb-6 rounded-2x flex items-center justify-center">
-            <LayoutDashboard className="w-10 h-10 text-black" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-3">
-            Welcome to MLdrift Dashboard
-          </h1>
-          <p className="text-gray-500 text-lg max-w-md">
-            Your ML model management console is being built.
-            Deploy, monitor, and scale your models from here.
-          </p>
-        </div>
-      </main>
-    </div>
-  );
-}
+export const dashboardPlaceholders = {
+  driftMonitoring: (
+    <PlaceholderPage
+      title="Drift Monitoring"
+      description="Upload reference training data and compare it with production data using Evidently AI drift reports."
+      icon={<LineChart className="h-6 w-6" />}
+    />
+  ),
+  modelTraining: (
+    <PlaceholderPage
+      title="Model Training"
+      description="Submit new training data and Python source code for SageMaker retraining jobs when model quality drops."
+      icon={<Cpu className="h-6 w-6" />}
+    />
+  ),
+  modelEvolution: (
+    <PlaceholderPage
+      title="Model Evolution"
+      description="Track model versions, metrics, and production promotion history through the MLflow Model Registry."
+      icon={<GitBranch className="h-6 w-6" />}
+    />
+  ),
+  notifications: (
+    <PlaceholderPage
+      title="Notifications"
+      description="Model deployment events, drift alerts, retraining results, and API status notifications will appear here."
+      icon={<Rocket className="h-6 w-6" />}
+    />
+  ),
+};
