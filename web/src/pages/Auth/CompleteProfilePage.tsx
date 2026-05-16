@@ -1,5 +1,5 @@
-import { useLocation, useNavigate } from 'react-router-dom';
-import { User, Briefcase, Globe } from 'lucide-react';
+import { Link, Navigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Briefcase, Globe, User } from 'lucide-react';
 import { Cover } from '../../components/layout/Cover';
 import { Input, InputPassword } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -7,10 +7,9 @@ import { toast } from '../../lib/toast';
 import { useAuth } from '../../hooks/useAuth';
 import { useForm } from '../../hooks/useForm';
 import { completeRegistration } from '../../lib/api';
-import MLdriftLogo from '../../assets/icons/MLdrift.png';
 
 interface LocationState {
-  token: string;
+  registrationToken: string;
   email: string;
 }
 
@@ -23,9 +22,11 @@ const validationRules = {
 };
 
 export default function CompleteProfilePage() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { token, email } = (location.state as LocationState) || { token: '', email: '' };
+  const { registrationToken, email } = (location.state as LocationState) || {
+    registrationToken: '',
+    email: '',
+  };
 
   const { saveAuthTokens } = useAuth();
 
@@ -37,22 +38,21 @@ export default function CompleteProfilePage() {
   const onSubmit = handleSubmit(async (v) => {
     try {
       const response = await completeRegistration({
-        token,
+        registration_token: registrationToken,
         full_name: v.full_name,
         field_of_work: v.field_of_work,
         country: v.country,
         password: v.password,
       });
       toast.success('Account created successfully!');
-      saveAuthTokens(response.access, response.refresh, '/dashboard');
+      saveAuthTokens(response.access, response.refresh, '/dashboard', response.tenant_id);
     } catch {
       toast.error('Registration failed. Please try again.');
     }
   });
 
-  if (!token) {
-    navigate('/signup');
-    return null;
+  if (!registrationToken) {
+    return <Navigate to="/signup" replace />;
   }
 
   return (
@@ -60,14 +60,18 @@ export default function CompleteProfilePage() {
       <Cover />
 
       <div className="w-full lg:w-1/3 flex flex-col justify-center px-8 sm:px-12 lg:px-10 xl:px-14">
-        <div className="lg:hidden flex items-center gap-3 mb-8">
-          <img src={MLdriftLogo} alt="MLdrift" className="w-10 h-10" />
-          <span className="text-2xl font-bold text-gray-800">MLdrift</span>
-        </div>
-
         <div className="max-w-sm w-full mx-auto">
+          <Link
+            to="/signup"
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-4
+                      font-medium transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="leading-none">Back to sign up</span>
+          </Link>
+
           <h2 className="text-2xl font-bold text-gray-800 mb-1">Complete your profile</h2>
-          <p className="text-gray-500 text-sm mb-8">
+          <p className="text-gray-500 text-sm mb-6">
             Registering as <span className="font-semibold text-gray-700">{email}</span>
           </p>
 
@@ -75,7 +79,7 @@ export default function CompleteProfilePage() {
             <Input
               id="input-fullname"
               label="Full Name"
-              placeholder="Enter your full name"
+              placeholder="Nguyen Van A"
               icon={<User className="w-4 h-4 text-gray-400" />}
               value={values.full_name}
               error={errors.full_name}
@@ -97,23 +101,25 @@ export default function CompleteProfilePage() {
               value={values.country}
               onChange={(e) => updateField('country', e.target.value)}
             />
-            <InputPassword
-              id="input-new-password"
-              label="Password"
-              placeholder="At least 8 characters"
-              value={values.password}
-              error={errors.password}
-              onChange={(e) => updateField('password', e.target.value)}
-            />
-            <InputPassword
-              id="input-confirm-password"
-              label="Confirm Password"
-              placeholder="Re-enter your password"
-              value={values.confirmPassword}
-              error={errors.confirmPassword}
-              onChange={(e) => updateField('confirmPassword', e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <InputPassword
+                id="input-new-password"
+                label="Password"
+                placeholder="At least 8 characters"
+                value={values.password}
+                error={errors.password}
+                onChange={(e) => updateField('password', e.target.value)}
+              />
+              <InputPassword
+                id="input-confirm-password"
+                label="Confirm"
+                placeholder="Re-enter your password"
+                value={values.confirmPassword}
+                error={errors.confirmPassword}
+                onChange={(e) => updateField('confirmPassword', e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+              />
+            </div>
 
             <Button
               id="btn-create-account"
@@ -121,7 +127,7 @@ export default function CompleteProfilePage() {
               fullWidth
               loading={loading}
               onClick={onSubmit}
-              className="mt-2"
+              className="mt-6"
             >
               Create account
             </Button>

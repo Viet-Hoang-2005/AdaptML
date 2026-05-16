@@ -1,44 +1,51 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { loginBaseAuth, loginGitHub, loginGoogle } from '../lib/api';
 import { toast } from '../lib/toast';
-import { loginBaseAuth } from '../lib/api';
-import type { LoginCredentials } from '../types/auth';
+import type { AuthResponse, LoginCredentials } from '../types/auth';
 
-// Token helpers
 export const getAccessToken = () => localStorage.getItem('access_token');
 export const getRefreshToken = () => localStorage.getItem('refresh_token');
 export const isAuthenticated = () => !!getAccessToken();
 
-const saveTokens = (access: string, refresh: string) => {
+const saveTokens = (access: string, refresh: string, tenantId?: string) => {
   localStorage.setItem('access_token', access);
   localStorage.setItem('refresh_token', refresh);
+  if (tenantId) {
+    localStorage.setItem('tenant_id', tenantId);
+  }
 };
 
 const clearTokens = () => {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
+  localStorage.removeItem('tenant_id');
 };
 
-/**
- * useAuth – Quản lý toàn bộ luồng xác thực:
- * login, logout, lưu/xóa token.
- * Sẽ được mở rộng thêm OAuth, refresh token, user profile sau.
- */
 export function useAuth() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  /** Đăng nhập bằng email + password */
+  const handleOAuthSuccess = useCallback(
+    (response: AuthResponse, successMessage = 'OAuth login successful!') => {
+      saveTokens(response.access, response.refresh, response.tenant_id);
+      toast.success(successMessage);
+      navigate('/dashboard');
+    },
+    [navigate],
+  );
+
   const login = useCallback(
     async (credentials: LoginCredentials) => {
       if (!credentials.email || !credentials.password) {
         toast.warning('Please enter your email and password.');
         return;
       }
+
       setLoading(true);
       try {
         const response = await loginBaseAuth(credentials);
-        saveTokens(response.access, response.refresh);
+        saveTokens(response.access, response.refresh, response.tenant_id);
         toast.success('Login successful!');
         navigate('/dashboard');
       } catch {
@@ -50,21 +57,58 @@ export function useAuth() {
     [navigate],
   );
 
-  /** Lưu token sau khi đăng ký / OAuth thành công từ bên ngoài */
+  const loginWithGoogle = useCallback(
+    async (googleToken: string) => {
+      setLoading(true);
+      try {
+        const response = await loginGoogle(googleToken);
+        handleOAuthSuccess(response, 'Google login successful!');
+      } catch {
+        toast.error('Google login failed. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [handleOAuthSuccess],
+  );
+
+  const loginWithGitHubCode = useCallback(
+    async (code: string, redirectUri: string) => {
+      setLoading(true);
+      try {
+        const response = await loginGitHub(code, redirectUri);
+        handleOAuthSuccess(response, 'GitHub login successful!');
+      } catch {
+        toast.error('GitHub login failed. Please try again.');
+        navigate('/login');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [handleOAuthSuccess, navigate],
+  );
+
   const saveAuthTokens = useCallback(
-    (access: string, refresh: string, redirectTo = '/dashboard') => {
-      saveTokens(access, refresh);
+    (access: string, refresh: string, redirectTo = '/dashboard', tenantId?: string) => {
+      saveTokens(access, refresh, tenantId);
       navigate(redirectTo);
     },
     [navigate],
   );
 
-  /** Đăng xuất */
   const logout = useCallback(() => {
     clearTokens();
     toast.success('Logged out successfully.');
     navigate('/login');
   }, [navigate]);
 
-  return { login, logout, saveAuthTokens, loading, isAuthenticated };
+  return {
+    login,
+    logout,
+    saveAuthTokens,
+    loginWithGoogle,
+    loginWithGitHubCode,
+    loading,
+    isAuthenticated,
+  };
 }

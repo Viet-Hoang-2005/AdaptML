@@ -14,22 +14,22 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary: `
-    bg-blue-600 text-white border-transparent
-    hover:bg-blue-700 active:bg-blue-800
-    disabled:bg-blue-300 disabled:cursor-not-allowed
+    bg-black text-white border-transparent transition-colors
+    hover:opacity-70 active:bg-gray-600
+    disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed
   `,
   secondary: `
-    bg-white text-gray-700 border-gray-200
+    bg-white text-gray-700 border-gray-200 transition-colors
     hover:bg-gray-50 active:bg-gray-100
     disabled:opacity-50 disabled:cursor-not-allowed
   `,
   ghost: `
-    bg-transparent text-gray-600 border-transparent
+    bg-transparent text-gray-600 border-transparent transition-colors
     hover:bg-gray-100 active:bg-gray-200
     disabled:opacity-50 disabled:cursor-not-allowed
   `,
   danger: `
-    bg-red-600 text-white border-transparent
+    bg-red-600 text-white border-transparent transition-colors
     hover:bg-red-700 active:bg-red-800
     disabled:bg-red-300 disabled:cursor-not-allowed
   `,

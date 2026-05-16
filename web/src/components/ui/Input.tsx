@@ -24,11 +24,11 @@ export function Input({ label, error, icon, className = '', id, ...props }: Inpu
           id={id}
           className={`
             w-full h-14 rounded-2xl border bg-white text-sm text-gray-800 placeholder-gray-400
-            hover:border-blue-400 transition-colors duration-200 outline-none
+            hover:border-black transition-colors duration-200 outline-none
             ${icon ? 'pl-10 pr-4' : 'px-4'}
             ${error
-              ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100'
-              : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+              ? 'border-red-400 focus:border-red-500'
+              : 'border-gray-200 focus:border-black'
             }
             disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
             ${className}
@@ -59,10 +59,10 @@ export function InputPassword({ label, error, className = '', id, ...props }: In
         type="password"
         className={`
           w-full h-14 rounded-2xl border bg-white px-4 text-sm text-gray-800 placeholder-gray-400
-          hover:border-blue-400 transition-colors duration-200 outline-none
+          hover:border-black transition-colors duration-200 outline-none
           ${error
-            ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100'
-            : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+            ? 'border-red-400 focus:border-red-500'
+            : 'border-gray-200 focus:border-black'
           }
           disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
           ${className}

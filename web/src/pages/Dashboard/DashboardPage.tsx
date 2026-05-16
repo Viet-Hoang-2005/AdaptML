@@ -30,8 +30,8 @@ export default function DashboardPage() {
       {/* Main Content - Placeholder */}
       <main className="max-w-7xl mx-auto px-6 py-16">
         <div className="flex flex-col items-center justify-center text-center">
-          <div className="w-20 h-20 mb-6 rounded-2xl bg-blue-50 flex items-center justify-center">
-            <LayoutDashboard className="w-10 h-10 text-blue-600" />
+          <div className="mb-6 rounded-2x flex items-center justify-center">
+            <LayoutDashboard className="w-10 h-10 text-black" />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-3">
             Welcome to MLdrift Dashboard

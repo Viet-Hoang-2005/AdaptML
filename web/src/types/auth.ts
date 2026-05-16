@@ -15,7 +15,7 @@ export interface OTPVerifyRequest {
 }
 
 export interface CompleteRegistrationRequest {
-  token: string;
+  registration_token: string;
   full_name: string;
   avatar?: File | null;
   field_of_work: string;
@@ -27,13 +27,23 @@ export interface ForgotPasswordRequest {
   email: string;
 }
 
+export interface PasswordResetVerifyRequest {
+  email: string;
+  otp_code: string;
+}
+
+export interface PasswordResetCompleteRequest {
+  reset_token: string;
+  new_password: string;
+}
+
 // Response Types
 export interface AuthResponse {
   message: string;
   access: string;
   refresh: string;
   tenant_id: string;
-  is_new_user: boolean;
+  is_new_user?: boolean;
 }
 
 export interface OTPResponse {
@@ -43,7 +53,12 @@ export interface OTPResponse {
 
 export interface OTPVerifyResponse {
   message: string;
-  token: string;
+  registration_token: string;
+}
+
+export interface PasswordResetVerifyResponse {
+  message: string;
+  reset_token: string;
 }
 
 export interface ApiErrorResponse {

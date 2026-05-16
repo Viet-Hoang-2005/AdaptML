@@ -7,6 +7,7 @@ import type {
   AuthResponse,
   OTPResponse,
   OTPVerifyResponse,
+  PasswordResetVerifyResponse,
 } from '../types/auth';
 
 // 1. AUTHENTICATION
@@ -37,13 +38,35 @@ export const loginGoogle = async (token: string): Promise<AuthResponse> => {
   return data;
 };
 
-export const loginGitHub = async (token: string): Promise<AuthResponse> => {
-  const { data } = await axiosInstance.post<AuthResponse>('/oauth/github/', { token });
+export const loginGitHub = async (code: string, redirectUri: string): Promise<AuthResponse> => {
+  const { data } = await axiosInstance.post<AuthResponse>('/oauth/github/', {
+    code,
+    redirect_uri: redirectUri,
+  });
   return data;
 };
 
 // Forgot Password
 export const forgotPasswordOTP = async (email: string): Promise<OTPResponse> => {
-  const { data } = await axiosInstance.post<OTPResponse>('/profile/password-otp/', { email });
+  const { data } = await axiosInstance.post<OTPResponse>('/password-reset/request-otp/', { email });
+  return data;
+};
+
+export const verifyForgotPasswordOTP = async (
+  email: string,
+  otpCode: string,
+): Promise<PasswordResetVerifyResponse> => {
+  const { data } = await axiosInstance.post<PasswordResetVerifyResponse>('/password-reset/verify-otp/', {
+    email,
+    otp_code: otpCode,
+  });
+  return data;
+};
+
+export const resetForgottenPassword = async (resetToken: string, newPassword: string): Promise<OTPResponse> => {
+  const { data } = await axiosInstance.post<OTPResponse>('/password-reset/complete/', {
+    reset_token: resetToken,
+    new_password: newPassword,
+  });
   return data;
 };
