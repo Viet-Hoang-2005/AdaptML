@@ -24,7 +24,45 @@ services:
       retries: 5
       start_period: 10s
 
-  # 2. FastAPI Inference Server (Data Plane)
+  # 2. Django Control Plane (Auth & Users)
+  control_plane:
+    build:
+      context: ./services/api/control-plane
+      dockerfile: Dockerfile
+    container_name: mlops_nids_django
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-local-dev-change-me}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,control_plane}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      DB_HOST: postgres
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      REDIS_URL: redis://redis:6379/1
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      GOOGLE_OAUTH2_CLIENT_ID: ${GOOGLE_OAUTH2_CLIENT_ID}
+      GITHUB_OAUTH2_CLIENT_ID: ${GITHUB_OAUTH2_CLIENT_ID}
+      GITHUB_OAUTH2_CLIENT_SECRET: ${GITHUB_OAUTH2_CLIENT_SECRET}
+      GITHUB_OAUTH_REDIRECT_URI: ${GITHUB_OAUTH_REDIRECT_URI:-http://localhost:5173/oauth/github/callback}
+    volumes:
+      - ./services/api/control-plane:/app
+    command: sh -c "python src/manage.py migrate && python src/manage.py runserver 0.0.0.0:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - mlops_nids_network
+
+  # 3. FastAPI Inference Server (Data Plane)
   api:
     build:
       context: ./services/api/model-server
@@ -45,6 +83,7 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       REDPANDA_BROKERS: redpanda:9092
+      JWKS_URL: http://control_plane:8000/api/auth/.well-known/jwks.json
       EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
       GITHUB_REPO: ${GITHUB_REPO}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
@@ -60,10 +99,10 @@ services:
     networks:
       - mlops_nids_network
 
-  # 3. Evidently Drift Monitor
+  # 4. Evidently Drift Monitor
   evidently:
     build:
-      context: ./monitoring
+      context: ./services/evidently
       dockerfile: Dockerfile
     container_name: mlops_nids_evidently
     # Không restart tự động - đây là job chạy 1 lần như CronJob trong K3s
@@ -85,7 +124,7 @@ services:
     networks:
       - mlops_nids_network
 
-  # 4. MLflow Tracking Server
+  # 5. MLflow Tracking Server
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: mlops_nids_mlflow
@@ -109,7 +148,7 @@ services:
     networks:
       - mlops_nids_network
 
-  # 5. NIDS Log Consumer (đứng giữa Redpanda và PostgreSQL)
+  # 6. NIDS Log Consumer (đứng giữa Redpanda và PostgreSQL)
   consumer:
     build:
       context: ./services/api/model-server
@@ -139,7 +178,7 @@ services:
     networks:
       - mlops_nids_network
 
-  # 6. Redpanda Kafka Broker
+  # 7. Redpanda Kafka Broker
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: mlops_nids_redpanda
@@ -162,7 +201,7 @@ services:
     networks:
       - mlops_nids_network
 
-  # 7. Redpanda Console (Kafka UI)
+  # Redpanda Console (Kafka UI)
   console:
     image: docker.redpanda.com/redpandadata/console:latest
     container_name: mlops_nids_redpanda_console
@@ -182,34 +221,6 @@ services:
     restart: always
     ports:
       - "6379:6379"
-    networks:
-      - mlops_nids_network
-
-  # 9. Django Control Plane (Auth & Users)
-  control_plane:
-    build:
-      context: ./services/api/control-plane
-      dockerfile: Dockerfile
-    container_name: mlops_nids_django
-    restart: always
-    ports:
-      - "8000:8000"
-    environment:
-      PYTHONUNBUFFERED: 1
-      DB_HOST: postgres
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME}
-      REDIS_URL: redis://redis:6379/1
-    volumes:
-      - ./services/api/control-plane:/app
-    command: python src/manage.py runserver 0.0.0.0:8000
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
     networks:
       - mlops_nids_network
 
