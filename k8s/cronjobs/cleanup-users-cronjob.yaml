@@ -4,7 +4,7 @@ metadata:
   name: cleanup-deleted-users
   namespace: default
   labels:
-    app: ai-paas
+    app: mlops-paas-cronjob
     component: control-plane-cronjob
 spec:
   # Chạy vào 00:00 (nửa đêm) mỗi ngày
@@ -20,7 +20,7 @@ spec:
           restartPolicy: OnFailure
           containers:
           - name: django-cleanup
-            image: your-docker-registry.com/ai-paas-control-plane:latest
+            image: your-docker-registry.com/mlops-paas-control-plane:latest
             # Chạy lệnh management command thay vì runserver
             command: ["python", "src/manage.py", "cleanup_users"]
             envFrom:

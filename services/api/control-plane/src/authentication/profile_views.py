@@ -14,11 +14,20 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from PIL import Image, UnidentifiedImageError
 
-from .models import UserAPIKey
+from .models import UserAPIKey, UserAvatar
 from .otp_service import request_otp, verify_otp
 
 PASSWORD_CHANGE_TOKEN_TTL_SECONDS = 600
 MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024
+
+
+def avatar_url(avatar):
+    if not avatar:
+        return ""
+    try:
+        return avatar.url
+    except Exception:
+        return str(avatar)
 
 
 class ProfileView(APIView):
@@ -27,12 +36,6 @@ class ProfileView(APIView):
 
     def get(self, request):
         user = request.user
-        avatar_url = ""
-        if user.avatar:
-            try:
-                avatar_url = user.avatar.url
-            except Exception:
-                avatar_url = str(user.avatar)
 
         return Response({
             "email": user.email,
@@ -40,7 +43,7 @@ class ProfileView(APIView):
             "description": user.description,
             "pronouns": user.pronouns,
             "company": user.company,
-            "avatar": avatar_url,
+            "avatar": avatar_url(user.avatar),
             "field_of_work": user.field_of_work,
             "country": user.country,
             "tenant_id": user.tenant_id,
@@ -59,7 +62,13 @@ class ProfileView(APIView):
         remove_avatar = str(request.data.get("remove_avatar", "")).lower() in {"1", "true", "yes"}
 
         if remove_avatar and user.avatar:
-            user.avatar.delete(save=False)
+            current_avatar_name = user.avatar.name
+            avatar_record = UserAvatar.objects.filter(user=user, image=current_avatar_name).first()
+            if avatar_record:
+                avatar_record.image.delete(save=False)
+                avatar_record.delete()
+            else:
+                user.avatar.delete(save=False)
             user.avatar = None
 
         if avatar_file:
@@ -91,7 +100,44 @@ class ProfileView(APIView):
         user.country = request.data.get("country", user.country)
         user.save()
 
+        if avatar_file and user.avatar:
+            UserAvatar.objects.create(user=user, image=user.avatar.name)
+
         return Response({"message": "Profile updated successfully."}, status=status.HTTP_200_OK)
+
+
+class AvatarHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        current_avatar_name = user.avatar.name if user.avatar else ""
+        avatars = user.avatar_history.all()
+        return Response({
+            "avatars": [
+                {
+                    "id": avatar.id,
+                    "url": avatar_url(avatar.image),
+                    "is_current": avatar.image.name == current_avatar_name,
+                    "created_at": avatar.created_at,
+                }
+                for avatar in avatars
+            ]
+        }, status=status.HTTP_200_OK)
+
+
+class AvatarSelectView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, avatar_id):
+        avatar = UserAvatar.objects.filter(id=avatar_id, user=request.user).first()
+        if not avatar:
+            return Response({"error": "Avatar not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        request.user.avatar = avatar.image.name
+        request.user.save(update_fields=["avatar"])
+
+        return Response({"message": "Avatar selected successfully."}, status=status.HTTP_200_OK)
 
 
 class PasswordChangeRequestView(APIView):

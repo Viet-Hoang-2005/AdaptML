@@ -2,7 +2,17 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 import uuid
 import secrets
+import os
 from django.core.cache import cache
+
+def user_avatar_path(instance, filename):
+    # Lấy username từ email (phần trước @) để tạo thư mục
+    email_prefix = instance.email.split('@')[0]
+    return f'{email_prefix}/avatar/{filename}'
+
+def user_avatar_history_path(instance, filename):
+    email_prefix = instance.user.email.split('@')[0]
+    return f'{email_prefix}/avatar/{filename}'
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -41,7 +51,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     description = models.TextField(blank=True, null=True)
     pronouns = models.CharField(max_length=30, blank=True, null=True)
     company = models.CharField(max_length=150, blank=True, null=True)
-    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    avatar = models.ImageField(upload_to=user_avatar_path, blank=True, null=True)
     field_of_work = models.CharField(max_length=100, blank=True, null=True)
     country = models.CharField(max_length=100, blank=True, null=True)
     
@@ -105,3 +115,15 @@ class UserAPIKey(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.key_prefix})"
+
+
+class UserAvatar(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="avatar_history")
+    image = models.ImageField(upload_to=user_avatar_history_path)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email} avatar {self.id}"

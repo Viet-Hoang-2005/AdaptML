@@ -4,7 +4,9 @@ import {
   completePasswordChange,
   deleteAccount,
   getProfile,
+  listProfileAvatars,
   requestPasswordChangeOTP,
+  selectProfileAvatar,
   updateProfile,
   updateProfileAvatar,
   verifyPasswordChangeOTP,
@@ -52,6 +54,10 @@ export function useProfileSettings() {
     queryKey: queryKeys.profile,
     queryFn: getProfile,
   });
+  const avatarHistoryQuery = useQuery({
+    queryKey: queryKeys.profileAvatars,
+    queryFn: listProfileAvatars,
+  });
 
   const profile = profileQuery.data ?? null;
   const profileFormValues = useMemo(
@@ -95,11 +101,28 @@ export function useProfileSettings() {
   const updateAvatarMutation = useMutation({
     mutationFn: updateProfileAvatar,
     onSuccess: async (_response, variables) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.profile });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.profile }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.profileAvatars }),
+      ]);
       toast.success(variables.remove_avatar ? 'Avatar removed successfully.' : 'Avatar updated successfully.');
     },
     onError: () => {
       toast.error('Unable to update avatar.');
+    },
+  });
+
+  const selectAvatarMutation = useMutation({
+    mutationFn: selectProfileAvatar,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.profile }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.profileAvatars }),
+      ]);
+      toast.success('Avatar selected successfully.');
+    },
+    onError: () => {
+      toast.error('Unable to select avatar.');
     },
   });
 
@@ -141,6 +164,10 @@ export function useProfileSettings() {
 
   const handleRemoveAvatar = async () => {
     await updateAvatarMutation.mutateAsync({ remove_avatar: true });
+  };
+
+  const handleSelectAvatar = async (avatarId: number) => {
+    await selectAvatarMutation.mutateAsync(avatarId);
   };
 
   const openPasswordOTPModal = async () => {
@@ -219,11 +246,14 @@ export function useProfileSettings() {
 
   return {
     profile,
+    avatarHistory: avatarHistoryQuery.data?.avatars ?? [],
     formValues,
     editingProfile,
     loading: profileQuery.isLoading,
     saving: updateProfileMutation.isPending,
     avatarSaving: updateAvatarMutation.isPending,
+    avatarHistoryLoading: avatarHistoryQuery.isLoading,
+    selectingAvatar: selectAvatarMutation.isPending,
     profileChanged,
     passwordModalStep,
     otpCode,
@@ -245,6 +275,7 @@ export function useProfileSettings() {
     handleCancelEdit,
     handleUpdateAvatar,
     handleRemoveAvatar,
+    handleSelectAvatar,
     openPasswordOTPModal,
     handleVerifyPasswordOTP,
     handleCompletePasswordChange,

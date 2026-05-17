@@ -3,7 +3,7 @@ from .views import CustomTokenObtainPairView, CustomTokenRefreshView, JWKSView
 from .base_auth_views import RequestOTPView, VerifyOTPView, CompleteRegistrationView
 from .oauth2_views import GoogleOAuthView, GitHubOAuthView
 from .password_reset_views import PasswordResetCompleteView, PasswordResetRequestOTPView, PasswordResetVerifyOTPView
-from .profile_views import ProfileView, PasswordChangeRequestView, PasswordChangeVerifyOTPView, PasswordChangeCompleteView, AccountDeleteView, APIKeyManagementView, APIKeyDetailView, APIKeyRegenerateView
+from .profile_views import ProfileView, PasswordChangeRequestView, PasswordChangeVerifyOTPView, PasswordChangeCompleteView, AccountDeleteView, APIKeyManagementView, APIKeyDetailView, APIKeyRegenerateView, AvatarHistoryView, AvatarSelectView
 
 urlpatterns = [
     # JWT & JWKS
@@ -33,5 +33,7 @@ urlpatterns = [
     path('profile/api-key/', APIKeyManagementView.as_view(), name='api_key_manage'),
     path('profile/api-key/<int:key_id>/', APIKeyDetailView.as_view(), name='api_key_detail'),
     path('profile/api-key/<int:key_id>/regenerate/', APIKeyRegenerateView.as_view(), name='api_key_regenerate'),
+    path('profile/avatars/', AvatarHistoryView.as_view(), name='profile_avatars'),
+    path('profile/avatars/<int:avatar_id>/select/', AvatarSelectView.as_view(), name='profile_avatar_select'),
     path('profile/delete/', AccountDeleteView.as_view(), name='account_delete'),
 ]

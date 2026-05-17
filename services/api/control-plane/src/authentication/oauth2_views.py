@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from .otp_service import normalize_email
 from .serializers import CustomTokenObtainPairSerializer
+from .models import UserAvatar
 
 User = get_user_model()
 
@@ -54,6 +55,10 @@ def get_or_create_oauth_user(email, full_name, avatar_url, provider):
             print(f"Unable to fetch OAuth avatar from {avatar_url}: {exc}")
 
     user.save()
+
+    if avatar_url and created and user.avatar:
+        UserAvatar.objects.get_or_create(user=user, image=user.avatar.name)
+
     return build_auth_response(user, created)
 
 

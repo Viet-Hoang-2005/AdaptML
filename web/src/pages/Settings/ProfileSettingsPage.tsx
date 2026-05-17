@@ -2,8 +2,7 @@ import { BriefcaseBusiness, Building2, CalendarDays, Camera, ChevronDown, FileTe
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AvatarCropModal } from '../../components/ui/AvatarCropModal';
-import { AvatarOptionsModal } from '../../components/ui/AvatarOptionsModal';
-import { AvatarUploadModal } from '../../components/ui/AvatarUploadModal';
+import { AvatarModal } from '../../components/ui/AvatarModal';
 import { Button } from '../../components/ui/Button';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { Input, InputPassword } from '../../components/ui/Input';
@@ -37,16 +36,18 @@ const getInitials = (profile: UserProfile | null) => {
 const readOnlyFieldClass =
   'cursor-default hover:border-gray-300 focus:border-gray-300';
 
-type AvatarModalState = 'closed' | 'upload' | 'options';
+type AvatarModalState = 'closed' | 'options';
 
 export default function ProfileSettingsPage() {
   const {
     profile,
+    avatarHistory,
     formValues,
     editingProfile,
     loading,
     saving,
     avatarSaving,
+    avatarHistoryLoading,
     profileChanged,
     passwordModalStep,
     newPassword,
@@ -67,6 +68,7 @@ export default function ProfileSettingsPage() {
     handleCancelEdit,
     handleUpdateAvatar,
     handleRemoveAvatar,
+    handleSelectAvatar,
     openPasswordOTPModal,
     handleVerifyPasswordOTP,
     handleCompletePasswordChange,
@@ -76,6 +78,7 @@ export default function ProfileSettingsPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [avatarModal, setAvatarModal] = useState<AvatarModalState>('closed');
   const [cropImage, setCropImage] = useState('');
+  const [selectingAvatarId, setSelectingAvatarId] = useState<number | null>(null);
   const initials = useMemo(() => getInitials(profile), [profile]);
   const avatarPreview = profile?.avatar || '';
 
@@ -86,7 +89,7 @@ export default function ProfileSettingsPage() {
   }, [cropImage]);
 
   const openAvatarModal = () => {
-    setAvatarModal(avatarPreview ? 'options' : 'upload');
+    setAvatarModal('options');
   };
 
   const openAvatarPicker = () => {
@@ -127,6 +130,16 @@ export default function ProfileSettingsPage() {
   const removeAvatar = async () => {
     await handleRemoveAvatar();
     setAvatarModal('closed');
+  };
+
+  const selectAvatar = async (avatarId: number) => {
+    setSelectingAvatarId(avatarId);
+    try {
+      await handleSelectAvatar(avatarId);
+      setAvatarModal('closed');
+    } finally {
+      setSelectingAvatarId(null);
+    }
   };
 
   return (
@@ -412,18 +425,16 @@ export default function ProfileSettingsPage() {
         onConfirm={handleDeleteAccount}
       />
 
-      <AvatarUploadModal
-        open={avatarModal === 'upload'}
-        onClose={() => setAvatarModal('closed')}
-        onUpload={openAvatarPicker}
-      />
-
-      <AvatarOptionsModal
+      <AvatarModal
         open={avatarModal === 'options'}
         avatarPreview={avatarPreview}
+        avatarHistory={avatarHistory}
+        historyLoading={avatarHistoryLoading}
+        selectingAvatarId={selectingAvatarId}
         onClose={() => setAvatarModal('closed')}
         onRemove={removeAvatar}
         onChange={openAvatarPicker}
+        onSelectAvatar={selectAvatar}
       />
 
       <AvatarCropModal

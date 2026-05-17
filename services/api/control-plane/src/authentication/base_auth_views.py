@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from .otp_service import normalize_email, request_otp, verify_otp
 from .serializers import CustomTokenObtainPairSerializer
+from .models import UserAvatar
 
 User = get_user_model()
 MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024
@@ -151,6 +152,9 @@ class CompleteRegistrationView(APIView):
         user.country = request.data.get("country", "")
         user.set_password(password)
         user.save()
+
+        if avatar_file and user.avatar:
+            UserAvatar.objects.create(user=user, image=user.avatar.name)
 
         cache.delete(f"register_token:{token}")
 

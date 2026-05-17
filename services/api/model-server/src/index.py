@@ -11,11 +11,11 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header, Re
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
 import uvicorn
 import jwt
 from jwt.algorithms import RSAAlgorithm
-import requests
+import httpx
 from confluent_kafka import Producer
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -94,10 +94,10 @@ print(f"Access Mode: {ACCESS_MODE.upper()}")
 print(f"Loading MLflow model from: {MODEL_URI}...")
 
 try:
-    # mlflow.pyfunc can load Sklearn, XGBoost, PyTorch, etc. dynamically
+    # mlflow.pyfunc có thể load Sklearn, XGBoost, PyTorch, etc. động
     model = mlflow.pyfunc.load_model(MODEL_URI)
     
-    # Try to extract signature (expected input schema)
+    # Thử trích xuất signature (lược đồ đầu vào dự kiến)
     signature = model.metadata.signature
     EXPECTED_FEATURES = None
     if signature and signature.inputs:
@@ -116,20 +116,21 @@ except Exception as e:
 # 6. AUTHENTICATION (ASYMMETRIC JWT)
 JWKS_CACHE = {}
 
-def get_public_key(kid: str):
+async def get_public_key(kid: str):
     """Lấy Public Key từ Django JWKS endpoint (có cache)."""
     if kid not in JWKS_CACHE:
         try:
             print(f"Fetching JWKS from {JWKS_URL}...")
-            response = requests.get(JWKS_URL, timeout=5)
-            response.raise_for_status()
-            jwks = response.json()
-            for key_data in jwks.get("keys", []):
-                if key_data.get("kid") == kid:
-                    # Convert JWK to RSA Public Key
-                    public_key = RSAAlgorithm.from_jwk(json.dumps(key_data))
-                    JWKS_CACHE[kid] = public_key
-                    return public_key
+            async with httpx.AsyncClient() as client:
+                response = await client.get(JWKS_URL, timeout=5.0)
+                response.raise_for_status()
+                jwks = response.json()
+                for key_data in jwks.get("keys", []):
+                    if key_data.get("kid") == kid:
+                        # Convert JWK to RSA Public Key
+                        public_key = RSAAlgorithm.from_jwk(json.dumps(key_data))
+                        JWKS_CACHE[kid] = public_key
+                        return public_key
         except Exception as e:
             print(f"Failed to fetch or parse JWKS: {e}")
             return None
@@ -146,7 +147,7 @@ async def verify_tenant_access(
     if ACCESS_MODE == "public":
         return {"tenant_id": "public_user"}
         
-    # 2. KIỂM TRA LUỒNG 1: API KEY (Dành cho Code Python)
+    # 2. Kiểm tra luồng API KEY (Dành cho Code Python)
     if api_key:
         if not redis_client:
             raise HTTPException(status_code=500, detail="Internal Server Error: Redis cache unavailable")
@@ -162,7 +163,7 @@ async def verify_tenant_access(
             
         return {"tenant_id": cached_tenant_id, "auth_type": "api_key"}
 
-    # 3. KIỂM TRA LUỒNG 2: JWT BEARER (Dành cho ReactJS Web)
+    # 3. Kiểm tra luồng JWT BEARER (Dành cho ReactJS Web)
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized: Missing API Key or Bearer Token")
     
@@ -176,7 +177,7 @@ async def verify_tenant_access(
             raise HTTPException(status_code=401, detail="Unauthorized: JWT missing 'kid' header")
             
         # Lấy Public Key từ Cache/Django
-        public_key = get_public_key(kid)
+        public_key = await get_public_key(kid)
         if not public_key:
             raise HTTPException(status_code=401, detail="Unauthorized: Unable to verify token signature (Key not found)")
 
@@ -202,9 +203,29 @@ async def verify_tenant_access(
 
 
 # 7. SCHEMA & BACKGROUND TASKS
-class InferenceRequest(BaseModel):
-    # Schema động để chấp nhận mọi loại dữ liệu dạng bảng
-    features: Dict[str, Any]
+MLFLOW_TO_PY_TYPE = {
+    "integer": int,
+    "long": int,
+    "float": float,
+    "double": float,
+    "boolean": bool,
+    "string": str,
+}
+
+if EXPECTED_FEATURES and signature and signature.inputs:
+    fields = {}
+    for inp in signature.inputs:
+        py_type = MLFLOW_TO_PY_TYPE.get(inp.type, Any)
+        fields[inp.name] = (py_type, ...)
+    
+    DynamicFeaturesModel = create_model("DynamicFeaturesModel", **fields)
+    
+    class InferenceRequest(BaseModel):
+        features: DynamicFeaturesModel
+else:
+    class InferenceRequest(BaseModel):
+        # Schema động để chấp nhận mọi loại dữ liệu dạng bảng nếu không có signature
+        features: Dict[str, Any]
 
 def send_to_redpanda(features_dict: dict, prediction_result: Any):
     if kafka_producer is None:
@@ -266,9 +287,12 @@ async def predict(
         raise HTTPException(status_code=500, detail="Internal Error: Model is not initialized.")
         
     try:
+        # Convert features to dict (supports both Dict and Pydantic submodel)
+        features_dict = payload.model_dump().get("features", {})
+
         # 1. Fail-fast Validation (Nếu model có signature)
         if EXPECTED_FEATURES:
-            missing_cols = set(EXPECTED_FEATURES) - set(payload.features.keys())
+            missing_cols = set(EXPECTED_FEATURES) - set(features_dict.keys())
             if missing_cols:
                 raise HTTPException(
                     status_code=400, 
@@ -276,7 +300,7 @@ async def predict(
                 )
 
         # 2. Xử lý Pandas DataFrame (MLflow nhận DataFrame)
-        df_input = pd.DataFrame([payload.features])
+        df_input = pd.DataFrame([features_dict])
         if EXPECTED_FEATURES:
             df_input = df_input[EXPECTED_FEATURES] # Sắp xếp lại thứ tự cột cho đúng
             
@@ -297,7 +321,7 @@ async def predict(
         
         background_tasks.add_task(
             send_to_redpanda, 
-            features_dict=payload.features, 
+            features_dict=features_dict, 
             prediction_result=single_result
         )
 

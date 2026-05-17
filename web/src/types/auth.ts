@@ -50,6 +50,17 @@ export interface UserProfile {
   date_joined: string;
 }
 
+export interface AvatarRecord {
+  id: number;
+  url: string;
+  is_current: boolean;
+  created_at: string;
+}
+
+export interface AvatarHistoryResponse {
+  avatars: AvatarRecord[];
+}
+
 export interface UpdateProfileRequest {
   full_name: string;
   description: string;

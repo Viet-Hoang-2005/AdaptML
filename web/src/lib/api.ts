@@ -5,6 +5,7 @@ import type {
   OTPVerifyRequest,
   CompleteRegistrationRequest,
   AuthResponse,
+  AvatarHistoryResponse,
   OTPResponse,
   OTPVerifyResponse,
   MessageResponse,
@@ -121,6 +122,16 @@ export const updateProfileAvatar = async (payload: UpdateProfileAvatarRequest): 
       'Content-Type': 'multipart/form-data',
     },
   });
+  return data;
+};
+
+export const listProfileAvatars = async (): Promise<AvatarHistoryResponse> => {
+  const { data } = await axiosInstance.get<AvatarHistoryResponse>('/profile/avatars/');
+  return data;
+};
+
+export const selectProfileAvatar = async (avatarId: number): Promise<MessageResponse> => {
+  const { data } = await axiosInstance.post<MessageResponse>(`/profile/avatars/${avatarId}/select/`);
   return data;
 };
 

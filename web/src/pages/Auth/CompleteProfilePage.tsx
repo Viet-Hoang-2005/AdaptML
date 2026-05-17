@@ -5,8 +5,7 @@ import { Cover } from '../../components/layout/Cover';
 import { Input, InputPassword } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { AvatarCropModal } from '../../components/ui/AvatarCropModal';
-import { AvatarOptionsModal } from '../../components/ui/AvatarOptionsModal';
-import { AvatarUploadModal } from '../../components/ui/AvatarUploadModal';
+import { AvatarModal } from '../../components/ui/AvatarModal';
 import { toast } from '../../lib/toast';
 import { useAuth } from '../../hooks/useAuth';
 import { useForm } from '../../hooks/useForm';
@@ -17,7 +16,7 @@ interface LocationState {
   email: string;
 }
 
-type AvatarModalState = 'closed' | 'upload' | 'options';
+type AvatarModalState = 'closed' | 'options';
 
 const validationRules = {
   full_name: (v: string) => (!v ? 'Full name is required.' : undefined),
@@ -88,7 +87,7 @@ export default function CompleteProfilePage() {
   };
 
   const openAvatarModal = () => {
-    setAvatarModal(avatarPreview ? 'options' : 'upload');
+    setAvatarModal('options');
   };
 
   const openAvatarPicker = () => {
@@ -226,13 +225,7 @@ export default function CompleteProfilePage() {
         </div>
       </div>
 
-      <AvatarUploadModal
-        open={avatarModal === 'upload'}
-        onClose={() => setAvatarModal('closed')}
-        onUpload={openAvatarPicker}
-      />
-
-      <AvatarOptionsModal
+      <AvatarModal
         open={avatarModal === 'options'}
         avatarPreview={avatarPreview}
         onClose={() => setAvatarModal('closed')}
