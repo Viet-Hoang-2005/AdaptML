@@ -149,7 +149,7 @@ export default function CompleteProfilePage() {
             <button
               type="button"
               onClick={openAvatarModal}
-              className="flex w-full items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:border-black focus:border-black focus:outline-none"
+              className="flex w-full items-center justify-between gap-4 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-left transition-colors hover:border-black focus:border-black focus:outline-none"
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-gray-400">

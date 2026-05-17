@@ -34,7 +34,7 @@ export default function Sidebar({ collapsed, onToggle }: DashboardSidebarProps) 
   };
 
   return (
-    <aside className={`${sidebarWidth} flex h-full shrink-0 flex-col border-r border-gray-200 bg-white transition-all`}>
+    <aside className={`${sidebarWidth} flex h-full shrink-0 flex-col border-r border-gray-300 bg-white transition-all`}>
       <div className="flex h-12 items-center justify-between border-b border-gray-100 px-4">
         {!collapsed && <span className="text-sm font-sans tracking-wide text-gray-400">My workspace</span>}
         <button
@@ -65,7 +65,7 @@ export default function Sidebar({ collapsed, onToggle }: DashboardSidebarProps) 
             <button
               type="button"
               onClick={() => navigate('/dashboard/home/model-api')}
-              className="mb-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:border-black hover:text-black"
+              className="mb-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:border-black hover:text-black"
             >
               <UploadCloud className="h-4 w-4" />
               Upload Model

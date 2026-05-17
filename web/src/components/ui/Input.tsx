@@ -28,7 +28,7 @@ export function Input({ label, error, icon, className = '', id, ...props }: Inpu
             ${icon ? 'pl-10 pr-4' : 'px-4'}
             ${error
               ? 'border-red-400 focus:border-red-500'
-              : 'border-gray-200 focus:border-black'
+              : 'border-gray-300 focus:border-black'
             }
             disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
             ${className}
@@ -62,7 +62,7 @@ export function InputPassword({ label, error, className = '', id, ...props }: In
           hover:border-black transition-colors duration-200 outline-none
           ${error
             ? 'border-red-400 focus:border-red-500'
-            : 'border-gray-200 focus:border-black'
+            : 'border-gray-300 focus:border-black'
           }
           disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
           ${className}

@@ -8,7 +8,7 @@ const settingsTabs = [
 export default function SettingsLayout() {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 border-b border-gray-200 pb-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 border-b border-gray-300 pb-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -16,7 +16,7 @@ export default function SettingsLayout() {
           </p>
         </div>
 
-        <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1.5 gap-1">
+        <div className="inline-flex rounded-xl border border-gray-300 bg-white p-1.5 gap-1">
           {settingsTabs.map((tab) => (
             <NavLink
               key={tab.to}

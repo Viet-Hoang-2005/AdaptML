@@ -12,7 +12,7 @@ export function AvatarUploadModal({ open, onClose, onUpload }: AvatarUploadModal
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white shadow-xl">
+      <div className="w-full max-w-lg rounded-xl border border-gray-300 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <h2 className="text-xl font-bold text-gray-900">Upload avatar</h2>
           <button

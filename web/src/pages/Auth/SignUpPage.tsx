@@ -80,7 +80,7 @@ export default function SignUpPage() {
               id="btn-google-signup"
               onClick={handleGoogleSignUp}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3
-                         border border-gray-200 rounded-xl hover:opacity-70
+                         border border-gray-300 rounded-xl hover:opacity-70
                          transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
             >
               <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
@@ -90,7 +90,7 @@ export default function SignUpPage() {
               id="btn-github-signup"
               onClick={handleGitHubSignUp}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3
-                         border border-gray-200 rounded-xl hover:opacity-70
+                         border border-gray-300 rounded-xl hover:opacity-70
                          transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
             >
               <img src={GitHubIcon} alt="GitHub" className="w-5 h-5" />

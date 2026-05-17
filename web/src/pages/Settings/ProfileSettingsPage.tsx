@@ -35,7 +35,7 @@ const getInitials = (profile: UserProfile | null) => {
 };
 
 const readOnlyFieldClass =
-  'cursor-default hover:border-gray-200 focus:border-gray-200';
+  'cursor-default hover:border-gray-300 focus:border-gray-300';
 
 type AvatarModalState = 'closed' | 'upload' | 'options';
 
@@ -131,7 +131,7 @@ export default function ProfileSettingsPage() {
 
   return (
     <div className="w-full space-y-6">
-      <section className="rounded-lg border border-gray-200 bg-white">
+      <section className="rounded-lg border border-gray-300 bg-white">
         <div className="flex flex-col gap-5 border-b border-gray-100 px-6 py-6 md:flex-row md:items-center">
           <button
             type="button"
@@ -150,9 +150,6 @@ export default function ProfileSettingsPage() {
               {profile?.full_name || 'AI Engineer'}
             </h2>
             <p className="truncate text-sm text-gray-500">{profile?.email || 'Loading profile...'}</p>
-            <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Click the avatar to upload, crop, change, or remove it.
-            </p>
           </div>
           <input
             ref={fileInputRef}
@@ -218,7 +215,7 @@ export default function ProfileSettingsPage() {
                       value={formValues.pronouns}
                       disabled={loading}
                       onChange={(event) => updateProfileField('pronouns', event.target.value)}
-                      className="h-14 w-full appearance-none rounded-2xl border border-gray-200 bg-white pl-10 pr-10 text-sm font-normal text-gray-800 outline-none transition-colors duration-200 hover:border-black focus:border-black disabled:bg-gray-50 disabled:text-gray-400"
+                      className="h-14 w-full appearance-none rounded-2xl border border-gray-300 bg-white pl-10 pr-10 text-sm font-normal text-gray-800 outline-none transition-colors duration-200 hover:border-black focus:border-black disabled:bg-gray-50 disabled:text-gray-400"
                     >
                       <option value="">Don't specify</option>
                       <option value="he/him">he/him</option>
@@ -290,8 +287,8 @@ export default function ProfileSettingsPage() {
                 <FileText className="pointer-events-none absolute left-3 top-4 h-4 w-4 text-gray-400" />
                 <textarea
                   id="profile-description"
-                  className={`text-sm text-gray-800 placeholder-gray-400 font-normal placeholder:font-normal min-h-24 w-full resize-none rounded-2xl border border-gray-200 bg-white py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-gray-50 disabled:text-gray-400 ${
-                    editingProfile ? 'hover:border-black focus:border-black' : 'cursor-default hover:border-gray-200 focus:border-gray-200'
+                  className={`text-sm text-gray-800 placeholder-gray-400 font-normal placeholder:font-normal min-h-24 w-full resize-none rounded-2xl border border-gray-300 bg-white py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-gray-50 disabled:text-gray-400 ${
+                    editingProfile ? 'hover:border-black focus:border-black' : 'cursor-default hover:border-gray-300 focus:border-gray-300'
                   }`}
                   placeholder="Tell us more about yourself"
                   value={formValues.description}
@@ -325,7 +322,7 @@ export default function ProfileSettingsPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="rounded-lg border border-gray-300 bg-gray-50 p-4">
             <h3 className="mb-4 text-sm font-bold text-gray-900">Account Details</h3>
             <div className="space-y-3">
               <ReadOnlyRow icon={<Mail className="h-4 w-4" />} label="Email" value={profile?.email || 'Unknown'} />

@@ -33,7 +33,7 @@ export function ConfirmModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-      <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white shadow-xl">
+      <div className="w-full max-w-lg rounded-lg border border-gray-300 bg-white shadow-xl">
         <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
           <div className="flex items-center gap-3">
             <div

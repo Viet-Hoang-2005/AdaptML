@@ -19,7 +19,7 @@ const variantStyles: Record<ButtonVariant, string> = {
     disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed
   `,
   secondary: `
-    bg-white text-black border-gray-200 transition-colors
+    bg-white text-black border-gray-300 transition-colors
     hover:bg-gray-200 active:bg-gray-400
     disabled:opacity-50 disabled:cursor-not-allowed
   `,

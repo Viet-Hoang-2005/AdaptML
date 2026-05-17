@@ -1,5 +1,5 @@
 import { useGoogleLogin } from '@react-oauth/google';
-import { Handshake } from 'lucide-react';
+import { Astroid } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Cover } from '../../components/layout/Cover';
 import { Button } from '../../components/ui/Button';
@@ -48,7 +48,7 @@ export default function LoginPage() {
       <div className="w-full lg:w-1/3 flex flex-col justify-center px-8 sm:px-12 lg:px-10 xl:px-14">
         <div className="max-w-sm w-full mx-auto">
           <div className="rounded-2xl flex items-center justify-center mx-auto mb-2">
-            <Handshake className="w-8 h-8 text-black" />
+            <Astroid className="w-8 h-8 text-black" />
           </div>
 
           <h2 className="text-center text-2xl font-bold text-gray-800 mb-1">Welcome back</h2>
@@ -59,7 +59,7 @@ export default function LoginPage() {
               id="btn-google-login"
               onClick={handleGoogleLogin}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3
-                         border border-gray-200 rounded-xl hover:opacity-70
+                         border border-black rounded-xl hover:border-gray-300 hover:opacity-70
                          transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
             >
               <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
@@ -69,7 +69,7 @@ export default function LoginPage() {
               id="btn-github-login"
               onClick={handleGitHubLogin}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3
-                         border border-gray-200 rounded-xl hover:opacity-70
+                         border border-black rounded-xl hover:border-gray-300 hover:opacity-70
                          transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
             >
               <img src={GitHubIcon} alt="GitHub" className="w-5 h-5" />
