@@ -15,7 +15,6 @@ from .models import UserAvatar
 User = get_user_model()
 MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024
 
-
 class RequestOTPView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -26,13 +25,13 @@ class RequestOTPView(APIView):
             return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         existing_user = User.objects.filter(email=email).first()
-        if (
-            existing_user
-            and existing_user.is_active
-            and existing_user.has_usable_password()
-        ):
+        if existing_user:
             return Response(
-                {"error": "An active account already exists for this email."},
+                {
+                    "error": (
+                        "This email is already registered. Please sign in instead."
+                    )
+                },
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -130,20 +129,13 @@ class CompleteRegistrationView(APIView):
                 )
 
         user = User.objects.filter(email=email).first()
-        created = user is None
-
-        if user and user.is_active and user.has_usable_password():
+        if user:
             return Response(
-                {"error": "An active account already exists for this email."},
+                {"error": "This email is already registered. Please sign in instead."},
                 status=status.HTTP_409_CONFLICT,
             )
 
-        if created:
-            user = User(email=email, auth_provider="email")
-
-        if not user.is_active:
-            user.is_active = True
-            user.deleted_at = None
+        user = User(email=email, auth_provider="email")
 
         user.full_name = request.data.get("full_name", "")
         if avatar_file:

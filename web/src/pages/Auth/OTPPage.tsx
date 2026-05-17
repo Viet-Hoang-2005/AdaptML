@@ -1,11 +1,12 @@
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Mail } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Mail, ArrowLeft } from 'lucide-react';
 import { Cover } from '../../components/layout/Cover';
 import { OTPInput } from '../../components/ui/OTPInput';
 import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';
 import { useCountdown } from '../../hooks/useCountdown';
 import { verifyOTP, requestOTP } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 import { useState } from 'react';
 
 interface LocationState {
@@ -35,8 +36,8 @@ export default function OTPPage() {
       navigate('/signup/complete-profile', {
         state: { registrationToken: response.registration_token, email },
       });
-    } catch {
-      toast.error('Invalid or expired OTP. Please try again.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Invalid or expired OTP. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -47,8 +48,8 @@ export default function OTPPage() {
       await requestOTP({ email });
       toast.success('A new OTP has been sent to your email.');
       resetCountdown(); // Bắt đầu lại bộ đếm 60s
-    } catch {
-      toast.error('Failed to resend OTP.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to resend OTP.'));
     }
   };
 
@@ -68,7 +69,16 @@ export default function OTPPage() {
 
       <div className="w-full lg:w-1/3 flex flex-col justify-center px-8 sm:px-12 lg:px-10 xl:px-14">
         <div className="max-w-sm w-full mx-auto text-center">
-          <div className="mx-auto mb-4 rounded-2xl flex items-center justify-center">
+          <Link
+            to="/signup"
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-8
+                      font-medium transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="leading-none">Back</span>
+          </Link>
+
+          <div className="mx-auto mb-2 rounded-2xl flex items-center justify-center">
             <Mail className="w-8 h-8 text-black" />
           </div>
 

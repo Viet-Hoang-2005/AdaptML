@@ -10,6 +10,7 @@ import { useAuth } from '../../hooks/useAuth';
 import GitHubIcon from '../../assets/icons/GitHub.png';
 import GoogleIcon from '../../assets/icons/Google.png';
 import { requestOTP } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 import { startGitHubOAuth } from '../../lib/oauth';
 import { toast } from '../../lib/toast';
 
@@ -39,8 +40,8 @@ export default function SignUpPage() {
       await requestOTP({ email });
       toast.success('OTP has been sent to your email!');
       navigate('/signup/verify-otp', { state: { email } });
-    } catch {
-      toast.error('Failed to send OTP. Please try again.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to send OTP. Please try again.'));
     } finally {
       setLoading(false);
     }

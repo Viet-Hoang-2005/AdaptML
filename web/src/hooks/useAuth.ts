@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loginBaseAuth, loginGitHub, loginGoogle } from '../lib/api';
+import { getApiErrorMessage } from '../lib/apiError';
 import { toast } from '../lib/toast';
 import type { AuthResponse, LoginCredentials } from '../types/auth';
 
@@ -48,8 +49,8 @@ export function useAuth() {
         saveTokens(response.access, response.refresh, response.tenant_id);
         toast.success('Login successful!');
         navigate('/dashboard');
-      } catch {
-        toast.error('Invalid email or password.');
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, 'Invalid email or password.'));
       } finally {
         setLoading(false);
       }
@@ -63,8 +64,8 @@ export function useAuth() {
       try {
         const response = await loginGoogle(googleToken);
         handleOAuthSuccess(response, 'Google login successful!');
-      } catch {
-        toast.error('Google login failed. Please try again.');
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, 'Google login failed. Please try again.'));
       } finally {
         setLoading(false);
       }
@@ -78,8 +79,8 @@ export function useAuth() {
       try {
         const response = await loginGitHub(code, redirectUri);
         handleOAuthSuccess(response, 'GitHub login successful!');
-      } catch {
-        toast.error('GitHub login failed. Please try again.');
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, 'GitHub login failed. Please try again.'));
         navigate('/login');
       } finally {
         setLoading(false);

@@ -39,6 +39,10 @@ class KIDRefreshToken(KIDTokenMixin, RefreshToken):
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     token_class = KIDRefreshToken
 
+    default_error_messages = {
+        "no_active_account": "Invalid email or password."
+    }
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)

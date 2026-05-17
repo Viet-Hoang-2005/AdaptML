@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { InputPassword } from '../../components/ui/Input';
 import { useForm } from '../../hooks/useForm';
 import { resetForgottenPassword } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
 
 interface LocationState {
@@ -37,8 +38,8 @@ export default function ForgotPasswordResetPage() {
       await resetForgottenPassword(resetToken, formValues.password);
       toast.success('Password reset successfully. Please sign in again.');
       navigate('/login', { replace: true });
-    } catch {
-      toast.error('Failed to reset password. Please request a new OTP.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to reset password. Please request a new OTP.'));
     }
   });
 

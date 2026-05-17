@@ -7,6 +7,7 @@ import {
   regenerateAPIKey,
   updateAPIKey,
 } from '../lib/api';
+import { getApiErrorMessage } from '../lib/apiError';
 import { queryKeys } from '../lib/queryKeys';
 import { toast } from '../lib/toast';
 import type { APIKeyRecord, CreatedAPIKeyResponse } from '../types/auth';
@@ -27,9 +28,9 @@ export function useDeveloperSettings() {
 
   useEffect(() => {
     if (apiKeysQuery.isError) {
-      toast.error('Unable to load API keys.');
+      toast.error(getApiErrorMessage(apiKeysQuery.error, 'Unable to load API keys.'));
     }
-  }, [apiKeysQuery.isError]);
+  }, [apiKeysQuery.error, apiKeysQuery.isError]);
 
   const refreshAPIKeys = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys });
@@ -42,8 +43,8 @@ export function useDeveloperSettings() {
       closeEditModal();
       await refreshAPIKeys();
     },
-    onError: () => {
-      toast.error('Unable to create API key.');
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Unable to create API key.'));
     },
   });
 
@@ -55,8 +56,8 @@ export function useDeveloperSettings() {
       closeEditModal();
       await refreshAPIKeys();
     },
-    onError: () => {
-      toast.error('Unable to update API key.');
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Unable to update API key.'));
     },
   });
 
@@ -66,8 +67,8 @@ export function useDeveloperSettings() {
       toast.success('API key deleted successfully.');
       await refreshAPIKeys();
     },
-    onError: () => {
-      toast.error('Unable to delete API key.');
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Unable to delete API key.'));
     },
   });
 
@@ -77,8 +78,8 @@ export function useDeveloperSettings() {
       setCreatedApiKey(response);
       await refreshAPIKeys();
     },
-    onError: () => {
-      toast.error('Unable to regenerate API key.');
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Unable to regenerate API key.'));
     },
   });
 

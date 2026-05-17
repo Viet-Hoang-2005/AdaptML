@@ -11,6 +11,7 @@ import {
   updateProfileAvatar,
   verifyPasswordChangeOTP,
 } from '../lib/api';
+import { getApiErrorMessage } from '../lib/apiError';
 import { queryKeys } from '../lib/queryKeys';
 import { toast } from '../lib/toast';
 import type { UpdateProfileRequest, UserProfile } from '../types/auth';
@@ -68,9 +69,9 @@ export function useProfileSettings() {
 
   useEffect(() => {
     if (profileQuery.isError) {
-      toast.error('Unable to load profile.');
+      toast.error(getApiErrorMessage(profileQuery.error, 'Unable to load profile.'));
     }
-  }, [profileQuery.isError]);
+  }, [profileQuery.error, profileQuery.isError]);
 
   const updateProfileMutation = useMutation({
     mutationFn: updateProfile,
@@ -93,8 +94,8 @@ export function useProfileSettings() {
       setEditingProfile(false);
       toast.success('Profile updated successfully.');
     },
-    onError: () => {
-      toast.error('Unable to update profile.');
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Unable to update profile.'));
     },
   });
 
@@ -107,8 +108,8 @@ export function useProfileSettings() {
       ]);
       toast.success(variables.remove_avatar ? 'Avatar removed successfully.' : 'Avatar updated successfully.');
     },
-    onError: () => {
-      toast.error('Unable to update avatar.');
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Unable to update avatar.'));
     },
   });
 
@@ -121,8 +122,8 @@ export function useProfileSettings() {
       ]);
       toast.success('Avatar selected successfully.');
     },
-    onError: () => {
-      toast.error('Unable to select avatar.');
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Unable to select avatar.'));
     },
   });
 
@@ -181,8 +182,8 @@ export function useProfileSettings() {
     try {
       await requestPasswordChangeOTP();
       toast.success('OTP has been sent to your email.');
-    } catch {
-      toast.error('Unable to send password change OTP.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to send password change OTP.'));
     } finally {
       setPasswordActionLoading(false);
     }
@@ -200,8 +201,8 @@ export function useProfileSettings() {
       setPasswordChangeToken(response.password_change_token);
       setPasswordModalStep('password');
       toast.success('OTP verified successfully.');
-    } catch {
-      toast.error('Invalid or expired OTP.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Invalid or expired OTP.'));
     } finally {
       setPasswordActionLoading(false);
     }
@@ -223,8 +224,8 @@ export function useProfileSettings() {
       await completePasswordChange(passwordChangeToken, newPassword);
       toast.success('Password changed successfully.');
       setPasswordModalStep('closed');
-    } catch {
-      toast.error('Unable to change password.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to change password.'));
     } finally {
       setPasswordActionLoading(false);
     }
@@ -237,8 +238,8 @@ export function useProfileSettings() {
       toast.success('Account deleted successfully.');
       queryClient.clear();
       logout();
-    } catch {
-      toast.error('Unable to delete account.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to delete account.'));
     } finally {
       setDeleteLoading(false);
     }

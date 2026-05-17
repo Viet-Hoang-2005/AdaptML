@@ -10,6 +10,7 @@ import { toast } from '../../lib/toast';
 import { useAuth } from '../../hooks/useAuth';
 import { useForm } from '../../hooks/useForm';
 import { completeRegistration } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 
 interface LocationState {
   registrationToken: string;
@@ -115,8 +116,8 @@ export default function CompleteProfilePage() {
       });
       toast.success('Account created successfully!');
       saveAuthTokens(response.access, response.refresh, '/dashboard', response.tenant_id);
-    } catch {
-      toast.error('Registration failed. Please try again.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Registration failed. Please try again.'));
     }
   });
 

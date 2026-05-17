@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { OTPInput } from '../../components/ui/OTPInput';
 import { useCountdown } from '../../hooks/useCountdown';
 import { forgotPasswordOTP, verifyForgotPasswordOTP } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
 
 interface LocationState {
@@ -39,8 +40,8 @@ export default function ForgotPasswordOTPPage() {
       navigate('/forgot-password/reset', {
         state: { email, resetToken: response.reset_token },
       });
-    } catch {
-      toast.error('Invalid or expired OTP. Please try again.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Invalid or expired OTP. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -51,8 +52,8 @@ export default function ForgotPasswordOTPPage() {
       await forgotPasswordOTP(email);
       toast.success('A new OTP has been sent to your email.');
       resetCountdown();
-    } catch {
-      toast.error('Failed to resend OTP.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to resend OTP.'));
     }
   };
 

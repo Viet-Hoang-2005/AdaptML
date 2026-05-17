@@ -6,6 +6,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';
 import { forgotPasswordOTP } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -24,8 +25,8 @@ export default function ForgotPasswordPage() {
       navigate('/forgot-password/verify-otp', {
         state: { email: response.email || email.trim().toLowerCase() },
       });
-    } catch {
-      toast.error('Failed to send OTP. Please check your email and try again.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to send OTP. Please check your email and try again.'));
     } finally {
       setLoading(false);
     }
