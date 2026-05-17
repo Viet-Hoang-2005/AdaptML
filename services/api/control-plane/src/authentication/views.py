@@ -38,7 +38,7 @@ class JWKSView(APIView):
                     "kty": "RSA",
                     "alg": "RS256",
                     "use": "sig",
-                    "kid": "ai-paas-key-1", # Key ID trùng với header kid của token
+                    "kid": "mlops-paas-key-1", # Key ID trùng với header kid của token
                     "n": int_to_base64url(numbers.n),
                     "e": int_to_base64url(numbers.e)
                 }

@@ -5,7 +5,7 @@ from rest_framework_simplejwt.serializers import (
 )
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
-JWT_KID = "ai-paas-key-1"
+JWT_KID = "mlops-paas-key-1"
 
 class KIDTokenMixin:
     def __str__(self):

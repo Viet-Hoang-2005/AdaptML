@@ -181,9 +181,9 @@ async def verify_tenant_access(
             raise HTTPException(status_code=401, detail="Unauthorized: Unable to verify token signature (Key not found)")
 
         # Verify token (sử dụng thuật toán RS256)
-        payload = jwt.decode(token, public_key, algorithms=["RS256"], audience="ai-paas")
+        payload = jwt.decode(token, public_key, algorithms=["RS256"], audience="mlops-paas")
         
-        # KIỂM TRA CHÉO (Ngăn chặn BOLA/IDOR)
+        # Kiểm tra chéo (Ngăn chặn BOLA/IDOR)
         token_tenant_id = payload.get("tenant_id")
         if not token_tenant_id:
             raise HTTPException(status_code=401, detail="Unauthorized: Token payload missing 'tenant_id'")

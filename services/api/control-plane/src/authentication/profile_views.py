@@ -8,18 +8,22 @@ from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from PIL import Image, UnidentifiedImageError
 
 from .models import UserAPIKey
 from .otp_service import request_otp, verify_otp
 
 PASSWORD_CHANGE_TOKEN_TTL_SECONDS = 600
+MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024
 
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
         user = request.user
@@ -52,7 +56,35 @@ class ProfileView(APIView):
         user.company = request.data.get("company", user.company)
 
         avatar_file = request.FILES.get("avatar") or request.data.get("avatar")
+        remove_avatar = str(request.data.get("remove_avatar", "")).lower() in {"1", "true", "yes"}
+
+        if remove_avatar and user.avatar:
+            user.avatar.delete(save=False)
+            user.avatar = None
+
         if avatar_file:
+            if avatar_file.size > MAX_AVATAR_SIZE_BYTES:
+                return Response(
+                    {"error": "Avatar image must be 5MB or smaller."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not getattr(avatar_file, "content_type", "").startswith("image/"):
+                return Response(
+                    {"error": "Avatar must be an image file."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                image = Image.open(avatar_file)
+                image.verify()
+                avatar_file.seek(0)
+            except (UnidentifiedImageError, OSError):
+                return Response(
+                    {"error": "Avatar image is invalid or corrupted."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             user.avatar = avatar_file
 
         user.field_of_work = request.data.get("field_of_work", user.field_of_work)
@@ -199,6 +231,7 @@ class APIKeyManagementView(APIView):
         )
 
         cache.set(f"api_key:{raw_key}", user.tenant_id, timeout=None)
+        cache.set(f"api_key_reverse:{api_key.id}", raw_key, timeout=None)
 
         return Response({
             "message": "API key has been created. Store it now because it will only be shown once.",
@@ -245,6 +278,11 @@ class APIKeyDetailView(APIView):
         api_key.revoked_at = timezone.now()
         api_key.save(update_fields=["revoked_at"])
 
+        raw_key = cache.get(f"api_key_reverse:{api_key.id}")
+        if raw_key:
+            cache.delete(f"api_key:{raw_key}")
+            cache.delete(f"api_key_reverse:{api_key.id}")
+
         return Response({"message": "API key deleted successfully."}, status=status.HTTP_200_OK)
 
 
@@ -256,12 +294,17 @@ class APIKeyRegenerateView(APIView):
         if not api_key:
             return Response({"error": "API key not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        old_raw_key = cache.get(f"api_key_reverse:{api_key.id}")
+        if old_raw_key:
+            cache.delete(f"api_key:{old_raw_key}")
+
         raw_key = f"sk_live_{secrets.token_urlsafe(32)}"
         api_key.key_prefix = raw_key[:16]
         api_key.key_hash = make_password(raw_key)
         api_key.save(update_fields=["key_prefix", "key_hash"])
 
         cache.set(f"api_key:{raw_key}", request.user.tenant_id, timeout=None)
+        cache.set(f"api_key_reverse:{api_key.id}", raw_key, timeout=None)
 
         return Response({
             "message": "API key regenerated. Store it now because it will only be shown once.",

@@ -149,7 +149,7 @@ SIMPLE_JWT = {
     "ALGORITHM": "RS256",
     "SIGNING_KEY": PRIVATE_KEY,
     "VERIFYING_KEY": PUBLIC_KEY,
-    "AUDIENCE": "ai-paas",
+    "AUDIENCE": "mlops-paas",
     "ISSUER": "django-control-plane",
     "JWK_URL": None,
 }
@@ -204,12 +204,13 @@ GITHUB_OAUTH_REDIRECT_URI = os.environ.get(
 # Cấu hình lưu trữ AWS S3 (cho Avatar & File)
 # Lưu ý: Không khai báo AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY
 # boto3 sẽ tự động sử dụng IAM Role được gán cho EC2 instance (cấu hình trong main.tf)
-AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_BUCKET_NAME', 'mlops-nids-artifacts')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_BUCKET_NAME', 'mlops-paas-artifacts')
 AWS_S3_REGION_NAME = os.environ.get('AWS_DEFAULT_REGION', 'ap-southeast-1')
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
 
 # Tự động gán quyền đọc cho file khi upload lên S3
-AWS_DEFAULT_ACL = 'public-read'
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = False
 # Giữ nguyên tên file, tránh ghi đè ngẫu nhiên quá mức nếu cần
 AWS_S3_FILE_OVERWRITE = False
 

@@ -2,7 +2,9 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from PIL import Image, UnidentifiedImageError
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -10,6 +12,7 @@ from .otp_service import normalize_email, request_otp, verify_otp
 from .serializers import CustomTokenObtainPairSerializer
 
 User = get_user_model()
+MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024
 
 
 class RequestOTPView(APIView):
@@ -80,6 +83,7 @@ class VerifyOTPView(APIView):
 class CompleteRegistrationView(APIView):
     authentication_classes = []
     permission_classes = []
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
         token = request.data.get("registration_token")
@@ -100,6 +104,30 @@ class CompleteRegistrationView(APIView):
         if not password:
             return Response({"error": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
 
+        avatar_file = request.FILES.get("avatar")
+        if avatar_file:
+            if avatar_file.size > MAX_AVATAR_SIZE_BYTES:
+                return Response(
+                    {"error": "Avatar image must be 5MB or smaller."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not getattr(avatar_file, "content_type", "").startswith("image/"):
+                return Response(
+                    {"error": "Avatar must be an image file."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                image = Image.open(avatar_file)
+                image.verify()
+                avatar_file.seek(0)
+            except (UnidentifiedImageError, OSError):
+                return Response(
+                    {"error": "Avatar image is invalid or corrupted."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         user = User.objects.filter(email=email).first()
         created = user is None
 
@@ -117,7 +145,8 @@ class CompleteRegistrationView(APIView):
             user.deleted_at = None
 
         user.full_name = request.data.get("full_name", "")
-        user.avatar = request.data.get("avatar", "")
+        if avatar_file:
+            user.avatar = avatar_file
         user.field_of_work = request.data.get("field_of_work", "")
         user.country = request.data.get("country", "")
         user.set_password(password)
