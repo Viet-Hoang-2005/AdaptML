@@ -106,6 +106,8 @@ export default function SignUpPage() {
           <div className="flex flex-col gap-4">
             <Input
               id="input-signup-email"
+              name="email"
+              autoComplete="email"
               label="Email"
               type="email"
               placeholder="abcxyz@gmail.com"

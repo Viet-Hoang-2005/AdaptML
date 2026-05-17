@@ -145,7 +145,13 @@ export default function CompleteProfilePage() {
             Registering as <span className="font-semibold text-gray-700">{email}</span>
           </p>
 
-          <div className="flex flex-col gap-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSubmit();
+            }}
+            className="flex flex-col gap-4"
+          >
             <button
               type="button"
               onClick={openAvatarModal}
@@ -176,6 +182,8 @@ export default function CompleteProfilePage() {
 
             <Input
               id="input-fullname"
+              name="full_name"
+              autoComplete="name"
               label="Full Name"
               placeholder="Nguyen Van A"
               icon={<User className="w-4 h-4 text-gray-400" />}
@@ -185,6 +193,8 @@ export default function CompleteProfilePage() {
             />
             <Input
               id="input-field"
+              name="field_of_work"
+              autoComplete="organization-title"
               label="Field of Work"
               placeholder="e.g. Machine Learning, Data Science"
               icon={<Briefcase className="w-4 h-4 text-gray-400" />}
@@ -195,6 +205,8 @@ export default function CompleteProfilePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <InputPassword
                 id="input-new-password"
+                name="new-password"
+                autoComplete="new-password"
                 label="Password"
                 placeholder="At least 8 characters"
                 value={values.password}
@@ -203,26 +215,27 @@ export default function CompleteProfilePage() {
               />
               <InputPassword
                 id="input-confirm-password"
+                name="confirm-password"
+                autoComplete="new-password"
                 label="Confirm"
                 placeholder="Re-enter your password"
                 value={values.confirmPassword}
                 error={errors.confirmPassword}
                 onChange={(e) => updateField('confirmPassword', e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
               />
             </div>
 
             <Button
               id="btn-create-account"
+              type="submit"
               variant="primary"
               fullWidth
               loading={loading}
-              onClick={onSubmit}
               className="mt-6"
             >
               Create account
             </Button>
-          </div>
+          </form>
         </div>
       </div>
 

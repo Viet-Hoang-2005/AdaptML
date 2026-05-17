@@ -1,5 +1,5 @@
 import { useGoogleLogin } from '@react-oauth/google';
-import { Astroid } from 'lucide-react';
+import { Astroid, Mail, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Cover } from '../../components/layout/Cover';
 import { Button } from '../../components/ui/Button';
@@ -44,7 +44,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen bg-white">
       <Cover />
-      
+
       <div className="w-full lg:w-1/3 flex flex-col justify-center px-8 sm:px-12 lg:px-10 xl:px-14">
         <div className="max-w-sm w-full mx-auto">
           <div className="rounded-2xl flex items-center justify-center mx-auto mb-2">
@@ -81,45 +81,56 @@ export default function LoginPage() {
             <Divider label="or sign in with email" />
           </div>
 
-          <div className="flex flex-col gap-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              login(values);
+            }}
+            className="flex flex-col gap-4"
+          >
             <Input
               id="input-email"
+              name="email"
+              autoComplete="email"
               label="Email"
               type="email"
               placeholder="abcxyz@gmail.com"
+              icon={<Mail className="w-4 h-4" />}
               value={values.email}
               onChange={(e) => updateField('email', e.target.value)}
             />
-            <div>
-              <InputPassword
-                id="input-password"
-                label="Password"
-                placeholder="********"
-                value={values.password}
-                onChange={(e) => updateField('password', e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && login(values)}
-              />
-              <div className="flex justify-end mt-2">
-                <Link
-                  to="/forgot-password"
-                  className="text-xs text-black hover:opacity-60 underline font-semibold"
-                >
-                  Forgot password?
-                </Link>
-              </div>
+
+            <InputPassword
+              id="input-password"
+              name="password"
+              autoComplete="current-password"
+              label="Password"
+              placeholder="********"
+              icon={<LockKeyhole className="w-4 h-4" />}
+              value={values.password}
+              onChange={(e) => updateField('password', e.target.value)}
+            />
+
+            <div className="flex justify-end mt-2">
+              <Link
+                to="/forgot-password"
+                className="text-xs text-black hover:opacity-60 underline font-semibold"
+              >
+                Forgot password?
+              </Link>
             </div>
 
             <Button
               id="btn-login"
+              type="submit"
               variant="primary"
               fullWidth
               loading={loading}
-              onClick={() => login(values)}
               className="mt-2"
             >
               Sign in
             </Button>
-          </div>
+          </form>
 
           <p className="text-center text-sm text-gray-500 mt-8">
             Don't have an account?{' '}

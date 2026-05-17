@@ -61,6 +61,8 @@ export default function ForgotPasswordPage() {
           <div className="flex flex-col gap-4">
             <Input
               id="input-forgot-email"
+              name="email"
+              autoComplete="email"
               label="Email"
               type="email"
               placeholder="abcxyz@gmail.com"

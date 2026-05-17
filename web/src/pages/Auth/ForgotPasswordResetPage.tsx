@@ -75,6 +75,8 @@ export default function ForgotPasswordResetPage() {
           <div className="flex flex-col gap-4">
             <InputPassword
               id="input-reset-password"
+              name="new-password"
+              autoComplete="new-password"
               label="New Password"
               placeholder="At least 8 characters"
               value={values.password}
@@ -83,6 +85,8 @@ export default function ForgotPasswordResetPage() {
             />
             <InputPassword
               id="input-confirm-reset-password"
+              name="confirm-password"
+              autoComplete="new-password"
               label="Confirm Password"
               placeholder="Re-enter your password"
               value={values.confirmPassword}
