@@ -78,9 +78,9 @@ export function AvatarModal({
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-500">
                 <ImageUp className="h-6 w-6" />
               </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Upload an avatar</p>
-                <p className="mt-1 text-sm text-gray-500">Choose a new image or select a previous avatar below.</p>
+              <div className="space-y-1 pb-1">
+                <p className="text-lg font-semibold text-gray-900">Set your avatar</p>
+                <p className="text-sm text-gray-500">Choose a new image or select a previous avatar below.</p>
               </div>
               <Button type="button" icon={<ImageUp className="h-4 w-4" />} onClick={onChange}>
                 Upload image

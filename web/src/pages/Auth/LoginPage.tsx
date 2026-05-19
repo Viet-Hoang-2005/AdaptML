@@ -1,16 +1,17 @@
 import { useGoogleLogin } from '@react-oauth/google';
-import { Astroid, Mail, LockKeyhole } from 'lucide-react';
+import { Mail, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Cover } from '../../components/layout/Cover';
+import { Background } from '../../components/layout/Background';
 import { Button } from '../../components/ui/Button';
 import { Divider } from '../../components/ui/Divider';
 import { Input, InputPassword } from '../../components/ui/Input';
 import { useAuth } from '../../hooks/useAuth';
-import GitHubIcon from '../../assets/icons/GitHub.png';
-import GoogleIcon from '../../assets/icons/Google.png';
 import { startGitHubOAuth } from '../../lib/oauth';
 import { toast } from '../../lib/toast';
 import { useForm } from '../../hooks/useForm';
+import GitHubIcon from '../../assets/icons/GitHub.png';
+import GoogleIcon from '../../assets/icons/Google.png';
+import MLdriftLogo from '../../assets/icons/MLdrift.png';
 
 export default function LoginPage() {
   const { login, loginWithGoogle, loading } = useAuth();
@@ -42,13 +43,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-white">
-      <Cover />
-
-      <div className="w-full lg:w-1/3 flex flex-col justify-center px-8 sm:px-12 lg:px-10 xl:px-14">
-        <div className="max-w-sm w-full mx-auto">
+    <div className="relative flex min-h-screen items-center justify-center bg-slate-50 overflow-hidden">
+      <Background />
+      
+      <div className="relative w-full max-w-md mx-4 sm:mx-0 z-10">
+        <div className="bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl rounded-3xl p-8 sm:p-10">
           <div className="rounded-2xl flex items-center justify-center mx-auto mb-2">
-            <Astroid className="w-8 h-8 text-black" />
+            <img src={MLdriftLogo} alt="MLdrift" className="w-8 h-8" />
           </div>
 
           <h2 className="text-center text-2xl font-bold text-gray-800 mb-1">Welcome back</h2>
@@ -94,7 +95,7 @@ export default function LoginPage() {
               autoComplete="email"
               label="Email"
               type="email"
-              placeholder="abcxyz@gmail.com"
+              placeholder="example@gmail.com"
               icon={<Mail className="w-4 h-4" />}
               value={values.email}
               onChange={(e) => updateField('email', e.target.value)}
@@ -111,7 +112,7 @@ export default function LoginPage() {
               onChange={(e) => updateField('password', e.target.value)}
             />
 
-            <div className="flex justify-end mt-2">
+            <div className="flex justify-end">
               <Link
                 to="/forgot-password"
                 className="text-xs text-black hover:opacity-60 underline font-semibold"
@@ -126,7 +127,7 @@ export default function LoginPage() {
               variant="primary"
               fullWidth
               loading={loading}
-              className="mt-2"
+              className="mt-2 "
             >
               Sign in
             </Button>

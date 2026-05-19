@@ -2,17 +2,17 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { Mail, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Cover } from '../../components/layout/Cover';
+import { Background } from '../../components/layout/Background';
 import { Button } from '../../components/ui/Button';
 import { Divider } from '../../components/ui/Divider';
 import { Input } from '../../components/ui/Input';
 import { useAuth } from '../../hooks/useAuth';
-import GitHubIcon from '../../assets/icons/GitHub.png';
-import GoogleIcon from '../../assets/icons/Google.png';
 import { requestOTP } from '../../lib/api';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { startGitHubOAuth } from '../../lib/oauth';
 import { toast } from '../../lib/toast';
+import GitHubIcon from '../../assets/icons/GitHub.png';
+import GoogleIcon from '../../assets/icons/Google.png';
 
 export default function SignUpPage() {
   const navigate = useNavigate();
@@ -64,11 +64,11 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-white">
-      <Cover />
+    <div className="relative flex min-h-screen items-center justify-center bg-slate-50 overflow-hidden">
+      <Background />
 
-      <div className="w-full lg:w-1/3 flex flex-col justify-center px-8 sm:px-12 lg:px-10 xl:px-14">
-        <div className="max-w-sm w-full mx-auto">
+      <div className="relative w-full max-w-md mx-4 sm:mx-0 z-10">
+        <div className="bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl rounded-3xl p-8 sm:p-10">
           <div className="mb-2 rounded-2xl flex items-center justify-center mx-auto">
             <UserPlus className="w-8 h-8 text-black" />
           </div>
@@ -110,7 +110,7 @@ export default function SignUpPage() {
               autoComplete="email"
               label="Email"
               type="email"
-              placeholder="abcxyz@gmail.com"
+              placeholder="example@gmail.com"
               icon={<Mail className="w-4 h-4" />}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -123,7 +123,7 @@ export default function SignUpPage() {
               fullWidth
               loading={loading}
               onClick={handleRequestOTP}
-              className="mt-2"
+              className="mt-4"
             >
               Sign up
             </Button>
