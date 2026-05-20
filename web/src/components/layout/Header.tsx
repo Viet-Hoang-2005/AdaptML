@@ -77,7 +77,8 @@ export default function Header() {
           type="button"
           onClick={() => navigate('/dashboard/home/model-api')}
           className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-500 hover:border-gray-300 hover:text-black"
-          aria-label="Add model"
+          aria-label="New model"
+          title="New model"
         >
           <Plus className="h-5 w-5" />
         </button>
@@ -97,6 +98,7 @@ export default function Header() {
           onClick={() => navigate('/dashboard/notifications')}
           className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-500 hover:border-gray-300 hover:text-black"
           aria-label="Notifications"
+          title="Notifications"
         >
           <Bell className="h-5 w-5" />
         </button>

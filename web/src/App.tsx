@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from './components/ui/Toast';
+import AuthLayout from './pages/Auth/AuthLayout';
 import LoginPage from './pages/Auth/LoginPage';
 import SignUpPage from './pages/Auth/SignUpPage';
 import OTPPage from './pages/Auth/OTPPage';
@@ -22,14 +23,16 @@ function App() {
       <ToastContainer />
       <Routes>
         {/* Auth Routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignUpPage />} />
-        <Route path="/signup/verify-otp" element={<OTPPage />} />
-        <Route path="/signup/complete-profile" element={<CompleteProfilePage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/forgot-password/verify-otp" element={<ForgotPasswordOTPPage />} />
-        <Route path="/forgot-password/reset" element={<ForgotPasswordResetPage />} />
-        <Route path="/oauth/github/callback" element={<GitHubCallbackPage />} />
+        <Route element={<AuthLayout />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+          <Route path="/signup/verify-otp" element={<OTPPage />} />
+          <Route path="/signup/complete-profile" element={<CompleteProfilePage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/forgot-password/verify-otp" element={<ForgotPasswordOTPPage />} />
+          <Route path="/forgot-password/reset" element={<ForgotPasswordResetPage />} />
+          <Route path="/oauth/github/callback" element={<GitHubCallbackPage />} />
+        </Route>
 
         {/* Dashboard */}
         <Route

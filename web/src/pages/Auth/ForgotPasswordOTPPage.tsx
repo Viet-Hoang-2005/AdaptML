@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail } from 'lucide-react';
-import { Background } from '../../components/layout/Background';
+import { AuthCard } from '../../components/ui/AuthCard';
 import { Button } from '../../components/ui/Button';
 import { OTPInput } from '../../components/ui/OTPInput';
 import { useCountdown } from '../../hooks/useCountdown';
@@ -63,63 +63,57 @@ export default function ForgotPasswordOTPPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-slate-50 overflow-hidden">
-      <Background />
-      
-      <div className="relative w-full max-w-md mx-4 sm:mx-0 z-10">
-        <div className="bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl rounded-3xl p-8 sm:p-10">
-          <div className="max-w-sm w-full mx-auto text-center">
-            <Link
-              to="/forgot-password"
-              className="flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-8
-                        font-medium transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="leading-none">Back</span>
-            </Link>
+    <AuthCard>
+      <div className="max-w-sm w-full mx-auto text-center">
+        <Link
+          to="/forgot-password"
+          className="flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-8
+                    font-medium transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="leading-none">Back</span>
+        </Link>
 
-            <div className="mx-auto mb-4 rounded-2xl flex items-center justify-center">
-              <Mail className="w-8 h-8 text-black" />
-            </div>
-
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Verify your email</h2>
-            <p className="text-gray-500 text-sm mb-8">
-              We've sent a 6-digit code to{' '}
-              <span className="font-semibold text-gray-700">{email}</span>
-            </p>
-
-            <div className="mb-6">
-              <OTPInput onComplete={handleOTPComplete} disabled={loading} />
-            </div>
-
-            <Button
-              id="btn-verify-reset-otp"
-              variant="primary"
-              fullWidth
-              loading={loading}
-              onClick={() => handleVerify()}
-            >
-              Verify
-            </Button>
-
-            <p className="text-sm text-gray-500 mt-6">
-              Didn't receive the code?{' '}
-              {isRunning ? (
-                <span className="text-gray-400 font-semibold">
-                  Resend in <span className="text-black">{seconds}s</span>
-                </span>
-              ) : (
-                <button
-                  onClick={handleResend}
-                  className="text-black hover:opacity-60 font-semibold cursor-pointer"
-                >
-                  Resend code
-                </button>
-              )}
-            </p>
-          </div>
+        <div className="mx-auto mb-4 rounded-2xl flex items-center justify-center">
+          <Mail className="w-8 h-8 text-black" />
         </div>
+
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Verify your email</h2>
+        <p className="text-gray-500 text-sm mb-8">
+          We've sent a 6-digit code to{' '}
+          <span className="font-semibold text-gray-700">{email}</span>
+        </p>
+
+        <div className="mb-6">
+          <OTPInput onComplete={handleOTPComplete} disabled={loading} />
+        </div>
+
+        <Button
+          id="btn-verify-reset-otp"
+          variant="primary"
+          fullWidth
+          loading={loading}
+          onClick={() => handleVerify()}
+        >
+          Verify
+        </Button>
+
+        <p className="text-sm text-gray-500 mt-6">
+          Didn't receive the code?{' '}
+          {isRunning ? (
+            <span className="text-gray-400 font-semibold">
+              Resend in <span className="text-black">{seconds}s</span>
+            </span>
+          ) : (
+            <button
+              onClick={handleResend}
+              className="text-black hover:opacity-60 font-semibold cursor-pointer"
+            >
+              Resend code
+            </button>
+          )}
+        </p>
       </div>
-    </div>
+    </AuthCard>
   );
 }

@@ -41,7 +41,7 @@ export default function GitHubCallbackPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-700">
-      <LoaderCircle className="w-8 h-8 animate-spin text-blue-600 mb-4" />
+      <LoaderCircle className="w-8 h-8 animate-spin text-black mb-4" />
       <p className="text-sm font-medium">Completing GitHub sign in...</p>
     </div>
   );

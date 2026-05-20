@@ -16,13 +16,13 @@ export default function SettingsLayout() {
           </p>
         </div>
 
-        <div className="inline-flex rounded-xl border border-gray-300 bg-white p-1.5 gap-1">
+        <div className="inline-flex overflow-hidden rounded-xl border border-gray-300 bg-white gap-1">
           {settingsTabs.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}
               className={({ isActive }) =>
-                `rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                `px-3 py-2 text-sm font-semibold transition-colors ${
                   isActive
                     ? 'bg-black text-white'
                     : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'

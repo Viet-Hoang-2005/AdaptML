@@ -1,98 +1,71 @@
-import { useMemo } from "react";
-import Particles, { ParticlesProvider } from "@tsparticles/react";
-import { type Container, type Engine, type ISourceOptions } from "@tsparticles/engine";
-import { loadSlim } from "@tsparticles/slim";
+import { useMemo, type CSSProperties } from 'react';
 
-const particlesInit = async (engine: Engine): Promise<void> => {
-  // loadSlim cung cấp các tính năng cơ bản như hình dạng (shape), di chuyển (move), liên kết (links), v.v.
-  // giúp tối ưu hóa dung lượng bundle thay vì tải toàn bộ thư viện.
-  await loadSlim(engine);
+const colors = ['#f9a0cf', '#ffb46a', '#a58ef9', '#ffe180', '#85b4d8', '#7dd3fc'];
+
+type ParticleStyle = CSSProperties & {
+  '--dx': string;
+  '--dy': string;
+  '--scale': number;
+};
+
+const createParticleStyle = (index: number): ParticleStyle => {
+  const left = (index * 37) % 100;
+  const top = (index * 53) % 100;
+  const size = 10 + ((index * 11) % 24);
+  const dx = -70 + ((index * 29) % 140);
+  const dy = -55 + ((index * 41) % 110);
+  const duration = 5 + ((index * 7) % 8);
+  const delay = -((index * 3) % duration);
+
+  return {
+    left: `${left}%`,
+    top: `${top}%`,
+    width: `${size}px`,
+    height: `${size}px`,
+    backgroundColor: colors[index % colors.length],
+    opacity: 0.26 + ((index * 13) % 30) / 100,
+    animationDuration: `${duration}s`,
+    animationDelay: `${delay}s`,
+    '--dx': `${dx}px`,
+    '--dy': `${dy}px`,
+    '--scale': 0.75 + ((index * 5) % 45) / 100,
+  };
 };
 
 export const Background = () => {
-  const particlesLoaded = async (container?: Container): Promise<void> => {
-    console.log("Particles container loaded", container);
-  };
-
-  const options: ISourceOptions = useMemo(
-    () => ({
-      background: {
-        color: {
-          value: "transparent", // Nền trong suốt để hiển thị màu nền của ứng dụng
-        },
-      },
-      fpsLimit: 60,
-      interactivity: {
-        events: {
-          onHover: {
-            enable: true,
-            mode: "grab", // Khi di chuột vào, các đường kẻ sẽ bám lấy chuột
-          },
-        },
-        modes: {
-          push: {
-            quantity: 3,
-          },
-          grab: {
-            distance: 140,
-            links: {
-              opacity: 0.5,
-            },
-          },
-        },
-      },
-      particles: {
-        color: {
-          value: "#334155", // Màu Slate-700 (Xám đậm)
-        },
-        links: {
-          color: "#475569", // Màu Slate-600
-          distance: 150,
-          enable: true,
-          opacity: 0.3,
-          width: 1,
-        },
-        move: {
-          direction: "none",
-          enable: true,
-          outModes: {
-            default: "bounce", // Hạt sẽ nảy lại khi chạm viền màn hình
-          },
-          random: true,
-          speed: 1.2,
-          straight: false,
-        },
-        number: {
-          density: {
-            enable: true,
-            width: 800,
-            height: 800
-          },
-          value: 80, // Số lượng hạt vừa phải để giống chòm sao
-        },
-        opacity: {
-          value: { min: 0.3, max: 0.7 },
-        },
-        shape: {
-          type: "circle",
-        },
-        size: {
-          value: { min: 1, max: 3 },
-        },
-      },
-      detectRetina: true,
-    }),
-    []
+  const particles = useMemo(
+    () => Array.from({ length: 70 }, (_, index) => createParticleStyle(index)),
+    [],
   );
 
   return (
-    <ParticlesProvider init={particlesInit}>
-      <Particles
-        id="tsparticles-background"
-        particlesLoaded={particlesLoaded}
-        options={options}
-        className="absolute inset-0 z-0 w-full h-full"
-      />
-    </ParticlesProvider>
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+      <style>
+        {`
+          @keyframes mldrift-particle-float {
+            0% {
+              transform: translate3d(0, 0, 0) scale(1);
+            }
+            100% {
+              transform: translate3d(var(--dx), var(--dy), 0) scale(var(--scale));
+            }
+          }
+        `}
+      </style>
+
+      {particles.map((style, index) => (
+        <span
+          key={index}
+          className="absolute rounded-full mix-blend-multiply shadow-sm"
+          style={{
+            ...style,
+            animationName: 'mldrift-particle-float',
+            animationTimingFunction: 'ease-in-out',
+            animationIterationCount: 'infinite',
+            animationDirection: 'alternate',
+          }}
+        />
+      ))}
+    </div>
   );
 };

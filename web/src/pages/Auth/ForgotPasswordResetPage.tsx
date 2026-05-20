@@ -1,6 +1,6 @@
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, LockKeyhole } from 'lucide-react';
-import { Background } from '../../components/layout/Background';
+import { AuthCard } from '../../components/ui/AuthCard';
 import { Button } from '../../components/ui/Button';
 import { InputPassword } from '../../components/ui/Input';
 import { useForm } from '../../hooks/useForm';
@@ -48,67 +48,61 @@ export default function ForgotPasswordResetPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-slate-50 overflow-hidden">
-      <Background />
-      
-      <div className="relative w-full max-w-md mx-4 sm:mx-0 z-10">
-        <div className="bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl rounded-3xl p-8 sm:p-10">
-          <div className="max-w-sm w-full mx-auto">
-            <Link
-              to="/forgot-password"
-              className="flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-8
-                        font-medium transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="leading-none">Start over</span>
-            </Link>
+    <AuthCard>
+      <div className="max-w-sm w-full mx-auto">
+        <Link
+          to="/forgot-password"
+          className="flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-8
+                    font-medium transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="leading-none">Start over</span>
+        </Link>
 
-            <div className="mb-4 rounded-2xl flex items-center justify-center mx-auto">
-              <LockKeyhole className="w-8 h-8 text-black" />
-            </div>
+        <div className="mb-4 rounded-2xl flex items-center justify-center mx-auto">
+          <LockKeyhole className="w-8 h-8 text-black" />
+        </div>
 
-            <h2 className="text-2xl text-center font-bold text-gray-800 mb-2">Create a new password</h2>
-            <p className="text-center text-gray-500 text-sm mb-8">
-              Choose a strong password for{' '}
-              <span className="font-semibold text-gray-700">{email}</span>.
-            </p>
+        <h2 className="text-2xl text-center font-bold text-gray-800 mb-2">Create a new password</h2>
+        <p className="text-center text-gray-500 text-sm mb-8">
+          Choose a strong password for{' '}
+          <span className="font-semibold text-gray-700">{email}</span>.
+        </p>
 
-            <div className="flex flex-col gap-4">
-              <InputPassword
-                id="input-reset-password"
-                name="new-password"
-                autoComplete="new-password"
-                label="New Password"
-                placeholder="At least 8 characters"
-                value={values.password}
-                error={errors.password}
-                onChange={(event) => updateField('password', event.target.value)}
-              />
-              <InputPassword
-                id="input-confirm-reset-password"
-                name="confirm-password"
-                autoComplete="new-password"
-                label="Confirm Password"
-                placeholder="Re-enter password"
-                value={values.confirmPassword}
-                error={errors.confirmPassword}
-                onChange={(event) => updateField('confirmPassword', event.target.value)}
-                onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
-              />
-              <Button
-                id="btn-reset-password"
-                variant="primary"
-                fullWidth
-                loading={loading}
-                onClick={onSubmit}
-                className="mt-4"
-              >
-                Reset password
-              </Button>
-            </div>
-          </div>
+        <div className="flex flex-col gap-4">
+          <InputPassword
+            id="input-reset-password"
+            name="new-password"
+            autoComplete="new-password"
+            label="New Password"
+            placeholder="At least 8 characters"
+            value={values.password}
+            error={errors.password}
+            onChange={(event) => updateField('password', event.target.value)}
+          />
+          <InputPassword
+            id="input-confirm-reset-password"
+            name="confirm-password"
+            autoComplete="new-password"
+            label="Confirm Password"
+            placeholder="Re-enter password"
+            value={values.confirmPassword}
+            error={errors.confirmPassword}
+            onChange={(event) => updateField('confirmPassword', event.target.value)}
+            onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
+          />
+          <Button
+            id="btn-reset-password"
+            variant="primary"
+            fullWidth
+            loading={loading}
+            onClick={onSubmit}
+            className="mt-4"
+          >
+            Reset password
+          </Button>
         </div>
       </div>
-    </div>
+    </AuthCard>
   );
 }

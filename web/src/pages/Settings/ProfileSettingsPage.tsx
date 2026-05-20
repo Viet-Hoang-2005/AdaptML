@@ -152,6 +152,7 @@ export default function ProfileSettingsPage() {
             disabled={loading || avatarSaving}
             className="group relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-xl font-bold text-white outline-none ring-offset-2 transition focus:ring-2 focus:ring-black disabled:cursor-not-allowed disabled:opacity-70"
             aria-label="Update avatar"
+            title="Update avatar"
           >
             {avatarPreview ? <img src={avatarPreview} alt="" className="h-full w-full object-cover" /> : initials}
             <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">

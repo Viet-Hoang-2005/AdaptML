@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, ArrowLeft } from 'lucide-react';
-import { Background } from '../../components/layout/Background';
+import { AuthCard } from '../../components/ui/AuthCard';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';
@@ -33,59 +33,53 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-slate-50 overflow-hidden">
-      <Background />
-      
-      <div className="relative w-full max-w-md mx-4 sm:mx-0 z-10">
-        <div className="bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl rounded-3xl p-8 sm:p-10">
-          <div className="max-w-sm w-full mx-auto">
-            {/* Back to Login */}
-            <Link
-              to="/login"
-              className="flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-8
-                        font-medium transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="leading-none">Back to sign in</span>
-            </Link>
+    <AuthCard>
+      <div className="max-w-sm w-full mx-auto">
+        {/* Back to Login */}
+        <Link
+          to="/login"
+          className="flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-8
+                    font-medium transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="leading-none">Back to sign in</span>
+        </Link>
 
-            {/* Icon */}
-            <div className="mb-4 rounded-2xl flex items-center justify-center mx-auto">
-              <Mail className="w-8 h-8 text-black" />
-            </div>
+        {/* Icon */}
+        <div className="mb-4 rounded-2xl flex items-center justify-center mx-auto">
+          <Mail className="w-8 h-8 text-black" />
+        </div>
 
-            <h2 className="text-2xl text-center font-bold text-gray-800 mb-2">Reset your password</h2>
-            <p className="text-center text-gray-500 text-sm mb-6">
-              Enter your email and we'll send you a verification code to reset your password.
-            </p>
+        <h2 className="text-2xl text-center font-bold text-gray-800 mb-2">Reset your password</h2>
+        <p className="text-center text-gray-500 text-sm mb-6">
+          Enter your email and we'll send you a verification code to reset your password.
+        </p>
 
-            <div className="flex flex-col gap-4">
-              <Input
-                id="input-forgot-email"
-                name="email"
-                autoComplete="email"
-                label="Email"
-                type="email"
-                placeholder="example@gmail.com"
-                icon={<Mail className="w-4 h-4 text-gray-400" />}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendOTP()}
-              />
-              <Button
-                id="btn-send-otp"
-                variant="primary"
-                fullWidth
-                loading={loading}
-                onClick={handleSendOTP}
-                className="mt-4"
-              >
-                Send OTP
-              </Button>
-            </div>
-          </div>
+        <div className="flex flex-col gap-4">
+          <Input
+            id="input-forgot-email"
+            name="email"
+            autoComplete="email"
+            label="Email"
+            type="email"
+            placeholder="example@gmail.com"
+            icon={<Mail className="w-4 h-4 text-gray-400" />}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendOTP()}
+          />
+          <Button
+            id="btn-send-otp"
+            variant="primary"
+            fullWidth
+            loading={loading}
+            onClick={handleSendOTP}
+            className="mt-4"
+          >
+            Send OTP
+          </Button>
         </div>
       </div>
-  </div>
+    </AuthCard>
   );
 }
