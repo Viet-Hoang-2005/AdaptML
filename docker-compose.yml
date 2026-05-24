@@ -87,6 +87,7 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       REDPANDA_BROKERS: redpanda:9092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-ai_paas_production_logs}
       JWKS_URL: http://control_plane:8000/api/auth/.well-known/jwks.json
       EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
       GITHUB_REPO: ${GITHUB_REPO}
@@ -120,11 +121,25 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       DRIFT_THRESHOLD: ${DRIFT_THRESHOLD:-0.5}
-      GITHUB_REPO: ${GITHUB_REPO}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      MIN_SAMPLES: ${MIN_SAMPLES:-100}
+      MAX_SAMPLES: ${MAX_SAMPLES:-100000}
+      TENANT_ID: ${TENANT_ID:-T-LOCALDEV}
+      MODEL_ID: ${MODEL_ID:-demo-model}
+      MODEL_URI: ${MODEL_URI:-models:/demo-model/Production}
+      REFERENCE_DATA_S3_URI: ${REFERENCE_DATA_S3_URI:-s3://mlops-paas-artifacts/reference-data/demo-model/reference.csv}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://control_plane:8000/api/v1/internal/drift-webhook}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-super-secret-key}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-mlops-paas-artifacts}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
+      DRIFT_REPORTS_S3_PREFIX: ${DRIFT_REPORTS_S3_PREFIX:-drift-reports}
     depends_on:
       postgres:
         condition: service_healthy
+      mlflow:
+        condition: service_started
     networks:
       - mlops_nids_network
 
@@ -168,6 +183,7 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       REDPANDA_BROKERS: redpanda:9092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-ai_paas_production_logs}
       EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
       GITHUB_REPO: ${GITHUB_REPO}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
