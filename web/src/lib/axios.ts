@@ -6,6 +6,7 @@ type RetryableRequestConfig = InternalAxiosRequestConfig & {
 
 type TokenRefreshResponse = {
   access: string;
+  refresh?: string;
 };
 
 const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/auth';
@@ -29,7 +30,7 @@ const clearAuthAndRedirect = () => {
   }
 };
 
-const refreshAccessToken = () => {
+export const refreshAccessToken = () => {
   const refreshToken = localStorage.getItem('refresh_token');
 
   if (!refreshToken) {
@@ -49,6 +50,9 @@ const refreshAccessToken = () => {
       )
       .then((response) => {
         localStorage.setItem('access_token', response.data.access);
+        if (response.data.refresh) {
+          localStorage.setItem('refresh_token', response.data.refresh);
+        }
         return response.data.access;
       })
       .finally(() => {

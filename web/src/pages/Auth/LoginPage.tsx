@@ -102,7 +102,7 @@ export default function LoginPage() {
           name="password"
           autoComplete="current-password"
           label="Password"
-          placeholder="********"
+          placeholder="••••••••"
           icon={<LockKeyhole className="w-4 h-4" />}
           value={values.password}
           onChange={(e) => updateField('password', e.target.value)}

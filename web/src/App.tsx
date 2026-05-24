@@ -9,7 +9,7 @@ import ForgotPasswordPage from './pages/Auth/ForgotPasswordPage';
 import ForgotPasswordOTPPage from './pages/Auth/ForgotPasswordOTPPage';
 import ForgotPasswordResetPage from './pages/Auth/ForgotPasswordResetPage';
 import GitHubCallbackPage from './pages/Auth/GitHubCallbackPage';
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { ProtectedRoute } from './pages/Dashboard/ProtectedRoute';
 import DashboardLayout from './pages/Dashboard/DashboardLayout';
 import HomeLayout from './pages/Home/HomeLayout';
 import DeveloperSettingsPage from './pages/Settings/DeveloperSettingsPage';
@@ -33,6 +33,8 @@ function App() {
           <Route path="/forgot-password/reset" element={<ForgotPasswordResetPage />} />
           <Route path="/oauth/github/callback" element={<GitHubCallbackPage />} />
         </Route>
+
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
         {/* Dashboard */}
         <Route

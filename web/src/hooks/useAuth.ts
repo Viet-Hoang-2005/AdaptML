@@ -17,7 +17,7 @@ const saveTokens = (access: string, refresh: string, tenantId?: string) => {
   }
 };
 
-const clearTokens = () => {
+export const clearAuthTokens = () => {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
   localStorage.removeItem('tenant_id');
@@ -98,7 +98,7 @@ export function useAuth() {
   );
 
   const logout = useCallback(() => {
-    clearTokens();
+    clearAuthTokens();
     toast.success('Logged out successfully.');
     navigate('/login');
   }, [navigate]);
