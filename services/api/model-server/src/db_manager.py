@@ -95,7 +95,7 @@ def get_production_data_count() -> int:
 
     try:
         with engine.connect() as conn:
-            result = conn.execute(text("SELECT COUNT(*) FROM nids_production_data"))
+            result = conn.execute(text("SELECT COUNT(*) FROM paas_production_logs"))
             return result.scalar()
     except Exception as e:
         print(f"Error counting records: {e}")
@@ -117,6 +117,6 @@ if __name__ == "__main__":
         if 'created_at' not in sample_df.columns:
             sample_df['created_at'] = datetime.utcnow()
 
-        save_dataframe_to_db(sample_df, "nids_production_data")
+        save_dataframe_to_db(sample_df, "paas_production_logs")
     else:
         print(f"Test CSV not found at: {CSV_PATH}")

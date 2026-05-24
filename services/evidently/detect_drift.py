@@ -8,244 +8,393 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-
+import boto3
+from urllib.parse import urlparse
+from datetime import datetime, timezone
 from evidently.report import Report
 from evidently.metric_preset import DataDriftPreset
+from evidently.pipeline.column_mapping import ColumnMapping
+
+try:
+    import mlflow
+except ImportError:
+    mlflow = None
 
 # 1. NẠP CẤU HÌNH TỪ BIẾN MÔI TRƯỜNG
-# Khi chạy local, đọc từ file .env ở thư mục gốc project.
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(dotenv_path=os.path.join(ROOT_DIR, ".env"))
 
-# Khi chạy trong K8s CronJob, các biến này được inject từ manifest YAML.
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "mlops_nids_db")
-DB_HOST_RO = os.getenv("DB_HOST_RO", "localhost") # Chỉ thực hiện thao tác đọc (SELECT) để phân tích Drift
+DB_HOST_RO = os.getenv("DB_HOST_RO", "localhost")
 
-GITHUB_REPO = os.getenv("GITHUB_REPO", "Viet-Hoang-2005/MLOps-nids-system")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+# PAAS MULTI-TENANT CONFIG
+TENANT_ID = os.getenv("TENANT_ID")
+MODEL_ID = os.getenv("MODEL_ID")
+REFERENCE_DATA_S3_URI = os.getenv("REFERENCE_DATA_S3_URI")
+MODEL_URI = os.getenv("MODEL_URI", f"models:/{MODEL_ID}/Production")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/drift-webhook")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "super-secret-key")
+AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "mlops-paas-artifacts")
+AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")
+REPORTS_S3_PREFIX = os.getenv("DRIFT_REPORTS_S3_PREFIX", "drift-reports")
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 
-# Ngưỡng Drift và số lượng mẫu tối đa để phân tích
 DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD", "0.6"))
-MAX_SAMPLES = 100_000
+MAX_SAMPLES = int(os.getenv("MAX_SAMPLES", "100000"))
+MIN_SAMPLES = int(os.getenv("MIN_SAMPLES", "100"))
 
-# 2. KẾT NỐI TỚI POSTGRESQL VÀ TẢI DỮ LIỆU
-def load_data_from_db(engine):
-    print("[1/4] Loading data from PostgreSQL...")
+if MLFLOW_TRACKING_URI and mlflow:
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
+if not 0 <= DRIFT_THRESHOLD <= 1:
+    print("CRITICAL ERROR: DRIFT_THRESHOLD must be between 0 and 1.")
+    sys.exit(1)
+
+if not TENANT_ID or not MODEL_ID:
+    print("CRITICAL ERROR: TENANT_ID and MODEL_ID must be set!")
+    sys.exit(1)
+
+# 2. TẢI DỮ LIỆU
+def load_reference_data():
+    print(f"[1/4] Loading reference data from {REFERENCE_DATA_S3_URI}...")
+    if not REFERENCE_DATA_S3_URI:
+        raise ValueError("REFERENCE_DATA_S3_URI is not provided")
+    
+    if not REFERENCE_DATA_S3_URI.startswith("s3://"):
+        raise ValueError("REFERENCE_DATA_S3_URI must be a valid S3 URI starting with s3://")
+
+    # Phân tích S3 URI
+    parsed_uri = urlparse(REFERENCE_DATA_S3_URI)
+    bucket_name = parsed_uri.netloc
+    object_key = parsed_uri.path.lstrip('/')
+    
+    # Xác định đường dẫn file tạm trên môi trường cục bộ
+    reference_path = parsed_uri.path.lower()
+    local_filename = f"/tmp/ref_data_{MODEL_ID}.csv"
+    if reference_path.endswith('.parquet'):
+        local_filename = f"/tmp/ref_data_{MODEL_ID}.parquet"
+    
+    # Dùng boto3 tải file từ S3 (Tự động nhận diện IAM Role trên EC2)
+    s3_client = boto3.client('s3')
+    try:
+        print(f"Downloading s3://{bucket_name}/{object_key} to {local_filename} using boto3 via IAM Role...")
+        s3_client.download_file(bucket_name, object_key, local_filename)
+    except Exception as e:
+        raise Exception(f"Failed to download reference data from S3: {e}")
+    
+    # Đọc file bằng pandas
+    if local_filename.endswith('.csv'):
+        df = pd.read_csv(local_filename)
+    elif local_filename.endswith('.parquet'):
+        df = pd.read_parquet(local_filename)
+    else:
+        # Giả định mặc định là CSV
+        df = pd.read_csv(local_filename)
+        
+    print(f"Reference: {len(df)} rows loaded.")
+    return df
+
+def load_production_data_from_db(engine):
+    print(f"[2/4] Loading production data from PostgreSQL for Tenant {TENANT_ID}, Model {MODEL_ID}...")
+    time_filter = """
+        tenant_id = :tenant_id AND model_id = :model_id
+        AND "timestamp"::timestamptz >= NOW() - INTERVAL '24 hours'
+    """
     with engine.connect() as conn:
-        # Tải toàn bộ dữ liệu tham chiếu (Reference Data)
-        reference_df = pd.read_sql(text("SELECT * FROM nids_reference_data"), conn)
-        print(f"Reference: {len(reference_df)} rows")
-
         # Tải dữ liệu thực tế (Production Data) trong 24h gần nhất
-        count_query = text("""
-            SELECT COUNT(*) FROM nids_production_data
-            WHERE created_at >= NOW() - INTERVAL '24 hours'
+        count_query = text(f"""
+            SELECT COUNT(*) FROM paas_production_logs
+            WHERE {time_filter}
         """)
-        total_rows = conn.execute(count_query).scalar()
+        total_rows = conn.execute(count_query, {"tenant_id": TENANT_ID, "model_id": MODEL_ID}).scalar()
         print(f"Production (24h): {total_rows} rows (total available)")
 
-        # Nếu dữ liệu quá lớn, thực hiện sampling nhanh ở cấp độ DB để tránh tải toàn bộ vào bộ nhớ.
         if total_rows > MAX_SAMPLES:
             sample_pct = min(100.0, (MAX_SAMPLES / total_rows) * 100 * 1.1)
             print(f"Exceeds MAX_SAMPLES={MAX_SAMPLES}. Fast sampling at ~{sample_pct:.2f}% at DB level...")
             
-            # Sử dụng TABLESAMPLE SYSTEM để lấy mẫu ngẫu nhiên trực tiếp từ bảng, giảm tải cho ứng dụng.
+            # Lưu ý: TABLESAMPLE SYSTEM yêu cầu PostgreSQL. Với JSONB, ta lấy cột features ra.
             production_query = text(f"""
-                SELECT * FROM nids_production_data TABLESAMPLE SYSTEM ({sample_pct})
-                WHERE created_at >= NOW() - INTERVAL '24 hours'
+                SELECT features FROM paas_production_logs TABLESAMPLE SYSTEM ({sample_pct})
+                WHERE {time_filter}
+                ORDER BY "timestamp"::timestamptz DESC
                 LIMIT :max_samples
             """)
-            production_df = pd.read_sql(
-                production_query, conn, params={"max_samples": MAX_SAMPLES}
+            raw_df = pd.read_sql(
+                production_query, conn, 
+                params={"tenant_id": TENANT_ID, "model_id": MODEL_ID, "max_samples": MAX_SAMPLES}
             )
-            print(f"-> Sample load: {len(production_df)} rows loaded successfully.")
         else:
-            production_df = pd.read_sql(text("""
-                SELECT * FROM nids_production_data
-                WHERE created_at >= NOW() - INTERVAL '24 hours'
-            """), conn)
-            print(f"-> Full load: {len(production_df)} rows")
+            raw_df = pd.read_sql(text(f"""
+                SELECT features FROM paas_production_logs
+                WHERE {time_filter}
+                ORDER BY "timestamp"::timestamptz DESC
+            """), conn, params={"tenant_id": TENANT_ID, "model_id": MODEL_ID})
+            
+    # Bung JSONB features
+    if len(raw_df) > 0:
+        features = raw_df['features'].map(lambda item: json.loads(item) if isinstance(item, str) else item)
+        production_df = pd.json_normalize(features)
+        del raw_df
+        print(f"-> Production data loaded and JSON normalized: {len(production_df)} rows")
+        return production_df
+    return pd.DataFrame()
 
-    return reference_df, production_df
+# 3. TRÍCH XUẤT COLUMN MAPPING TỪ MLFLOW
+def get_column_mapping():
+    print(f"[3/4] Extracting Model Signature from MLflow: {MODEL_URI}")
+    column_mapping = ColumnMapping()
+    if mlflow is None:
+        print("MLflow client is not installed in the Evidently image. Evidently will auto-infer column types.")
+        return column_mapping
 
+    try:
+        model_info = mlflow.models.get_model_info(MODEL_URI)
+        signature = model_info.signature
+        if signature and signature.inputs:
+            num_cols = []
+            cat_cols = []
+            for inp in signature.inputs:
+                if inp.type in ["integer", "long", "float", "double"]:
+                    num_cols.append(inp.name)
+                else:
+                    cat_cols.append(inp.name)
+            column_mapping.numerical_features = num_cols
+            column_mapping.categorical_features = cat_cols
+            print(f"Signature extracted: {len(num_cols)} numerical, {len(cat_cols)} categorical.")
+        else:
+            print("Warning: No signature found in MLflow. Evidently will auto-infer types.")
+    except Exception as e:
+        print(f"Failed to extract signature from MLflow: {e}. Evidently will auto-infer types.")
+    
+    return column_mapping
 
-# 3. TIỀN XỬ LÝ DỮ LIỆU
-def preprocess(df):
-    # Loại bỏ các cột metadata không liên quan đến phân tích drift, chỉ giữ lại các cột đặc trưng (features).
-    METADATA_COLS = ["id", "created_at", "Predicted_Label", "Confidence_Score"]
-    feature_cols = [c for c in df.columns if c not in METADATA_COLS]
-    return df[feature_cols].copy()
+def filter_column_mapping(column_mapping, common_cols):
+    common_set = set(common_cols)
+    filtered_mapping = ColumnMapping()
+
+    if column_mapping.numerical_features:
+        filtered_mapping.numerical_features = [
+            col for col in column_mapping.numerical_features if col in common_set
+        ]
+    if column_mapping.categorical_features:
+        filtered_mapping.categorical_features = [
+            col for col in column_mapping.categorical_features if col in common_set
+        ]
+    if getattr(column_mapping, "target", None) in common_set:
+        filtered_mapping.target = column_mapping.target
+    if getattr(column_mapping, "prediction", None) in common_set:
+        filtered_mapping.prediction = column_mapping.prediction
+
+    return filtered_mapping
+
+def get_public_s3_url(bucket_name, object_key):
+    if AWS_DEFAULT_REGION == "us-east-1":
+        return f"https://{bucket_name}.s3.amazonaws.com/{object_key}"
+    return f"https://{bucket_name}.s3.{AWS_DEFAULT_REGION}.amazonaws.com/{object_key}"
+
+def save_drift_report(report, result_dict, summary):
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    report_dir = f"/tmp/drift_reports/{TENANT_ID}/{MODEL_ID}/{run_id}"
+    os.makedirs(report_dir, exist_ok=True)
+
+    html_path = os.path.join(report_dir, "report.html")
+    result_json_path = os.path.join(report_dir, "report.json")
+    summary_json_path = os.path.join(report_dir, "summary.json")
+
+    report.save_html(html_path)
+    with open(result_json_path, "w", encoding="utf-8") as fp:
+        json.dump(result_dict, fp, ensure_ascii=False, indent=2, default=str)
+    with open(summary_json_path, "w", encoding="utf-8") as fp:
+        json.dump(summary, fp, ensure_ascii=False, indent=2, default=str)
+
+    artifacts = {
+        "local_html_path": html_path,
+        "local_report_json_path": result_json_path,
+        "local_summary_json_path": summary_json_path,
+    }
+
+    if not AWS_BUCKET_NAME:
+        return artifacts
+
+    s3_client = boto3.client("s3")
+    base_key = f"{REPORTS_S3_PREFIX}/{TENANT_ID}/{MODEL_ID}/{run_id}"
+    uploads = [
+        (html_path, f"{base_key}/report.html", "text/html"),
+        (result_json_path, f"{base_key}/report.json", "application/json"),
+        (summary_json_path, f"{base_key}/summary.json", "application/json"),
+    ]
+
+    try:
+        for local_path, object_key, content_type in uploads:
+            s3_client.upload_file(
+                local_path,
+                AWS_BUCKET_NAME,
+                object_key,
+                ExtraArgs={"ContentType": content_type},
+            )
+
+        artifacts.update({
+            "s3_report_prefix": f"s3://{AWS_BUCKET_NAME}/{base_key}/",
+            "html_s3_uri": f"s3://{AWS_BUCKET_NAME}/{base_key}/report.html",
+            "report_json_s3_uri": f"s3://{AWS_BUCKET_NAME}/{base_key}/report.json",
+            "summary_json_s3_uri": f"s3://{AWS_BUCKET_NAME}/{base_key}/summary.json",
+            "html_url": get_public_s3_url(AWS_BUCKET_NAME, f"{base_key}/report.html"),
+        })
+        print(f"Drift report uploaded to s3://{AWS_BUCKET_NAME}/{base_key}/")
+    except Exception as e:
+        print(f"Failed to upload drift report to S3: {e}")
+
+    summary_with_artifacts = {**summary, "report_artifacts": artifacts}
+    with open(summary_json_path, "w", encoding="utf-8") as fp:
+        json.dump(summary_with_artifacts, fp, ensure_ascii=False, indent=2, default=str)
+    if "summary_json_s3_uri" in artifacts:
+        try:
+            s3_client.upload_file(
+                summary_json_path,
+                AWS_BUCKET_NAME,
+                f"{base_key}/summary.json",
+                ExtraArgs={"ContentType": "application/json"},
+            )
+        except Exception as e:
+            print(f"Failed to refresh summary report on S3: {e}")
+
+    return artifacts
 
 
 # 4. PHÂN TÍCH DATA DRIFT (EVIDENTLY 0.4.15)
-def run_drift_analysis(reference_df, production_df):
-    print("[2/4] Running Evidently AI Data Drift analysis (v0.4.15)...")
+def run_drift_analysis(reference_df, production_df, column_mapping):
+    print("[4/4] Running Evidently AI Data Drift analysis...")
 
-    ref_clean = preprocess(reference_df)
-    prod_clean = preprocess(production_df)
-
-    # Đảm bảo chỉ so sánh các cột đặc trưng chung giữa hai dataset để tránh lỗi do sự khác biệt về schema.
-    common_cols = [col for col in ref_clean.columns if col in prod_clean.columns]
-    ref_clean = ref_clean[common_cols]
-    prod_clean = prod_clean[common_cols]
-    total_features = len(common_cols)
-
-    if total_features == 0:
+    # Đảm bảo chỉ so sánh các cột đặc trưng chung giữa hai dataset
+    common_cols = [col for col in reference_df.columns if col in production_df.columns]
+    if len(common_cols) == 0:
         raise ValueError("No common columns found between reference and production datasets.")
+        
+    ref_clean = reference_df[common_cols]
+    prod_clean = production_df[common_cols]
+    filtered_mapping = filter_column_mapping(column_mapping, common_cols)
 
-    # Cấu hình Report với preset DataDriftPreset để thu thập cả tỷ lệ drift tổng thể và chi tiết từng cột.
-    report = Report(metrics=[DataDriftPreset()])
+    try:
+        report = Report(metrics=[DataDriftPreset(drift_share=DRIFT_THRESHOLD)])
+    except TypeError:
+        print("Warning: Evidently DataDriftPreset does not accept drift_share. Applying threshold in summary only.")
+        report = Report(metrics=[DataDriftPreset()])
+    report.run(reference_data=ref_clean, current_data=prod_clean, column_mapping=filtered_mapping)
     
-    # Chạy phân tích drift, Evidently sẽ tự động tính toán và lưu trữ kết quả trong cấu trúc nội bộ của Report.
-    report.run(reference_data=ref_clean, current_data=prod_clean)
     result_dict = report.as_dict()
-    
     dataset_drift_metrics = {}
     data_drift_table = {}
 
-    # Quét toàn bộ mảng metrics để hứng đủ 2 block kết quả
     for item in result_dict.get('metrics', []):
         result_data = item.get('result', {})
-        
-        # Hứng Block chứa tỷ lệ Drift tổng thể
         if 'dataset_drift' in result_data and 'share_of_drifted_columns' in result_data:
             dataset_drift_metrics = result_data
-            
-        # Hứng Block chứa chi tiết từng cột
         if 'drift_by_columns' in result_data:
             data_drift_table = result_data
 
-    # Trích xuất các chỉ số chính từ Block DataDriftPreset
     drift_share = dataset_drift_metrics.get('share_of_drifted_columns', 0.0)
     drifted_count = dataset_drift_metrics.get('number_of_drifted_columns', 0)
-
-    # Trích xuất danh sách tên cột (features) từ Block DataDriftTable
+    dataset_drift = drift_share >= DRIFT_THRESHOLD
+    
     drifted_feature_names = []
     drift_by_columns = data_drift_table.get('drift_by_columns', {})
-    
-    # Duyệt qua từng cột trong kết quả chi tiết để xác định cột nào bị Drift và thu thập tên của chúng.
     for col_name, col_data in drift_by_columns.items():
         if col_data.get('drift_detected', False):
             drifted_feature_names.append(col_name)
 
     summary = {
+        "tenant_id": TENANT_ID,
+        "model_id": MODEL_ID,
         "share_drifted_features": drift_share,
-        "dataset_drift": dataset_drift_metrics.get('dataset_drift', False),
+        "dataset_drift": dataset_drift,
+        "drift_threshold": DRIFT_THRESHOLD,
         "number_of_drifted_features": drifted_count,
-        "number_of_features": total_features,
+        "number_of_features": len(common_cols),
         "drifted_feature_names": drifted_feature_names,
     }
+    summary["report_artifacts"] = save_drift_report(report, result_dict, summary)
 
-    print("\n" + "="*60)
-    print("     SUMMARY OF DATA DRIFT RESULTS")
+    print("SUMMARY OF DATA DRIFT RESULTS")
     print("-" * 60)
     print(f"Total features: {summary['number_of_features']}")
     print(f"Drifted features: {summary['number_of_drifted_features']}")
     print(f"Drift rate: {summary['share_drifted_features']:.2%}")
-
-    if drifted_feature_names:
-        print(f"Drifted feature names: \n  - " + "\n  - ".join(drifted_feature_names))
-    else:
-        print("Drifted feature names: []")
-
     drift_status = "DETECTED" if summary["dataset_drift"] else "NOT DETECTED"
     print(f"Dataset drift: {drift_status}")
-    print("="*60 + "\n")
 
     return summary
 
 
-# 5. KÍCH HOẠT GITHUB ACTIONS VIA WEBHOOK
-def trigger_github_webhook(drift_summary):
-    print("[4/4] Triggering GitHub alert workflow...")
+# 5. GỬI KẾT QUẢ VỀ DJANGO WEBHOOK
+def trigger_django_webhook(drift_summary):
+    print("Triggering Django Webhook...")
 
-    if not GITHUB_TOKEN:
-        print("GITHUB_TOKEN not configured - skipping webhook.")
-        return
-
-    # Thiết lập session với retry strategy để tăng độ bền khi gửi webhook, tránh lỗi tạm thời do mạng hoặc GitHub.
     session = requests.Session()
     retry_strategy = Retry(
-        total=3,
-        backoff_factor=2,          
+        total=3, backoff_factor=2,          
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["POST"]  
     )
+    session.mount("http://", HTTPAdapter(max_retries=retry_strategy))
     session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
 
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/dispatches"
-    
-    # Chỉ gửi alert cho Data Engineer, retrain chỉ được khởi động khi data_manifest.json thay đổi bởi Data Engineer trên S3.
     headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json",
+        "Authorization": f"Bearer {WEBHOOK_SECRET}",
         "Content-Type": "application/json"
     }
+    
     payload = {
-        "event_type": "drift_alert_required",
-        "client_payload": {
-            "drift_share": drift_summary["share_drifted_features"],
-            "drifted_features": drift_summary["number_of_drifted_features"],
-            "threshold": DRIFT_THRESHOLD,
-            "drifted_feature_names": drift_summary["drifted_feature_names"],
-        }
+        "tenant_id": TENANT_ID,
+        "model_id": MODEL_ID,
+        "drift_summary": drift_summary,
+        "threshold": DRIFT_THRESHOLD
     }
 
-    response = session.post(url, headers=headers, data=json.dumps(payload), timeout=15)
-
-    if response.status_code == 204:
-        print("Webhook sent successfully! GitHub Actions has been triggered.")
-    else:
-        print(f"Webhook failed! HTTP {response.status_code} after 3 retries: {response.text}")
-        sys.exit(1)
+    try:
+        response = session.post(WEBHOOK_URL, headers=headers, json=payload, timeout=15)
+        if response.status_code in [200, 201, 204]:
+            print("Webhook sent successfully to Django Control Plane.")
+        else:
+            print(f"Webhook failed! HTTP {response.status_code}: {response.text}")
+    except Exception as e:
+        print(f"Failed to send webhook: {e}")
 
 
 # CHƯƠNG TRÌNH CHÍNH
 if __name__ == "__main__":
-    # Kết nối đến endpoint READ-ONLY của CloudNativePG để không tạo tải cho Primary.
+    try:
+        reference_df = load_reference_data()
+    except Exception as e:
+        print(f"Failed to load Reference Data: {e}")
+        sys.exit(1)
+
     db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST_RO}:{DB_PORT}/{DB_NAME}"
     try:
-        engine = create_engine(
-            db_url,
-            pool_pre_ping=True,
-            pool_recycle=1800,
-            isolation_level="READ COMMITTED"  
-        )
-        print(f"[0/4] Connected to PostgreSQL (RO) at {DB_HOST_RO}:{DB_PORT}/{DB_NAME}")
+        engine = create_engine(db_url, pool_pre_ping=True)
     except Exception as e:
-        print(f"Failed to connect: {e}")
+        print(f"Failed to connect to DB: {e}")
         sys.exit(1)
 
-    # Tải dữ liệu tham chiếu và sản xuất, với cơ chế sampling nhanh nếu dữ liệu quá lớn để đảm bảo hiệu suất.
     try:
-        reference_df, production_df = load_data_from_db(engine)
+        production_df = load_production_data_from_db(engine)
     except Exception as e:
-        print(f"Failed to load data: {e}")
+        print(f"Failed to load Production Data: {e}")
         sys.exit(1)
 
-    # Kiểm tra xem có đủ dữ liệu production để phân tích drift không.
-    MIN_SAMPLES = 100  
     if len(production_df) < MIN_SAMPLES:
-        print(f"Only {len(production_df)} production samples available (minimum: {MIN_SAMPLES}). Skipping drift analysis.")
+        print(f"Only {len(production_df)} production samples available. Skipping drift analysis.")
         sys.exit(0)  
 
-    # Chạy phân tích drift và đánh giá kết quả để quyết định có cần kích hoạt retrain pipeline hay không.
+    column_mapping = get_column_mapping()
+
     try:
-        drift_summary = run_drift_analysis(reference_df, production_df)
+        drift_summary = run_drift_analysis(reference_df, production_df, column_mapping)
     except Exception as e:
         print(f"Drift analysis failed: {e}")
-        import traceback
-        traceback.print_exc()  
         sys.exit(1)
 
-    print(f"[3/4] Evaluating results (threshold: {DRIFT_THRESHOLD:.0%})...")
-    share = drift_summary["share_drifted_features"]
-    if share >= DRIFT_THRESHOLD:
-        print(f"Drift detected! Rate {share:.2%} exceeds threshold {DRIFT_THRESHOLD:.2%}.")
-        trigger_github_webhook(drift_summary)
-    else:
-        print(f"Drift rate {share:.2%} is below the allowed threshold! System is stable.")
+    trigger_django_webhook(drift_summary)

@@ -10,10 +10,10 @@ from db_manager import save_dataframe_to_db, get_production_data_count
 
 # Lấy biến môi trường
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
-KAFKA_TOPIC = "nids_production_data"
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "ai_paas_production_logs")
 EVIDENTLY_TRIGGER_THRESHOLD = int(os.environ.get('EVIDENTLY_TRIGGER_THRESHOLD', '100'))
-GITHUB_REPO = os.environ.get("GITHUB_REPO", "")
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/trigger-drift-job")
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "super-secret-key")
 
 # Cờ báo hiệu trạng thái hoạt động
 RUNNING = True
@@ -24,33 +24,23 @@ def handle_sigterm(*args):
     print("Received SIGTERM. Shutting down gracefully...")
     RUNNING = False
 
-# Hàm gửi Webhook kích hoạt GitHub Action tạo Evidently Drift Check
-def trigger_github_webhook(count: int):
-    print(f"Data count reached {count} (threshold: {EVIDENTLY_TRIGGER_THRESHOLD}). Triggering GitHub webhook...")
+# Hàm gửi Webhook cảnh báo về Django Control Plane để kích hoạt Argo Workflows / Celery
+def trigger_django_webhook(count: int):
+    print(f"Data count reached {count} (threshold: {EVIDENTLY_TRIGGER_THRESHOLD}). Triggering Django webhook...")
 
-    if not GITHUB_TOKEN or not GITHUB_REPO:
-        print("GITHUB_TOKEN or GITHUB_REPO not configured - skipping webhook.")
-        return
-
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/dispatches"
-    
     headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json",
+        "Authorization": f"Bearer {WEBHOOK_SECRET}",
         "Content-Type": "application/json"
     }
     payload = {
         "event_type": "trigger_drift_check",
-        "client_payload": {
-            "trigger_source": "redpanda_consumer",
-            "current_data_count": count
-        }
+        "current_data_count": count
     }
 
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
-        if response.status_code == 204:
-            print("Webhook sent Successfully! GitHub Actions has been triggered.")
+        response = requests.post(WEBHOOK_URL, headers=headers, json=payload, timeout=10)
+        if response.status_code in [200, 201, 204]:
+            print("Webhook sent Successfully! Django has been notified.")
         else:
             print(f"Webhook failed! HTTP {response.status_code}: {response.text}")
     except Exception as e:
@@ -64,9 +54,16 @@ def check_threshold_and_trigger(last_triggered_count: int) -> int:
     print(f"Drift monitoring: {count} total rows. New rows since last trigger: {diff}/{EVIDENTLY_TRIGGER_THRESHOLD}")
     
     if diff >= EVIDENTLY_TRIGGER_THRESHOLD:
-        trigger_github_webhook(count)
+        trigger_django_webhook(count)
         return count
     return last_triggered_count
+
+def build_batch_dataframe(records: list[dict]) -> pd.DataFrame:
+    df = pd.DataFrame(records)
+    for column in ("timestamp", "created_at"):
+        if column in df.columns:
+            df[column] = pd.to_datetime(df[column], utc=True, errors="coerce")
+    return df
 
 # Hàm main để chạy Consumer liên tục lắng nghe Redpanda và xử lý dữ liệu
 def main():
@@ -101,12 +98,9 @@ def main():
             # Cơ chế "Flush on Idle": Nếu không có message mới nào trong 1 giây, tự động flush batch hiện tại vào DB.
             if msg is None:
                 if len(current_batch) > 0:
-                    df = pd.DataFrame(current_batch)
+                    df = build_batch_dataframe(current_batch)
                     # Chuyển đổi chuỗi text created_at (isoformat) lại thành DateTime object chuẩn pandas
-                    if 'created_at' in df.columns:
-                        df['created_at'] = pd.to_datetime(df['created_at'])
-                        
-                    if save_dataframe_to_db(df, "nids_production_data"):
+                    if save_dataframe_to_db(df, "paas_production_logs"):
                         consumer.commit() # Chỉ commit khi đã lưu thẳng vào Database thành công
                         print(f"Flushed {len(current_batch)} records to DB due to idle time.")
                         last_triggered_count = check_threshold_and_trigger(last_triggered_count)
@@ -129,11 +123,8 @@ def main():
                 
                 # Gom đủ một hộp (BATCH) thì mang đi phân phối
                 if len(current_batch) >= BATCH_SIZE:
-                    df = pd.DataFrame(current_batch)
-                    if 'created_at' in df.columns:
-                        df['created_at'] = pd.to_datetime(df['created_at'])
-                        
-                    if save_dataframe_to_db(df, "nids_production_data"):
+                    df = build_batch_dataframe(current_batch)
+                    if save_dataframe_to_db(df, "paas_production_logs"):
                         consumer.commit()
                         print(f"Completed batch delivery: {len(current_batch)} records to DB.")
                         last_triggered_count = check_threshold_and_trigger(last_triggered_count)
@@ -147,10 +138,8 @@ def main():
     finally:
         # Trước khi đóng Consumer, nếu còn dữ liệu trong batch thì cũng nên flush nốt vào DB để tránh mất mát dữ liệu cuối cùng.
         if len(current_batch) > 0:
-            df = pd.DataFrame(current_batch)
-            if 'created_at' in df.columns:
-                df['created_at'] = pd.to_datetime(df['created_at'])
-            if save_dataframe_to_db(df, "nids_production_data"):
+            df = build_batch_dataframe(current_batch)
+            if save_dataframe_to_db(df, "paas_production_logs"):
                 consumer.commit()
                 last_triggered_count = check_threshold_and_trigger(last_triggered_count)
         consumer.close()

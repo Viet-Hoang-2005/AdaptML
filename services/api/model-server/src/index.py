@@ -31,7 +31,7 @@ JWKS_URL = os.environ.get("JWKS_URL", "http://django-service/.well-known/jwks.js
 
 # Kafka configs
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
-KAFKA_TOPIC = "ai_paas_production_logs"
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "ai_paas_production_logs")
 
 # Redis Config (API Key Cache)
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
@@ -86,7 +86,6 @@ try:
 except Exception as e:
     print(f"Failed to setup Redpanda producer: {e}")
     kafka_producer = None
-
 
 # 5. DYNAMIC MODEL LOADING (MLFLOW)
 print(f"Starting generic server for Tenant [{TENANT_ID}] - Model [{MODEL_ID}]")
