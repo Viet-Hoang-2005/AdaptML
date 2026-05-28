@@ -12,10 +12,14 @@ import GitHubCallbackPage from './pages/Auth/GitHubCallbackPage';
 import { ProtectedRoute } from './pages/Dashboard/ProtectedRoute';
 import DashboardLayout from './pages/Dashboard/DashboardLayout';
 import HomeLayout from './pages/Home/HomeLayout';
-import DeveloperSettingsPage from './pages/Settings/DeveloperSettingsPage';
-import ProfileSettingsPage from './pages/Settings/ProfileSettingsPage';
+import ModelApiPage from './pages/Home/ModelApiPage';
+import ModelTestingPage from './pages/Home/ModelTestingPage';
+import APIManagementPage from './pages/Management/APIManagementPage';
+import ModelAPIFormPage from './pages/Management/ModelAPIFormPage';
+import DeveloperSettingPage from './pages/Settings/DeveloperSettingPage';
+import ProfileSettingPage from './pages/Settings/ProfileSettingPage';
 import SettingsLayout from './pages/Settings/SettingsLayout';
-import { dashboardPlaceholders, homePlaceholders } from './pages/Dashboard/DashboardPage';
+import { dashboardPlaceholders } from './pages/Dashboard/DashboardPage';
 
 function App() {
   return (
@@ -48,18 +52,22 @@ function App() {
           <Route index element={<Navigate to="home/model-api" replace />} />
           <Route path="home" element={<HomeLayout />}>
             <Route index element={<Navigate to="model-api" replace />} />
-            <Route path="model-api" element={homePlaceholders.modelApi} />
-            <Route path="benchmark" element={homePlaceholders.benchmark} />
-            <Route path="model-management" element={homePlaceholders.modelManagement} />
+            <Route path="model-api" element={<ModelApiPage />} />
+            <Route path="model-testing" element={<ModelTestingPage />} />
+            <Route path="benchmark" element={<Navigate to="/dashboard/home/model-testing" replace />} />
+            <Route path="model-management" element={<Navigate to="/dashboard/api-management" replace />} />
           </Route>
+          <Route path="api-management" element={<APIManagementPage />} />
+          <Route path="api-management/upload" element={<ModelAPIFormPage />} />
+          <Route path="api-management/:modelId" element={<ModelAPIFormPage />} />
           <Route path="drift-monitoring" element={dashboardPlaceholders.driftMonitoring} />
           <Route path="model-training" element={dashboardPlaceholders.modelTraining} />
           <Route path="model-evolution" element={dashboardPlaceholders.modelEvolution} />
           <Route path="notifications" element={dashboardPlaceholders.notifications} />
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<Navigate to="profile" replace />} />
-            <Route path="profile" element={<ProfileSettingsPage />} />
-            <Route path="developer" element={<DeveloperSettingsPage />} />
+            <Route path="profile" element={<ProfileSettingPage />} />
+            <Route path="developer" element={<DeveloperSettingPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard/home/model-api" replace />} />
         </Route>

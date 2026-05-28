@@ -1,21 +1,13 @@
 import { createContext, useContext } from 'react';
+import type { ModelAPI } from '../../types/modelApi';
 
-export interface DashboardModel {
-  id: string;
-  name: string;
-  status: 'Connected' | 'Idle' | 'Training';
-}
-
-export const mockModels: DashboardModel[] = [
-  { id: 'cicids-demo', name: 'CICIDS Demo Model', status: 'Connected' },
-  { id: 'fraud-detector', name: 'Fraud Detector Baseline', status: 'Idle' },
-  { id: 'traffic-classifier', name: 'Traffic Classifier v2', status: 'Training' },
-];
+export type DashboardModel = ModelAPI;
 
 export interface ModelSelectionContextValue {
   models: DashboardModel[];
   selectedModel: DashboardModel | null;
-  selectModel: (modelId: string) => void;
+  selectModel: (modelId: number) => void;
+  loading: boolean;
 }
 
 export const ModelSelectionContext = createContext<ModelSelectionContextValue | undefined>(undefined);

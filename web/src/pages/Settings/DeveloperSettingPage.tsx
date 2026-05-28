@@ -5,7 +5,7 @@ import { Input } from '../../components/ui/Input';
 import { useDeveloperSettings } from '../../hooks/useDeveloperSettings';
 import SettingsModal from './SettingsModal';
 
-export default function DeveloperSettingsPage() {
+export default function DeveloperSettingPage() {
   const {
     apiKeys,
     loading,
@@ -28,7 +28,7 @@ export default function DeveloperSettingsPage() {
 
   return (
     <div className="w-full space-y-6">
-      <section className="rounded-lg border border-gray-300 bg-white">
+      <section className="min-h-140 rounded-lg border border-gray-300 bg-white">
         <div className="flex flex-col gap-4 border-b border-gray-100 px-6 py-6 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Developer Access</h2>

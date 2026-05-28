@@ -1,11 +1,10 @@
-import { BarChart3, Boxes, UploadCloud } from 'lucide-react';
+import { FlaskConical, UploadCloud } from 'lucide-react';
 import { Outlet } from 'react-router-dom';
 import { PageTabs } from '../../components/layout/PageTabs';
 
 const homeTabs = [
   { label: 'Model API', to: '/dashboard/home/model-api', icon: UploadCloud },
-  { label: 'Model Benchmark', to: '/dashboard/home/benchmark', icon: BarChart3 },
-  { label: 'Model Management', to: '/dashboard/home/model-management', icon: Boxes },
+  { label: 'Model Testing', to: '/dashboard/home/model-testing', icon: FlaskConical },
 ];
 
 export default function HomeLayout() {

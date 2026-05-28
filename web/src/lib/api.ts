@@ -19,6 +19,19 @@ import type {
   UpdateProfileRequest,
   UserProfile,
 } from '../types/auth';
+import type {
+  ModelAPI,
+  ModelAPIFormValues,
+  ModelAPIListResponse,
+  ModelPredictionResponse,
+} from '../types/modelApi';
+
+const authApiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/auth';
+const controlPlaneApiBaseURL =
+  import.meta.env.VITE_CONTROL_PLANE_API_BASE_URL ||
+  authApiBaseURL.replace(/\/api\/auth\/?$/, '/api');
+
+const controlPlaneURL = (path: string) => `${controlPlaneApiBaseURL.replace(/\/+$/, '')}${path}`;
 
 // 1. AUTHENTICATION
 // Base Auth
@@ -185,5 +198,55 @@ export const deleteAPIKey = async (keyId: number): Promise<MessageResponse> => {
 
 export const regenerateAPIKey = async (keyId: number): Promise<CreatedAPIKeyResponse> => {
   const { data } = await axiosInstance.post<CreatedAPIKeyResponse>(`/profile/api-key/${keyId}/regenerate/`);
+  return data;
+};
+
+// Model APIs
+const modelFormData = (payload: ModelAPIFormValues) => {
+  const formData = new FormData();
+  formData.append('name', payload.name);
+  formData.append('description', payload.description);
+  formData.append('model_info', payload.model_info);
+  formData.append('access_mode', payload.access_mode);
+  if (payload.artifact) {
+    formData.append('artifact', payload.artifact);
+  }
+  return formData;
+};
+
+export const listModelAPIs = async (): Promise<ModelAPIListResponse> => {
+  const { data } = await axiosInstance.get<ModelAPIListResponse>(controlPlaneURL('/models/'));
+  return data;
+};
+
+export const getModelAPI = async (modelId: number): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.get<ModelAPI>(controlPlaneURL(`/models/${modelId}/`));
+  return data;
+};
+
+export const createModelAPI = async (payload: ModelAPIFormValues): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL('/models/'), modelFormData(payload), {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+export const updateModelAPI = async (modelId: number, payload: ModelAPIFormValues): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.put<ModelAPI>(controlPlaneURL(`/models/${modelId}/`), modelFormData(payload), {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+export const deleteModelAPI = async (modelId: number): Promise<MessageResponse> => {
+  const { data } = await axiosInstance.delete<MessageResponse>(controlPlaneURL(`/models/${modelId}/`));
+  return data;
+};
+
+export const predictWithModelAPI = async (
+  endpointUrl: string,
+  features: Record<string, unknown>,
+): Promise<ModelPredictionResponse> => {
+  const { data } = await axiosInstance.post<ModelPredictionResponse>(endpointUrl, { features });
   return data;
 };

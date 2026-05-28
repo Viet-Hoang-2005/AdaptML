@@ -38,7 +38,7 @@ const readOnlyFieldClass =
 
 type AvatarModalState = 'closed' | 'options';
 
-export default function ProfileSettingsPage() {
+export default function ProfileSettingPage() {
   const {
     profile,
     avatarHistory,
@@ -144,40 +144,55 @@ export default function ProfileSettingsPage() {
 
   return (
     <div className="w-full space-y-6">
-      <section className="rounded-lg border border-gray-300 bg-white">
-        <div className="flex flex-col gap-5 border-b border-gray-100 px-6 py-6 md:flex-row md:items-center">
-          <button
-            type="button"
-            onClick={openAvatarModal}
-            disabled={loading || avatarSaving}
-            className="group relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-xl font-bold text-white outline-none ring-offset-2 transition focus:ring-2 focus:ring-black disabled:cursor-not-allowed disabled:opacity-70"
-            aria-label="Update avatar"
-            title="Update avatar"
-          >
-            {avatarPreview ? <img src={avatarPreview} alt="" className="h-full w-full object-cover" /> : initials}
-            <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
-              <Camera className="h-5 w-5 text-white" />
-            </span>
-          </button>
-          <div className="min-w-0">
-            <h2 className="truncate text-xl font-bold text-gray-900">
-              {profile?.full_name || 'AI Engineer'}
-            </h2>
-            <p className="truncate text-sm text-gray-500">{profile?.email || 'Loading profile...'}</p>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(event) => handleAvatarSelection(event.target.files?.[0])}
-          />
-        </div>
+      <section className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className="space-y-5">
+          <div className="rounded-lg border border-gray-300 bg-white">
+            <div className="flex flex-col items-center text-center p-6">
+              <button
+                type="button"
+                onClick={openAvatarModal}
+                disabled={loading || avatarSaving}
+                className="group relative flex h-36 w-36 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-4xl font-bold text-white outline-none ring-offset-2 transition focus:ring-2 focus:ring-black disabled:cursor-not-allowed disabled:opacity-70"
+                aria-label="Update avatar"
+                title="Update avatar"
+              >
+                {avatarPreview ? <img src={avatarPreview} alt="" className="h-full w-full object-cover" /> : initials}
+                <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
+                  <Camera className="h-7 w-7 text-white" />
+                </span>
+              </button>
+              <h2 className="mt-5 max-w-full truncate text-xl font-bold text-gray-900">
+                {profile?.full_name || 'AI Engineer'}
+              </h2>
+              <p className="mt-1 max-w-full truncate text-sm text-gray-500">{profile?.email || 'Loading profile...'}</p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => handleAvatarSelection(event.target.files?.[0])}
+            />
 
-        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="mx-auto h-px w-64 rounded-full bg-gray-300" />
+
+            <div className="p-6">
+              <h3 className="mb-4 text-base font-bold text-gray-900">Account Details</h3>
+              <div className="space-y-3">
+                <ReadOnlyRow icon={<Mail className="h-4 w-4" />} label="Email" value={profile?.email || 'Unknown'} />
+                <ReadOnlyRow icon={<Fingerprint className="h-4 w-4" />} label="Tenant ID" value={profile?.tenant_id || 'Unknown'} />
+                <ReadOnlyRow icon={<ShieldCheck className="h-4 w-4" />} label="Provider" value={profile?.auth_provider || 'Unknown'} />
+                <ReadOnlyRow icon={<CalendarDays className="h-4 w-4" />} label="Joined" value={formatDate(profile?.date_joined)} />
+              </div>
+            </div>
+          </div>
+
+        </aside>
+
+        <div className="rounded-lg border border-gray-300 bg-white p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-bold text-gray-900">Profile Information</h3>
+              <h3 className="text-base font-bold text-gray-900">Profile Information</h3>
               {editingProfile ? (
                 <div className="flex gap-2">
                   <Button variant="secondary" size="md" onClick={handleCancelEdit}>
@@ -335,16 +350,6 @@ export default function ProfileSettingsPage() {
               </Button>
             </div>
           </div>
-
-          <div className="rounded-lg border border-gray-300 bg-gray-50 p-4">
-            <h3 className="mb-4 text-sm font-bold text-gray-900">Account Details</h3>
-            <div className="space-y-3">
-              <ReadOnlyRow icon={<Mail className="h-4 w-4" />} label="Email" value={profile?.email || 'Unknown'} />
-              <ReadOnlyRow icon={<Fingerprint className="h-4 w-4" />} label="Tenant ID" value={profile?.tenant_id || 'Unknown'} />
-              <ReadOnlyRow icon={<ShieldCheck className="h-4 w-4" />} label="Provider" value={profile?.auth_provider || 'Unknown'} />
-              <ReadOnlyRow icon={<CalendarDays className="h-4 w-4" />} label="Joined" value={formatDate(profile?.date_joined)} />
-            </div>
-          </div>
         </div>
       </section>
 
@@ -451,7 +456,7 @@ export default function ProfileSettingsPage() {
 
 function ReadOnlyRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="flex items-start gap-3 rounded-md bg-white px-3 py-3">
+    <div className="flex items-start gap-3 rounded-md bg-gray-50 px-3 py-3">
       <span className="mt-0.5 text-gray-400">{icon}</span>
       <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>

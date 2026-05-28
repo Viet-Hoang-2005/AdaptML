@@ -68,6 +68,18 @@ export default function Header() {
                 <span className="text-xs text-gray-400">{model.status}</span>
               </button>
             ))}
+            {!models.length && (
+              <button
+                type="button"
+                onClick={() => {
+                  setModelMenuOpen(false);
+                  navigate('/dashboard/api-management/upload');
+                }}
+                className="w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-gray-500 hover:bg-gray-100 hover:text-black"
+              >
+                Upload your first model
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -75,7 +87,7 @@ export default function Header() {
       <div className="flex min-w-48 items-center justify-end gap-2">
         <button
           type="button"
-          onClick={() => navigate('/dashboard/home/model-api')}
+          onClick={() => navigate('/dashboard/api-management/upload')}
           className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-500 hover:border-gray-300 hover:text-black"
           aria-label="New model"
           title="New model"
