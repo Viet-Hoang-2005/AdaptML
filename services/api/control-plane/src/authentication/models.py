@@ -14,6 +14,9 @@ def user_avatar_history_path(instance, filename):
     email_prefix = instance.user.email.split('@')[0]
     return f'{email_prefix}/avatar/{filename}'
 
+def model_artifact_path(instance, filename):
+    return f'{instance.tenant.tenant_id}/models/{instance.id or "new"}/{filename}'
+
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -127,3 +130,39 @@ class UserAvatar(models.Model):
 
     def __str__(self):
         return f"{self.user.email} avatar {self.id}"
+
+
+class ModelAPI(models.Model):
+    ACCESS_MODE_CHOICES = (
+        ("private", "Private"),
+        ("public", "Public"),
+    )
+    STATUS_CHOICES = (
+        ("ready", "Ready"),
+        ("uploading", "Uploading"),
+        ("error", "Error"),
+        ("disabled", "Disabled"),
+    )
+
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_apis")
+    name = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    model_info = models.TextField(blank=True)
+    access_mode = models.CharField(max_length=20, choices=ACCESS_MODE_CHOICES, default="private")
+    artifact = models.FileField(upload_to=model_artifact_path, blank=True, null=True)
+    model_uri = models.CharField(max_length=1024, blank=True)
+    endpoint_url = models.CharField(max_length=1024, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ready")
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["tenant", "status"]),
+            models.Index(fields=["tenant", "access_mode"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.tenant.tenant_id})"

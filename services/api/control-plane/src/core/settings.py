@@ -204,6 +204,8 @@ GITHUB_OAUTH_REDIRECT_URI = os.environ.get(
     'http://localhost:5173/oauth/github/callback',
 )
 
+MODEL_SERVER_PUBLIC_URL = os.environ.get('MODEL_SERVER_PUBLIC_URL', 'http://localhost:5000')
+
 # Cấu hình lưu trữ AWS S3 (cho Avatar & File)
 # Lưu ý: Không khai báo AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY
 # boto3 sẽ tự động sử dụng IAM Role được gán cho EC2 instance (cấu hình trong main.tf)

@@ -1,46 +1,42 @@
-# index.py: AI PaaS Generic Model Inference Server
-import os
 import json
+import os
+import shutil
 import uuid
+import zipfile
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
+from urllib.parse import urlparse
+
+import boto3
+import httpx
+import jwt
+import mlflow.pyfunc
 import numpy as np
 import pandas as pd
-from datetime import datetime
-from typing import Dict, Any, List
-
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header, Request, Security
-from fastapi.security import APIKeyHeader
+import redis
+from confluent_kafka import Producer
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, create_model
-import uvicorn
-import jwt
+from fastapi.security import APIKeyHeader
 from jwt.algorithms import RSAAlgorithm
-import httpx
-from confluent_kafka import Producer
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
-import mlflow.pyfunc
-import redis
+from pydantic import BaseModel
+from sqlalchemy import create_engine, text
 
-# 1. ENVIRONMENT VARIABLES (POD INJECTION)
-TENANT_ID = os.environ.get("TENANT_ID", "default_tenant")
-MODEL_ID = os.environ.get("MODEL_ID", "default_model")
-ACCESS_MODE = os.environ.get("ACCESS_MODE", "private").lower() # 'public' or 'private'
-MODEL_URI = os.environ.get("MODEL_URI", "/app/models/model") # S3 Path loaded by Init Container
 JWKS_URL = os.environ.get("JWKS_URL", "http://django-service/.well-known/jwks.json")
-
-# Kafka configs
-REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
+CONTROL_PLANE_DATABASE_URL = os.environ.get("CONTROL_PLANE_DATABASE_URL")
+MODEL_CACHE_DIR = os.environ.get("MODEL_CACHE_DIR", "/tmp/mlops_paas_models")
+REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "localhost:19092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "ai_paas_production_logs")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
 
-# Redis Config (API Key Cache)
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
-
-# 2. FASTAPI INIT
 app = FastAPI(
-    title=f"AI PaaS Inference API - Model: {MODEL_ID}",
-    description="Generic Inference Server supporting Multi-tenancy and JWT Auth.",
-    version="1.0.0"
+    title="AI PaaS Dynamic Inference API",
+    description="Generic multi-tenant inference server backed by Django model registry.",
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -51,292 +47,340 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 3. PROMETHEUS METRICS (MULTI-TENANT)
 paas_predictions_counter = Counter(
     "paas_predictions_total",
     "Total predictions processed",
-    ["tenant_id", "model_id", "status"]
+    ["tenant_id", "model_id", "status"],
 )
 
 paas_latency_histogram = Histogram(
     "paas_prediction_latency_seconds",
     "Latency of prediction requests",
-    ["tenant_id", "model_id"]
+    ["tenant_id", "model_id"],
 )
 
 Instrumentator().instrument(app).expose(app)
 
-# 4. REDIS CLIENT INIT
 try:
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
     redis_client.ping()
     print(f"Redis Connected: {REDIS_URL}")
-except Exception as e:
-    print(f"Failed to connect to Redis: {e}")
+except Exception as exc:
+    print(f"Failed to connect to Redis: {exc}")
     redis_client = None
 
-# 5. REDPANDA PRODUCER INIT
 try:
     kafka_producer = Producer({
-        'bootstrap.servers': REDPANDA_BROKERS,
-        'client.id': f'fastapi-{TENANT_ID}-{MODEL_ID}',
-        'linger.ms': 5
+        "bootstrap.servers": REDPANDA_BROKERS,
+        "client.id": "fastapi-dynamic-model-registry",
+        "linger.ms": 5,
     })
     print(f"Redpanda Connected: {REDPANDA_BROKERS} - Topic: {KAFKA_TOPIC}")
-except Exception as e:
-    print(f"Failed to setup Redpanda producer: {e}")
+except Exception as exc:
+    print(f"Failed to setup Redpanda producer: {exc}")
     kafka_producer = None
 
-# 5. DYNAMIC MODEL LOADING (MLFLOW)
-print(f"Starting generic server for Tenant [{TENANT_ID}] - Model [{MODEL_ID}]")
-print(f"Access Mode: {ACCESS_MODE.upper()}")
-print(f"Loading MLflow model from: {MODEL_URI}...")
-
 try:
-    # mlflow.pyfunc có thể load Sklearn, XGBoost, PyTorch, etc. động
-    model = mlflow.pyfunc.load_model(MODEL_URI)
-    
-    # Thử trích xuất signature (lược đồ đầu vào dự kiến)
-    signature = model.metadata.signature
-    EXPECTED_FEATURES = None
-    if signature and signature.inputs:
-        EXPECTED_FEATURES = [inp.name for inp in signature.inputs]
-        print(f"Model Signature found. Expecting {len(EXPECTED_FEATURES)} features.")
-    else:
-        print("Warning: Model has no MLflow signature. Input validation will be skipped.")
-        
-    print("Model loaded successfully.")
-except Exception as e:
-    print(f"Critical Error: Failed to load model from {MODEL_URI}. Details: {e}")
-    model = None
-    EXPECTED_FEATURES = None
+    model_registry_engine = create_engine(CONTROL_PLANE_DATABASE_URL, pool_pre_ping=True) if CONTROL_PLANE_DATABASE_URL else None
+    print("Connected to Control Plane model registry." if model_registry_engine else "CONTROL_PLANE_DATABASE_URL is not set.")
+except Exception as exc:
+    print(f"Failed to connect to Control Plane model registry: {exc}")
+    model_registry_engine = None
+
+JWKS_CACHE: Dict[str, Any] = {}
+MODEL_CACHE: Dict[int, Dict[str, Any]] = {}
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-# 6. AUTHENTICATION (ASYMMETRIC JWT)
-JWKS_CACHE = {}
+class InferenceRequest(BaseModel):
+    features: Dict[str, Any]
+
 
 async def get_public_key(kid: str):
-    """Lấy Public Key từ Django JWKS endpoint (có cache)."""
     if kid not in JWKS_CACHE:
         try:
-            print(f"Fetching JWKS from {JWKS_URL}...")
             async with httpx.AsyncClient() as client:
                 response = await client.get(JWKS_URL, timeout=5.0)
                 response.raise_for_status()
                 jwks = response.json()
                 for key_data in jwks.get("keys", []):
                     if key_data.get("kid") == kid:
-                        # Convert JWK to RSA Public Key
                         public_key = RSAAlgorithm.from_jwk(json.dumps(key_data))
                         JWKS_CACHE[kid] = public_key
                         return public_key
-        except Exception as e:
-            print(f"Failed to fetch or parse JWKS: {e}")
+        except Exception as exc:
+            print(f"Failed to fetch or parse JWKS: {exc}")
             return None
     return JWKS_CACHE.get(kid)
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-async def verify_tenant_access(
+def get_model_api_record(model_id: int) -> Dict[str, Any]:
+    if model_registry_engine is None:
+        raise HTTPException(status_code=500, detail="Model registry database is unavailable.")
+
+    query = text("""
+        SELECT
+            model.id,
+            model.name,
+            model.access_mode,
+            model.model_uri,
+            model.endpoint_url,
+            model.status,
+            model.updated_at,
+            users.tenant_id
+        FROM authentication_modelapi AS model
+        INNER JOIN authentication_customuser AS users ON users.id = model.tenant_id
+        WHERE model.id = :model_id AND model.status != 'disabled'
+        LIMIT 1
+    """)
+
+    with model_registry_engine.connect() as conn:
+        row = conn.execute(query, {"model_id": model_id}).mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Model API not found.")
+
+    return dict(row)
+
+
+def download_model_artifact(model_id: int, model_uri: str) -> Path:
+    model_dir = Path(MODEL_CACHE_DIR) / str(model_id)
+    source_dir = model_dir / "source"
+    artifact_path = model_dir / "artifact.zip"
+
+    if source_dir.exists() and any(source_dir.rglob("MLmodel")):
+        return source_dir
+
+    if model_dir.exists():
+        shutil.rmtree(model_dir)
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    parsed = urlparse(model_uri)
+    if parsed.scheme in {"http", "https"}:
+        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+            response = client.get(model_uri)
+            response.raise_for_status()
+            artifact_path.write_bytes(response.content)
+    elif parsed.scheme == "s3":
+        boto3.client("s3").download_file(parsed.netloc, parsed.path.lstrip("/"), str(artifact_path))
+    else:
+        local_path = Path(model_uri)
+        if local_path.is_dir():
+            return local_path
+        if not local_path.exists():
+            raise FileNotFoundError(f"Model artifact not found: {model_uri}")
+        shutil.copyfile(local_path, artifact_path)
+
+    with zipfile.ZipFile(artifact_path) as archive:
+        archive.extractall(source_dir)
+
+    return source_dir
+
+
+def resolve_mlflow_model_dir(source_dir: Path) -> Path:
+    root_mlmodel = source_dir / "MLmodel"
+    if root_mlmodel.exists():
+        return source_dir
+
+    candidates = list(source_dir.rglob("MLmodel"))
+    if not candidates:
+        raise FileNotFoundError("MLmodel file was not found in the model artifact.")
+    return candidates[0].parent
+
+
+def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
+    model_id = int(model_record["id"])
+    version_marker = str(model_record.get("updated_at"))
+    cached = MODEL_CACHE.get(model_id)
+
+    if cached and cached.get("version_marker") == version_marker:
+        return cached
+
+    model_uri = model_record.get("model_uri")
+    if not model_uri:
+        raise HTTPException(status_code=503, detail="Model API does not have a model artifact.")
+
+    try:
+        source_dir = download_model_artifact(model_id, model_uri)
+        mlflow_model_dir = resolve_mlflow_model_dir(source_dir)
+        pyfunc_model = mlflow.pyfunc.load_model(str(mlflow_model_dir))
+        signature = pyfunc_model.metadata.signature
+        expected_features = [inp.name for inp in signature.inputs] if signature and signature.inputs else None
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Unable to load model artifact: {exc}")
+
+    MODEL_CACHE[model_id] = {
+        "model": pyfunc_model,
+        "expected_features": expected_features,
+        "version_marker": version_marker,
+    }
+    return MODEL_CACHE[model_id]
+
+
+async def verify_model_access(
+    model_id: int,
     api_key: str = Security(api_key_header),
-    authorization: str = Header(None)
+    authorization: str = Header(None),
 ):
-    """FastAPI Dependency: Kiểm tra Token hoặc API Key nếu API đang ở chế độ Private."""
-    # 1. Bypass nếu đang chạy chế độ Public
-    if ACCESS_MODE == "public":
-        return {"tenant_id": "public_user"}
-        
-    # 2. Kiểm tra luồng API KEY (Dành cho Code Python)
+    model_record = get_model_api_record(model_id)
+    model_tenant_id = model_record["tenant_id"]
+
+    if model_record["access_mode"] == "public":
+        return {"tenant_id": model_tenant_id, "auth_type": "public", "model_api": model_record}
+
     if api_key:
         if not redis_client:
             raise HTTPException(status_code=500, detail="Internal Server Error: Redis cache unavailable")
-            
-        # Truy vấn trực tiếp vào Redis (Rất nhanh ~1ms)
+
         cached_tenant_id = redis_client.get(f"api_key:{api_key}")
         if not cached_tenant_id:
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid or revoked API Key")
-            
-        if cached_tenant_id != TENANT_ID:
-            print(f"Security Alert: API Key of Tenant {cached_tenant_id} attempted to access model of Tenant {TENANT_ID}")
-            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to access this model.")
-            
-        return {"tenant_id": cached_tenant_id, "auth_type": "api_key"}
 
-    # 3. Kiểm tra luồng JWT BEARER (Dành cho ReactJS Web)
+        if cached_tenant_id != model_tenant_id:
+            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to access this model.")
+
+        return {"tenant_id": cached_tenant_id, "auth_type": "api_key", "model_api": model_record}
+
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized: Missing API Key or Bearer Token")
-    
+
     token = authorization.split(" ")[1]
-    
+
     try:
-        # Trích xuất 'kid' (Key ID) từ header của JWT
         unverified_header = jwt.get_unverified_header(token)
         kid = unverified_header.get("kid")
         if not kid:
             raise HTTPException(status_code=401, detail="Unauthorized: JWT missing 'kid' header")
-            
-        # Lấy Public Key từ Cache/Django
+
         public_key = await get_public_key(kid)
         if not public_key:
-            raise HTTPException(status_code=401, detail="Unauthorized: Unable to verify token signature (Key not found)")
+            raise HTTPException(status_code=401, detail="Unauthorized: Unable to verify token signature")
 
-        # Verify token (sử dụng thuật toán RS256)
         payload = jwt.decode(token, public_key, algorithms=["RS256"], audience="mlops-paas")
-        
-        # Kiểm tra chéo (Ngăn chặn BOLA/IDOR)
         token_tenant_id = payload.get("tenant_id")
-        if not token_tenant_id:
-            raise HTTPException(status_code=401, detail="Unauthorized: Token payload missing 'tenant_id'")
-            
-        if token_tenant_id != TENANT_ID:
-            print(f"Security Alert: Tenant {token_tenant_id} attempted to access model of Tenant {TENANT_ID}")
+        if token_tenant_id != model_tenant_id:
             raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to access this model.")
-            
-        payload["auth_type"] = "jwt"
-        return payload
 
+        payload["auth_type"] = "jwt"
+        payload["model_api"] = model_record
+        return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Unauthorized: Token has expired")
-    except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"Unauthorized: Invalid token ({e})")
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail=f"Unauthorized: Invalid token ({exc})")
 
 
-# 7. SCHEMA & BACKGROUND TASKS
-MLFLOW_TO_PY_TYPE = {
-    "integer": int,
-    "long": int,
-    "float": float,
-    "double": float,
-    "boolean": bool,
-    "string": str,
-}
-
-if EXPECTED_FEATURES and signature and signature.inputs:
-    fields = {}
-    for inp in signature.inputs:
-        py_type = MLFLOW_TO_PY_TYPE.get(inp.type, Any)
-        fields[inp.name] = (py_type, ...)
-    
-    DynamicFeaturesModel = create_model("DynamicFeaturesModel", **fields)
-    
-    class InferenceRequest(BaseModel):
-        features: DynamicFeaturesModel
-else:
-    class InferenceRequest(BaseModel):
-        # Schema động để chấp nhận mọi loại dữ liệu dạng bảng nếu không có signature
-        features: Dict[str, Any]
-
-def send_to_redpanda(features_dict: dict, prediction_result: Any):
+def send_to_redpanda(tenant_id: str, model_id: str, features_dict: dict, prediction_result: Any):
     if kafka_producer is None:
         return
 
     try:
-        # Chuẩn bị payload log cho Multi-tenant
         payload = {
             "id": str(uuid.uuid4()),
-            "tenant_id": TENANT_ID,
-            "model_id": MODEL_ID,
+            "tenant_id": tenant_id,
+            "model_id": model_id,
             "timestamp": datetime.utcnow().isoformat(),
-            "features": features_dict, # Lưu vào cột JSONB
-            "prediction": prediction_result
+            "features": features_dict,
+            "prediction": prediction_result,
         }
-        
+
         kafka_producer.produce(
-            topic=KAFKA_TOPIC, 
-            key=payload['id'].encode('utf-8'), 
-            value=json.dumps(payload).encode('utf-8')
+            topic=KAFKA_TOPIC,
+            key=payload["id"].encode("utf-8"),
+            value=json.dumps(payload).encode("utf-8"),
         )
         kafka_producer.poll(0)
-    except Exception as e:
-        print(f"Error sending log to Redpanda: {e}")
+    except Exception as exc:
+        print(f"Error sending log to Redpanda: {exc}")
+
 
 @app.on_event("shutdown")
 def shutdown_event():
     if kafka_producer:
-        print("Flushing Redpanda messages...")
         kafka_producer.flush(timeout=5.0)
 
 
-# 8. API ENDPOINTS
 @app.get("/")
 async def health_check():
-    """Kiểm tra trạng thái của API."""
-    if model is None:
-        raise HTTPException(
-            status_code=503, 
-            detail="Service Unavailable: Model failed to load."
-        )
     return {
         "status": "healthy",
-        "tenant_id": TENANT_ID,
-        "model_id": MODEL_ID,
-        "access_mode": ACCESS_MODE,
-        "model_loaded": True
+        "mode": "dynamic-model-registry",
+        "model_registry_connected": model_registry_engine is not None,
+        "cached_models": list(MODEL_CACHE.keys()),
     }
 
-@app.post("/predict")
+
+@app.get("/models/{model_id}/health")
+async def model_health(model_id: int, token_payload: dict = Depends(verify_model_access)):
+    model_record = token_payload["model_api"]
+    loaded = load_model_for_record(model_record)
+    return {
+        "status": "healthy",
+        "tenant_id": model_record["tenant_id"],
+        "model_id": str(model_record["id"]),
+        "access_mode": model_record["access_mode"],
+        "model_loaded": loaded.get("model") is not None,
+    }
+
+
+@app.post("/models/{model_id}/predict")
 async def predict(
+    model_id: int,
     request: Request,
-    payload: InferenceRequest, 
+    payload: InferenceRequest,
     background_tasks: BackgroundTasks,
-    token_payload: dict = Depends(verify_tenant_access)
+    token_payload: dict = Depends(verify_model_access),
 ):
-    """Thực hiện dự đoán dựa trên payload gửi lên."""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Internal Error: Model is not initialized.")
-        
+    model_record = token_payload["model_api"]
+    loaded_model = load_model_for_record(model_record)
+    model = loaded_model["model"]
+    expected_features = loaded_model.get("expected_features")
+
     try:
-        # Convert features to dict (supports both Dict and Pydantic submodel)
         features_dict = payload.model_dump().get("features", {})
 
-        # 1. Fail-fast Validation (Nếu model có signature)
-        if EXPECTED_FEATURES:
-            missing_cols = set(EXPECTED_FEATURES) - set(features_dict.keys())
+        if expected_features:
+            missing_cols = set(expected_features) - set(features_dict.keys())
             if missing_cols:
                 raise HTTPException(
-                    status_code=400, 
-                    detail=f"Bad Request: Missing {len(missing_cols)} required features (e.g., {list(missing_cols)[:3]})"
+                    status_code=400,
+                    detail=f"Bad Request: Missing {len(missing_cols)} required features (e.g., {list(missing_cols)[:3]})",
                 )
 
-        # 2. Xử lý Pandas DataFrame (MLflow nhận DataFrame)
         df_input = pd.DataFrame([features_dict])
-        if EXPECTED_FEATURES:
-            df_input = df_input[EXPECTED_FEATURES] # Sắp xếp lại thứ tự cột cho đúng
-            
-        # 3. Tiến hành dự đoán
+        if expected_features:
+            df_input = df_input[expected_features]
+
         prediction = model.predict(df_input)
-        
-        # 4. Ép kiểu về Python native (để chuyển thành JSON hợp lệ)
+
         if isinstance(prediction, (np.ndarray, pd.Series)):
-             result = prediction.tolist()
+            result = prediction.tolist()
         else:
-             result = prediction if isinstance(prediction, list) else [prediction]
-             
-        # Giả định dự đoán trả về mảng 1 phần tử cho 1 row
+            result = prediction if isinstance(prediction, list) else [prediction]
+
         single_result = result[0] if len(result) > 0 else result
-        
-        # 5. Ghi nhận Metrics và đẩy log vào Redpanda
-        paas_predictions_counter.labels(tenant_id=TENANT_ID, model_id=MODEL_ID, status="success").inc()
-        
-        background_tasks.add_task(
-            send_to_redpanda, 
-            features_dict=features_dict, 
-            prediction_result=single_result
-        )
+        tenant_id = model_record["tenant_id"]
+        resolved_model_id = str(model_record["id"])
+
+        paas_predictions_counter.labels(tenant_id=tenant_id, model_id=resolved_model_id, status="success").inc()
+        background_tasks.add_task(send_to_redpanda, tenant_id, resolved_model_id, features_dict, single_result)
 
         return JSONResponse(
             content={
                 "success": True,
                 "prediction": single_result,
-                "tenant_id": TENANT_ID,
-                "model_id": MODEL_ID
+                "tenant_id": tenant_id,
+                "model_id": resolved_model_id,
             },
-            status_code=200
+            status_code=200,
         )
-        
     except HTTPException:
-        paas_predictions_counter.labels(tenant_id=TENANT_ID, model_id=MODEL_ID, status="error_400").inc()
+        paas_predictions_counter.labels(
+            tenant_id=model_record["tenant_id"], model_id=str(model_record["id"]), status="error_400"
+        ).inc()
         raise
-    except Exception as e:
-        paas_predictions_counter.labels(tenant_id=TENANT_ID, model_id=MODEL_ID, status="error_500").inc()
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        paas_predictions_counter.labels(
+            tenant_id=model_record["tenant_id"], model_id=str(model_record["id"]), status="error_500"
+        ).inc()
+        raise HTTPException(status_code=500, detail=str(exc))
