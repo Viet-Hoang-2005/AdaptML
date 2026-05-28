@@ -1,38 +1,18 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { KeyRound, UserRound } from 'lucide-react';
+import { Outlet } from 'react-router-dom';
+import { PageTabs } from '../../components/layout/PageTabs';
 
 const settingsTabs = [
-  { label: 'Profile', to: '/dashboard/settings/profile' },
-  { label: 'Developer', to: '/dashboard/settings/developer' },
+  { label: 'Profile', to: '/dashboard/settings/profile', icon: UserRound },
+  { label: 'Developer', to: '/dashboard/settings/developer', icon: KeyRound },
 ];
 
 export default function SettingsLayout() {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 border-b border-gray-300 pb-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Manage your account profile, credentials, and developer access.
-          </p>
-        </div>
-
-        <div className="inline-flex overflow-hidden rounded-xl border border-gray-300 bg-white gap-1">
-          {settingsTabs.map((tab) => (
-            <NavLink
-              key={tab.to}
-              to={tab.to}
-              className={({ isActive }) =>
-                `px-3 py-2 text-sm font-semibold transition-colors ${
-                  isActive
-                    ? 'bg-black text-white'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-                }`
-              }
-            >
-              {tab.label}
-            </NavLink>
-          ))}
-        </div>
+      <div className="flex flex-col gap-2 border-b border-gray-300 md:flex-row md:items-center md:justify-between">
+        <h1 className="text-xl font-bold text-gray-900">Settings</h1>
+        <PageTabs tabs={settingsTabs} />
       </div>
 
       <Outlet />
