@@ -34,7 +34,7 @@ get_required_env("MLFLOW_TRACKING_PASSWORD")
 # Cấu hình tham số từ biến môi trường
 MODEL_VERSION = get_required_env("MODEL_VERSION")
 TARGET_CSV = get_required_env("TARGET_CSV")
-AWS_BUCKET_NAME = os.environ.get("AWS_BUCKET_NAME", "mlops-nids-artifacts")
+AWS_BUCKET_NAME = os.environ.get("AWS_BUCKET_NAME", "mlops-paas-artifacts")
 S3_TRAINING_DATA_PREFIX = os.environ.get("S3_TRAINING_DATA_PREFIX", "training-data/")
 MLFLOW_TRACKING_URI = get_required_env("MLFLOW_TRACKING_URI")
 MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "MLOps_NIDS_Training")

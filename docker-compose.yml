@@ -4,7 +4,7 @@ services:
   # 1. PostgreSQL Database (mô phỏng CloudNativePG local)
   postgres:
     image: postgres:15-alpine
-    container_name: mlops_nids_postgres
+    container_name: mlops_paas_postgres
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -13,9 +13,9 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - mlops_nids_pgdata:/var/lib/postgresql/data
+      - mlops_paas_pgdata:/var/lib/postgresql/data
     networks:
-      - mlops_nids_network
+      - mlops_paas_network
     # Đợi PostgreSQL thực sự sẵn sàng nhận connection trước khi API start
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
@@ -24,12 +24,45 @@ services:
       retries: 5
       start_period: 10s
 
+  # Init Container để tạo schema riêng cho Control Plane và MLflow
+  db_schema_init:
+    image: postgres:15-alpine
+    container_name: mlops_paas_db_schema_init
+    restart: "no"
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    command: >
+      sh -c "psql -h postgres -U ${DB_USER} -d ${DB_NAME} -v ON_ERROR_STOP=1
+      -c 'CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA:-control_plane};'
+      -c 'CREATE SCHEMA IF NOT EXISTS ${MLFLOW_DB_SCHEMA:-mlflow};'"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mlops_paas_network
+
+  # pgAdmin 4 (PostgreSQL Web GUI)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: mlops_paas_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mlops_paas_network
+
   # 2. Django Control Plane (Auth & Users)
   control_plane:
     build:
-      context: ./services/api/control-plane
+      context: ./services/control-plane
       dockerfile: Dockerfile
-    container_name: mlops_nids_django
+    container_name: mlops_paas_django
     restart: always
     ports:
       - "8000:8000"
@@ -44,6 +77,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
+      DB_SCHEMA: ${DB_SCHEMA:-control_plane}
       REDIS_URL: redis://redis:6379/1
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
@@ -56,23 +90,28 @@ services:
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-mlops-paas-artifacts}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
       MODEL_SERVER_PUBLIC_URL: ${MODEL_SERVER_PUBLIC_URL:-http://localhost:5000}
+      MODEL_PACKAGER_URL: http://model_packager:7000
     volumes:
-      - ./services/api/control-plane:/app
-    command: sh -c "python src/manage.py migrate && python src/manage.py runserver 0.0.0.0:8000"
+      - ./services/control-plane:/app
+    command: sh -c "python src/manage.py ensure_db_schema && python src/manage.py migrate && python src/manage.py runserver 0.0.0.0:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      db_schema_init:
+        condition: service_completed_successfully
       redis:
         condition: service_started
+      model_packager:
+        condition: service_started
     networks:
-      - mlops_nids_network
+      - mlops_paas_network
 
   # 3. FastAPI Inference Server (Data Plane)
-  api:
+  model_server:
     build:
-      context: ./services/api/model-server
+      context: ./services/model-server
       dockerfile: Dockerfile
-    container_name: mlops_nids_api
+    container_name: mlops_paas_model_server
     restart: always
     ports:
       - "5000:5000"
@@ -88,9 +127,10 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       REDPANDA_BROKERS: redpanda:9092
-      KAFKA_TOPIC: ${KAFKA_TOPIC:-ai_paas_production_logs}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_logs}
       JWKS_URL: http://control_plane:8000/api/auth/.well-known/jwks.json
       CONTROL_PLANE_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control_plane}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
@@ -99,7 +139,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
       - ./models:/models # Mount thư mục models local vào container
-      - ./services/api/model-server:/app
+      - ./services/model-server:/app
     command: uvicorn src.index:app --host 0.0.0.0 --port 5000 --reload
     depends_on:
       postgres:
@@ -107,14 +147,26 @@ services:
       redpanda:
         condition: service_started
     networks:
-      - mlops_nids_network
+      - mlops_paas_network
 
-  # 4. Evidently Drift Monitor
+  # 4. Internal MLflow Package Builder
+  model_packager:
+    build:
+      context: ./services/model-packager
+      dockerfile: Dockerfile
+    container_name: mlops_paas_model_packager
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: 1
+    networks:
+      - mlops_paas_network
+
+  # 5. Evidently Drift Monitor
   evidently:
     build:
       context: ./services/evidently
       dockerfile: Dockerfile
-    container_name: mlops_nids_evidently
+    container_name: mlops_paas_evidently
     # Không restart tự động - đây là job chạy 1 lần như CronJob trong K3s
     restart: "no"
     environment:
@@ -146,12 +198,12 @@ services:
       mlflow:
         condition: service_started
     networks:
-      - mlops_nids_network
+      - mlops_paas_network
 
-  # 5. MLflow Tracking Server
+  # 6. MLflow Tracking Server
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
-    container_name: mlops_nids_mlflow
+    container_name: mlops_paas_mlflow
     restart: always
     ports:
       - "5001:5000"
@@ -160,24 +212,27 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-southeast-1}
       - AWS_BUCKET_NAME=${AWS_BUCKET_NAME:-mlops-paas-artifacts}
+      - MLFLOW_DB_SCHEMA=${MLFLOW_DB_SCHEMA:-mlflow}
     command: >
       mlflow server 
       --host 0.0.0.0 
       --port 5000 
-      --backend-store-uri postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME} 
+      --backend-store-uri postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?options=-csearch_path%3D${MLFLOW_DB_SCHEMA:-mlflow}%2Cpublic
       --default-artifact-root s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/
     depends_on:
       postgres:
         condition: service_healthy
+      db_schema_init:
+        condition: service_completed_successfully
     networks:
-      - mlops_nids_network
+      - mlops_paas_network
 
-  # 6. NIDS Log Consumer (đứng giữa Redpanda và PostgreSQL)
+  # 7. PaaS Log Consumer (đứng giữa Redpanda và PostgreSQL)
   consumer:
     build:
-      context: ./services/api/model-server
+      context: ./services/model-server
       dockerfile: Dockerfile
-    container_name: mlops_nids_consumer
+    container_name: mlops_paas_consumer
     restart: always
     environment:
       PYTHONUNBUFFERED: 1
@@ -188,12 +243,12 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       REDPANDA_BROKERS: redpanda:9092
-      KAFKA_TOPIC: ${KAFKA_TOPIC:-ai_paas_production_logs}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_logs}
       EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
       GITHUB_REPO: ${GITHUB_REPO}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
-      - ./services/api/model-server:/app
+      - ./services/model-server:/app
     command: python src/consumer.py
     depends_on:
       postgres:
@@ -201,12 +256,12 @@ services:
       redpanda:
         condition: service_started
     networks:
-      - mlops_nids_network
+      - mlops_paas_network
 
-  # 7. Redpanda Kafka Broker
+  # 8. Redpanda Kafka Broker
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
-    container_name: mlops_nids_redpanda
+    container_name: mlops_paas_redpanda
     command:
       - redpanda
       - start
@@ -224,12 +279,12 @@ services:
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     networks:
-      - mlops_nids_network
+      - mlops_paas_network
 
-  # Redpanda Console (Kafka UI)
+  # Redpanda Console UI
   console:
     image: docker.redpanda.com/redpandadata/console:latest
-    container_name: mlops_nids_redpanda_console
+    container_name: mlops_paas_redpanda_console
     ports:
       - "8080:8080"
     environment:
@@ -237,25 +292,25 @@ services:
     depends_on:
       - redpanda
     networks:
-      - mlops_nids_network
+      - mlops_paas_network
 
-  # 8. Redis (OTP Cache)
+  # 9. Redis (Cache)
   redis:
     image: redis:7-alpine
-    container_name: mlops_nids_redis
+    container_name: mlops_paas_redis
     restart: always
     ports:
       - "6379:6379"
     networks:
-      - mlops_nids_network
+      - mlops_paas_network
 
 # Mạng nội bộ cho các container
 networks:
-  mlops_nids_network:
+  mlops_paas_network:
     driver: bridge
 
 # Volume để lưu trữ dữ liệu của PostgreSQL và Redpanda
 volumes:
-  mlops_nids_pgdata:
+  mlops_paas_pgdata:
     external: false
   redpanda_data:
