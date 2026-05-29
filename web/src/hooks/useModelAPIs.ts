@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
+  buildModelAPI,
   createModelAPI,
   deleteModelAPI,
   listModelAPIs,
@@ -36,6 +37,18 @@ export function useModelAPIMutations() {
     },
   });
 
+  const buildMutation = useMutation({
+    mutationFn: buildModelAPI,
+    onSuccess: async (model) => {
+      await invalidateModels();
+      toast.success('MLflow package built and deployed successfully.');
+      navigate(`/dashboard/api-management/${model.id}`);
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Unable to build MLflow package.'));
+    },
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ modelId, payload }: { modelId: number; payload: ModelAPIFormValues }) =>
       updateModelAPI(modelId, payload),
@@ -63,9 +76,11 @@ export function useModelAPIMutations() {
 
   return {
     createModelAPI: createMutation.mutate,
+    buildModelAPI: buildMutation.mutate,
     updateModelAPI: updateMutation.mutate,
     deleteModelAPI: deleteMutation.mutate,
     creating: createMutation.isPending,
+    building: buildMutation.isPending,
     updating: updateMutation.isPending,
     deleting: deleteMutation.isPending,
   };
