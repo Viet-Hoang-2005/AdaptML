@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Plus, Settings, LogOut, UserCircle, Moon, Sun } from 'lucide-react';
+import { Bell, ChevronDown, ChevronUp, Plus, Settings, LogOut, UserCircle, Moon, Sun } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -7,7 +7,7 @@ import { getProfile } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import MLdriftLogo from '../../assets/icons/MLdrift.png';
 import type { UserProfile } from '../../types/auth';
-import { useModelSelection } from '../../pages/Dashboard/modelSelection';
+import { useModelSelection } from '../../hooks/useModelSelection';
 
 const getInitials = (profile: UserProfile | null) => {
   const source = profile?.full_name || profile?.email || 'User';
@@ -49,7 +49,11 @@ export default function Header() {
           className="flex h-10 w-full items-center justify-between gap-3 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 shadow-sm hover:border-gray-300"
         >
           <span className="truncate">{selectedModel ? selectedModel.name : 'No model selected'}</span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
+          {modelMenuOpen ? (
+            <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
+          )}
         </button>
 
         {modelMenuOpen && (
@@ -68,18 +72,20 @@ export default function Header() {
                 <span className="text-xs text-gray-400">{model.status}</span>
               </button>
             ))}
-            {!models.length && (
-              <button
-                type="button"
-                onClick={() => {
-                  setModelMenuOpen(false);
-                  navigate('/dashboard/api-management/upload');
-                }}
-                className="w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-gray-500 hover:bg-gray-100 hover:text-black"
-              >
-                Upload your first model
-              </button>
-            )}
+            
+            {models.length > 0 && <div className="my-1 border-t border-gray-100" />}
+            
+            <button
+              type="button"
+              onClick={() => {
+                setModelMenuOpen(false);
+                navigate('/dashboard/api-management/upload');
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-gray-500 hover:bg-gray-100 hover:text-black"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span>Upload your new model</span>
+            </button>
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Mail, ArrowLeft } from 'lucide-react';
-import { AuthCard } from '../../components/ui/AuthCard';
+import { AuthCard } from '../../components/layout/AuthCard';
 import { OTPInput } from '../../components/ui/OTPInput';
 import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';

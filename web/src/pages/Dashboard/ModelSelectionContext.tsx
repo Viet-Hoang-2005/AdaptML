@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useModelAPIs } from '../../hooks/useModelAPIs';
-import { ModelSelectionContext } from './modelSelection';
-import type { ModelSelectionContextValue } from './modelSelection';
+import { ModelSelectionContext } from '../../hooks/useModelSelection';
+import type { ModelSelectionContextValue } from '../../hooks/useModelSelection';
 
 export function ModelSelectionProvider({ children }: { children: ReactNode }) {
   const [selectedModelId, setSelectedModelId] = useState<number | null>(() => {

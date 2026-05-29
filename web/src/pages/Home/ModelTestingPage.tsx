@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { predictWithModelAPI } from '../../lib/api';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
-import { useModelSelection } from '../Dashboard/modelSelection';
+import { useModelSelection } from '../../hooks/useModelSelection';
 
 type TestResult = {
   row: number;

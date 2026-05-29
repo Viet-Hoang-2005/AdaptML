@@ -145,8 +145,8 @@ export default function ProfileSettingPage() {
   return (
     <div className="w-full space-y-6">
       <section className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <aside className="space-y-5">
-          <div className="rounded-lg border border-gray-300 bg-white">
+        <aside className="flex flex-col">
+          <div className="flex-1 rounded-lg border border-gray-300 bg-white">
             <div className="flex flex-col items-center text-center p-6">
               <button
                 type="button"
@@ -177,7 +177,6 @@ export default function ProfileSettingPage() {
             <div className="mx-auto h-px w-64 rounded-full bg-gray-300" />
 
             <div className="p-6">
-              <h3 className="mb-4 text-base font-bold text-gray-900">Account Details</h3>
               <div className="space-y-3">
                 <ReadOnlyRow icon={<Mail className="h-4 w-4" />} label="Email" value={profile?.email || 'Unknown'} />
                 <ReadOnlyRow icon={<Fingerprint className="h-4 w-4" />} label="Tenant ID" value={profile?.tenant_id || 'Unknown'} />
@@ -329,7 +328,7 @@ export default function ProfileSettingPage() {
               </div>
             </label>
 
-            <div className="grid gap-3 pt-4 sm:grid-cols-2">
+            <div className="grid gap-3 pt-1 sm:grid-cols-2">
               <Button
                 id="btn-change-password"
                 variant="secondary"

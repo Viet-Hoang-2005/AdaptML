@@ -1,8 +1,9 @@
 import { Copy, ExternalLink, UploadCloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
+import Placeholder from '../../components/layout/Placeholder';
 import { toast } from '../../lib/toast';
-import { useModelSelection } from '../Dashboard/modelSelection';
+import { useModelSelection } from '../../hooks/useModelSelection';
 
 export default function ModelApiPage() {
   const navigate = useNavigate();
@@ -15,25 +16,17 @@ export default function ModelApiPage() {
   };
 
   if (loading) {
-    return <section className="min-h-105 rounded-lg border border-gray-300 bg-white p-8" />;
+    return <section className="flex-1 rounded-lg border border-gray-300 bg-white p-8" />;
   }
 
   if (!selectedModel) {
     return (
-      <section className="min-h-140 rounded-lg border border-dashed border-gray-300 bg-white px-8 py-10">
-        <div className="flex h-full flex-col items-center justify-center text-center">
-          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-black">
-            <UploadCloud className="h-6 w-6" />
-          </div>
-          <h1 className="mb-3 text-2xl font-bold text-gray-900">No model API yet</h1>
-          <p className="mb-6 max-w-lg text-sm leading-6 text-gray-500">
-            Upload an MLflow model package to generate an endpoint that can be called from your apps.
-          </p>
-          <Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>
-            Upload model
-          </Button>
-        </div>
-      </section>
+      <Placeholder
+        title="No model API yet"
+        description="You haven't uploaded any models to generate prediction endpoints yet. Start by uploading an MLflow package."
+        icon={<UploadCloud className="h-6 w-6" />}
+        action={<Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>Upload model</Button>}
+      />
     );
   }
 

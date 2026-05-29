@@ -1,23 +1,23 @@
 import { Activity, Boxes, Cpu, GitBranch, LineChart, Rocket, UploadCloud } from 'lucide-react';
-import PlaceholderPage from './PlaceholderPage';
+import Placeholder from '../../components/layout/Placeholder';
 
 export const homePlaceholders = {
   modelApi: (
-    <PlaceholderPage
+    <Placeholder
       title="Model API"
       description="Upload an MLflow MLmodel package, connect it to FastAPI, and monitor endpoint status from this workspace."
       icon={<UploadCloud className="h-6 w-6" />}
     />
   ),
   benchmark: (
-    <PlaceholderPage
+    <Placeholder
       title="Benchmark Model"
       description="Upload a CSV dataset and send benchmark requests to the selected model endpoint to inspect API predictions."
       icon={<Activity className="h-6 w-6" />}
     />
   ),
   modelManagement: (
-    <PlaceholderPage
+    <Placeholder
       title="Model Management"
       description="Review connected models, their generated API endpoints, and lifecycle state for the selected workspace."
       icon={<Boxes className="h-6 w-6" />}
@@ -27,29 +27,30 @@ export const homePlaceholders = {
 
 export const dashboardPlaceholders = {
   driftMonitoring: (
-    <PlaceholderPage
+    <Placeholder
       title="Drift Monitoring"
       description="Upload reference training data and compare it with production data using Evidently AI drift reports."
       icon={<LineChart className="h-6 w-6" />}
     />
   ),
   modelTraining: (
-    <PlaceholderPage
+    <Placeholder
       title="Model Training"
       description="Submit new training data and Python source code for SageMaker retraining jobs when model quality drops."
       icon={<Cpu className="h-6 w-6" />}
     />
   ),
   modelEvolution: (
-    <PlaceholderPage
+    <Placeholder
       title="Model Evolution"
       description="Track model versions, metrics, and production promotion history through the MLflow Model Registry."
       icon={<GitBranch className="h-6 w-6" />}
     />
   ),
   notifications: (
-    <PlaceholderPage
+    <Placeholder
       title="Notifications"
+      showModelName={false}
       description="Model deployment events, drift alerts, retraining results, and API status notifications will appear here."
       icon={<Rocket className="h-6 w-6" />}
     />

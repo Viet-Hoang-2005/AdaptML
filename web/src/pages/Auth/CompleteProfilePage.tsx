@@ -1,7 +1,7 @@
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Briefcase, Camera, User, Lock, LockKeyhole } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { AuthCard } from '../../components/ui/AuthCard';
+import { AuthCard } from '../../components/layout/AuthCard';
 import { Input, InputPassword } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { AvatarCropModal } from '../../components/ui/AvatarCropModal';

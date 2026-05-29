@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail } from 'lucide-react';
-import { AuthCard } from '../../components/ui/AuthCard';
+import { AuthCard } from '../../components/layout/AuthCard';
 import { Button } from '../../components/ui/Button';
 import { OTPInput } from '../../components/ui/OTPInput';
 import { useCountdown } from '../../hooks/useCountdown';

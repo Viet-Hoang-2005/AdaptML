@@ -16,7 +16,7 @@ export default function DashboardLayout() {
             collapsed={sidebarCollapsed}
             onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
           />
-          <main className="min-w-0 flex-1 overflow-y-auto p-6">
+          <main className="min-w-0 flex-1 flex flex-col overflow-y-auto p-6">
             <Outlet />
           </main>
         </div>

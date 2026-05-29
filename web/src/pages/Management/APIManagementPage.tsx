@@ -1,6 +1,7 @@
-import { Plus, ServerCog } from 'lucide-react';
+import { Plus, Bot } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
+import Placeholder from '../../components/layout/Placeholder';
 import { useModelAPIs } from '../../hooks/useModelAPIs';
 
 export default function APIManagementPage() {
@@ -9,34 +10,31 @@ export default function APIManagementPage() {
   const models = data?.models ?? [];
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 border-b border-gray-300 pb-4 md:flex-row md:items-center md:justify-between">
+    <section className="flex w-full flex-1 flex-col space-y-6">
+      <div className="flex flex-col gap-4 border-b border-gray-300 pb-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">API Management</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage model endpoints, metadata, and public/private access.</p>
+          <h1 className="text-lg font-bold text-gray-900">API Management</h1>
         </div>
-        <Button size="md" icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/dashboard/api-management/upload')}>
+        <Button
+          size="md"
+          icon={<Plus className="h-4 w-4" />}
+          onClick={() => navigate('/dashboard/api-management/upload')}
+          className="px-4"
+        >
           Upload model
         </Button>
       </div>
 
       {isLoading ? (
-        <div className="min-h-80 rounded-lg border border-gray-300 bg-white" />
+        <div className="flex-1 rounded-lg border border-gray-300 bg-white" />
       ) : models.length === 0 ? (
-        <div className="min-h-105 rounded-lg border border-dashed border-gray-300 bg-white px-8 py-10">
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-black">
-              <ServerCog className="h-6 w-6" />
-            </div>
-            <h2 className="mb-3 text-2xl font-bold text-gray-900">No model APIs</h2>
-            <p className="mb-6 max-w-xl text-sm leading-6 text-gray-500">
-              Upload your first MLflow model package to create a prediction endpoint.
-            </p>
-            <Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>
-              Upload model
-            </Button>
-          </div>
-        </div>
+        <Placeholder
+          title="No model APIs"
+          description="Upload your first MLflow model package to create a prediction endpoint."
+          icon={<Bot className="h-6 w-6" />}
+          showModelName={false}
+          action={<Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>Upload model</Button>}
+        />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {models.map((model) => (

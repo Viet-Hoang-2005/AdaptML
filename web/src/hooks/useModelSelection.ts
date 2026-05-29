@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { ModelAPI } from '../../types/modelApi';
+import type { ModelAPI } from '../types/modelApi';
 
 export type DashboardModel = ModelAPI;
 

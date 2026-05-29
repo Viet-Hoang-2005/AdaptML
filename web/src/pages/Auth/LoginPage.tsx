@@ -1,7 +1,7 @@
 import { useGoogleLogin } from '@react-oauth/google';
 import { Mail, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { AuthCard } from '../../components/ui/AuthCard';
+import { AuthCard } from '../../components/layout/AuthCard';
 import { Button } from '../../components/ui/Button';
 import { Divider } from '../../components/ui/Divider';
 import { Input, InputPassword } from '../../components/ui/Input';

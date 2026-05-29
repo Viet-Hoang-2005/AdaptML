@@ -2,7 +2,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { Mail, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AuthCard } from '../../components/ui/AuthCard';
+import { AuthCard } from '../../components/layout/AuthCard';
 import { Button } from '../../components/ui/Button';
 import { Divider } from '../../components/ui/Divider';
 import { Input } from '../../components/ui/Input';
