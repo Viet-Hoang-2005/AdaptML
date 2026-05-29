@@ -16,11 +16,18 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from authentication.model_api_views import ModelAPIListCreateView, ModelAPIDetailView
+from authentication.model_api_views import (
+    ModelAPIBuildView,
+    ModelAPIDetailView,
+    ModelAPIListCreateView,
+    ModelAPIPackagePreviewView,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('authentication.urls')),
     path('api/models/', ModelAPIListCreateView.as_view(), name='model_api_list_create'),
+    path('api/models/build/', ModelAPIBuildView.as_view(), name='model_api_build'),
+    path('api/models/<int:model_id>/package-preview/', ModelAPIPackagePreviewView.as_view(), name='model_api_package_preview'),
     path('api/models/<int:model_id>/', ModelAPIDetailView.as_view(), name='model_api_detail'),
 ]

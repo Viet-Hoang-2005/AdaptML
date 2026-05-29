@@ -21,12 +21,12 @@ DB_USER = os.environ.get("DB_USER")
 DB_PASSWORD = os.environ.get("DB_PASSWORD")
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
-DB_NAME = os.environ.get("DB_NAME", "mlops_nids_db")
+DB_NAME = os.environ.get("DB_NAME", "mlops_paas_db")
 
-AWS_BUCKET = os.environ.get("AWS_BUCKET_NAME", "mlops-nids-artifacts")
+AWS_BUCKET = os.environ.get("AWS_BUCKET_NAME", "mlops-paas-artifacts")
 AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1")
 MANIFEST_KEY = "data_manifest.json"
-REFERENCE_TABLE = "nids_reference_data"
+REFERENCE_TABLE = "paas_reference_data"
 
 os.makedirs(DATA_DIR, exist_ok=True)
 

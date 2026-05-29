@@ -27,7 +27,7 @@ load_dotenv(dotenv_path=os.path.join(ROOT_DIR, ".env"))
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "mlops_nids_db")
+DB_NAME = os.getenv("DB_NAME", "mlops_paas_db")
 DB_HOST_RO = os.getenv("DB_HOST_RO", "localhost")
 
 # PAAS MULTI-TENANT CONFIG

@@ -32,7 +32,7 @@ class Command(BaseCommand):
         # Khởi tạo Boto3 S3 Client
         # Nếu chạy trên EC2/K3s, boto3 tự động lấy IAM Role
         s3 = boto3.client('s3', region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'ap-southeast-1'))
-        bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'mlops-nids-artifacts')
+        bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'mlops-paas-artifacts')
 
         for user in expired_users:
             tenant_id = user.tenant_id
@@ -45,7 +45,7 @@ class Command(BaseCommand):
                 "tenant_id": tenant_id,
                 "email": email
             }
-            producer.produce('ai_paas_control_events', key=tenant_id, value=json.dumps(event_payload))
+            producer.produce('mlops_paas_control_events', key=tenant_id, value=json.dumps(event_payload))
             
             # 2. Xóa Model Artifacts trên S3 (Giả sử thư mục là mlflow-artifacts/tenant_id)
             # Lưu ý: Cấu trúc thư mục MLflow có thể khác, nhưng thường người ta thiết kế theo tenant_id

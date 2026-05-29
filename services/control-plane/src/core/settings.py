@@ -29,6 +29,13 @@ def env_list(name, default=""):
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def env_db_identifier(name, default):
+    value = os.environ.get(name, default).strip()
+    if not value.replace("_", "").isalnum() or value[0].isdigit():
+        raise ValueError(f"{name} must be a simple PostgreSQL identifier.")
+    return value
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -92,14 +99,19 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+DB_SCHEMA = env_db_identifier('DB_SCHEMA', 'control_plane')
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'mlops_nids'),
+        'NAME': os.environ.get('DB_NAME', 'mlops_paas'),
         'USER': os.environ.get('DB_USER', 'postgres'),
         'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres0123'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '5432'),
+        'OPTIONS': {
+            'options': f'-c search_path={DB_SCHEMA},public',
+        },
     }
 }
 
@@ -205,6 +217,7 @@ GITHUB_OAUTH_REDIRECT_URI = os.environ.get(
 )
 
 MODEL_SERVER_PUBLIC_URL = os.environ.get('MODEL_SERVER_PUBLIC_URL', 'http://localhost:5000')
+MODEL_PACKAGER_URL = os.environ.get('MODEL_PACKAGER_URL', 'http://model_packager:7000')
 
 # Cấu hình lưu trữ AWS S3 (cho Avatar & File)
 # Lưu ý: Không khai báo AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY

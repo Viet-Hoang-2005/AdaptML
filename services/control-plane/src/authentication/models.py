@@ -17,6 +17,9 @@ def user_avatar_history_path(instance, filename):
 def model_artifact_path(instance, filename):
     return f'{instance.tenant.tenant_id}/models/{instance.id or "new"}/{filename}'
 
+def model_source_artifact_path(instance, filename):
+    return f'{instance.tenant.tenant_id}/models/{instance.id or "new"}/source/{filename}'
+
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -143,12 +146,25 @@ class ModelAPI(models.Model):
         ("error", "Error"),
         ("disabled", "Disabled"),
     )
+    BUILD_STATUS_CHOICES = (
+        ("not_started", "Not Started"),
+        ("building", "Building"),
+        ("ready", "Ready"),
+        ("error", "Error"),
+    )
 
     tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_apis")
     name = models.CharField(max_length=160)
     description = models.TextField(blank=True)
     model_info = models.TextField(blank=True)
     access_mode = models.CharField(max_length=20, choices=ACCESS_MODE_CHOICES, default="private")
+    source_artifact = models.FileField(upload_to=model_source_artifact_path, blank=True, null=True)
+    flavor = models.CharField(max_length=40, blank=True)
+    requirements_text = models.TextField(blank=True)
+    package_manifest = models.JSONField(default=dict, blank=True)
+    package_preview_tree = models.JSONField(default=list, blank=True)
+    build_status = models.CharField(max_length=20, choices=BUILD_STATUS_CHOICES, default="not_started")
+    build_error = models.TextField(blank=True)
     artifact = models.FileField(upload_to=model_artifact_path, blank=True, null=True)
     model_uri = models.CharField(max_length=1024, blank=True)
     endpoint_url = models.CharField(max_length=1024, blank=True)
@@ -160,8 +176,8 @@ class ModelAPI(models.Model):
     class Meta:
         ordering = ["-updated_at"]
         indexes = [
-            models.Index(fields=["tenant", "status"]),
-            models.Index(fields=["tenant", "access_mode"]),
+            models.Index(fields=["tenant", "status"], name="authenticat_tenant__dcb6f3_idx"),
+            models.Index(fields=["tenant", "access_mode"], name="authenticat_tenant__e54007_idx"),
         ]
 
     def __str__(self):

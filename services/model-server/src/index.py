@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import urlparse
+import re
 
 import boto3
 import httpx
@@ -28,9 +29,10 @@ from sqlalchemy import create_engine, text
 
 JWKS_URL = os.environ.get("JWKS_URL", "http://django-service/.well-known/jwks.json")
 CONTROL_PLANE_DATABASE_URL = os.environ.get("CONTROL_PLANE_DATABASE_URL")
+CONTROL_PLANE_DB_SCHEMA = os.environ.get("CONTROL_PLANE_DB_SCHEMA", "control_plane")
 MODEL_CACHE_DIR = os.environ.get("MODEL_CACHE_DIR", "/tmp/mlops_paas_models")
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "localhost:19092")
-KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "ai_paas_production_logs")
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_logs")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
 
 app = FastAPI(
@@ -46,6 +48,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", CONTROL_PLANE_DB_SCHEMA):
+    raise RuntimeError("CONTROL_PLANE_DB_SCHEMA must be a simple PostgreSQL identifier.")
 
 paas_predictions_counter = Counter(
     "paas_predictions_total",
@@ -81,7 +86,15 @@ except Exception as exc:
     kafka_producer = None
 
 try:
-    model_registry_engine = create_engine(CONTROL_PLANE_DATABASE_URL, pool_pre_ping=True) if CONTROL_PLANE_DATABASE_URL else None
+    model_registry_engine = (
+        create_engine(
+            CONTROL_PLANE_DATABASE_URL,
+            pool_pre_ping=True,
+            connect_args={"options": f"-c search_path={CONTROL_PLANE_DB_SCHEMA},public"},
+        )
+        if CONTROL_PLANE_DATABASE_URL
+        else None
+    )
     print("Connected to Control Plane model registry." if model_registry_engine else "CONTROL_PLANE_DATABASE_URL is not set.")
 except Exception as exc:
     print(f"Failed to connect to Control Plane model registry: {exc}")

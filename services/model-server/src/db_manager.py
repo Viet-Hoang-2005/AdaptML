@@ -14,7 +14,7 @@ load_dotenv(dotenv_path=os.path.join(ROOT_DIR, '.env'))
 DB_USER = os.environ.get("DB_USER")
 DB_PASSWORD = os.environ.get("DB_PASSWORD")
 DB_PORT = os.environ.get("DB_PORT", "5432")
-DB_NAME = os.environ.get("DB_NAME", "mlops_nids_db")
+DB_NAME = os.environ.get("DB_NAME", "mlops_paas_db")
 
 # CloudNativePG tạo ra 2 Service endpoint riêng biệt:
 # - DB_HOST_RW (Read-Write): Trỏ đến Pod PRIMARY — dùng cho INSERT/UPDATE/DELETE.

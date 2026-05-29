@@ -225,7 +225,7 @@ class AccountDeleteView(APIView):
             }
 
             producer.produce(
-                "ai_paas_control_events",
+                "mlops_paas_control_events",
                 key=user.tenant_id,
                 value=json.dumps(event_payload),
             )

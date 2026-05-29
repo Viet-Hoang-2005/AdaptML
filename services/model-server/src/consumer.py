@@ -10,7 +10,7 @@ from db_manager import save_dataframe_to_db, get_production_data_count
 
 # Lấy biến môi trường
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
-KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "ai_paas_production_logs")
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_logs")
 EVIDENTLY_TRIGGER_THRESHOLD = int(os.environ.get('EVIDENTLY_TRIGGER_THRESHOLD', '100'))
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/trigger-drift-job")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "super-secret-key")
@@ -74,7 +74,7 @@ def main():
     # Cấu hình Kafka Consumer
     conf = {
         'bootstrap.servers': REDPANDA_BROKERS,
-        'group.id': 'nids-db-writer-group',
+        'group.id': 'paas-db-writer-group',
         'auto.offset.reset': 'earliest',
         'enable.auto.commit': False  # Tự quản lý commit để tránh mất data nếu crash giữa chừng
     }
