@@ -3,11 +3,11 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: mlops-nids-evidently
+  name: mlops-paas-evidently
   annotations:
     description: "Job to detect data drift between production data and baseline data using Evidently AI"
   labels:
-    app: mlops-nids-evidently
+    app: mlops-paas-evidently
 spec:
   backoffLimit: 1
   template:
@@ -16,18 +16,18 @@ spec:
         workload-type: worker
       restartPolicy: Never
       containers:
-        - name: mlops-nids-evidently
-          image: tnvhoang/mlops-nids-evidently:latest
+        - name: mlops-paas-evidently
+          image: tnvhoang/mlops-paas-evidently:latest
           imagePullPolicy: Always
           env:
             - name: DB_HOST_RO
-              value: "mlops-nids-postgres-ro"
+              value: "mlops-paas-postgres-ro"
             - name: DB_HOST
-              value: "mlops-nids-postgres-ro"
+              value: "mlops-paas-postgres-ro"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
-              value: "mlops_nids_db"
+              value: "mlops_paas_db"
             - name: DB_USER
               valueFrom:
                 secretKeyRef:

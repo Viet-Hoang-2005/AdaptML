@@ -1,5 +1,5 @@
 # trigger_drift_check.yml: GitHub Actions workflow kích hoạt kiểm tra Data drift bằng Evidently
-name: MLOps NIDS - Manual Trigger Evidently AI Drift Check
+name: MLOps PaaS - Manual Trigger Evidently AI Drift Check
 
 on:
   workflow_dispatch:
@@ -71,17 +71,17 @@ jobs:
           git commit -m "chore(drift): Trigger Evidently drift check at $(date -u +'%Y-%m-%dT%H:%M:%SZ') [skip ci]"
           git push
 
-      - name: Trigger ArgoCD to sync mlops-nids-jobs Application
-        # Gọi ArgoCD REST API để kích hoạt sync thủ công cho Application mlops-nids-jobs
+      - name: Trigger ArgoCD to sync mlops-paas-jobs Application
+        # Gọi ArgoCD REST API để kích hoạt sync thủ công cho Application mlops-paas-jobs
         # Không cần KUBECONFIG - ArgoCD sẽ thực hiện kubectl apply bên trong cluster
         run: |
-          echo "Calling ArgoCD API to sync mlops-nids-jobs..."
+          echo "Calling ArgoCD API to sync mlops-paas-jobs..."
 
           HTTP_STATUS=$(curl -sk -o /tmp/argocd_response.json -w "%{http_code}" \
             -X POST \
             -H "Authorization: Bearer ${{ env.SECRETS_ARGOCD_TOKEN }}" \
             -H "Content-Type: application/json" \
-            "https://argocd.mlops-nids-nt114.id.vn/api/v1/applications/mlops-nids-jobs/sync" \
+            "https://argocd.mlops-nids-nt114.id.vn/api/v1/applications/mlops-paas-jobs/sync" \
             -d '{
               "revision": "main",
               "prune": false,
@@ -95,7 +95,7 @@ jobs:
                 {
                   "group": "batch",
                   "kind": "Job",
-                  "name": "mlops-nids-evidently",
+                  "name": "mlops-paas-evidently",
                   "namespace": "default"
                 }
               ]

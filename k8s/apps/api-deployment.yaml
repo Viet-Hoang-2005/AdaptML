@@ -3,20 +3,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mlops-nids-api
+  name: mlops-paas-api
   annotations:
-    description: "FastAPI service for real-time Network Intrusion Detection System (NIDS) predictions"
+    description: "FastAPI service for real-time Network Intrusion Detection System (PaaS) predictions"
   labels:
-    app: mlops-nids-api
+    app: mlops-paas-api
 spec:
   replicas: 2 # Số lượng replica mặc định của API 
   selector:
     matchLabels:
-      app: mlops-nids-api
+      app: mlops-paas-api
   template:
     metadata:
       labels:
-        app: mlops-nids-api
+        app: mlops-paas-api
     spec:
       nodeSelector:
         workload-type: worker # Chỉ chạy trên máy worker
@@ -31,7 +31,7 @@ spec:
                     - key: app
                       operator: In
                       values:
-                        - mlops-nids-api
+                        - mlops-paas-api
                 topologyKey: "kubernetes.io/hostname"
       # Init Containers: Chạy trước FastAPI để kéo model từ S3
       initContainers:
@@ -45,8 +45,8 @@ spec:
               mkdir -p /models/${MODEL_VERSION}
 
               # Tải file model XGBoost (.pkl)
-              aws s3 cp s3://${AWS_BUCKET_NAME}/mlflow-artifacts/${EXPERIMENT_ID}/${RUN_ID}/artifacts/deployment_exports/xgb_nids_model_${MODEL_VERSION}.pkl \
-                /models/${MODEL_VERSION}/xgb_nids_model_${MODEL_VERSION}.pkl
+              aws s3 cp s3://${AWS_BUCKET_NAME}/mlflow-artifacts/${EXPERIMENT_ID}/${RUN_ID}/artifacts/deployment_exports/xgb_paas_model_${MODEL_VERSION}.pkl \
+                /models/${MODEL_VERSION}/xgb_paas_model_${MODEL_VERSION}.pkl
 
               # Tải file label classes (.json)
               aws s3 cp s3://${AWS_BUCKET_NAME}/mlflow-artifacts/${EXPERIMENT_ID}/${RUN_ID}/artifacts/deployment_exports/label_classes_${MODEL_VERSION}.json \
@@ -63,17 +63,17 @@ spec:
             - name: RUN_ID
               value: "unknown"
             - name: AWS_BUCKET_NAME
-              value: "mlops-nids-artifacts"
+              value: "mlops-paas-artifacts"
             - name: AWS_DEFAULT_REGION
               value: "ap-southeast-1"
           # Mount volume để chia sẻ model đã tải về với App Container
           volumeMounts:
             - name: model-volume
               mountPath: /models
-      # App Container: FastAPI NIDS Server
+      # App Container: FastAPI PaaS Server
       containers:
         - name: fastapi-server
-          image: tnvhoang/mlops-nids-api:92c1790dcb0057200f5eb6272f3e1b590df28dcb
+          image: tnvhoang/mlops-paas-api:92c1790dcb0057200f5eb6272f3e1b590df28dcb
           imagePullPolicy: Always # Luôn kéo image mới nhất từ registry
           ports:
             - containerPort: 5000 # FastAPI chạy trên cổng 5000
@@ -81,7 +81,7 @@ spec:
             - name: REDPANDA_BROKERS
               value: "redpanda-service:9092"
             - name: AWS_BUCKET_NAME
-              value: "mlops-nids-artifacts"
+              value: "mlops-paas-artifacts"
             - name: MODEL_VERSION
               value: "v1"
             - name: EXPERIMENT_ID
@@ -89,13 +89,13 @@ spec:
             - name: RUN_ID
               value: "unknown"
             - name: DB_HOST_RW
-              value: "mlops-nids-postgres-rw"
+              value: "mlops-paas-postgres-rw"
             - name: DB_HOST
-              value: "mlops-nids-postgres-rw"
+              value: "mlops-paas-postgres-rw"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
-              value: "mlops_nids_db"
+              value: "mlops_paas_db"
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
@@ -144,7 +144,7 @@ metadata:
   name: api-service
 spec:
   selector:
-    app: mlops-nids-api
+    app: mlops-paas-api
   type: ClusterIP
   # Cổng 80 của Service sẽ chuyển tiếp đến cổng 5000 của FastAPI trong pod
   ports:

@@ -35,7 +35,7 @@ spec:
       containers:
         - name: mlflow
           # Dùng image đã được build sẵn thay vì pip install lúc runtime
-          image: tnvhoang/mlops-nids-mlflow:92c1790dcb0057200f5eb6272f3e1b590df28dcb
+          image: tnvhoang/mlops-paas-mlflow:92c1790dcb0057200f5eb6272f3e1b590df28dcb
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
@@ -44,7 +44,7 @@ spec:
             - name: AWS_DEFAULT_REGION
               value: "ap-southeast-1"
             - name: AWS_BUCKET_NAME
-              value: "mlops-nids-artifacts"
+              value: "mlops-paas-artifacts"
             - name: MLFLOW_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -64,7 +64,7 @@ spec:
             - --app-name=basic-auth
             - --allowed-hosts=mlflow.mlops-nids-nt114.id.vn,mlflow.mlops-nids-nt114.id.vn:443,localhost,127.0.0.1,mlflow-service,mlflow-service.default.svc.cluster.local,mlflow-service.default.svc.cluster.local:5000
             - --cors-allowed-origins=https://mlflow.mlops-nids-nt114.id.vn
-            - --backend-store-uri=postgresql://mlflow:$(MLFLOW_DB_PASSWORD)@mlops-nids-postgres-rw:5432/mlflow
+            - --backend-store-uri=postgresql://mlflow:$(MLFLOW_DB_PASSWORD)@mlops-paas-postgres-rw:5432/mlflow
             - --default-artifact-root=s3://$(AWS_BUCKET_NAME)/mlflow-artifacts/
           resources:
             requests:

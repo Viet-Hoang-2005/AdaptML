@@ -10,7 +10,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      cnpg.io/cluster: mlops-nids-postgres
+      cnpg.io/cluster: mlops-paas-postgres
   policyTypes:
     - Ingress
   ingress:
@@ -18,7 +18,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              cnpg.io/cluster: mlops-nids-postgres
+              cnpg.io/cluster: mlops-paas-postgres
     # Cho phép các ứng dụng truy cập cổng 5432
     - from:
         - podSelector:
@@ -26,12 +26,12 @@ spec:
               - key: app
                 operator: In
                 values:
-                  - mlops-nids-api
-                  - mlops-nids-consumer
+                  - mlops-paas-api
+                  - mlops-paas-consumer
                   - mlflow-server
-                  - mlops-nids-evidently
-                  - mlops-nids-dispatch
-                  - mlops-nids-sync-data
+                  - mlops-paas-evidently
+                  - mlops-paas-dispatch
+                  - mlops-paas-sync-data
                   - mlflow-db-init
       ports:
         - protocol: TCP
@@ -72,8 +72,8 @@ spec:
               - key: app
                 operator: In
                 values:
-                  - mlops-nids-api
-                  - mlops-nids-consumer
+                  - mlops-paas-api
+                  - mlops-paas-consumer
       ports:
         - protocol: TCP
           port: 9092
@@ -103,7 +103,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: mlops-nids-api
+      app: mlops-paas-api
   policyTypes:
     - Ingress
   ingress:

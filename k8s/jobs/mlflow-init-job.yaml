@@ -24,7 +24,7 @@ spec:
           image: postgres:15-alpine
           env:
             - name: PGHOST
-              value: "mlops-nids-postgres-rw"
+              value: "mlops-paas-postgres-rw"
             - name: PGPORT
               value: "5432"
             - name: PGUSER
@@ -91,4 +91,4 @@ spec:
 
               echo "MLflow Database is ready!"
               echo "Database: mlflow | User: mlflow | Password: ***"
-              echo "MLFLOW_TRACKING_URI=postgresql://mlflow:***@mlops-nids-postgres-rw:5432/mlflow"
+              echo "MLFLOW_TRACKING_URI=postgresql://mlflow:***@mlops-paas-postgres-rw:5432/mlflow"

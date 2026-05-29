@@ -30,9 +30,9 @@ spec:
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: REDPANDA_BROKERS
-              value: "mlops-nids-redpanda.default.svc.cluster.local:9092"
+              value: "mlops-paas-redpanda.default.svc.cluster.local:9092"
             - name: AWS_S3_REGION_NAME
               value: "ap-southeast-1"
             - name: AWS_STORAGE_BUCKET_NAME
-              value: "mlops-nids-artifacts"
+              value: "mlops-paas-artifacts"
             # boto3 sẽ tự động dùng IAM Role của EC2 (OIDC/IRSA) nên không cần AWS_ACCESS_KEY

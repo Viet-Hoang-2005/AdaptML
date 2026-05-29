@@ -2,7 +2,7 @@
 import pandas as pd
 import os
 
-def prep_nids_dynamic_data(file_path, output_dir):
+def prep_paas_dynamic_data(file_path, output_dir):
     print(f"Đang nạp dữ liệu gốc từ: {file_path}")
     df = pd.read_csv(file_path)
     print(f"Tổng số dòng ban đầu: {len(df)}")
@@ -111,4 +111,4 @@ DATA_DIR = os.path.join(ROOT_DIR, 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
 INPUT_CSV = os.path.join(DATA_DIR, 'cicids2017_cleaned.csv')
 
-prep_nids_dynamic_data(INPUT_CSV, DATA_DIR)
+prep_paas_dynamic_data(INPUT_CSV, DATA_DIR)

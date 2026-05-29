@@ -1,5 +1,5 @@
 # retrain_pipeline.yml: GitHub Actions workflow để tự động hóa pipeline retraining có kiểm soát
-name: MLOps NIDS - Controlled Retraining Pipeline
+name: MLOps PaaS - Controlled Retraining Pipeline
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
     types: [data_manifest_updated]
 
 env:
-  AWS_BUCKET_NAME: mlops-nids-artifacts
+  AWS_BUCKET_NAME: mlops-paas-artifacts
   S3_TRAINING_DATA_PREFIX: training-data/
   MLFLOW_MODEL_NAME: NIDS-XGBoost
 

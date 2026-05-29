@@ -3,7 +3,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: mlops-nids-dispatch
+  name: mlops-paas-dispatch
   annotations:
     description: "CronJob to poll MLflow for approved Production models and trigger GitHub Actions deployment"
   namespace: default
@@ -20,14 +20,14 @@ spec:
       template:
         metadata:
           labels:
-            app: mlops-nids-dispatch
+            app: mlops-paas-dispatch
         spec:
           nodeSelector:
             workload-type: worker
           restartPolicy: OnFailure
           containers:
             - name: dispatcher
-              image: tnvhoang/mlops-nids-dispatch:92c1790dcb0057200f5eb6272f3e1b590df28dcb
+              image: tnvhoang/mlops-paas-dispatch:92c1790dcb0057200f5eb6272f3e1b590df28dcb
               imagePullPolicy: Always
               env:
                 # 1. Cấu hình kết nối tới MLflow Server (Nội bộ K3s)

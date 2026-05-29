@@ -1,5 +1,5 @@
 # drift_alert.yml: GitHub Actions workflow để gửi cảnh báo khi phát hiện Data drift
-name: MLOps NIDS - Drift Alert
+name: MLOps PaaS - Drift Alert
 
 on:
   repository_dispatch:
@@ -51,7 +51,7 @@ jobs:
 
           payload = {
               "text": (
-                  "MLOps NIDS drift alert\n"
+                  "MLOps PaaS drift alert\n"
                   f"- Drift share: ${{ github.event.client_payload.drift_share }}\n"
                   f"- Drifted features: ${{ github.event.client_payload.drifted_features }}\n"
                   f"- Threshold: ${{ github.event.client_payload.threshold }}\n"

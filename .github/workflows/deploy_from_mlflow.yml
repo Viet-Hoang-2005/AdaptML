@@ -1,5 +1,5 @@
 # deploy_from_mlflow.yml: GitHub Actions workflow để triển khai model production từ MLflow
-name: MLOps NIDS - Deploy Production Model from MLflow
+name: MLOps PaaS - Deploy Production Model from MLflow
 
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ permissions:
   contents: write # Cần để commit ngược Model Version vào Git cho ArgoCD sync
 
 env:
-  AWS_BUCKET_NAME: mlops-nids-artifacts
+  AWS_BUCKET_NAME: mlops-paas-artifacts
   AWS_DEFAULT_REGION: ap-southeast-1
   API_BASE_URL: https://api.mlops-nids-nt114.id.vn
 
@@ -87,7 +87,7 @@ jobs:
           RUN_ID: ${{ steps.resolve_model_version.outputs.run_id }}
           EXPERIMENT_ID: ${{ steps.resolve_model_version.outputs.experiment_id }}
         run: |
-          MODEL_ARTIFACT="s3://${AWS_BUCKET_NAME}/mlflow-artifacts/${EXPERIMENT_ID}/${RUN_ID}/artifacts/deployment_exports/xgb_nids_model_${MODEL_VERSION}.pkl"
+          MODEL_ARTIFACT="s3://${AWS_BUCKET_NAME}/mlflow-artifacts/${EXPERIMENT_ID}/${RUN_ID}/artifacts/deployment_exports/xgb_paas_model_${MODEL_VERSION}.pkl"
           LABEL_ARTIFACT="s3://${AWS_BUCKET_NAME}/mlflow-artifacts/${EXPERIMENT_ID}/${RUN_ID}/artifacts/deployment_exports/label_classes_${MODEL_VERSION}.json"
 
           echo "Verifying model artifact: $MODEL_ARTIFACT"

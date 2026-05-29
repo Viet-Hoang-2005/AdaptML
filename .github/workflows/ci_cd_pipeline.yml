@@ -1,5 +1,5 @@
-# ci_cd_pipeline.yml: GitHub Actions workflow để tự động hóa CI/CD cho MLOps NIDS System
-name: MLOps NIDS - CI/CD Pipeline
+# ci_cd_pipeline.yml: GitHub Actions workflow để tự động hóa CI/CD cho MLOps PaaS System
+name: MLOps PaaS - CI/CD Pipeline
 
 on:
   push:
@@ -114,11 +114,11 @@ jobs:
 
       - name: Set Image Envs
         run: |
-          echo "API_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-api" >> $GITHUB_ENV
-          echo "EVIDENTLY_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-evidently" >> $GITHUB_ENV
-          echo "SYNC_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-sync-data" >> $GITHUB_ENV
-          echo "DISPATCH_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-dispatch" >> $GITHUB_ENV
-          echo "MLFLOW_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-mlflow" >> $GITHUB_ENV
+          echo "API_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-api" >> $GITHUB_ENV
+          echo "EVIDENTLY_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-evidently" >> $GITHUB_ENV
+          echo "SYNC_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-sync-data" >> $GITHUB_ENV
+          echo "DISPATCH_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-dispatch" >> $GITHUB_ENV
+          echo "MLFLOW_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-mlflow" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -244,11 +244,11 @@ jobs:
 
       - name: Set Image Envs
         run: |
-          echo "API_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-api" >> $GITHUB_ENV
-          echo "DISPATCH_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-dispatch" >> $GITHUB_ENV
-          echo "MLFLOW_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-mlflow" >> $GITHUB_ENV
-          echo "EVIDENTLY_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-evidently" >> $GITHUB_ENV
-          echo "SYNC_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-nids-sync-data" >> $GITHUB_ENV
+          echo "API_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-api" >> $GITHUB_ENV
+          echo "DISPATCH_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-dispatch" >> $GITHUB_ENV
+          echo "MLFLOW_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-mlflow" >> $GITHUB_ENV
+          echo "EVIDENTLY_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-evidently" >> $GITHUB_ENV
+          echo "SYNC_IMAGE=${{ env.SECRETS_DOCKERHUB_USERNAME }}/mlops-paas-sync-data" >> $GITHUB_ENV
 
       - name: Install yq (YAML processor)
         run: |

@@ -3,7 +3,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
-  name: mlops-nids-postgres-monitor
+  name: mlops-paas-postgres-monitor
   namespace: monitoring
   labels:
     release: monitoring # Label để Prometheus Operator nhận diện
@@ -16,7 +16,7 @@ spec:
   # Bộ lọc nhận diện chính xác các Pod thuộc cụm DB
   selector:
     matchLabels:
-      cnpg.io/cluster: mlops-nids-postgres 
+      cnpg.io/cluster: mlops-paas-postgres 
 
   # Cấu hình cổng và tần suất thu thập
   podMetricsEndpoints:

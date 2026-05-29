@@ -3,7 +3,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: nids-api-monitor
+  name: paas-api-monitor
   namespace: monitoring
   labels:
     release: monitoring
@@ -13,7 +13,7 @@ spec:
       - default
   selector:
     matchLabels:
-      app: mlops-nids-api
+      app: mlops-paas-api
   endpoints:
     - port: http
       path: /metrics

@@ -2,10 +2,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: mlops-nids-cronjobs
+  name: mlops-paas-cronjobs
   namespace: argocd
   annotations:
-    description: "MLOps NIDS System - Scheduled CronJobs"
+    description: "MLOps PaaS System - Scheduled CronJobs"
 spec:
   project: default
 

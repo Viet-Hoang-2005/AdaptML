@@ -3,10 +3,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: mlops-nids-jobs
+  name: mlops-paas-jobs
   namespace: argocd
   annotations:
-    description: "MLOps NIDS One-time Jobs - Manual sync triggered by GitHub Actions API"
+    description: "MLOps PaaS One-time Jobs - Manual sync triggered by GitHub Actions API"
 spec:
   project: default
 

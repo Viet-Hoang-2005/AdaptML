@@ -1,14 +1,14 @@
 # postgres-cluster.yaml: CloudNativePG Cluster
-#   mlops-nids-postgres-rw -> Primary (dùng cho INSERT/UPDATE)
-#   mlops-nids-postgres-ro -> Load-balanced Primary + Standby (dùng cho SELECT)
-#   mlops-nids-postgres-r  -> Tất cả instances
+#   mlops-paas-postgres-rw -> Primary (dùng cho INSERT/UPDATE)
+#   mlops-paas-postgres-ro -> Load-balanced Primary + Standby (dùng cho SELECT)
+#   mlops-paas-postgres-r  -> Tất cả instances
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: mlops-nids-postgres
+  name: mlops-paas-postgres
   annotations:
-    description: "CloudNativePG cluster for MLflow metadata and NIDS baseline data storage"
+    description: "CloudNativePG cluster for MLflow metadata and PaaS baseline data storage"
 spec:
   # Chạy 2 instances để đảm bảo tính sẵn sàng cao (High Availability)
   # Node 1: Primary (RW), Node 2: Standby (RO)
@@ -19,7 +19,7 @@ spec:
   # Khởi tạo database và application owner
   bootstrap:
     initdb:
-      database: mlops_nids_db
+      database: mlops_paas_db
       owner: postgres
       secret:
         name: postgres-secrets

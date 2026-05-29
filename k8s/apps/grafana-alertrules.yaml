@@ -1,16 +1,16 @@
-# grafana-alertrules.yaml: Cấu hình PrometheusRule với các ngưỡng cảnh báo cho hệ thống NIDS
+# grafana-alertrules.yaml: Cấu hình PrometheusRule với các ngưỡng cảnh báo cho hệ thống paas
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: nids-alert-rules
+  name: paas-alert-rules
   namespace: monitoring
   labels:
     release: monitoring
 spec:
   groups:
     # Nhóm 1: API Health
-    - name: nids.api.health
+    - name: paas.api.health
       rules:
         # Cảnh báo khi API latency p95 vượt 100ms liên tục 3 phút
         - alert: HighAPILatency
@@ -41,7 +41,7 @@ spec:
 
         # Cảnh báo khi API pod không còn running
         - alert: APIPodsUnavailable
-          expr: kube_deployment_status_replicas_available{deployment="mlops-nids-api"} < 1
+          expr: kube_deployment_status_replicas_available{deployment="mlops-paas-api"} < 1
           for: 1m
           labels:
             severity: critical
@@ -50,13 +50,13 @@ spec:
             summary: "API Pods unavailable"
             description: "The API deployment has 0 available replicas. Please check immediately!"
 
-    # Nhóm 2: NIDS Security Events
-    - name: nids.security
+    # Nhóm 2: PaaS Security Events
+    - name: paas.security
       rules:
         # Cảnh báo khi phát hiện DDoS traffic đột biến (tấn công thực)
         - alert: DDoSSpikeDetected
           expr: |
-            rate(nids_predictions_total{label="DDoS"}[2m]) > 50
+            rate(paas_predictions_total{label="DDoS"}[2m]) > 50
           for: 1m
           labels:
             severity: critical
@@ -68,7 +68,7 @@ spec:
         # Cảnh báo khi PortScan tăng đột biến (giai đoạn trinh sát mạng)
         - alert: PortScanActivityDetected
           expr: |
-            rate(nids_predictions_total{label="PortScan"}[5m]) > 20
+            rate(paas_predictions_total{label="PortScan"}[5m]) > 20
           for: 2m
           labels:
             severity: warning
@@ -81,7 +81,7 @@ spec:
         - alert: LowModelConfidence
           expr: |
             histogram_quantile(0.5,
-              rate(nids_prediction_confidence_bucket[10m])
+              rate(paas_prediction_confidence_bucket[10m])
             ) < 0.7
           for: 5m
           labels:
@@ -92,7 +92,7 @@ spec:
             description: "The model is not confident with the input data. It may need to check Data Drift!"
 
     # Nhóm 3: Database Health
-    - name: nids.database
+    - name: paas.database
       rules:
         # Cảnh báo khi PostgreSQL Pod down
         - alert: PostgresDown
@@ -118,7 +118,7 @@ spec:
             description: "Database {{ $labels.datname }} has {{ $value }} active connections."
 
     # Nhóm 4: Infrastructure
-    - name: nids.infrastructure
+    - name: paas.infrastructure
       rules:
         # Cảnh báo khi RAM Worker Node vượt 85%
         - alert: NodeHighMemoryUsage

@@ -3,10 +3,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: mlops-nids-system
+  name: mlops-paas-system
   namespace: argocd
   annotations:
-    description: "MLOps NIDS System - Managed by ArgoCD GitOps"
+    description: "MLOps PaaS System - Managed by ArgoCD GitOps"
 spec:
   project: default
 
