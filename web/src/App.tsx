@@ -15,7 +15,7 @@ import HomeLayout from './pages/Home/HomeLayout';
 import ModelApiPage from './pages/Home/ModelApiPage';
 import ModelTestingPage from './pages/Home/ModelTestingPage';
 import APIManagementPage from './pages/Management/APIManagementPage';
-import ModelAPIFormPage from './pages/Management/ModelAPIFormPage';
+import ModelAPIFormPage from './pages/Management/UploadModelFormPage';
 import DeveloperSettingPage from './pages/Settings/DeveloperSettingPage';
 import ProfileSettingPage from './pages/Settings/ProfileSettingPage';
 import SettingsLayout from './pages/Settings/SettingsLayout';

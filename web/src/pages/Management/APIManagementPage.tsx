@@ -1,4 +1,4 @@
-import { Plus, Bot } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import Placeholder from '../../components/layout/Placeholder';
@@ -17,7 +17,6 @@ export default function APIManagementPage() {
         </div>
         <Button
           size="md"
-          icon={<Plus className="h-4 w-4" />}
           onClick={() => navigate('/dashboard/api-management/upload')}
           className="px-4"
         >

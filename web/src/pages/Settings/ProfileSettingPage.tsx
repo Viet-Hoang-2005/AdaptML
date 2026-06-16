@@ -315,7 +315,7 @@ export default function ProfileSettingPage() {
                 <FileText className="pointer-events-none absolute left-3 top-4 h-4 w-4 text-gray-400" />
                 <textarea
                   id="profile-description"
-                  className={`text-sm text-gray-800 placeholder-gray-400 font-normal placeholder:font-normal min-h-24 w-full resize-none rounded-2xl border border-gray-300 bg-white py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-gray-50 disabled:text-gray-400 ${
+                  className={`text-sm text-gray-800 placeholder-gray-400 font-normal placeholder:font-normal min-h-24 w-full resize-y rounded-2xl border border-gray-300 bg-white py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-gray-50 disabled:text-gray-400 ${
                     editingProfile ? 'hover:border-black focus:border-black' : 'cursor-default hover:border-gray-300 focus:border-gray-300'
                   }`}
                   placeholder="Tell us more about yourself"
@@ -331,7 +331,7 @@ export default function ProfileSettingPage() {
             <div className="grid gap-3 pt-1 sm:grid-cols-2">
               <Button
                 id="btn-change-password"
-                variant="secondary"
+                variant="primary"
                 icon={<LockKeyhole className="h-4 w-4" />}
                 onClick={() => setPasswordSendConfirmOpen(true)}
                 disabled={loading}
