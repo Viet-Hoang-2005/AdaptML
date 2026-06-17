@@ -15,6 +15,7 @@ import HomeLayout from './pages/Home/HomeLayout';
 import ModelApiPage from './pages/Home/ModelApiPage';
 import ModelTestingPage from './pages/Home/ModelTestingPage';
 import APIManagementPage from './pages/Management/APIManagementPage';
+import TrainModelPage from './pages/Management/TrainModelPage';
 import ModelAPIFormPage from './pages/Management/UploadModelFormPage';
 import DeveloperSettingPage from './pages/Settings/DeveloperSettingPage';
 import ProfileSettingPage from './pages/Settings/ProfileSettingPage';
@@ -61,7 +62,7 @@ function App() {
           <Route path="api-management/upload" element={<ModelAPIFormPage />} />
           <Route path="api-management/:modelId" element={<ModelAPIFormPage />} />
           <Route path="drift-monitoring" element={dashboardPlaceholders.driftMonitoring} />
-          <Route path="model-training" element={dashboardPlaceholders.modelTraining} />
+          <Route path="model-training" element={<TrainModelPage />} />
           <Route path="model-evolution" element={dashboardPlaceholders.modelEvolution} />
           <Route path="notifications" element={dashboardPlaceholders.notifications} />
           <Route path="settings" element={<SettingsLayout />}>
