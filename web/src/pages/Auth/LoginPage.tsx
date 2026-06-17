@@ -13,26 +13,33 @@ import GitHubIcon from '../../assets/icons/GitHub.png';
 import GoogleIcon from '../../assets/icons/Google.png';
 import MLdriftLogo from '../../assets/icons/MLdrift.png';
 
-export default function LoginPage() {
-  const { login, loginWithGoogle, loading } = useAuth();
-  const { values, updateField } = useForm({ email: '', password: '' });
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
+function GoogleLoginButton({ onSuccess }: { onSuccess: (accessToken: string) => void }) {
   const openGoogleLogin = useGoogleLogin({
     scope: 'openid email profile',
     onSuccess: (tokenResponse) => {
-      void loginWithGoogle(tokenResponse.access_token);
+      onSuccess(tokenResponse.access_token);
     },
     onError: () => toast.error('Google login failed. Please try again.'),
   });
 
-  const handleGoogleLogin = () => {
-    if (!googleClientId) {
-      toast.error('VITE_GOOGLE_CLIENT_ID is not configured.');
-      return;
-    }
-    openGoogleLogin();
-  };
+  return (
+    <button
+      id="btn-google-login"
+      onClick={() => openGoogleLogin()}
+      className="flex-1 flex items-center justify-center gap-2 px-4 py-3
+                  border border-black rounded-xl hover:border-gray-300 hover:opacity-70
+                  transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
+    >
+      <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
+      Google
+    </button>
+  );
+}
+
+export default function LoginPage() {
+  const { login, loginWithGoogle, loading } = useAuth();
+  const { values, updateField } = useForm({ email: '', password: '' });
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
   const handleGitHubLogin = () => {
     try {
@@ -52,16 +59,20 @@ export default function LoginPage() {
       <p className="text-center text-gray-500 text-sm mb-8">Sign in to your account to continue</p>
 
       <div className="flex gap-3 mb-6">
-        <button
-          id="btn-google-login"
-          onClick={handleGoogleLogin}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3
-                      border border-black rounded-xl hover:border-gray-300 hover:opacity-70
-                      transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
-        >
-          <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
-          Google
-        </button>
+        {googleClientId ? (
+          <GoogleLoginButton onSuccess={(accessToken) => void loginWithGoogle(accessToken)} />
+        ) : (
+          <button
+            id="btn-google-login"
+            onClick={() => toast.error('VITE_GOOGLE_CLIENT_ID is not configured.')}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3
+                        border border-black rounded-xl hover:border-gray-300 hover:opacity-70
+                        transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
+          >
+            <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
+            Google
+          </button>
+        )}
         <button
           id="btn-github-login"
           onClick={handleGitHubLogin}
