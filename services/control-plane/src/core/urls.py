@@ -22,6 +22,13 @@ from authentication.model_api_views import (
     ModelAPIListCreateView,
     ModelAPIPackagePreviewView,
 )
+from authentication.training_job_views import (
+    TrainingJobDetailView,
+    TrainingJobDownloadURLView,
+    TrainingJobListCreateView,
+    TrainingJobLogsView,
+    TrainingJobRefreshStatusView,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -30,4 +37,9 @@ urlpatterns = [
     path('api/models/build/', ModelAPIBuildView.as_view(), name='model_api_build'),
     path('api/models/<int:model_id>/package-preview/', ModelAPIPackagePreviewView.as_view(), name='model_api_package_preview'),
     path('api/models/<int:model_id>/', ModelAPIDetailView.as_view(), name='model_api_detail'),
+    path('api/training-jobs/', TrainingJobListCreateView.as_view(), name='training_job_list_create'),
+    path('api/training-jobs/<int:training_job_id>/', TrainingJobDetailView.as_view(), name='training_job_detail'),
+    path('api/training-jobs/<int:training_job_id>/refresh-status/', TrainingJobRefreshStatusView.as_view(), name='training_job_refresh_status'),
+    path('api/training-jobs/<int:training_job_id>/download-url/', TrainingJobDownloadURLView.as_view(), name='training_job_download_url'),
+    path('api/training-jobs/<int:training_job_id>/logs/', TrainingJobLogsView.as_view(), name='training_job_logs'),
 ]

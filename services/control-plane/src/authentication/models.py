@@ -1,9 +1,22 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.conf import settings
+from django.core.files.storage import FileSystemStorage
 import uuid
 import secrets
 import os
 from django.core.cache import cache
+
+
+class TrainingUploadStorage(FileSystemStorage):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("location", os.path.join(settings.BASE_DIR, "media", "training_uploads"))
+        kwargs.setdefault("base_url", "/media/training_uploads/")
+        super().__init__(*args, **kwargs)
+
+
+training_upload_storage = TrainingUploadStorage()
+
 
 def user_avatar_path(instance, filename):
     # Lấy username từ email (phần trước @) để tạo thư mục
@@ -19,6 +32,15 @@ def model_artifact_path(instance, filename):
 
 def model_source_artifact_path(instance, filename):
     return f'{instance.tenant.tenant_id}/models/{instance.id or "new"}/source/{filename}'
+
+def training_source_zip_path(instance, filename):
+    return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/source/{filename}'
+
+def training_requirements_path(instance, filename):
+    return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/source/{filename}'
+
+def training_data_path(instance, filename):
+    return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/data/{filename}'
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -182,3 +204,48 @@ class ModelAPI(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.tenant.tenant_id})"
+
+
+class TrainingJob(models.Model):
+    BACKEND_CHOICES = (
+        ("sagemaker", "SageMaker"),
+        ("local", "Local"),
+        ("aws_batch", "AWS Batch"),
+    )
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("uploading", "Uploading"),
+        ("running", "Running"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+    )
+
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="training_jobs")
+    name = models.CharField(max_length=160)
+    model_version = models.CharField(max_length=80)
+    entry_point = models.CharField(max_length=160, default="train.py")
+    training_backend = models.CharField(max_length=20, choices=BACKEND_CHOICES, default="sagemaker")
+    source_zip = models.FileField(upload_to=training_source_zip_path, storage=training_upload_storage)
+    requirements_file = models.FileField(upload_to=training_requirements_path, storage=training_upload_storage, blank=True, null=True)
+    training_data = models.FileField(upload_to=training_data_path, storage=training_upload_storage)
+    s3_source_uri = models.CharField(max_length=1024, blank=True)
+    s3_training_data_uri = models.CharField(max_length=1024, blank=True)
+    sagemaker_job_name = models.CharField(max_length=160, blank=True)
+    external_job_id = models.CharField(max_length=160, blank=True)
+    output_s3_uri = models.CharField(max_length=1024, blank=True)
+    model_artifact_uri = models.CharField(max_length=1024, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    error_message = models.TextField(blank=True)
+    training_logs = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["tenant", "status"], name="authenticat_trainin_57fd0f_idx"),
+            models.Index(fields=["tenant", "model_version"], name="authenticat_trainin_5cba8b_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} {self.model_version} ({self.tenant.tenant_id})"
