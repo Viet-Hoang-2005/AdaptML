@@ -40,13 +40,15 @@ resource "aws_internet_gateway" "igw" {
 
 # Elastic IP cho NAT Gateway
 resource "aws_eip" "nat_eip" {
+  count  = var.enable_nat_gateway ? 1 : 0
   domain = "vpc"
   tags   = { Name = "mlops-nat-eip" }
 }
 
 # NAT Gateway
 resource "aws_nat_gateway" "nat_gw" {
-  allocation_id = aws_eip.nat_eip.id
+  count         = var.enable_nat_gateway ? 1 : 0
+  allocation_id = aws_eip.nat_eip[0].id
   subnet_id     = aws_subnet.public_1a.id
   tags          = { Name = "mlops-nat-gw" }
   depends_on    = [aws_internet_gateway.igw]
@@ -77,10 +79,15 @@ resource "aws_route_table_association" "pub_1b_assoc" {
 # Route Table Private
 resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.mlops_vpc.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat_gw.id
+
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.nat_gw[0].id
+    }
   }
+
   tags = { Name = "mlops-private-rt" }
 }
 
