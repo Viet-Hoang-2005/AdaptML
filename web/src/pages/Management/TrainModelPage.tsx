@@ -1,4 +1,4 @@
-import { Download, FileArchive, FileCode2, RefreshCw, Rocket, ScrollText, UploadCloud, X } from 'lucide-react';
+import { Download, FileArchive, FileCode2, RefreshCw, Rocket, ScrollText, UploadCloud } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -14,7 +14,7 @@ import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import type { TrainingJob, TrainingJobFormValues, TrainingJobStatus } from '../../types/modelApi';
 import { FileDropzone, SummaryItem } from './UploadModelFormPage';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 const initialForm: TrainingJobFormValues = {
@@ -37,12 +37,27 @@ const statusStyles: Record<TrainingJobStatus, string> = {
 export default function TrainModelPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<TrainingJobFormValues>(initialForm);
-  const [logsModal, setLogsModal] = useState<{ title: string; logs: string } | null>(null);
+  const [logsByJobId, setLogsByJobId] = useState<Record<number, string>>({});
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.trainingJobs,
     queryFn: listTrainingJobs,
   });
   const trainingJobs = data?.training_jobs ?? [];
+
+  useEffect(() => {
+    setLogsByJobId((current) => {
+      let next = current;
+      for (const job of trainingJobs) {
+        if (!next[job.id] && (job.training_logs || job.error_message)) {
+          if (next === current) {
+            next = { ...current };
+          }
+          next[job.id] = job.training_logs || job.error_message;
+        }
+      }
+      return next;
+    });
+  }, [trainingJobs]);
 
   const invalidateJobs = () => queryClient.invalidateQueries({ queryKey: queryKeys.trainingJobs });
 
@@ -82,11 +97,7 @@ export default function TrainModelPage() {
   const logsMutation = useMutation({
     mutationFn: getTrainingJobLogs,
     onSuccess: ({ logs }, jobId) => {
-      const job = trainingJobs.find((item) => item.id === jobId);
-      setLogsModal({
-        title: job ? `${job.name} logs` : 'Training logs',
-        logs,
-      });
+      setLogsByJobId((current) => ({ ...current, [jobId]: logs }));
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Unable to load training logs.'));
@@ -201,20 +212,13 @@ export default function TrainModelPage() {
               refreshing={refreshMutation.isPending}
               downloading={downloadMutation.isPending}
               loadingLogs={logsMutation.isPending}
+              logText={logsByJobId[job.id] || job.training_logs || job.error_message}
               onRefresh={() => refreshMutation.mutate(job.id)}
               onDownload={() => downloadMutation.mutate(job.id)}
-              onShowLogs={() => logsMutation.mutate(job.id)}
+              onRefreshLogs={() => logsMutation.mutate(job.id)}
             />
           ))}
         </div>
-      )}
-
-      {logsModal && (
-        <TrainingLogsModal
-          title={logsModal.title}
-          logs={logsModal.logs}
-          onClose={() => setLogsModal(null)}
-        />
       )}
     </section>
   );
@@ -225,17 +229,19 @@ function TrainingJobCard({
   refreshing,
   downloading,
   loadingLogs,
+  logText,
   onRefresh,
   onDownload,
-  onShowLogs,
+  onRefreshLogs,
 }: {
   job: TrainingJob;
   refreshing: boolean;
   downloading: boolean;
   loadingLogs: boolean;
+  logText?: string;
   onRefresh: () => void;
   onDownload: () => void;
-  onShowLogs: () => void;
+  onRefreshLogs: () => void;
 }) {
   return (
     <article className="rounded-lg border border-gray-300 bg-white p-5">
@@ -267,16 +273,28 @@ function TrainingJobCard({
         </div>
       )}
 
+      <div className="mt-4 overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
+        <div className="flex items-center justify-between border-b border-gray-800 px-3 py-2">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-300">
+            <ScrollText className="h-4 w-4" />
+            Training Log
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RefreshCw className="h-4 w-4" />}
+            loading={loadingLogs}
+            onClick={onRefreshLogs}
+          >
+            Refresh logs
+          </Button>
+        </div>
+        <pre className="max-h-56 min-h-36 overflow-y-auto whitespace-pre-wrap p-4 text-xs leading-5 text-gray-100">
+          {logText || 'No training logs are available yet. Refresh logs after the job starts.'}
+        </pre>
+      </div>
+
       <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<ScrollText className="h-4 w-4" />}
-          loading={loadingLogs}
-          onClick={onShowLogs}
-        >
-          Logs
-        </Button>
         <Button
           variant="secondary"
           size="sm"
@@ -297,45 +315,6 @@ function TrainingJobCard({
         </Button>
       </div>
     </article>
-  );
-}
-
-function TrainingLogsModal({
-  title,
-  logs,
-  onClose,
-}: {
-  title: string;
-  logs: string;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="flex max-h-[82vh] w-full max-w-4xl flex-col rounded-lg bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase text-gray-400">Training Log</p>
-            <h2 className="mt-1 text-base font-bold text-gray-900">{title}</h2>
-          </div>
-          <button
-            type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-            onClick={onClose}
-            aria-label="Close training logs"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <pre className="min-h-72 overflow-auto whitespace-pre-wrap bg-gray-950 p-5 text-xs leading-5 text-gray-100">
-          {logs || 'No training logs are available yet.'}
-        </pre>
-        <div className="flex justify-end border-t border-gray-200 px-5 py-3">
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
 
