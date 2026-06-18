@@ -69,13 +69,7 @@ const runtimeOptions = [
   { label: '12h', value: 43200 },
 ];
 
-const statusStyles: Record<TrainingJobStatus, string> = {
-  pending: 'bg-gray-100 text-gray-700 border-gray-200',
-  uploading: 'bg-blue-50 text-blue-700 border-blue-100',
-  running: 'bg-amber-50 text-amber-700 border-amber-100',
-  completed: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-  failed: 'bg-red-50 text-red-700 border-red-100',
-};
+
 
 const statusLabels: Record<TrainingJobStatus, string> = {
   pending: 'Pending',
@@ -731,47 +725,97 @@ export default function TrainModelPage() {
     (!usage || form.max_runtime_seconds <= usage.remaining_seconds);
 
   return (
-    <section className="flex w-full flex-1 flex-col space-y-5">
-      <div className="flex flex-col gap-2 border-b border-gray-300 pb-3">
-        <h1 className="text-lg font-bold text-gray-900">Model Training</h1>
-        <p className="max-w-3xl text-sm leading-6 text-gray-500">
-          Upload training code and data, run a backend training job, inspect logs, and download the private model artifact from S3.
-        </p>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-4">
-        <UsageCard
-          icon={<Clock3 className="h-4 w-4" />}
-          label="Used this month"
-          value={isUsageLoading ? 'Loading...' : formatDuration(usage?.monthly_runtime_seconds)}
-        />
-        <UsageCard
-          icon={<Clock3 className="h-4 w-4" />}
-          label="Monthly quota"
-          value={formatDuration(usage?.monthly_quota_seconds || 43200)}
-        />
-        <UsageCard
-          icon={<Clock3 className="h-4 w-4" />}
-          label="Remaining"
-          value={isUsageLoading ? 'Loading...' : formatDuration(usage?.remaining_seconds)}
-          tone={usage && usage.remaining_seconds < form.max_runtime_seconds ? 'danger' : 'default'}
-        />
-        <UsageCard
+    <section className="flex w-full flex-1 flex-col space-y-6">
+      <div className="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Model Training</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Train models in the cloud, monitor resource metrics in real-time, and download artifacts.
+          </p>
+        </div>
+        <Button
           icon={<Rocket className="h-4 w-4" />}
-          label="Running jobs"
-          value={String(usage?.running_jobs_count ?? 0)}
-        />
+          onClick={() => document.getElementById('start-training-section')?.scrollIntoView({ behavior: 'smooth' })}
+        >
+          Start training job
+        </Button>
       </div>
 
-      <div className="rounded-lg border border-gray-300 bg-white p-5">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-black text-white">
-              <Rocket className="h-5 w-5" />
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="md:col-span-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Monthly Training Quota</p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-gray-900">
+                  {isUsageLoading ? '...' : formatDuration(usage?.monthly_runtime_seconds)}
+                </span>
+                <span className="text-sm font-medium text-gray-500">
+                  / {formatDuration(usage?.monthly_quota_seconds || 43200)} used
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Remaining</p>
+              <p className={`mt-1 text-lg font-bold ${
+                usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.1) 
+                  ? 'text-red-600' 
+                  : usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.3) 
+                    ? 'text-amber-600' 
+                    : 'text-emerald-600'
+              }`}>
+                {isUsageLoading ? '...' : formatDuration(usage?.remaining_seconds)}
+              </p>
+            </div>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+            <div
+              className={`h-full transition-all duration-500 ease-out ${
+                usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.1) 
+                  ? 'bg-red-500' 
+                  : usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.3) 
+                    ? 'bg-amber-500' 
+                    : 'bg-emerald-500'
+              }`}
+              style={{ width: `${Math.min(100, ((usage?.monthly_runtime_seconds || 0) / (usage?.monthly_quota_seconds || 1)) * 100)}%` }}
+            />
+          </div>
+        </div>
+
+        <div className={`flex flex-col justify-center rounded-xl border p-5 shadow-sm transition-colors ${
+          (usage?.running_jobs_count || 0) > 0 
+            ? 'border-blue-200 bg-blue-50/50' 
+            : 'border-gray-200 bg-white'
+        }`}>
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500">
+            <Rocket className="h-4 w-4" />
+            Active Jobs
+          </p>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className={`text-3xl font-bold ${
+              (usage?.running_jobs_count || 0) > 0 ? 'text-blue-700' : 'text-gray-900'
+            }`}>
+              {usage?.running_jobs_count ?? 0}
+            </span>
+            {(usage?.running_jobs_count || 0) > 0 && (
+              <span className="relative flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-blue-500"></span>
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div id="start-training-section" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-gray-800 to-black text-white shadow-md">
+              <Rocket className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Start training job</h2>
-              <p className="text-sm text-gray-500">Source zip must contain the entry point, usually train.py.</p>
+              <h2 className="text-lg font-bold tracking-tight text-gray-900">Configure Training Job</h2>
+              <p className="text-sm text-gray-500">Upload code, select resources, and start your experiment.</p>
             </div>
           </div>
           <span className="w-fit rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
@@ -829,12 +873,15 @@ export default function TrainModelPage() {
           />
         </div>
 
-        <UploadSummary
-          sourceZip={form.source_zip}
-          requirementsFile={form.requirements_file}
-          trainingData={form.training_data}
-          sourceZipState={sourceZipState}
-        />
+        <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Validation Summary</p>
+          <UploadSummary
+            sourceZip={form.source_zip}
+            requirementsFile={form.requirements_file}
+            trainingData={form.training_data}
+            sourceZipState={sourceZipState}
+          />
+        </div>
 
         <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -895,13 +942,21 @@ export default function TrainModelPage() {
                   }
                 />
                 {sourceZipState.error && (
-                  <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {sourceZipState.error}
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800 shadow-sm flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+                    <div>
+                      <p className="font-bold">Inspection Error</p>
+                      <p className="mt-0.5 text-red-700">{sourceZipState.error}</p>
+                    </div>
                   </div>
                 )}
                 {sourceZipState.warning && (
-                  <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                    {sourceZipState.warning}
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800 shadow-sm flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                    <div>
+                      <p className="font-bold">Warning</p>
+                      <p className="mt-0.5 text-amber-700">{sourceZipState.warning}</p>
+                    </div>
                   </div>
                 )}
                 <div className="rounded-lg border border-gray-200 bg-gray-950 p-3">
@@ -975,24 +1030,31 @@ export default function TrainModelPage() {
                 <button
                   key={profile.id}
                   type="button"
-                  className={`rounded-lg border p-3 text-left transition ${
-                    selected ? 'border-black bg-white shadow-sm' : 'border-gray-200 bg-white hover:border-gray-400'
+                  className={`relative rounded-xl border p-4 text-left transition-all ${
+                    selected ? 'border-blue-500 bg-blue-50/20 ring-1 ring-blue-500 shadow-md' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
                   }`}
                   onClick={() => selectRuntimeProfile(profile.vcpu, profile.memory)}
                 >
+                  {selected && (
+                    <div className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-white shadow-sm">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-gray-900">{profile.label}</p>
-                    <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-semibold text-gray-500">
+                    <p className="text-base font-bold text-gray-900">{profile.label}</p>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wide uppercase ${
+                      profile.helper === 'Recommended' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
                       {profile.helper}
                     </span>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Cpu className="h-3.5 w-3.5" />
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold text-gray-500">
+                    <span className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-md border border-gray-100 shadow-sm">
+                      <Cpu className="h-3.5 w-3.5 text-gray-400" />
                       {profile.vcpu} vCPU
                     </span>
-                    <span className="flex items-center gap-1">
-                      <HardDrive className="h-3.5 w-3.5" />
+                    <span className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-md border border-gray-100 shadow-sm">
+                      <HardDrive className="h-3.5 w-3.5 text-gray-400" />
                       {profile.memory / 1024} GB
                     </span>
                   </div>
@@ -1158,31 +1220,7 @@ function SegmentedFilter({
   );
 }
 
-function UsageCard({
-  icon,
-  label,
-  value,
-  tone = 'default',
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  tone?: 'default' | 'danger';
-}) {
-  return (
-    <div
-      className={`rounded-lg border bg-white p-4 ${
-        tone === 'danger' ? 'border-red-100 text-red-700' : 'border-gray-300 text-gray-900'
-      }`}
-    >
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-400">
-        {icon}
-        {label}
-      </p>
-      <p className="mt-2 text-lg font-bold">{value}</p>
-    </div>
-  );
-}
+
 
 function TrainingFilePicker({
   label,
@@ -1202,39 +1240,49 @@ function TrainingFilePicker({
   onChange: (file: File | null) => void;
 }) {
   const inputId = `training-file-${label.replace(/\W+/g, '-').toLowerCase()}`;
-  const status = file ? (valid ? 'Selected' : 'Invalid') : required ? 'Missing' : 'Optional';
-  const statusClass = file
-    ? valid
-      ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-      : 'border-red-100 bg-red-50 text-red-700'
+  const isSelected = Boolean(file);
+  const isValid = isSelected && valid;
+  const status = isSelected ? (valid ? 'Selected' : 'Invalid') : required ? 'Missing' : 'Optional';
+  
+  const containerClass = isSelected
+    ? isValid
+      ? 'border-emerald-200 ring-1 ring-emerald-100 bg-emerald-50/30'
+      : 'border-red-300 ring-1 ring-red-100 bg-red-50/50'
+    : 'border-dashed border-gray-300 hover:border-gray-400 bg-gray-50/50 hover:bg-gray-50 transition-colors';
+
+  const statusClass = isSelected
+    ? isValid
+      ? 'bg-emerald-100 text-emerald-700'
+      : 'bg-red-100 text-red-700'
     : required
-      ? 'border-amber-100 bg-amber-50 text-amber-700'
-      : 'border-gray-200 bg-gray-50 text-gray-500';
+      ? 'bg-amber-100 text-amber-700'
+      : 'bg-gray-200 text-gray-600';
 
   return (
-    <div className={`rounded-lg border p-4 ${file ? 'border-gray-400 bg-white' : 'border-dashed border-gray-300 bg-gray-50'}`}>
+    <div className={`rounded-xl border p-4 ${containerClass}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-bold text-gray-900">{label}</p>
           <p className="mt-1 text-xs text-gray-500">{required ? `Required ${expected}` : `Optional ${expected}`}</p>
         </div>
-        <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${statusClass}`}>{status}</span>
+        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase ${statusClass}`}>{status}</span>
       </div>
 
       {file ? (
-        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
-          <p className="truncate text-sm font-semibold text-gray-900" title={file.name}>
+        <div className={`mt-4 rounded-lg border p-3 ${isValid ? 'border-emerald-200 bg-white' : 'border-red-200 bg-white'}`}>
+          <p className={`truncate text-sm font-semibold ${isValid ? 'text-gray-900' : 'text-red-900'}`} title={file.name}>
             {file.name}
           </p>
           <p className="mt-1 text-xs text-gray-500">{formatFileSize(file)}</p>
         </div>
       ) : (
-        <div className="mt-4 flex min-h-16 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-3 text-center text-sm text-gray-500">
-          No file selected
+        <div className="mt-4 flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-200 bg-white px-3 py-4 text-center">
+          <UploadCloud className="h-5 w-5 text-gray-400" />
+          <span className="text-xs text-gray-500">No file selected</span>
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap justify-end gap-2">
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
         {file && (
           <Button variant="ghost" size="sm" icon={<X className="h-4 w-4" />} onClick={() => onChange(null)}>
             Remove
@@ -1242,10 +1290,14 @@ function TrainingFilePicker({
         )}
         <label
           htmlFor={inputId}
-          className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-xs font-semibold text-black transition-colors hover:bg-gray-200"
+          className={`inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors ${
+            isSelected 
+              ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' 
+              : 'border-transparent bg-black text-white hover:bg-gray-800'
+          }`}
         >
-          <UploadCloud className="h-4 w-4" />
-          {file ? 'Change file' : 'Select file'}
+          {isSelected ? <RefreshCw className="h-3.5 w-3.5" /> : <UploadCloud className="h-4 w-4" />}
+          {file ? 'Replace' : 'Select file'}
         </label>
         <input
           id={inputId}
@@ -1282,7 +1334,7 @@ function UploadSummary({
           : 'missing';
 
   return (
-    <div className="mt-4 grid gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm md:grid-cols-4">
+    <div className="grid gap-3 text-sm md:grid-cols-4">
       <UploadSummaryItem label="Source zip" status={sourceZip ? 'selected' : 'missing'} detail={sourceZip?.name || 'Missing'} />
       <UploadSummaryItem
         label="Requirements"
@@ -1326,9 +1378,9 @@ function UploadSummaryItem({
   };
 
   return (
-    <div className="min-w-0 rounded-md bg-white px-3 py-2">
-      <p className="text-xs font-semibold uppercase text-gray-400">{label}</p>
-      <p className={`mt-1 truncate text-sm font-bold ${styles[status]}`} title={detail}>
+    <div className="min-w-0 rounded-lg bg-white px-3 py-2 shadow-sm border border-gray-100">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className={`mt-0.5 truncate text-sm font-bold ${styles[status]}`} title={detail}>
         {detail}
       </p>
     </div>
@@ -1351,14 +1403,14 @@ function SourceValidationRow({
   const tone = pending ? 'gray' : ok ? 'green' : warning ? 'amber' : 'red';
   const styles: Record<'gray' | 'green' | 'amber' | 'red', string> = {
     gray: 'border-gray-200 bg-gray-50 text-gray-600',
-    green: 'border-emerald-100 bg-emerald-50 text-emerald-700',
-    amber: 'border-amber-100 bg-amber-50 text-amber-700',
-    red: 'border-red-100 bg-red-50 text-red-700',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    red: 'border-red-200 bg-red-50 text-red-700',
   };
 
   return (
-    <div className={`rounded-lg border px-3 py-2 ${styles[tone]}`}>
-      <p className="text-xs font-semibold uppercase opacity-70">{label}</p>
+    <div className={`rounded-lg border px-3 py-2 shadow-sm ${styles[tone]}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">{label}</p>
       <p className="mt-1 flex items-center gap-2 text-sm font-semibold">
         {!ok && !pending && <AlertTriangle className="h-4 w-4" />}
         {message}
@@ -1432,159 +1484,211 @@ function TrainingJobCard({
   const externalJobId = job.external_job_id || job.sagemaker_job_name || '';
   const updatedAt = job.updated_at ? new Date(job.updated_at).toLocaleString() : '-';
 
+  const getAccentBorderClass = () => {
+    if (job.is_deleted) return 'border-l-[4px] border-l-gray-400';
+    if (job.status === 'completed') return 'border-l-[4px] border-l-emerald-500';
+    if (job.status === 'failed') return 'border-l-[4px] border-l-red-500';
+    if (job.status === 'running') return 'border-l-[4px] border-l-blue-500';
+    return 'border-l-[4px] border-l-gray-300';
+  };
+
   return (
-    <article className="rounded-lg border border-gray-300 bg-white">
-      <div className="flex flex-col gap-3 border-b border-gray-200 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+    <article className={`rounded-xl border bg-white shadow-sm transition-all overflow-hidden flex flex-col ${
+      job.is_deleted ? 'opacity-75 grayscale-[0.3]' : ''
+    } ${getAccentBorderClass()} ${
+      job.status === 'running' ? 'ring-1 ring-blue-100 border-y-blue-100 border-r-blue-100' : 'border-y-gray-200 border-r-gray-200'
+    }`}>
+      {/* Header */}
+      <div className="flex flex-col gap-4 border-b border-gray-100 p-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate text-base font-bold text-gray-900">{job.name}</p>
-            <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="truncate text-xl font-extrabold tracking-tight text-gray-900">{job.name}</h3>
+            <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-bold tracking-wide text-gray-600 border border-gray-200">
               {job.model_version}
             </span>
+            {job.status === 'failed' && (
+              <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700 border border-red-200">
+                Failed
+              </span>
+            )}
           </div>
-          <p className="mt-1 text-xs font-semibold uppercase text-gray-400">
-            {backendLabel(job.training_backend)} · {runtimeSummary}
-          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-gray-500">
+              <Cpu className="h-3 w-3" />
+              {backendLabel(job.training_backend)}
+            </span>
+            <span className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-gray-500">
+              {runtimeSummary}
+            </span>
+          </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-3">
-          <span className="text-xs text-gray-500">
-            <span className="font-semibold uppercase text-gray-400">Updated </span>
-            {updatedAt}
-          </span>
-          <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusStyles[job.status]}`}>
+        <div className="flex shrink-0 flex-col items-end gap-2.5">
+          <span className={`w-fit rounded-full border px-4 py-1 text-xs font-bold uppercase tracking-wider ${
+            job.is_deleted ? 'border-gray-200 bg-gray-100 text-gray-600' : 
+            job.status === 'completed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
+            job.status === 'failed' ? 'border-red-200 bg-red-50 text-red-700' :
+            job.status === 'running' ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm' :
+            'border-gray-200 bg-gray-50 text-gray-700'
+          }`}>
             {job.is_deleted ? 'Archived' : statusLabels[job.status]}
+          </span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+            Updated {updatedAt}
           </span>
         </div>
       </div>
 
-      <div className="grid gap-x-5 gap-y-3 px-4 py-4 text-xs sm:grid-cols-2 xl:grid-cols-5">
-        <InlineFact icon={<Cpu className="h-3.5 w-3.5" />} label="Runtime" value={runtimeSummary} />
+      {/* Main Info */}
+      <div className="grid gap-3 px-5 py-4 sm:grid-cols-2 xl:grid-cols-4">
+        <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Elapsed" value={formatDuration(elapsedForJob(job))} accent />
         <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Max runtime" value={formatDuration(job.max_runtime_seconds)} />
-        <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Elapsed" value={formatDuration(elapsedForJob(job))} />
         <InlineFact label="Started" value={job.started_at ? new Date(job.started_at).toLocaleString() : '-'} />
         <InlineFact label="Completed" value={job.completed_at ? new Date(job.completed_at).toLocaleString() : '-'} />
       </div>
 
-      <div className="grid gap-3 border-y border-gray-100 px-4 py-3 lg:grid-cols-2">
-        <UriLine
-          icon={<Rocket className="h-4 w-4" />}
-          label="External job ID"
-          value={externalJobId}
-          onCopy={onCopyUri}
-        />
-        <InlineFact label="Entry point" value={job.entry_point || '-'} />
-        {job.is_deleted && <InlineFact label="Archived" value={job.deleted_at ? new Date(job.deleted_at).toLocaleString() : '-'} />}
+      {/* Tech info */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-gray-100 bg-gray-50/50 px-5 py-3 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Ext ID</span>
+          <code className="rounded border border-gray-200 bg-white px-2 py-0.5 text-xs font-bold text-gray-600 shadow-sm">
+            {externalJobId || '-'}
+          </code>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Entry</span>
+          <code className="rounded border border-gray-200 bg-white px-2 py-0.5 text-xs font-bold text-blue-700 shadow-sm">
+            {job.entry_point || '-'}
+          </code>
+        </div>
+        {job.is_deleted && (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Archived</span>
+            <span className="text-xs font-semibold text-gray-600">{job.deleted_at ? new Date(job.deleted_at).toLocaleString() : '-'}</span>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-2 px-4 py-4">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-400">
-            <FileArchive className="h-4 w-4" />
-            Artifact summary
+      {/* Artifacts */}
+      <div className="border-t border-gray-100 px-5 py-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex-1 min-w-0 space-y-3">
+            <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+              <FileArchive className="h-4 w-4" />
+              Artifacts
+            </p>
+            <div className="flex flex-col gap-2 xl:flex-row xl:gap-4">
+              <UriLine
+                label="Output URI"
+                value={job.output_s3_uri}
+                onCopy={onCopyUri}
+              />
+              <UriLine
+                label="Model URI"
+                value={job.model_artifact_uri}
+                onCopy={onCopyUri}
+              />
+            </div>
+          </div>
+          <div className="shrink-0 pt-7">
+            <Button
+              size="sm"
+              icon={<Download className="h-4 w-4" />}
+              disabled={job.status !== 'completed'}
+              loading={downloading}
+              onClick={onDownload}
+            >
+              Download model
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Diagnostics */}
+      {job.status === 'failed' && (
+        <div className="mx-5 mb-4 mt-2 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
+          <h4 className="flex items-center gap-2 text-sm font-bold text-red-800">
+            <AlertTriangle className="h-5 w-5" />
+            Training Failed
+          </h4>
+          <p className="mt-2 text-sm font-medium text-red-700">
+            {job.stop_reason || 'The training job exited unexpectedly.'}
           </p>
-          <Button
-            size="sm"
-            icon={<Download className="h-4 w-4" />}
-            disabled={job.status !== 'completed'}
-            loading={downloading}
-            onClick={onDownload}
-          >
-            Download model
-          </Button>
-        </div>
-        <div className="grid gap-2 xl:grid-cols-2">
-          <UriLine
-            icon={<FileArchive className="h-4 w-4" />}
-            label="Output URI"
-            value={job.output_s3_uri}
-            onCopy={onCopyUri}
-          />
-          <UriLine
-            icon={<Download className="h-4 w-4" />}
-            label="Artifact URI"
-            value={job.model_artifact_uri}
-            onCopy={onCopyUri}
-          />
-        </div>
-      </div>
-
-      {job.error_message && (
-        <div className="mx-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {job.error_message}
+          {job.error_message && (
+            <div className="mt-3 rounded-lg border border-red-100 bg-white p-3 shadow-sm">
+              <code className="whitespace-pre-wrap break-words text-xs text-red-900">
+                {job.error_message}
+              </code>
+            </div>
+          )}
         </div>
       )}
 
-      {job.stop_reason && !job.error_message && (
-        <div className="mx-4 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          {job.stop_reason}
-        </div>
-      )}
-
-      <div className="px-4 py-4">
+      {/* Metrics */}
+      <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/30">
         <RuntimeMetricsPanel metrics={metrics} loading={loadingMetrics} />
       </div>
 
-      <div className="flex flex-wrap justify-end gap-2 border-t border-gray-200 px-4 py-3">
-        {job.is_deleted ? (
+      {/* Actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
-            icon={<RotateCcw className="h-4 w-4" />}
-            loading={restoring}
-            onClick={onRestore}
+            icon={logsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            onClick={onToggleLogs}
+            className="text-gray-600 hover:bg-gray-200 hover:text-gray-900"
           >
-            Restore
+            {logsExpanded ? 'Hide logs' : 'Show logs'}
           </Button>
-        ) : (
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
-            icon={<Archive className="h-4 w-4" />}
-            loading={archiving}
-            onClick={onArchive}
+            icon={<RefreshCw className="h-4 w-4" />}
+            loading={refreshing}
+            onClick={onRefresh}
+            className="text-gray-600 hover:bg-gray-200 hover:text-gray-900"
           >
-            Archive
+            Status
           </Button>
-        )}
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={logsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          onClick={onToggleLogs}
-        >
-          {logsExpanded ? 'Hide logs' : 'Show logs'}
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<RefreshCw className="h-4 w-4" />}
-          loading={refreshing}
-          onClick={onRefresh}
-        >
-          Refresh status
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<RefreshCw className="h-4 w-4" />}
-          loading={loadingMetrics}
-          onClick={onRefreshMetrics}
-        >
-          Refresh metrics
-        </Button>
-        <Button
-          size="sm"
-          icon={<Download className="h-4 w-4" />}
-          disabled={job.status !== 'completed'}
-          loading={downloading}
-          onClick={onDownload}
-        >
-          Download model
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RefreshCw className="h-4 w-4" />}
+            loading={loadingMetrics}
+            onClick={onRefreshMetrics}
+            className="text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+          >
+            Metrics
+          </Button>
+        </div>
+        <div>
+          {job.is_deleted ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<RotateCcw className="h-4 w-4" />}
+              loading={restoring}
+              onClick={onRestore}
+            >
+              Restore
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Archive className="h-4 w-4 text-gray-400" />}
+              loading={archiving}
+              onClick={onArchive}
+              className="text-gray-500 hover:bg-red-50 hover:text-red-600"
+            >
+              Archive
+            </Button>
+          )}
+        </div>
       </div>
 
       {logsExpanded && (
-        <div className="border-t border-gray-200 px-4 pb-4">
+        <div className="border-t border-gray-200 px-5 pb-5 pt-3 bg-gray-50">
           <LogTerminal
             text={logText || 'Logs are not available yet. They usually appear after the Batch container starts.'}
             loading={loadingLogs}
@@ -1600,18 +1704,26 @@ function InlineFact({
   icon,
   label,
   value,
+  accent = false,
 }: {
   icon?: ReactNode;
   label: string;
   value: string;
+  accent?: boolean;
 }) {
   return (
-    <div className="min-w-0">
-      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase text-gray-400">
+    <div className={`min-w-0 rounded-xl border p-3 shadow-sm transition-colors ${
+      accent ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-white'
+    }`}>
+      <p className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${
+        accent ? 'text-blue-500' : 'text-gray-500'
+      }`}>
         {icon}
         {label}
       </p>
-      <p className="mt-1 truncate font-semibold text-gray-800" title={value}>
+      <p className={`mt-1.5 truncate text-lg font-bold ${
+        accent ? 'text-blue-900' : 'text-gray-900'
+      }`} title={value}>
         {value}
       </p>
     </div>
@@ -1625,6 +1737,9 @@ function RuntimeMetricsPanel({
   metrics?: TrainingJobMetricsResponse;
   loading: boolean;
 }) {
+  const isHighCpu = metrics?.latest?.cpu_percent != null && metrics.latest.cpu_percent > 85;
+  const isHighRam = metrics?.latest?.memory_percent != null && metrics.latest.memory_percent > 85;
+
   const latest = metrics?.latest;
   const memoryValue =
     latest?.memory_percent != null
@@ -1645,33 +1760,39 @@ function RuntimeMetricsPanel({
       : 'No GPU detected by runner';
 
   return (
-    <div className="rounded-lg bg-gray-50 p-3">
+    <div>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-400">
-            <Cpu className="h-4 w-4" />
-            Runtime metrics
-          </p>
-          <p className="mt-1 text-xs text-gray-500">
+        <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+          <Cpu className="h-4 w-4" />
+          Runtime metrics
+        </p>
+        <div className="flex items-center gap-3">
+          {loading && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500">Refreshing...</span>}
+          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
             {latest?.timestamp
-              ? `Last sample: ${new Date(latest.timestamp).toLocaleString()}`
-              : metrics?.message || 'Metrics appear after the training container starts.'}
-          </p>
+              ? `Sampled ${new Date(latest.timestamp).toLocaleTimeString()}`
+              : 'Pending metrics...'}
+          </span>
         </div>
-        {loading && <span className="text-xs font-semibold text-gray-400">Refreshing...</span>}
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <MetricCell
           icon={<Cpu className="h-3.5 w-3.5" />}
           label="CPU"
           value={latest?.cpu_percent == null ? '-' : formatMetricPercent(latest.cpu_percent)}
           detail={latest?.cpu_limit_cores ? `${latest.cpu_limit_cores} vCPU limit` : 'Container CPU usage'}
+          warning={isHighCpu}
+          progress={latest?.cpu_percent}
+          progressColor={isHighCpu ? 'bg-amber-500' : 'bg-emerald-500'}
         />
         <MetricCell
           icon={<HardDrive className="h-3.5 w-3.5" />}
           label="RAM"
           value={memoryValue}
           detail={memoryDetail}
+          warning={isHighRam}
+          progress={latest?.memory_percent}
+          progressColor={isHighRam ? 'bg-red-500' : 'bg-blue-500'}
         />
         <MetricCell
           icon={<Rocket className="h-3.5 w-3.5" />}
@@ -1679,6 +1800,8 @@ function RuntimeMetricsPanel({
           value={gpuValue}
           detail={gpuDetail}
           muted={!latest?.gpu_available}
+          progress={latest?.gpu_percent}
+          progressColor="bg-purple-500"
         />
       </div>
     </div>
@@ -1691,23 +1814,43 @@ function MetricCell({
   value,
   detail,
   muted = false,
+  warning = false,
+  progress,
+  progressColor,
 }: {
   icon: ReactNode;
   label: string;
   value: string;
   detail: string;
   muted?: boolean;
+  warning?: boolean;
+  progress?: number | null;
+  progressColor?: string;
 }) {
   return (
-    <div className={`min-w-0 rounded-md bg-white px-3 py-2 ${muted ? 'opacity-60' : ''}`}>
-      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase text-gray-400">
-        {icon}
-        {label}
-      </p>
-      <p className="mt-1 truncate text-base font-bold text-gray-900" title={value}>
-        {value}
-      </p>
-      <p className="mt-0.5 truncate text-xs text-gray-500" title={detail}>
+    <div className={`min-w-0 flex flex-col justify-between rounded-xl bg-white px-4 py-3 shadow-sm border ${warning ? 'border-amber-300 ring-1 ring-amber-100' : 'border-gray-200'} ${muted ? 'opacity-50 grayscale bg-gray-50 border-dashed' : ''}`}>
+      <div>
+        <div className="flex items-start justify-between">
+          <p className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${warning ? 'text-amber-600' : 'text-gray-500'}`}>
+            {icon}
+            {label}
+          </p>
+          <p className={`truncate text-xl font-black tracking-tight ${warning ? 'text-amber-700' : muted ? 'text-gray-400' : 'text-gray-900'}`} title={value}>
+            {value}
+          </p>
+        </div>
+        
+        {progress != null && !muted && (
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+            <div
+              className={`h-full transition-all duration-500 ${progressColor || 'bg-gray-400'}`}
+              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+            />
+          </div>
+        )}
+      </div>
+      
+      <p className={`mt-2 truncate text-[11px] font-bold ${warning ? 'text-amber-600/80' : 'text-gray-400'}`} title={detail}>
         {detail}
       </p>
     </div>
@@ -1740,26 +1883,27 @@ function LogTerminal({
   };
 
   return (
-    <div className="mt-4 overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
-      <div className="flex items-center justify-between border-b border-gray-800 px-3 py-2">
-        <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-300">
-          <ScrollText className="h-4 w-4" />
-          Training Log
-        </p>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<RefreshCw className="h-4 w-4" />}
-          loading={loading}
+    <div className="mt-2 overflow-hidden rounded-xl border border-gray-800 bg-[#0d1117] shadow-md">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-800 bg-[#161b22] px-4 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <ScrollText className="h-4 w-4 text-gray-400" />
+          <p className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+            Training Output
+          </p>
+        </div>
+        <button
           onClick={onRefresh}
+          disabled={loading}
+          className="flex h-7 items-center gap-1.5 rounded bg-gray-800 px-2.5 text-[11px] font-bold text-gray-300 hover:bg-gray-700 disabled:opacity-50 transition-colors"
         >
+          <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
           Refresh
-        </Button>
+        </button>
       </div>
       <pre
         ref={scrollRef}
         onScroll={handleScroll}
-        className="max-h-[480px] min-h-80 overflow-auto whitespace-pre p-4 text-xs leading-5 text-gray-100"
+        className="max-h-[420px] min-h-[320px] overflow-x-auto overflow-y-auto whitespace-pre p-5 font-mono text-[13px] leading-6 text-gray-300"
       >
         {text}
       </pre>
@@ -1773,31 +1917,31 @@ function UriLine({
   value,
   onCopy,
 }: {
-  icon: ReactNode;
+  icon?: ReactNode;
   label: string;
   value: string;
   onCopy: (value: string) => void;
 }) {
   return (
-    <div className="min-w-0 rounded-md bg-gray-50 px-3 py-2">
-      <div className="flex min-w-0 items-center gap-3">
-        <p className="flex shrink-0 items-center gap-2 text-xs font-semibold uppercase text-gray-400">
+    <div className="flex w-full min-w-0 items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm">
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
           {icon}
           {label}
         </p>
-        <code className="min-w-0 flex-1 truncate text-xs text-gray-700" title={value || '-'}>
+        <code className="mt-0.5 block truncate text-xs font-semibold text-gray-700" title={value || '-'}>
           {value || '-'}
         </code>
-        <button
-          type="button"
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-white hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
-          disabled={!value}
-          onClick={() => onCopy(value)}
-          aria-label={`Copy ${label}`}
-        >
-          <Clipboard className="h-4 w-4" />
-        </button>
       </div>
+      <button
+        type="button"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-gray-50 text-gray-500 hover:bg-white hover:text-gray-900 hover:shadow-sm transition-all disabled:opacity-40"
+        disabled={!value}
+        onClick={() => onCopy(value)}
+        aria-label={`Copy ${label}`}
+      >
+        <Clipboard className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
