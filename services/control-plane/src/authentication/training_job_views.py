@@ -14,8 +14,10 @@ from rest_framework.views import APIView
 from .models import TrainingJob
 from .aws_batch_training_service import (
     get_aws_batch_training_log_payload,
+    get_training_metrics_payload,
     refresh_aws_batch_training_job,
     start_aws_batch_training_job,
+    strip_training_metric_lines,
 )
 from .local_training_service import run_local_training_job
 from .sagemaker_service import (
@@ -359,20 +361,27 @@ class TrainingJobLogsView(TrainingJobDetailView):
 
         if not logs and training_job.error_message:
             logs = training_job.error_message
+        display_logs = strip_training_metric_lines(logs)
 
         return Response(
             {
                 "job_id": training_job.id,
                 "training_job_id": training_job.id,
                 "status": training_job.status,
-                "logs": logs or "No training logs are available yet.",
-                "text": logs or "No training logs are available yet.",
+                "logs": display_logs or "No training logs are available yet.",
+                "text": display_logs or "No training logs are available yet.",
                 "log_stream_name": log_stream_name,
                 "next_token": next_token,
                 "updated_at": training_job.updated_at,
             },
             status=status.HTTP_200_OK,
         )
+
+
+class TrainingJobMetricsView(TrainingJobDetailView):
+    def get(self, request, training_job_id):
+        training_job = self.get_training_job(request, training_job_id)
+        return Response(get_training_metrics_payload(training_job), status=status.HTTP_200_OK)
 
 
 class TrainingJobRestoreView(TrainingJobDetailView):

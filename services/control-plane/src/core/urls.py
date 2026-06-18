@@ -27,6 +27,7 @@ from authentication.training_job_views import (
     TrainingJobDownloadURLView,
     TrainingJobListCreateView,
     TrainingJobLogsView,
+    TrainingJobMetricsView,
     TrainingJobRefreshStatusView,
     TrainingJobRestoreView,
     TrainingUsageView,
@@ -44,6 +45,7 @@ urlpatterns = [
     path('api/training-jobs/<int:training_job_id>/refresh-status/', TrainingJobRefreshStatusView.as_view(), name='training_job_refresh_status'),
     path('api/training-jobs/<int:training_job_id>/download-url/', TrainingJobDownloadURLView.as_view(), name='training_job_download_url'),
     path('api/training-jobs/<int:training_job_id>/logs/', TrainingJobLogsView.as_view(), name='training_job_logs'),
+    path('api/training-jobs/<int:training_job_id>/metrics/', TrainingJobMetricsView.as_view(), name='training_job_metrics'),
     path('api/training-jobs/<int:training_job_id>/restore/', TrainingJobRestoreView.as_view(), name='training_job_restore'),
     path('api/training-usage/', TrainingUsageView.as_view(), name='training_usage'),
 ]

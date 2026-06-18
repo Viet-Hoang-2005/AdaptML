@@ -28,6 +28,7 @@ import {
   deleteTrainingJob,
   getTrainingJobDownloadUrl,
   getTrainingJobLogs,
+  getTrainingJobMetrics,
   getTrainingUsage,
   listTrainingJobs,
   refreshTrainingJobStatus,
@@ -38,7 +39,7 @@ import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import { downloadSampleTrainingTemplate } from '../../lib/trainingTemplate';
 import { inspectZipFile, readZipEntryText, rebuildZipWithEditedEntry } from '../../lib/trainingZip';
-import type { TrainingJob, TrainingJobFormValues, TrainingJobStatus } from '../../types/modelApi';
+import type { TrainingJob, TrainingJobFormValues, TrainingJobMetricsResponse, TrainingJobStatus } from '../../types/modelApi';
 import { SummaryItem } from './UploadModelFormPage';
 
 const initialForm: TrainingJobFormValues = {
@@ -99,6 +100,14 @@ const formatDuration = (seconds?: number | null) => {
   if (hours > 0) return `${hours}h ${minutes}m`;
   if (minutes > 0) return `${minutes}m ${secs}s`;
   return `${secs}s`;
+};
+
+const formatMetricPercent = (value?: number | null) => (value == null ? '-' : `${Math.round(value)}%`);
+
+const formatMegabytes = (value?: number | null) => {
+  if (value == null) return '-';
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} GB`;
+  return `${Math.round(value)} MB`;
 };
 
 const elapsedForJob = (job: TrainingJob) => {
@@ -270,6 +279,7 @@ export default function TrainModelPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<TrainingJobFormValues>(initialForm);
   const [logsByJobId, setLogsByJobId] = useState<Record<number, string>>({});
+  const [metricsByJobId, setMetricsByJobId] = useState<Record<number, TrainingJobMetricsResponse>>({});
   const [expandedLogJobIds, setExpandedLogJobIds] = useState<Record<number, boolean>>({});
   const [sourceZipState, setSourceZipState] = useState<SourceZipState>(emptySourceZipState);
   const [editedEntryText, setEditedEntryText] = useState('');
@@ -329,9 +339,11 @@ export default function TrainModelPage() {
         syncableJobs.map(async (job) => {
           try {
             const shouldRefreshLogs = job.status === 'running' && expandedLogJobIds[job.id];
-            const [updatedJob, logsResponse] = await Promise.all([
+            const shouldRefreshMetrics = job.status === 'running';
+            const [updatedJob, logsResponse, metricsResponse] = await Promise.all([
               refreshTrainingJobStatus(job.id),
               shouldRefreshLogs ? getTrainingJobLogs(job.id).catch(() => null) : Promise.resolve(null),
+              shouldRefreshMetrics ? getTrainingJobMetrics(job.id).catch(() => null) : Promise.resolve(null),
             ]);
 
             if (cancelled) return;
@@ -342,6 +354,9 @@ export default function TrainModelPage() {
 
             if (logsResponse?.text || logsResponse?.logs) {
               setLogsByJobId((current) => ({ ...current, [job.id]: logsResponse.text || logsResponse.logs }));
+            }
+            if (metricsResponse) {
+              setMetricsByJobId((current) => ({ ...current, [job.id]: metricsResponse }));
             }
 
             if (updatedJob.status !== job.status) {
@@ -581,6 +596,16 @@ export default function TrainModelPage() {
     },
   });
 
+  const metricsMutation = useMutation({
+    mutationFn: (job: TrainingJob) => getTrainingJobMetrics(job.id),
+    onSuccess: (metrics, job) => {
+      setMetricsByJobId((current) => ({ ...current, [job.id]: metrics }));
+    },
+    onError: (error, job) => {
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to load runtime metrics.')}`);
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (job: TrainingJob) => deleteTrainingJob(job.id),
     onSuccess: (updatedJob) => {
@@ -649,6 +674,7 @@ export default function TrainModelPage() {
     setExpandedLogJobIds((current) => ({ ...current, [job.id]: !current[job.id] }));
     if (!expandedLogJobIds[job.id]) {
       logsMutation.mutate(job);
+      metricsMutation.mutate(job);
     }
   };
 
@@ -1069,7 +1095,7 @@ export default function TrainModelPage() {
               <p className="mt-1 text-sm text-gray-500">Change the filter to Active, Archived, or All.</p>
             </div>
           ) : (
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="space-y-4">
               {trainingJobs.map((job) => (
                 <TrainingJobCard
                   key={job.id}
@@ -1077,13 +1103,16 @@ export default function TrainModelPage() {
                   refreshing={refreshMutation.isPending}
                   downloading={downloadMutation.isPending}
                   loadingLogs={logsMutation.isPending}
+                  loadingMetrics={metricsMutation.isPending}
                   archiving={deleteMutation.isPending}
                   restoring={restoreMutation.isPending}
                   logText={logsByJobId[job.id] || job.training_logs || job.error_message}
+                  metrics={metricsByJobId[job.id]}
                   logsExpanded={Boolean(expandedLogJobIds[job.id])}
                   onRefresh={() => refreshMutation.mutate(job)}
                   onDownload={() => downloadMutation.mutate(job)}
                   onRefreshLogs={() => logsMutation.mutate(job)}
+                  onRefreshMetrics={() => metricsMutation.mutate(job)}
                   onToggleLogs={() => toggleLogs(job)}
                   onArchive={() => deleteMutation.mutate(job)}
                   onRestore={() => restoreMutation.mutate(job)}
@@ -1340,15 +1369,20 @@ function SourceValidationRow({
 
 function TrainingJobsSkeleton() {
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="space-y-4">
       {[0, 1].map((item) => (
-        <div key={item} className="min-h-80 animate-pulse rounded-lg border border-gray-300 bg-white p-5">
-          <div className="h-5 w-40 rounded bg-gray-200" />
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <div className="h-16 rounded bg-gray-100" />
-            <div className="h-16 rounded bg-gray-100" />
+        <div key={item} className="animate-pulse rounded-lg border border-gray-300 bg-white p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="h-5 w-48 rounded bg-gray-200" />
+            <div className="h-7 w-24 rounded-full bg-gray-200" />
           </div>
-          <div className="mt-4 h-36 rounded bg-gray-950/90" />
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div className="h-10 rounded bg-gray-100" />
+            <div className="h-10 rounded bg-gray-100" />
+            <div className="h-10 rounded bg-gray-100" />
+            <div className="h-10 rounded bg-gray-100" />
+          </div>
+          <div className="mt-4 h-20 rounded bg-gray-100" />
         </div>
       ))}
     </div>
@@ -1360,13 +1394,16 @@ function TrainingJobCard({
   refreshing,
   downloading,
   loadingLogs,
+  loadingMetrics,
   archiving,
   restoring,
   logText,
+  metrics,
   logsExpanded,
   onRefresh,
   onDownload,
   onRefreshLogs,
+  onRefreshMetrics,
   onToggleLogs,
   onArchive,
   onRestore,
@@ -1376,13 +1413,16 @@ function TrainingJobCard({
   refreshing: boolean;
   downloading: boolean;
   loadingLogs: boolean;
+  loadingMetrics: boolean;
   archiving: boolean;
   restoring: boolean;
   logText?: string;
+  metrics?: TrainingJobMetricsResponse;
   logsExpanded: boolean;
   onRefresh: () => void;
   onDownload: () => void;
   onRefreshLogs: () => void;
+  onRefreshMetrics: () => void;
   onToggleLogs: () => void;
   onArchive: () => void;
   onRestore: () => void;
@@ -1390,10 +1430,11 @@ function TrainingJobCard({
 }) {
   const runtimeSummary = `${job.vcpu} vCPU / ${job.memory / 1024} GB`;
   const externalJobId = job.external_job_id || job.sagemaker_job_name || '';
+  const updatedAt = job.updated_at ? new Date(job.updated_at).toLocaleString() : '-';
 
   return (
-    <article className="rounded-lg border border-gray-300 bg-white p-4">
-      <div className="flex flex-col gap-3 border-b border-gray-100 pb-3 sm:flex-row sm:items-start sm:justify-between">
+    <article className="rounded-lg border border-gray-300 bg-white">
+      <div className="flex flex-col gap-3 border-b border-gray-200 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate text-base font-bold text-gray-900">{job.name}</p>
@@ -1405,56 +1446,85 @@ function TrainingJobCard({
             {backendLabel(job.training_backend)} · {runtimeSummary}
           </p>
         </div>
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusStyles[job.status]}`}>
-          {job.is_deleted ? 'Archived' : statusLabels[job.status]}
-        </span>
+        <div className="flex shrink-0 flex-wrap items-center gap-3">
+          <span className="text-xs text-gray-500">
+            <span className="font-semibold uppercase text-gray-400">Updated </span>
+            {updatedAt}
+          </span>
+          <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusStyles[job.status]}`}>
+            {job.is_deleted ? 'Archived' : statusLabels[job.status]}
+          </span>
+        </div>
       </div>
 
-      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-x-5 gap-y-3 px-4 py-4 text-xs sm:grid-cols-2 xl:grid-cols-5">
         <InlineFact icon={<Cpu className="h-3.5 w-3.5" />} label="Runtime" value={runtimeSummary} />
-        <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Max" value={formatDuration(job.max_runtime_seconds)} />
+        <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Max runtime" value={formatDuration(job.max_runtime_seconds)} />
         <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Elapsed" value={formatDuration(elapsedForJob(job))} />
-        <InlineFact label="Entry" value={job.entry_point || '-'} />
         <InlineFact label="Started" value={job.started_at ? new Date(job.started_at).toLocaleString() : '-'} />
         <InlineFact label="Completed" value={job.completed_at ? new Date(job.completed_at).toLocaleString() : '-'} />
-        <InlineFact label="Updated" value={job.updated_at ? new Date(job.updated_at).toLocaleString() : '-'} />
-        {job.is_deleted && <InlineFact label="Archived" value={job.deleted_at ? new Date(job.deleted_at).toLocaleString() : '-'} />}
       </div>
 
-      <div className="mt-3 space-y-2">
+      <div className="grid gap-3 border-y border-gray-100 px-4 py-3 lg:grid-cols-2">
         <UriLine
           icon={<Rocket className="h-4 w-4" />}
           label="External job ID"
           value={externalJobId}
           onCopy={onCopyUri}
         />
-        <UriLine
-          icon={<FileArchive className="h-4 w-4" />}
-          label="Output URI"
-          value={job.output_s3_uri}
-          onCopy={onCopyUri}
-        />
-        <UriLine
-          icon={<Download className="h-4 w-4" />}
-          label="Artifact URI"
-          value={job.model_artifact_uri}
-          onCopy={onCopyUri}
-        />
+        <InlineFact label="Entry point" value={job.entry_point || '-'} />
+        {job.is_deleted && <InlineFact label="Archived" value={job.deleted_at ? new Date(job.deleted_at).toLocaleString() : '-'} />}
+      </div>
+
+      <div className="space-y-2 px-4 py-4">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-400">
+            <FileArchive className="h-4 w-4" />
+            Artifact summary
+          </p>
+          <Button
+            size="sm"
+            icon={<Download className="h-4 w-4" />}
+            disabled={job.status !== 'completed'}
+            loading={downloading}
+            onClick={onDownload}
+          >
+            Download model
+          </Button>
+        </div>
+        <div className="grid gap-2 xl:grid-cols-2">
+          <UriLine
+            icon={<FileArchive className="h-4 w-4" />}
+            label="Output URI"
+            value={job.output_s3_uri}
+            onCopy={onCopyUri}
+          />
+          <UriLine
+            icon={<Download className="h-4 w-4" />}
+            label="Artifact URI"
+            value={job.model_artifact_uri}
+            onCopy={onCopyUri}
+          />
+        </div>
       </div>
 
       {job.error_message && (
-        <div className="mt-4 rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+        <div className="mx-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
           {job.error_message}
         </div>
       )}
 
       {job.stop_reason && !job.error_message && (
-        <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-700">
+        <div className="mx-4 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
           {job.stop_reason}
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
+      <div className="px-4 py-4">
+        <RuntimeMetricsPanel metrics={metrics} loading={loadingMetrics} />
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2 border-t border-gray-200 px-4 py-3">
         {job.is_deleted ? (
           <Button
             variant="secondary"
@@ -1494,6 +1564,15 @@ function TrainingJobCard({
           Refresh status
         </Button>
         <Button
+          variant="secondary"
+          size="sm"
+          icon={<RefreshCw className="h-4 w-4" />}
+          loading={loadingMetrics}
+          onClick={onRefreshMetrics}
+        >
+          Refresh metrics
+        </Button>
+        <Button
           size="sm"
           icon={<Download className="h-4 w-4" />}
           disabled={job.status !== 'completed'}
@@ -1505,11 +1584,13 @@ function TrainingJobCard({
       </div>
 
       {logsExpanded && (
-        <LogTerminal
-          text={logText || 'Logs are not available yet. They usually appear after the Batch container starts.'}
-          loading={loadingLogs}
-          onRefresh={onRefreshLogs}
-        />
+        <div className="border-t border-gray-200 px-4 pb-4">
+          <LogTerminal
+            text={logText || 'Logs are not available yet. They usually appear after the Batch container starts.'}
+            loading={loadingLogs}
+            onRefresh={onRefreshLogs}
+          />
+        </div>
       )}
     </article>
   );
@@ -1525,13 +1606,109 @@ function InlineFact({
   value: string;
 }) {
   return (
-    <div className="min-w-0 rounded-md bg-gray-50 px-2.5 py-2">
+    <div className="min-w-0">
       <p className="flex items-center gap-1 text-[11px] font-semibold uppercase text-gray-400">
         {icon}
         {label}
       </p>
-      <p className="mt-1 truncate font-semibold text-gray-700" title={value}>
+      <p className="mt-1 truncate font-semibold text-gray-800" title={value}>
         {value}
+      </p>
+    </div>
+  );
+}
+
+function RuntimeMetricsPanel({
+  metrics,
+  loading,
+}: {
+  metrics?: TrainingJobMetricsResponse;
+  loading: boolean;
+}) {
+  const latest = metrics?.latest;
+  const memoryValue =
+    latest?.memory_percent != null
+      ? `${formatMetricPercent(latest.memory_percent)}`
+      : latest?.memory_used_mb != null
+        ? `${formatMegabytes(latest.memory_used_mb)} used`
+        : '-';
+  const memoryDetail =
+    latest?.memory_used_mb != null && latest?.memory_limit_mb != null
+      ? `${formatMegabytes(latest.memory_used_mb)} / ${formatMegabytes(latest.memory_limit_mb)}`
+      : latest?.memory_used_mb != null
+        ? `${formatMegabytes(latest.memory_used_mb)} used`
+        : metrics?.message || 'Waiting for runner metrics';
+  const gpuValue = latest?.gpu_available ? formatMetricPercent(latest.gpu_percent) : 'N/A';
+  const gpuDetail =
+    latest?.gpu_available && latest.gpu_memory_used_mb != null && latest.gpu_memory_total_mb != null
+      ? `${formatMegabytes(latest.gpu_memory_used_mb)} / ${formatMegabytes(latest.gpu_memory_total_mb)}`
+      : 'No GPU detected by runner';
+
+  return (
+    <div className="rounded-lg bg-gray-50 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-400">
+            <Cpu className="h-4 w-4" />
+            Runtime metrics
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            {latest?.timestamp
+              ? `Last sample: ${new Date(latest.timestamp).toLocaleString()}`
+              : metrics?.message || 'Metrics appear after the training container starts.'}
+          </p>
+        </div>
+        {loading && <span className="text-xs font-semibold text-gray-400">Refreshing...</span>}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <MetricCell
+          icon={<Cpu className="h-3.5 w-3.5" />}
+          label="CPU"
+          value={latest?.cpu_percent == null ? '-' : formatMetricPercent(latest.cpu_percent)}
+          detail={latest?.cpu_limit_cores ? `${latest.cpu_limit_cores} vCPU limit` : 'Container CPU usage'}
+        />
+        <MetricCell
+          icon={<HardDrive className="h-3.5 w-3.5" />}
+          label="RAM"
+          value={memoryValue}
+          detail={memoryDetail}
+        />
+        <MetricCell
+          icon={<Rocket className="h-3.5 w-3.5" />}
+          label="GPU"
+          value={gpuValue}
+          detail={gpuDetail}
+          muted={!latest?.gpu_available}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MetricCell({
+  icon,
+  label,
+  value,
+  detail,
+  muted = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className={`min-w-0 rounded-md bg-white px-3 py-2 ${muted ? 'opacity-60' : ''}`}>
+      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase text-gray-400">
+        {icon}
+        {label}
+      </p>
+      <p className="mt-1 truncate text-base font-bold text-gray-900" title={value}>
+        {value}
+      </p>
+      <p className="mt-0.5 truncate text-xs text-gray-500" title={detail}>
+        {detail}
       </p>
     </div>
   );
@@ -1582,7 +1759,7 @@ function LogTerminal({
       <pre
         ref={scrollRef}
         onScroll={handleScroll}
-        className="max-h-72 min-h-40 overflow-y-auto whitespace-pre-wrap p-4 text-xs leading-5 text-gray-100"
+        className="max-h-[480px] min-h-80 overflow-auto whitespace-pre p-4 text-xs leading-5 text-gray-100"
       >
         {text}
       </pre>
@@ -1602,15 +1779,18 @@ function UriLine({
   onCopy: (value: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-      <div className="mb-1 flex items-center justify-between gap-3">
-        <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-400">
+    <div className="min-w-0 rounded-md bg-gray-50 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-3">
+        <p className="flex shrink-0 items-center gap-2 text-xs font-semibold uppercase text-gray-400">
           {icon}
           {label}
         </p>
+        <code className="min-w-0 flex-1 truncate text-xs text-gray-700" title={value || '-'}>
+          {value || '-'}
+        </code>
         <button
           type="button"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-white hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-white hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
           disabled={!value}
           onClick={() => onCopy(value)}
           aria-label={`Copy ${label}`}
@@ -1618,9 +1798,6 @@ function UriLine({
           <Clipboard className="h-4 w-4" />
         </button>
       </div>
-      <code className="block truncate text-xs text-gray-600" title={value || '-'}>
-        {value || '-'}
-      </code>
     </div>
   );
 }

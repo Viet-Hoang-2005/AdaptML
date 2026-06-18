@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import datetime, timezone as datetime_timezone
 
@@ -13,6 +14,8 @@ from .sagemaker_service import (
     get_training_job_prefix,
     upload_training_inputs_to_s3,
 )
+
+METRIC_LOG_PREFIX = "METRIC_JSON "
 
 
 def _batch_client():
@@ -221,6 +224,61 @@ def get_aws_batch_training_log_payload(training_job: TrainingJob, limit: int = 3
 
 def get_aws_batch_training_logs(training_job: TrainingJob, limit: int = 300) -> str:
     return get_aws_batch_training_log_payload(training_job, limit=limit)["logs"]
+
+
+def parse_training_metrics_from_logs(logs: str, max_points: int = 120) -> list[dict]:
+    metrics = []
+    for line in (logs or "").splitlines():
+        if METRIC_LOG_PREFIX not in line:
+            continue
+        _, raw_payload = line.split(METRIC_LOG_PREFIX, 1)
+        try:
+            payload = json.loads(raw_payload.strip())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            metrics.append(payload)
+    return metrics[-max_points:]
+
+
+def strip_training_metric_lines(logs: str) -> str:
+    return "\n".join(line for line in (logs or "").splitlines() if METRIC_LOG_PREFIX not in line).strip()
+
+
+def get_training_metrics_payload(training_job: TrainingJob, limit: int = 1000) -> dict:
+    logs = training_job.training_logs or ""
+    log_stream_name = ""
+    message = ""
+
+    if training_job.training_backend == "aws_batch":
+        log_payload = get_aws_batch_training_log_payload(training_job, limit=limit)
+        logs = log_payload["logs"]
+        log_stream_name = log_payload["log_stream_name"]
+        if logs != training_job.training_logs:
+            training_job.training_logs = logs
+            training_job.save(update_fields=["training_logs", "updated_at"])
+    elif not logs:
+        message = "Runtime metrics are not available for this job yet."
+
+    history = parse_training_metrics_from_logs(logs)
+    latest = history[-1] if history else None
+    if not history and not message:
+        message = (
+            "Runtime metrics are not available yet. They appear after the training runner starts "
+            "and emits METRIC_JSON log lines."
+        )
+
+    return {
+        "job_id": training_job.id,
+        "training_job_id": training_job.id,
+        "status": training_job.status,
+        "metrics_available": bool(history),
+        "latest": latest,
+        "history": history,
+        "log_stream_name": log_stream_name,
+        "message": message,
+        "updated_at": timezone.now(),
+    }
 
 
 def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:

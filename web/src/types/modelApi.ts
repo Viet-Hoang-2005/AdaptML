@@ -127,6 +127,32 @@ export interface TrainingJobLogsResponse {
   updated_at: string;
 }
 
+export interface TrainingMetricPoint {
+  timestamp: string;
+  cpu_percent: number | null;
+  cpu_limit_cores: number | null;
+  memory_used_mb: number | null;
+  memory_limit_mb: number | null;
+  memory_percent: number | null;
+  gpu_available: boolean;
+  gpu_percent: number | null;
+  gpu_memory_used_mb: number | null;
+  gpu_memory_total_mb: number | null;
+  gpu_memory_percent: number | null;
+}
+
+export interface TrainingJobMetricsResponse {
+  job_id: number;
+  training_job_id: number;
+  status: TrainingJobStatus;
+  metrics_available: boolean;
+  latest: TrainingMetricPoint | null;
+  history: TrainingMetricPoint[];
+  log_stream_name: string;
+  message: string;
+  updated_at: string;
+}
+
 export interface TrainingUsageResponse {
   training_backend: 'sagemaker' | 'local' | 'aws_batch';
   monthly_quota_seconds: number;

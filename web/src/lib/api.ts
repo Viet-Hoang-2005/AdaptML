@@ -31,6 +31,7 @@ import type {
   TrainingJobFormValues,
   TrainingJobListResponse,
   TrainingJobLogsResponse,
+  TrainingJobMetricsResponse,
   TrainingUsageResponse,
 } from '../types/modelApi';
 
@@ -348,6 +349,11 @@ export const getTrainingJobDownloadUrl = async (jobId: number): Promise<Training
 
 export const getTrainingJobLogs = async (jobId: number): Promise<TrainingJobLogsResponse> => {
   const { data } = await axiosInstance.get<TrainingJobLogsResponse>(controlPlaneURL(`/training-jobs/${jobId}/logs/`));
+  return data;
+};
+
+export const getTrainingJobMetrics = async (jobId: number): Promise<TrainingJobMetricsResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobMetricsResponse>(controlPlaneURL(`/training-jobs/${jobId}/metrics/`));
   return data;
 };
 
