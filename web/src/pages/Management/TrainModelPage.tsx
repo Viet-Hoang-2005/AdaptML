@@ -53,6 +53,46 @@ const statusLabels: Record<TrainingJobStatus, string> = {
 
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
 
+const jobLabel = (job: Pick<TrainingJob, 'name' | 'model_version'>) => `${job.name} ${job.model_version}`.trim();
+
+const upsertTrainingJob = (jobs: TrainingJob[], job: TrainingJob) => {
+  const existingIndex = jobs.findIndex((item) => item.id === job.id);
+  if (existingIndex === -1) {
+    return [job, ...jobs];
+  }
+
+  const nextJobs = [...jobs];
+  nextJobs[existingIndex] = job;
+  return nextJobs;
+};
+
+const removeTrainingJob = (jobs: TrainingJob[], jobId: number) => jobs.filter((item) => item.id !== jobId);
+
+const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number): TrainingJob => {
+  const now = new Date().toISOString();
+  return {
+    id,
+    name: payload.name.trim() || 'Training job',
+    model_version: payload.model_version.trim() || 'version',
+    entry_point: payload.entry_point.trim() || 'train.py',
+    training_backend: 'aws_batch',
+    source_zip: payload.source_zip?.name || '',
+    requirements_file: payload.requirements_file?.name || '',
+    training_data: payload.training_data?.name || '',
+    s3_source_uri: '',
+    s3_training_data_uri: '',
+    sagemaker_job_name: '',
+    external_job_id: '',
+    output_s3_uri: '',
+    model_artifact_uri: '',
+    status: 'uploading',
+    error_message: '',
+    training_logs: 'Uploading files and creating training job...',
+    created_at: now,
+    updated_at: now,
+  };
+};
+
 export default function TrainModelPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<TrainingJobFormValues>(initialForm);
@@ -74,36 +114,66 @@ export default function TrainModelPage() {
 
   const createMutation = useMutation({
     mutationFn: createTrainingJob,
-    onMutate: () => {
-      toast.warning('Uploading files and creating training job...');
+    onMutate: async (payload) => {
+      const optimisticId = -Date.now();
+      const optimisticJob = createOptimisticTrainingJob(payload, optimisticId);
+
+      await queryClient.cancelQueries({ queryKey: queryKeys.trainingJobs });
+      queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
+        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], optimisticJob),
+      }));
+
+      toast.warning(`Uploading files and creating training job for ${jobLabel(optimisticJob)}...`);
+      return { optimisticId };
     },
-    onSuccess: async (job) => {
+    onSuccess: async (job, _payload, context) => {
       setForm(initialForm);
-      await invalidateJobs();
-      toast.success(`Training job ${job.name} ${job.model_version} created on ${backendLabel(job.training_backend)}.`);
+      queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => {
+        const withoutOptimistic = context?.optimisticId
+          ? removeTrainingJob(current?.training_jobs ?? [], context.optimisticId)
+          : current?.training_jobs ?? [];
+        return { training_jobs: upsertTrainingJob(withoutOptimistic, job) };
+      });
+      void invalidateJobs();
+      toast.success(`Training job ${jobLabel(job)} created on ${backendLabel(job.training_backend)}.`);
     },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to create training job. Check training backend configuration.'));
+    onError: (error, payload, context) => {
+      if (context?.optimisticId) {
+        queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
+          training_jobs: removeTrainingJob(current?.training_jobs ?? [], context.optimisticId),
+        }));
+      }
+      toast.error(
+        `${jobLabel({ name: payload.name, model_version: payload.model_version })}: ${getApiErrorMessage(
+          error,
+          'Unable to create training job. Check training backend configuration.',
+        )}`,
+      );
     },
   });
 
   const refreshMutation = useMutation({
     mutationFn: (job: TrainingJob) => refreshTrainingJobStatus(job.id),
     onMutate: (job) => {
-      toast.warning(`Refreshing status for ${job.name}...`);
+      toast.warning(`Refreshing status for ${jobLabel(job)}...`);
     },
     onSuccess: async (updatedJob, previousJob) => {
-      await invalidateJobs();
+      queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
+        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
+      }));
+      void invalidateJobs();
       if (updatedJob.status === previousJob.status) {
-        toast.success(`Status unchanged: ${statusLabels[updatedJob.status]}.`);
+        toast.success(`${jobLabel(updatedJob)} status unchanged: ${statusLabels[updatedJob.status]}.`);
       } else if (updatedJob.status === 'failed') {
-        toast.error(`Training job failed. Check the training log for details.`);
+        toast.error(`${jobLabel(updatedJob)} failed. Check the training log for details.`);
       } else {
-        toast.success(`Status changed: ${statusLabels[previousJob.status]} -> ${statusLabels[updatedJob.status]}.`);
+        toast.success(
+          `${jobLabel(updatedJob)} status changed: ${statusLabels[previousJob.status]} -> ${statusLabels[updatedJob.status]}.`,
+        );
       }
     },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to refresh training status. Check backend logs.'));
+    onError: (error, job) => {
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to refresh training status. Check backend logs.')}`);
     },
   });
 
@@ -111,10 +181,10 @@ export default function TrainModelPage() {
     mutationFn: (job: TrainingJob) => getTrainingJobDownloadUrl(job.id),
     onSuccess: ({ download_url }, job) => {
       window.open(download_url, '_blank', 'noopener,noreferrer');
-      toast.success(`Download link opened for ${job.name}.`);
+      toast.success(`Download link opened for ${jobLabel(job)}.`);
     },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Model artifact is not ready yet. Refresh status first.'));
+    onError: (error, job) => {
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Model artifact is not ready yet. Refresh status first.')}`);
     },
   });
 
@@ -123,8 +193,8 @@ export default function TrainModelPage() {
     onSuccess: ({ logs }, job) => {
       setLogsByJobId((current) => ({ ...current, [job.id]: logs }));
     },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to load training logs.'));
+    onError: (error, job) => {
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to load training logs.')}`);
     },
   });
 
