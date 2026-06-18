@@ -172,8 +172,8 @@ def start_sagemaker_training_job(training_job: TrainingJob) -> tuple[str, str]:
             },
             base_job_name=f"mlops-paas-{training_job.tenant.tenant_id.lower()}-{training_job.id}",
             use_spot_instances=config.use_spot,
-            max_run=config.max_run,
-            max_wait=config.max_wait,
+            max_run=training_job.max_runtime_seconds or config.max_run,
+            max_wait=max(config.max_wait, training_job.max_runtime_seconds or config.max_run),
         )
         estimator.fit({"train": data_uri}, wait=False)
         sagemaker_job_name = estimator.latest_training_job.name
@@ -182,12 +182,16 @@ def start_sagemaker_training_job(training_job: TrainingJob) -> tuple[str, str]:
         training_job.output_s3_uri = output_s3_uri
         training_job.status = "running"
         training_job.error_message = ""
+        training_job.stop_reason = ""
+        training_job.mark_started(save=False)
         training_job.save(
             update_fields=[
                 "sagemaker_job_name",
                 "output_s3_uri",
                 "status",
                 "error_message",
+                "stop_reason",
+                "started_at",
                 "updated_at",
             ]
         )
@@ -209,19 +213,36 @@ def refresh_sagemaker_training_job(training_job: TrainingJob) -> TrainingJob:
     if sagemaker_status == "Completed":
         training_job.status = "completed"
         training_job.error_message = ""
+        training_job.stop_reason = ""
         training_job.model_artifact_uri = (
             response.get("ModelArtifacts", {}).get("S3ModelArtifacts")
             or _model_artifact_uri(training_job, training_job.output_s3_uri)
         )
+        training_job.mark_finished(save=False)
     elif sagemaker_status in {"Failed", "Stopped"}:
         training_job.status = "failed"
         training_job.error_message = response.get("FailureReason", f"SageMaker status: {sagemaker_status}")
+        training_job.stop_reason = training_job.error_message
+        training_job.mark_finished(training_job.stop_reason, save=False)
     elif sagemaker_status in {"InProgress", "Stopping"}:
         training_job.status = "running"
+        training_job.mark_started(save=False)
     else:
         training_job.status = "running"
+        training_job.mark_started(save=False)
 
-    training_job.save(update_fields=["status", "error_message", "model_artifact_uri", "updated_at"])
+    training_job.save(
+        update_fields=[
+            "status",
+            "error_message",
+            "model_artifact_uri",
+            "started_at",
+            "completed_at",
+            "runtime_seconds",
+            "stop_reason",
+            "updated_at",
+        ]
+    )
     return training_job
 
 

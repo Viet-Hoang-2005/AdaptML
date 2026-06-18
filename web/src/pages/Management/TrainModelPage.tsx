@@ -1,9 +1,14 @@
 import {
   Archive,
+  ChevronDown,
+  ChevronUp,
   Clipboard,
+  Clock3,
+  Cpu,
   Download,
   FileArchive,
   FileCode2,
+  HardDrive,
   RefreshCw,
   RotateCcw,
   Rocket,
@@ -11,7 +16,7 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -20,6 +25,7 @@ import {
   deleteTrainingJob,
   getTrainingJobDownloadUrl,
   getTrainingJobLogs,
+  getTrainingUsage,
   listTrainingJobs,
   refreshTrainingJobStatus,
   restoreTrainingJob,
@@ -34,10 +40,28 @@ const initialForm: TrainingJobFormValues = {
   name: '',
   model_version: '',
   entry_point: 'train.py',
+  vcpu: 2,
+  memory: 4096,
+  max_runtime_seconds: 3600,
   source_zip: null,
   requirements_file: null,
   training_data: null,
 };
+
+const runtimeProfiles = [
+  { id: 'small', label: 'Small', helper: 'Cheaper', vcpu: 1, memory: 2048 },
+  { id: 'medium', label: 'Medium', helper: 'Recommended', vcpu: 2, memory: 4096 },
+  { id: 'large', label: 'Large', helper: 'More memory', vcpu: 4, memory: 8192 },
+] as const;
+
+const runtimeOptions = [
+  { label: '15m', value: 900 },
+  { label: '30m', value: 1800 },
+  { label: '1h', value: 3600 },
+  { label: '2h', value: 7200 },
+  { label: '6h', value: 21600 },
+  { label: '12h', value: 43200 },
+];
 
 const statusStyles: Record<TrainingJobStatus, string> = {
   pending: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -59,7 +83,45 @@ const backendLabel = (backend?: TrainingJob['training_backend']) => backend || '
 
 const jobLabel = (job: Pick<TrainingJob, 'name' | 'model_version'>) => `${job.name} ${job.model_version}`.trim();
 
-const AUTO_SYNC_INTERVAL_MS = 5000;
+const AUTO_SYNC_INTERVAL_MS = 4000;
+const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
+
+const formatDuration = (seconds?: number | null) => {
+  const totalSeconds = Math.max(Number(seconds || 0), 0);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+};
+
+const elapsedForJob = (job: TrainingJob) => {
+  if (job.runtime_seconds) return job.runtime_seconds;
+  if (job.status === 'running' && job.started_at) {
+    return Math.max(Math.floor((Date.now() - new Date(job.started_at).getTime()) / 1000), 0);
+  }
+  return 0;
+};
+
+const isActiveJob = (job: TrainingJob) => ACTIVE_STATUSES.includes(job.status);
+
+const transitionToast = (previousJob: TrainingJob, updatedJob: TrainingJob) => {
+  if (previousJob.status === updatedJob.status) return;
+  const wasStarting = ['pending', 'uploading'].includes(previousJob.status);
+  if (wasStarting && updatedJob.status === 'running') {
+    toast.success(`${jobLabel(updatedJob)} started.`);
+    return;
+  }
+  if (previousJob.status === 'running' && updatedJob.status === 'completed') {
+    toast.success(`${jobLabel(updatedJob)} completed in ${formatDuration(elapsedForJob(updatedJob))}.`);
+    return;
+  }
+  if (previousJob.status === 'running' && updatedJob.status === 'failed') {
+    const reason = updatedJob.stop_reason || updatedJob.error_message || 'Check the training log for details.';
+    toast.error(`${jobLabel(updatedJob)} failed: ${reason}`);
+  }
+};
 
 type JobVisibilityFilter = 'active' | 'archived' | 'all';
 type JobSortMode = 'newest' | 'oldest' | 'status' | 'name';
@@ -107,6 +169,9 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
     model_version: payload.model_version.trim() || 'version',
     entry_point: payload.entry_point.trim() || 'train.py',
     training_backend: 'aws_batch',
+    vcpu: payload.vcpu,
+    memory: payload.memory,
+    max_runtime_seconds: payload.max_runtime_seconds,
     source_zip: payload.source_zip?.name || '',
     requirements_file: payload.requirements_file?.name || '',
     training_data: payload.training_data?.name || '',
@@ -119,6 +184,10 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
     status: 'uploading',
     error_message: '',
     training_logs: 'Uploading files and creating training job...',
+    started_at: null,
+    completed_at: null,
+    runtime_seconds: 0,
+    stop_reason: '',
     deleted_at: null,
     is_deleted: false,
     created_at: now,
@@ -130,6 +199,7 @@ export default function TrainModelPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<TrainingJobFormValues>(initialForm);
   const [logsByJobId, setLogsByJobId] = useState<Record<number, string>>({});
+  const [expandedLogJobIds, setExpandedLogJobIds] = useState<Record<number, boolean>>({});
   const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
   const [sortMode, setSortMode] = useState<JobSortMode>('newest');
   const statusNotificationRef = useRef<Record<number, TrainingJobStatus>>({});
@@ -143,9 +213,17 @@ export default function TrainModelPage() {
   } = useQuery({
     queryKey: queryKeys.trainingJobs,
     queryFn: () => listTrainingJobs(true),
+  });
+  const { data: usage, isLoading: isUsageLoading } = useQuery({
+    queryKey: queryKeys.trainingUsage,
+    queryFn: getTrainingUsage,
     refetchInterval: 15000,
   });
   const allTrainingJobs = useMemo(() => data?.training_jobs ?? [], [data?.training_jobs]);
+  const activeTrainingJobs = useMemo(
+    () => allTrainingJobs.filter((job) => !job.is_deleted && job.id > 0 && isActiveJob(job)),
+    [allTrainingJobs],
+  );
   const filteredTrainingJobs = allTrainingJobs.filter((job) => {
     if (visibilityFilter === 'archived') return job.is_deleted;
     if (visibilityFilter === 'active') return !job.is_deleted;
@@ -153,12 +231,17 @@ export default function TrainModelPage() {
   });
   const trainingJobs = sortTrainingJobs(filteredTrainingJobs, sortMode);
 
-  const invalidateJobs = () => queryClient.invalidateQueries({ queryKey: queryKeys.trainingJobs });
+  const invalidateJobs = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.trainingJobs }),
+    [queryClient],
+  );
+  const invalidateUsage = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.trainingUsage }),
+    [queryClient],
+  );
 
   useEffect(() => {
-    const syncableJobs = allTrainingJobs.filter(
-      (job) => !job.is_deleted && job.id > 0 && ['pending', 'uploading', 'running'].includes(job.status),
-    );
+    const syncableJobs = activeTrainingJobs;
 
     if (syncableJobs.length === 0) {
       return undefined;
@@ -170,9 +253,10 @@ export default function TrainModelPage() {
       await Promise.all(
         syncableJobs.map(async (job) => {
           try {
+            const shouldRefreshLogs = job.status === 'running' && expandedLogJobIds[job.id];
             const [updatedJob, logsResponse] = await Promise.all([
               refreshTrainingJobStatus(job.id),
-              getTrainingJobLogs(job.id).catch(() => null),
+              shouldRefreshLogs ? getTrainingJobLogs(job.id).catch(() => null) : Promise.resolve(null),
             ]);
 
             if (cancelled) return;
@@ -181,19 +265,15 @@ export default function TrainModelPage() {
               training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
             }));
 
-            if (logsResponse?.logs) {
-              setLogsByJobId((current) => ({ ...current, [job.id]: logsResponse.logs }));
+            if (logsResponse?.text || logsResponse?.logs) {
+              setLogsByJobId((current) => ({ ...current, [job.id]: logsResponse.text || logsResponse.logs }));
             }
 
-            if (updatedJob.status !== job.status && ['completed', 'failed'].includes(updatedJob.status)) {
+            if (updatedJob.status !== job.status) {
+              void invalidateUsage();
               if (statusNotificationRef.current[updatedJob.id] !== updatedJob.status) {
                 statusNotificationRef.current[updatedJob.id] = updatedJob.status;
-                if (updatedJob.status === 'completed') {
-                  toast.success(`${jobLabel(updatedJob)} completed. Model artifact is ready to download.`);
-                } else {
-                  const reason = updatedJob.error_message ? ` ${updatedJob.error_message}` : ' Check the training log for details.';
-                  toast.error(`${jobLabel(updatedJob)} failed.${reason}`);
-                }
+                transitionToast(job, updatedJob);
               }
             }
           } catch {
@@ -212,7 +292,7 @@ export default function TrainModelPage() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [allTrainingJobs, queryClient]);
+  }, [activeTrainingJobs, expandedLogJobIds, invalidateUsage, queryClient]);
 
   const createMutation = useMutation({
     mutationFn: createTrainingJob,
@@ -237,6 +317,7 @@ export default function TrainModelPage() {
         return { training_jobs: upsertTrainingJob(withoutOptimistic, job) };
       });
       void invalidateJobs();
+      void invalidateUsage();
       toast.success(`Training job ${jobLabel(job)} created on ${backendLabel(job.training_backend)}.`);
     },
     onError: (error, payload, context) => {
@@ -264,10 +345,12 @@ export default function TrainModelPage() {
         training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
       }));
       void invalidateJobs();
+      void invalidateUsage();
       if (updatedJob.status === previousJob.status) {
         toast.success(`${jobLabel(updatedJob)} status unchanged: ${statusLabels[updatedJob.status]}.`);
       } else if (updatedJob.status === 'failed') {
-        toast.error(`${jobLabel(updatedJob)} failed. Check the training log for details.`);
+        const reason = updatedJob.stop_reason || updatedJob.error_message || 'Check the training log for details.';
+        toast.error(`${jobLabel(updatedJob)} failed: ${reason}`);
       } else {
         toast.success(
           `${jobLabel(updatedJob)} status changed: ${statusLabels[previousJob.status]} -> ${statusLabels[updatedJob.status]}.`,
@@ -292,8 +375,8 @@ export default function TrainModelPage() {
 
   const logsMutation = useMutation({
     mutationFn: (job: TrainingJob) => getTrainingJobLogs(job.id),
-    onSuccess: ({ logs }, job) => {
-      setLogsByJobId((current) => ({ ...current, [job.id]: logs }));
+    onSuccess: ({ logs, text }, job) => {
+      setLogsByJobId((current) => ({ ...current, [job.id]: text || logs }));
     },
     onError: (error, job) => {
       toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to load training logs.')}`);
@@ -306,6 +389,7 @@ export default function TrainModelPage() {
       queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
         training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
       }));
+      void invalidateUsage();
       toast.success(`${jobLabel(updatedJob)} archived. You can restore it from Archived jobs.`);
     },
     onError: (error, job) => {
@@ -319,6 +403,7 @@ export default function TrainModelPage() {
       queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
         training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
       }));
+      void invalidateUsage();
       toast.success(`${jobLabel(updatedJob)} restored.`);
     },
     onError: (error, job) => {
@@ -326,8 +411,12 @@ export default function TrainModelPage() {
     },
   });
 
-  const setField = (field: keyof TrainingJobFormValues, value: string | File | null) => {
+  const setField = (field: keyof TrainingJobFormValues, value: string | number | File | null) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const selectRuntimeProfile = (vcpu: number, memory: number) => {
+    setForm((current) => ({ ...current, vcpu, memory }));
   };
 
   const copyUri = async (value: string) => {
@@ -344,12 +433,20 @@ export default function TrainModelPage() {
     }
   };
 
+  const toggleLogs = (job: TrainingJob) => {
+    setExpandedLogJobIds((current) => ({ ...current, [job.id]: !current[job.id] }));
+    if (!expandedLogJobIds[job.id]) {
+      logsMutation.mutate(job);
+    }
+  };
+
   const canSubmit =
     Boolean(form.name.trim()) &&
     Boolean(form.model_version.trim()) &&
     Boolean(form.entry_point.trim()) &&
     Boolean(form.source_zip) &&
-    Boolean(form.training_data);
+    Boolean(form.training_data) &&
+    (!usage || form.max_runtime_seconds <= usage.remaining_seconds);
 
   return (
     <section className="flex w-full flex-1 flex-col space-y-5">
@@ -358,6 +455,30 @@ export default function TrainModelPage() {
         <p className="max-w-3xl text-sm leading-6 text-gray-500">
           Upload training code and data, run a backend training job, inspect logs, and download the private model artifact from S3.
         </p>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <UsageCard
+          icon={<Clock3 className="h-4 w-4" />}
+          label="Used this month"
+          value={isUsageLoading ? 'Loading...' : formatDuration(usage?.monthly_runtime_seconds)}
+        />
+        <UsageCard
+          icon={<Clock3 className="h-4 w-4" />}
+          label="Monthly quota"
+          value={formatDuration(usage?.monthly_quota_seconds || 43200)}
+        />
+        <UsageCard
+          icon={<Clock3 className="h-4 w-4" />}
+          label="Remaining"
+          value={isUsageLoading ? 'Loading...' : formatDuration(usage?.remaining_seconds)}
+          tone={usage && usage.remaining_seconds < form.max_runtime_seconds ? 'danger' : 'default'}
+        />
+        <UsageCard
+          icon={<Rocket className="h-4 w-4" />}
+          label="Running jobs"
+          value={String(usage?.running_jobs_count ?? 0)}
+        />
       </div>
 
       <div className="rounded-lg border border-gray-300 bg-white p-5">
@@ -416,6 +537,74 @@ export default function TrainModelPage() {
             subtitle="Required .csv"
             onChange={(file) => setField('training_data', file)}
           />
+        </div>
+
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">Training configuration</h3>
+              <p className="text-xs text-gray-500">AWS Batch uses fixed Fargate-safe profiles for this MVP.</p>
+            </div>
+            <span className="w-fit rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-600">
+              Training backend: {backendLabel(usage?.training_backend)}
+            </span>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {runtimeProfiles.map((profile) => {
+              const selected = form.vcpu === profile.vcpu && form.memory === profile.memory;
+              return (
+                <button
+                  key={profile.id}
+                  type="button"
+                  className={`rounded-lg border p-3 text-left transition ${
+                    selected ? 'border-black bg-white shadow-sm' : 'border-gray-200 bg-white hover:border-gray-400'
+                  }`}
+                  onClick={() => selectRuntimeProfile(profile.vcpu, profile.memory)}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-gray-900">{profile.label}</p>
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-semibold text-gray-500">
+                      {profile.helper}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <Cpu className="h-3.5 w-3.5" />
+                      {profile.vcpu} vCPU
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <HardDrive className="h-3.5 w-3.5" />
+                      {profile.memory / 1024} GB
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <label className="text-sm font-semibold text-gray-700">
+              Max runtime
+              <select
+                className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900"
+                value={form.max_runtime_seconds}
+                onChange={(event) => setField('max_runtime_seconds', Number(event.target.value))}
+              >
+                {runtimeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <SummaryItem label="Selected profile" value={`${form.vcpu} vCPU / ${form.memory / 1024} GB`} />
+            <SummaryItem label="Requested runtime" value={formatDuration(form.max_runtime_seconds)} />
+          </div>
+          {usage && form.max_runtime_seconds > usage.remaining_seconds && (
+            <p className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+              Monthly quota exceeded. Remaining quota is {formatDuration(usage.remaining_seconds)}, but this job requests{' '}
+              {formatDuration(form.max_runtime_seconds)}.
+            </p>
+          )}
         </div>
 
         <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-600">
@@ -498,9 +687,11 @@ export default function TrainModelPage() {
                   archiving={deleteMutation.isPending}
                   restoring={restoreMutation.isPending}
                   logText={logsByJobId[job.id] || job.training_logs || job.error_message}
+                  logsExpanded={Boolean(expandedLogJobIds[job.id])}
                   onRefresh={() => refreshMutation.mutate(job)}
                   onDownload={() => downloadMutation.mutate(job)}
                   onRefreshLogs={() => logsMutation.mutate(job)}
+                  onToggleLogs={() => toggleLogs(job)}
                   onArchive={() => deleteMutation.mutate(job)}
                   onRestore={() => restoreMutation.mutate(job)}
                   onCopyUri={copyUri}
@@ -545,6 +736,32 @@ function SegmentedFilter({
   );
 }
 
+function UsageCard({
+  icon,
+  label,
+  value,
+  tone = 'default',
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  tone?: 'default' | 'danger';
+}) {
+  return (
+    <div
+      className={`rounded-lg border bg-white p-4 ${
+        tone === 'danger' ? 'border-red-100 text-red-700' : 'border-gray-300 text-gray-900'
+      }`}
+    >
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-400">
+        {icon}
+        {label}
+      </p>
+      <p className="mt-2 text-lg font-bold">{value}</p>
+    </div>
+  );
+}
+
 function TrainingJobsSkeleton() {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -570,9 +787,11 @@ function TrainingJobCard({
   archiving,
   restoring,
   logText,
+  logsExpanded,
   onRefresh,
   onDownload,
   onRefreshLogs,
+  onToggleLogs,
   onArchive,
   onRestore,
   onCopyUri,
@@ -584,35 +803,55 @@ function TrainingJobCard({
   archiving: boolean;
   restoring: boolean;
   logText?: string;
+  logsExpanded: boolean;
   onRefresh: () => void;
   onDownload: () => void;
   onRefreshLogs: () => void;
+  onToggleLogs: () => void;
   onArchive: () => void;
   onRestore: () => void;
   onCopyUri: (value: string) => void;
 }) {
+  const runtimeSummary = `${job.vcpu} vCPU / ${job.memory / 1024} GB`;
+  const externalJobId = job.external_job_id || job.sagemaker_job_name || '';
+
   return (
-    <article className="rounded-lg border border-gray-300 bg-white p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <article className="rounded-lg border border-gray-300 bg-white p-4">
+      <div className="flex flex-col gap-3 border-b border-gray-100 pb-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase text-gray-400">Training Job</p>
-          <h2 className="mt-1 truncate text-lg font-bold text-gray-900">{job.name}</h2>
-          <p className="mt-1 text-sm text-gray-500">Version {job.model_version}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-base font-bold text-gray-900">{job.name}</p>
+            <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+              {job.model_version}
+            </span>
+          </div>
+          <p className="mt-1 text-xs font-semibold uppercase text-gray-400">
+            {backendLabel(job.training_backend)} · {runtimeSummary}
+          </p>
         </div>
         <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusStyles[job.status]}`}>
           {job.is_deleted ? 'Archived' : statusLabels[job.status]}
         </span>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <SummaryItem label="Backend" value={backendLabel(job.training_backend)} />
-        <SummaryItem label="Entry point" value={job.entry_point || '-'} />
-        <SummaryItem label="External job ID" value={job.external_job_id || job.sagemaker_job_name || '-'} />
-        <SummaryItem label="Updated" value={job.updated_at ? new Date(job.updated_at).toLocaleString() : '-'} />
-        {job.is_deleted && <SummaryItem label="Archived" value={job.deleted_at ? new Date(job.deleted_at).toLocaleString() : '-'} />}
+      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        <InlineFact icon={<Cpu className="h-3.5 w-3.5" />} label="Runtime" value={runtimeSummary} />
+        <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Max" value={formatDuration(job.max_runtime_seconds)} />
+        <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Elapsed" value={formatDuration(elapsedForJob(job))} />
+        <InlineFact label="Entry" value={job.entry_point || '-'} />
+        <InlineFact label="Started" value={job.started_at ? new Date(job.started_at).toLocaleString() : '-'} />
+        <InlineFact label="Completed" value={job.completed_at ? new Date(job.completed_at).toLocaleString() : '-'} />
+        <InlineFact label="Updated" value={job.updated_at ? new Date(job.updated_at).toLocaleString() : '-'} />
+        {job.is_deleted && <InlineFact label="Archived" value={job.deleted_at ? new Date(job.deleted_at).toLocaleString() : '-'} />}
       </div>
 
-      <div className="mt-4 space-y-3">
+      <div className="mt-3 space-y-2">
+        <UriLine
+          icon={<Rocket className="h-4 w-4" />}
+          label="External job ID"
+          value={externalJobId}
+          onCopy={onCopyUri}
+        />
         <UriLine
           icon={<FileArchive className="h-4 w-4" />}
           label="Output URI"
@@ -633,28 +872,13 @@ function TrainingJobCard({
         </div>
       )}
 
-      <div className="mt-4 overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
-        <div className="flex items-center justify-between border-b border-gray-800 px-3 py-2">
-          <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-300">
-            <ScrollText className="h-4 w-4" />
-            Training Log
-          </p>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<RefreshCw className="h-4 w-4" />}
-            loading={loadingLogs}
-            onClick={onRefreshLogs}
-          >
-            Refresh logs
-          </Button>
+      {job.stop_reason && !job.error_message && (
+        <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-700">
+          {job.stop_reason}
         </div>
-        <pre className="max-h-64 min-h-40 overflow-y-auto whitespace-pre-wrap p-4 text-xs leading-5 text-gray-100">
-          {logText || 'No training logs are available yet. Refresh logs after the job starts.'}
-        </pre>
-      </div>
+      )}
 
-      <div className="mt-5 flex flex-wrap justify-end gap-2">
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
         {job.is_deleted ? (
           <Button
             variant="secondary"
@@ -679,6 +903,14 @@ function TrainingJobCard({
         <Button
           variant="secondary"
           size="sm"
+          icon={logsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          onClick={onToggleLogs}
+        >
+          {logsExpanded ? 'Hide logs' : 'Show logs'}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           icon={<RefreshCw className="h-4 w-4" />}
           loading={refreshing}
           onClick={onRefresh}
@@ -695,7 +927,90 @@ function TrainingJobCard({
           Download model
         </Button>
       </div>
+
+      {logsExpanded && (
+        <LogTerminal
+          text={logText || 'Logs are not available yet. They usually appear after the Batch container starts.'}
+          loading={loadingLogs}
+          onRefresh={onRefreshLogs}
+        />
+      )}
     </article>
+  );
+}
+
+function InlineFact({
+  icon,
+  label,
+  value,
+}: {
+  icon?: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-md bg-gray-50 px-2.5 py-2">
+      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase text-gray-400">
+        {icon}
+        {label}
+      </p>
+      <p className="mt-1 truncate font-semibold text-gray-700" title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function LogTerminal({
+  text,
+  loading,
+  onRefresh,
+}: {
+  text: string;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const scrollRef = useRef<HTMLPreElement | null>(null);
+  const shouldStickToBottomRef = useRef(true);
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element || !shouldStickToBottomRef.current) return;
+    element.scrollTop = element.scrollHeight;
+  }, [text]);
+
+  const handleScroll = () => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    shouldStickToBottomRef.current = distanceFromBottom < 24;
+  };
+
+  return (
+    <div className="mt-4 overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
+      <div className="flex items-center justify-between border-b border-gray-800 px-3 py-2">
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-300">
+          <ScrollText className="h-4 w-4" />
+          Training Log
+        </p>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<RefreshCw className="h-4 w-4" />}
+          loading={loading}
+          onClick={onRefresh}
+        >
+          Refresh
+        </Button>
+      </div>
+      <pre
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="max-h-72 min-h-40 overflow-y-auto whitespace-pre-wrap p-4 text-xs leading-5 text-gray-100"
+      >
+        {text}
+      </pre>
+    </div>
   );
 }
 

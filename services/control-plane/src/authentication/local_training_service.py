@@ -90,9 +90,21 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
     _, _, prefix = upload_training_inputs_to_s3(training_job)
     training_job.status = "running"
     training_job.error_message = ""
+    training_job.stop_reason = ""
     training_job.sagemaker_job_name = ""
     training_job.output_s3_uri = _s3_uri(settings.AWS_STORAGE_BUCKET_NAME, f"{prefix}/output/local/")
-    training_job.save(update_fields=["status", "error_message", "sagemaker_job_name", "output_s3_uri", "updated_at"])
+    training_job.mark_started(save=False)
+    training_job.save(
+        update_fields=[
+            "status",
+            "error_message",
+            "stop_reason",
+            "sagemaker_job_name",
+            "output_s3_uri",
+            "started_at",
+            "updated_at",
+        ]
+    )
 
     workspace = Path(tempfile.mkdtemp(prefix=f"local-training-job-{training_job.id}-"))
     try:
@@ -140,7 +152,7 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
             env=env,
             capture_output=True,
             text=True,
-            timeout=settings.LOCAL_TRAINING_TIMEOUT,
+            timeout=min(settings.LOCAL_TRAINING_TIMEOUT, training_job.max_runtime_seconds),
         )
         if result.returncode != 0:
             raise RuntimeError(_short_log(result.stdout, result.stderr))
@@ -157,7 +169,20 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
         training_job.error_message = ""
         training_job.training_logs = training_logs
         training_job.model_artifact_uri = artifact_uri
-        training_job.save(update_fields=["status", "error_message", "training_logs", "model_artifact_uri", "updated_at"])
+        training_job.stop_reason = ""
+        training_job.mark_finished(save=False)
+        training_job.save(
+            update_fields=[
+                "status",
+                "error_message",
+                "training_logs",
+                "model_artifact_uri",
+                "completed_at",
+                "runtime_seconds",
+                "stop_reason",
+                "updated_at",
+            ]
+        )
 
         return {
             "status": training_job.status,
@@ -168,7 +193,19 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
         training_job.status = "failed"
         training_job.error_message = str(exc)
         training_job.training_logs = str(exc)
-        training_job.save(update_fields=["status", "error_message", "training_logs", "updated_at"])
+        training_job.stop_reason = str(exc)
+        training_job.mark_finished(training_job.stop_reason, save=False)
+        training_job.save(
+            update_fields=[
+                "status",
+                "error_message",
+                "training_logs",
+                "completed_at",
+                "runtime_seconds",
+                "stop_reason",
+                "updated_at",
+            ]
+        )
         raise
     finally:
         shutil.rmtree(workspace, ignore_errors=True)

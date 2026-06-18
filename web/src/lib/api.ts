@@ -31,6 +31,7 @@ import type {
   TrainingJobFormValues,
   TrainingJobListResponse,
   TrainingJobLogsResponse,
+  TrainingUsageResponse,
 } from '../types/modelApi';
 
 const authApiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/auth';
@@ -292,6 +293,9 @@ const trainingJobFormData = (payload: TrainingJobFormValues) => {
   formData.append('name', payload.name);
   formData.append('model_version', payload.model_version);
   formData.append('entry_point', payload.entry_point || 'train.py');
+  formData.append('vcpu', String(payload.vcpu));
+  formData.append('memory', String(payload.memory));
+  formData.append('max_runtime_seconds', String(payload.max_runtime_seconds));
   if (payload.source_zip) {
     formData.append('source_zip', payload.source_zip);
   }
@@ -317,6 +321,11 @@ export const listTrainingJobs = async (includeDeleted = false): Promise<Training
   const { data } = await axiosInstance.get<TrainingJobListResponse>(
     controlPlaneURL(`/training-jobs/${includeDeleted ? '?include_deleted=true' : ''}`),
   );
+  return data;
+};
+
+export const getTrainingUsage = async (): Promise<TrainingUsageResponse> => {
+  const { data } = await axiosInstance.get<TrainingUsageResponse>(controlPlaneURL('/training-usage/'));
   return data;
 };
 
