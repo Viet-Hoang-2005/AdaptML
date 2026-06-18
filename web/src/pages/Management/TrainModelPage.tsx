@@ -16,6 +16,7 @@ import {
   Rocket,
   ScrollText,
   UploadCloud,
+  X,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -38,7 +39,7 @@ import { toast } from '../../lib/toast';
 import { downloadSampleTrainingTemplate } from '../../lib/trainingTemplate';
 import { inspectZipFile, readZipEntryText, rebuildZipWithEditedEntry } from '../../lib/trainingZip';
 import type { TrainingJob, TrainingJobFormValues, TrainingJobStatus } from '../../types/modelApi';
-import { FileDropzone, SummaryItem } from './UploadModelFormPage';
+import { SummaryItem } from './UploadModelFormPage';
 
 const initialForm: TrainingJobFormValues = {
   name: '',
@@ -110,6 +111,46 @@ const elapsedForJob = (job: TrainingJob) => {
 
 const isActiveJob = (job: TrainingJob) => ACTIVE_STATUSES.includes(job.status);
 
+const normalizeZipPath = (value: string) => value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+
+const resolveEntryPointPath = (fileNames: string[], entryPoint: string) => {
+  const normalizedEntry = normalizeZipPath(entryPoint || 'train.py');
+  if (fileNames.includes(normalizedEntry)) {
+    return { path: normalizedEntry, exact: true };
+  }
+
+  const basename = normalizedEntry.split('/').pop();
+  const matches = fileNames.filter((name) => !name.endsWith('/') && name.split('/').pop() === basename);
+  if (matches.length === 1) {
+    return { path: matches[0], exact: false };
+  }
+
+  return { path: '', exact: false };
+};
+
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string) => {
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+};
+
+const formatFileSize = (file?: File | null) => {
+  if (!file) return '';
+  if (file.size < 1024) return `${file.size} B`;
+  if (file.size < 1024 * 1024) return `${(file.size / 1024).toFixed(1)} KB`;
+  return `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 const transitionToast = (previousJob: TrainingJob, updatedJob: TrainingJob) => {
   if (previousJob.status === updatedJob.status) return;
   const wasStarting = ['pending', 'uploading'].includes(previousJob.status);
@@ -137,7 +178,10 @@ interface SourceZipState {
   requirementsInZip: boolean;
   editable: boolean;
   error: string;
+  warning: string;
+  resolvedEntryPoint: string;
   entryText: string;
+  previewLoading: boolean;
 }
 
 const emptySourceZipState: SourceZipState = {
@@ -147,7 +191,10 @@ const emptySourceZipState: SourceZipState = {
   requirementsInZip: false,
   editable: false,
   error: '',
+  warning: '',
+  resolvedEntryPoint: '',
   entryText: '',
+  previewLoading: false,
 };
 
 const statusRank: Record<TrainingJobStatus, number> = {
@@ -336,43 +383,103 @@ export default function TrainModelPage() {
         if (!sourceZip.name.toLowerCase().endsWith('.zip')) {
           throw new Error('source_zip must be a .zip file.');
         }
-        const inspection = await inspectZipFile(sourceZip);
-        const normalizedEntry = entryPoint.replace(/\\/g, '/').replace(/^\.\//, '');
-        const entryExists = inspection.fileNames.includes(normalizedEntry);
-        const requirementsInZip = inspection.fileNames.some((name) => name.split('/').pop()?.toLowerCase() === 'requirements.txt');
-        let entryText = '';
-        let editable = false;
-
-        if (entryExists) {
-          try {
-            entryText = await readZipEntryText(sourceZip, normalizedEntry, inspection.entries);
-            editable = true;
-          } catch (error) {
-            entryText = getApiErrorMessage(error, 'Entry point exists, but cannot be previewed in this browser.');
-          }
+        const inspection = await withTimeout(
+          inspectZipFile(sourceZip),
+          4000,
+          'Timed out while reading source.zip. The file may be too large or malformed.',
+        );
+        const fileNames = inspection.fileNames;
+        if (fileNames.length === 0) {
+          throw new Error('source.zip was inspected but no files were found.');
         }
 
-        if (cancelled) return;
-        setSourceZipState({
-          inspecting: false,
-          fileNames: inspection.fileNames,
-          entryExists,
-          requirementsInZip,
-          editable,
-          error: '',
-          entryText,
-        });
-        setEditedEntryText(entryText);
-        setEntryEdited(false);
-      } catch (error) {
+        const hasTemplateBundle = fileNames.includes('source.zip') && !fileNames.some((name) => name.split('/').pop() === 'train.py');
+        if (hasTemplateBundle) {
+          const templateError = 'You uploaded the template bundle. Extract it and upload the inner source.zip, or use the included train.csv/requirements.txt separately.';
+          if (cancelled) return;
+          setSourceZipState({
+            ...emptySourceZipState,
+            inspecting: false,
+            fileNames,
+            error: templateError,
+          });
+          setEditedEntryText('');
+          setEntryEdited(false);
+          toast.error(templateError);
+          return;
+        }
+
+        const resolved = resolveEntryPointPath(fileNames, entryPoint);
+        const entryExists = Boolean(resolved.path);
+        const requirementsInZip = inspection.fileNames.some((name) => name.split('/').pop()?.toLowerCase() === 'requirements.txt');
+        const autoSelectWarning = entryExists && !resolved.exact ? `Entry point was auto-selected as ${resolved.path}.` : '';
+
         if (cancelled) return;
         setSourceZipState({
           ...emptySourceZipState,
           inspecting: false,
-          error: getApiErrorMessage(error, 'Unable to inspect source.zip.'),
+          fileNames,
+          entryExists,
+          requirementsInZip,
+          warning: autoSelectWarning,
+          resolvedEntryPoint: resolved.path,
+          previewLoading: entryExists,
         });
         setEditedEntryText('');
         setEntryEdited(false);
+
+        if (entryExists && !resolved.exact) {
+          setForm((current) => ({ ...current, entry_point: resolved.path }));
+        }
+
+        if (!entryExists) {
+          return;
+        }
+
+        try {
+          const entryText = await withTimeout(
+            readZipEntryText(sourceZip, resolved.path),
+            4000,
+            `Preview timed out while reading ${resolved.path}. You can still submit the original zip if the entry point is valid.`,
+          );
+          if (entryText.includes('\u0000')) {
+            throw new Error(`${resolved.path} looks binary or is not UTF-8 text.`);
+          }
+          if (cancelled) return;
+          setSourceZipState((current) => ({
+            ...current,
+            editable: true,
+            entryText,
+            previewLoading: false,
+          }));
+          setEditedEntryText(entryText);
+          setEntryEdited(false);
+        } catch (error) {
+          const warning = getApiErrorMessage(error, 'Entry point exists, but cannot be previewed in this browser.');
+          console.warn('Source zip entry preview failed:', warning);
+          if (cancelled) return;
+          setSourceZipState((current) => ({
+            ...current,
+            warning,
+            previewLoading: false,
+          }));
+        }
+      } catch (error) {
+        const message = getApiErrorMessage(error, 'Unable to inspect source.zip.');
+        console.warn('Source zip inspection failed:', message);
+        toast.error(message);
+        if (cancelled) return;
+        setSourceZipState({
+          ...emptySourceZipState,
+          inspecting: false,
+          error: message,
+        });
+        setEditedEntryText('');
+        setEntryEdited(false);
+      } finally {
+        if (!cancelled) {
+          setSourceZipState((current) => (current.inspecting ? { ...current, inspecting: false } : current));
+        }
       }
     };
 
@@ -504,6 +611,9 @@ export default function TrainModelPage() {
 
   const setField = (field: keyof TrainingJobFormValues, value: string | number | File | null) => {
     setForm((current) => ({ ...current, [field]: value }));
+    if (field === 'entry_point' && form.source_zip) {
+      setSourceZipState((current) => ({ ...current, inspecting: true, error: '', warning: '' }));
+    }
   };
 
   const setSourceZip = (file: File | null) => {
@@ -665,25 +775,40 @@ export default function TrainModelPage() {
         </div>
 
         <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          <FileDropzone
+          <TrainingFilePicker
             accept=".zip,application/zip"
-            title={form.source_zip ? form.source_zip.name : 'Source code zip'}
-            subtitle="Required .zip"
+            label="Source code zip"
+            required
+            expected=".zip"
+            file={form.source_zip}
+            valid={Boolean(form.source_zip?.name.toLowerCase().endsWith('.zip'))}
             onChange={setSourceZip}
           />
-          <FileDropzone
+          <TrainingFilePicker
             accept=".txt,text/plain"
-            title={form.requirements_file ? form.requirements_file.name : 'requirements.txt'}
-            subtitle="Optional"
+            label="requirements.txt"
+            expected=".txt"
+            file={form.requirements_file}
+            valid={!form.requirements_file || form.requirements_file.name.toLowerCase().endsWith('.txt')}
             onChange={(file) => setField('requirements_file', file)}
           />
-          <FileDropzone
+          <TrainingFilePicker
             accept=".csv,text/csv"
-            title={form.training_data ? form.training_data.name : 'Training data CSV'}
-            subtitle="Required .csv"
+            label="Training data CSV"
+            required
+            expected=".csv"
+            file={form.training_data}
+            valid={Boolean(form.training_data?.name.toLowerCase().endsWith('.csv'))}
             onChange={(file) => setField('training_data', file)}
           />
         </div>
+
+        <UploadSummary
+          sourceZip={form.source_zip}
+          requirementsFile={form.requirements_file}
+          trainingData={form.training_data}
+          sourceZipState={sourceZipState}
+        />
 
         <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -726,7 +851,7 @@ export default function TrainModelPage() {
                     sourceZipState.inspecting
                       ? 'Inspecting...'
                       : sourceZipState.entryExists
-                        ? `${form.entry_point || 'train.py'} found`
+                        ? `${sourceZipState.resolvedEntryPoint || form.entry_point || 'train.py'} found`
                         : `${form.entry_point || 'train.py'} was not found`
                   }
                 />
@@ -746,6 +871,11 @@ export default function TrainModelPage() {
                 {sourceZipState.error && (
                   <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
                     {sourceZipState.error}
+                  </div>
+                )}
+                {sourceZipState.warning && (
+                  <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                    {sourceZipState.warning}
                   </div>
                 )}
                 <div className="rounded-lg border border-gray-200 bg-gray-950 p-3">
@@ -776,7 +906,11 @@ export default function TrainModelPage() {
                     </span>
                   )}
                 </div>
-                {sourceZipState.editable ? (
+                {sourceZipState.previewLoading ? (
+                  <div className="flex min-h-80 items-center justify-center rounded-lg border border-dashed border-blue-200 bg-blue-50 p-6 text-center text-sm font-semibold text-blue-700">
+                    Loading entry point preview...
+                  </div>
+                ) : sourceZipState.editable ? (
                   <textarea
                     value={editedEntryText}
                     onChange={(event) => {
@@ -789,7 +923,7 @@ export default function TrainModelPage() {
                 ) : (
                   <div className="flex min-h-80 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
                     {sourceZipState.entryExists
-                      ? 'Entry point exists but cannot be previewed. You can still submit the original zip.'
+                      ? sourceZipState.warning || 'Entry point exists but cannot be previewed. You can still submit the original zip.'
                       : 'Choose a zip that contains the configured entry point to preview and edit train.py.'}
                   </div>
                 )}
@@ -1017,6 +1151,157 @@ function UsageCard({
         {label}
       </p>
       <p className="mt-2 text-lg font-bold">{value}</p>
+    </div>
+  );
+}
+
+function TrainingFilePicker({
+  label,
+  expected,
+  accept,
+  file,
+  valid,
+  required = false,
+  onChange,
+}: {
+  label: string;
+  expected: string;
+  accept: string;
+  file: File | null;
+  valid: boolean;
+  required?: boolean;
+  onChange: (file: File | null) => void;
+}) {
+  const inputId = `training-file-${label.replace(/\W+/g, '-').toLowerCase()}`;
+  const status = file ? (valid ? 'Selected' : 'Invalid') : required ? 'Missing' : 'Optional';
+  const statusClass = file
+    ? valid
+      ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+      : 'border-red-100 bg-red-50 text-red-700'
+    : required
+      ? 'border-amber-100 bg-amber-50 text-amber-700'
+      : 'border-gray-200 bg-gray-50 text-gray-500';
+
+  return (
+    <div className={`rounded-lg border p-4 ${file ? 'border-gray-400 bg-white' : 'border-dashed border-gray-300 bg-gray-50'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-gray-900">{label}</p>
+          <p className="mt-1 text-xs text-gray-500">{required ? `Required ${expected}` : `Optional ${expected}`}</p>
+        </div>
+        <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${statusClass}`}>{status}</span>
+      </div>
+
+      {file ? (
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p className="truncate text-sm font-semibold text-gray-900" title={file.name}>
+            {file.name}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">{formatFileSize(file)}</p>
+        </div>
+      ) : (
+        <div className="mt-4 flex min-h-16 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-3 text-center text-sm text-gray-500">
+          No file selected
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        {file && (
+          <Button variant="ghost" size="sm" icon={<X className="h-4 w-4" />} onClick={() => onChange(null)}>
+            Remove
+          </Button>
+        )}
+        <label
+          htmlFor={inputId}
+          className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-xs font-semibold text-black transition-colors hover:bg-gray-200"
+        >
+          <UploadCloud className="h-4 w-4" />
+          {file ? 'Change file' : 'Select file'}
+        </label>
+        <input
+          id={inputId}
+          key={file?.name || 'empty'}
+          type="file"
+          accept={accept}
+          className="hidden"
+          onChange={(event) => onChange(event.target.files?.[0] ?? null)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function UploadSummary({
+  sourceZip,
+  requirementsFile,
+  trainingData,
+  sourceZipState,
+}: {
+  sourceZip: File | null;
+  requirementsFile: File | null;
+  trainingData: File | null;
+  sourceZipState: SourceZipState;
+}) {
+  const entryStatus = sourceZipState.inspecting
+    ? 'inspecting'
+    : sourceZipState.error
+      ? 'error'
+      : sourceZipState.entryExists
+        ? 'found'
+        : sourceZip
+          ? 'missing'
+          : 'missing';
+
+  return (
+    <div className="mt-4 grid gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm md:grid-cols-4">
+      <UploadSummaryItem label="Source zip" status={sourceZip ? 'selected' : 'missing'} detail={sourceZip?.name || 'Missing'} />
+      <UploadSummaryItem
+        label="Requirements"
+        status={requirementsFile ? 'selected' : sourceZipState.requirementsInZip ? 'selected' : 'optional'}
+        detail={requirementsFile?.name || (sourceZipState.requirementsInZip ? 'Inside zip' : 'Optional missing')}
+      />
+      <UploadSummaryItem label="Training data" status={trainingData ? 'selected' : 'missing'} detail={trainingData?.name || 'Missing'} />
+      <UploadSummaryItem
+        label="Entry point"
+        status={entryStatus}
+        detail={
+          sourceZipState.inspecting
+            ? 'Inspecting...'
+            : sourceZipState.error
+              ? 'Inspect failed'
+              : sourceZipState.entryExists
+                ? sourceZipState.resolvedEntryPoint
+                : 'Missing'
+        }
+      />
+    </div>
+  );
+}
+
+function UploadSummaryItem({
+  label,
+  status,
+  detail,
+}: {
+  label: string;
+  status: 'selected' | 'missing' | 'optional' | 'inspecting' | 'found' | 'error';
+  detail: string;
+}) {
+  const styles = {
+    selected: 'text-emerald-700',
+    found: 'text-emerald-700',
+    missing: 'text-red-700',
+    optional: 'text-gray-500',
+    inspecting: 'text-blue-700',
+    error: 'text-red-700',
+  };
+
+  return (
+    <div className="min-w-0 rounded-md bg-white px-3 py-2">
+      <p className="text-xs font-semibold uppercase text-gray-400">{label}</p>
+      <p className={`mt-1 truncate text-sm font-bold ${styles[status]}`} title={detail}>
+        {detail}
+      </p>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 from pathlib import Path
+import zipfile
 
 from django.conf import settings
 from django.db.models import Count, Q, Sum
@@ -121,6 +122,47 @@ def _parse_positive_int(value, field_name, default):
     return parsed
 
 
+def _validate_source_zip_entry_point(source_zip, entry_point):
+    try:
+        source_zip.seek(0)
+        with zipfile.ZipFile(source_zip) as archive:
+            file_names = [item.filename.replace("\\", "/").lstrip("./").lstrip("/") for item in archive.infolist()]
+    except zipfile.BadZipFile:
+        raise ValidationError({"error": "source_zip is not a valid zip archive."})
+    finally:
+        try:
+            source_zip.seek(0)
+        except Exception:
+            pass
+
+    if not file_names:
+        raise ValidationError({"error": "source_zip is empty."})
+
+    has_template_bundle = "source.zip" in file_names and not any(Path(name).name == "train.py" for name in file_names)
+    if has_template_bundle:
+        raise ValidationError(
+            {
+                "error": (
+                    "You uploaded the template bundle. Extract it and upload the inner source.zip, "
+                    "or use the included train.csv/requirements.txt separately."
+                )
+            }
+        )
+
+    normalized_entry_point = entry_point.replace("\\", "/").lstrip("./").lstrip("/")
+    if normalized_entry_point not in file_names:
+        matching_names = [name for name in file_names if Path(name).name == Path(normalized_entry_point).name]
+        suggestion = f" Did you mean '{matching_names[0]}'?" if len(matching_names) == 1 else ""
+        raise ValidationError(
+            {
+                "error": (
+                    f"Source zip must contain the configured entry point '{normalized_entry_point}'."
+                    f"{suggestion}"
+                )
+            }
+        )
+
+
 def validate_create_training_job_request(request):
     name = (request.data.get("name") or "").strip()
     model_version = (request.data.get("model_version") or "").strip()
@@ -171,6 +213,7 @@ def validate_create_training_job_request(request):
     entry_point_path = Path(entry_point)
     if entry_point_path.is_absolute() or ".." in entry_point_path.parts:
         raise ValidationError({"error": "entry_point must be a relative path inside source_zip."})
+    _validate_source_zip_entry_point(source_zip, entry_point)
 
     return {
         "name": name,
