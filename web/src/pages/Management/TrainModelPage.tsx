@@ -11,7 +11,7 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -58,6 +58,8 @@ const statusLabels: Record<TrainingJobStatus, string> = {
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
 
 const jobLabel = (job: Pick<TrainingJob, 'name' | 'model_version'>) => `${job.name} ${job.model_version}`.trim();
+
+const AUTO_SYNC_INTERVAL_MS = 5000;
 
 type JobVisibilityFilter = 'active' | 'archived' | 'all';
 type JobSortMode = 'newest' | 'oldest' | 'status' | 'name';
@@ -130,6 +132,7 @@ export default function TrainModelPage() {
   const [logsByJobId, setLogsByJobId] = useState<Record<number, string>>({});
   const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
   const [sortMode, setSortMode] = useState<JobSortMode>('newest');
+  const statusNotificationRef = useRef<Record<number, TrainingJobStatus>>({});
   const {
     data,
     error: jobsError,
@@ -140,8 +143,9 @@ export default function TrainModelPage() {
   } = useQuery({
     queryKey: queryKeys.trainingJobs,
     queryFn: () => listTrainingJobs(true),
+    refetchInterval: 15000,
   });
-  const allTrainingJobs = data?.training_jobs ?? [];
+  const allTrainingJobs = useMemo(() => data?.training_jobs ?? [], [data?.training_jobs]);
   const filteredTrainingJobs = allTrainingJobs.filter((job) => {
     if (visibilityFilter === 'archived') return job.is_deleted;
     if (visibilityFilter === 'active') return !job.is_deleted;
@@ -150,6 +154,65 @@ export default function TrainModelPage() {
   const trainingJobs = sortTrainingJobs(filteredTrainingJobs, sortMode);
 
   const invalidateJobs = () => queryClient.invalidateQueries({ queryKey: queryKeys.trainingJobs });
+
+  useEffect(() => {
+    const syncableJobs = allTrainingJobs.filter(
+      (job) => !job.is_deleted && job.id > 0 && ['pending', 'uploading', 'running'].includes(job.status),
+    );
+
+    if (syncableJobs.length === 0) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const syncTrainingJobs = async () => {
+      await Promise.all(
+        syncableJobs.map(async (job) => {
+          try {
+            const [updatedJob, logsResponse] = await Promise.all([
+              refreshTrainingJobStatus(job.id),
+              getTrainingJobLogs(job.id).catch(() => null),
+            ]);
+
+            if (cancelled) return;
+
+            queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
+              training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
+            }));
+
+            if (logsResponse?.logs) {
+              setLogsByJobId((current) => ({ ...current, [job.id]: logsResponse.logs }));
+            }
+
+            if (updatedJob.status !== job.status && ['completed', 'failed'].includes(updatedJob.status)) {
+              if (statusNotificationRef.current[updatedJob.id] !== updatedJob.status) {
+                statusNotificationRef.current[updatedJob.id] = updatedJob.status;
+                if (updatedJob.status === 'completed') {
+                  toast.success(`${jobLabel(updatedJob)} completed. Model artifact is ready to download.`);
+                } else {
+                  const reason = updatedJob.error_message ? ` ${updatedJob.error_message}` : ' Check the training log for details.';
+                  toast.error(`${jobLabel(updatedJob)} failed.${reason}`);
+                }
+              }
+            }
+          } catch {
+            // Auto-sync stays quiet on transient backend/AWS polling errors.
+          }
+        }),
+      );
+    };
+
+    void syncTrainingJobs();
+    const intervalId = window.setInterval(() => {
+      void syncTrainingJobs();
+    }, AUTO_SYNC_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [allTrainingJobs, queryClient]);
 
   const createMutation = useMutation({
     mutationFn: createTrainingJob,
