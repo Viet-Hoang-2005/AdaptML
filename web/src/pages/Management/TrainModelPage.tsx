@@ -1,9 +1,11 @@
 import {
+  Archive,
   Clipboard,
   Download,
   FileArchive,
   FileCode2,
   RefreshCw,
+  RotateCcw,
   Rocket,
   ScrollText,
   UploadCloud,
@@ -15,10 +17,12 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import {
   createTrainingJob,
+  deleteTrainingJob,
   getTrainingJobDownloadUrl,
   getTrainingJobLogs,
   listTrainingJobs,
   refreshTrainingJobStatus,
+  restoreTrainingJob,
 } from '../../lib/api';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { queryKeys } from '../../lib/queryKeys';
@@ -55,6 +59,31 @@ const backendLabel = (backend?: TrainingJob['training_backend']) => backend || '
 
 const jobLabel = (job: Pick<TrainingJob, 'name' | 'model_version'>) => `${job.name} ${job.model_version}`.trim();
 
+type JobVisibilityFilter = 'active' | 'archived' | 'all';
+type JobSortMode = 'newest' | 'oldest' | 'status' | 'name';
+
+const statusRank: Record<TrainingJobStatus, number> = {
+  running: 0,
+  uploading: 1,
+  pending: 2,
+  failed: 3,
+  completed: 4,
+};
+
+const sortTrainingJobs = (jobs: TrainingJob[], sortMode: JobSortMode) => {
+  const nextJobs = [...jobs];
+  if (sortMode === 'oldest') {
+    return nextJobs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+  if (sortMode === 'status') {
+    return nextJobs.sort((a, b) => statusRank[a.status] - statusRank[b.status] || b.id - a.id);
+  }
+  if (sortMode === 'name') {
+    return nextJobs.sort((a, b) => `${a.name} ${a.model_version}`.localeCompare(`${b.name} ${b.model_version}`));
+  }
+  return nextJobs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+};
+
 const upsertTrainingJob = (jobs: TrainingJob[], job: TrainingJob) => {
   const existingIndex = jobs.findIndex((item) => item.id === job.id);
   if (existingIndex === -1) {
@@ -88,6 +117,8 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
     status: 'uploading',
     error_message: '',
     training_logs: 'Uploading files and creating training job...',
+    deleted_at: null,
+    is_deleted: false,
     created_at: now,
     updated_at: now,
   };
@@ -97,6 +128,8 @@ export default function TrainModelPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<TrainingJobFormValues>(initialForm);
   const [logsByJobId, setLogsByJobId] = useState<Record<number, string>>({});
+  const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
+  const [sortMode, setSortMode] = useState<JobSortMode>('newest');
   const {
     data,
     error: jobsError,
@@ -106,9 +139,15 @@ export default function TrainModelPage() {
     refetch,
   } = useQuery({
     queryKey: queryKeys.trainingJobs,
-    queryFn: listTrainingJobs,
+    queryFn: () => listTrainingJobs(true),
   });
-  const trainingJobs = data?.training_jobs ?? [];
+  const allTrainingJobs = data?.training_jobs ?? [];
+  const filteredTrainingJobs = allTrainingJobs.filter((job) => {
+    if (visibilityFilter === 'archived') return job.is_deleted;
+    if (visibilityFilter === 'active') return !job.is_deleted;
+    return true;
+  });
+  const trainingJobs = sortTrainingJobs(filteredTrainingJobs, sortMode);
 
   const invalidateJobs = () => queryClient.invalidateQueries({ queryKey: queryKeys.trainingJobs });
 
@@ -195,6 +234,32 @@ export default function TrainModelPage() {
     },
     onError: (error, job) => {
       toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to load training logs.')}`);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (job: TrainingJob) => deleteTrainingJob(job.id),
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
+        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
+      }));
+      toast.success(`${jobLabel(updatedJob)} archived. You can restore it from Archived jobs.`);
+    },
+    onError: (error, job) => {
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to archive training job.')}`);
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (job: TrainingJob) => restoreTrainingJob(job.id),
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
+        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
+      }));
+      toast.success(`${jobLabel(updatedJob)} restored.`);
+    },
+    onError: (error, job) => {
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to restore training job.')}`);
     },
   });
 
@@ -319,7 +384,7 @@ export default function TrainModelPage() {
             Retry
           </Button>
         </div>
-      ) : trainingJobs.length === 0 ? (
+      ) : allTrainingJobs.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center">
           <FileCode2 className="mx-auto h-8 w-8 text-gray-400" />
           <h2 className="mt-3 text-base font-bold text-gray-900">No training jobs yet</h2>
@@ -327,29 +392,93 @@ export default function TrainModelPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-gray-900">Training jobs</h2>
+          <div className="flex flex-col gap-3 rounded-lg border border-gray-300 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">Training jobs</h2>
+              <p className="mt-1 text-xs text-gray-500">
+                {trainingJobs.length} shown / {allTrainingJobs.length} total
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <SegmentedFilter value={visibilityFilter} onChange={setVisibilityFilter} />
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+                Sort
+                <select
+                  className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-xs font-semibold text-gray-700"
+                  value={sortMode}
+                  onChange={(event) => setSortMode(event.target.value as JobSortMode)}
+                >
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="status">Status</option>
+                  <option value="name">Name</option>
+                </select>
+              </label>
+            </div>
             {isFetching && <span className="text-xs font-semibold text-gray-400">Refreshing list...</span>}
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            {trainingJobs.map((job) => (
-              <TrainingJobCard
-                key={job.id}
-                job={job}
-                refreshing={refreshMutation.isPending}
-                downloading={downloadMutation.isPending}
-                loadingLogs={logsMutation.isPending}
-                logText={logsByJobId[job.id] || job.training_logs || job.error_message}
-                onRefresh={() => refreshMutation.mutate(job)}
-                onDownload={() => downloadMutation.mutate(job)}
-                onRefreshLogs={() => logsMutation.mutate(job)}
-                onCopyUri={copyUri}
-              />
-            ))}
-          </div>
+          {trainingJobs.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
+              <Archive className="mx-auto h-7 w-7 text-gray-400" />
+              <h2 className="mt-3 text-sm font-bold text-gray-900">No jobs match this view</h2>
+              <p className="mt-1 text-sm text-gray-500">Change the filter to Active, Archived, or All.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {trainingJobs.map((job) => (
+                <TrainingJobCard
+                  key={job.id}
+                  job={job}
+                  refreshing={refreshMutation.isPending}
+                  downloading={downloadMutation.isPending}
+                  loadingLogs={logsMutation.isPending}
+                  archiving={deleteMutation.isPending}
+                  restoring={restoreMutation.isPending}
+                  logText={logsByJobId[job.id] || job.training_logs || job.error_message}
+                  onRefresh={() => refreshMutation.mutate(job)}
+                  onDownload={() => downloadMutation.mutate(job)}
+                  onRefreshLogs={() => logsMutation.mutate(job)}
+                  onArchive={() => deleteMutation.mutate(job)}
+                  onRestore={() => restoreMutation.mutate(job)}
+                  onCopyUri={copyUri}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>
+  );
+}
+
+function SegmentedFilter({
+  value,
+  onChange,
+}: {
+  value: JobVisibilityFilter;
+  onChange: (value: JobVisibilityFilter) => void;
+}) {
+  const options: Array<{ label: string; value: JobVisibilityFilter }> = [
+    { label: 'Active', value: 'active' },
+    { label: 'Archived', value: 'archived' },
+    { label: 'All', value: 'all' },
+  ];
+
+  return (
+    <div className="flex rounded-lg border border-gray-300 bg-gray-50 p-0.5">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={`h-7 rounded-md px-3 text-xs font-bold ${
+            value === option.value ? 'bg-black text-white' : 'text-gray-500 hover:bg-white hover:text-gray-900'
+          }`}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -375,20 +504,28 @@ function TrainingJobCard({
   refreshing,
   downloading,
   loadingLogs,
+  archiving,
+  restoring,
   logText,
   onRefresh,
   onDownload,
   onRefreshLogs,
+  onArchive,
+  onRestore,
   onCopyUri,
 }: {
   job: TrainingJob;
   refreshing: boolean;
   downloading: boolean;
   loadingLogs: boolean;
+  archiving: boolean;
+  restoring: boolean;
   logText?: string;
   onRefresh: () => void;
   onDownload: () => void;
   onRefreshLogs: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
   onCopyUri: (value: string) => void;
 }) {
   return (
@@ -400,7 +537,7 @@ function TrainingJobCard({
           <p className="mt-1 text-sm text-gray-500">Version {job.model_version}</p>
         </div>
         <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusStyles[job.status]}`}>
-          {statusLabels[job.status]}
+          {job.is_deleted ? 'Archived' : statusLabels[job.status]}
         </span>
       </div>
 
@@ -409,6 +546,7 @@ function TrainingJobCard({
         <SummaryItem label="Entry point" value={job.entry_point || '-'} />
         <SummaryItem label="External job ID" value={job.external_job_id || job.sagemaker_job_name || '-'} />
         <SummaryItem label="Updated" value={job.updated_at ? new Date(job.updated_at).toLocaleString() : '-'} />
+        {job.is_deleted && <SummaryItem label="Archived" value={job.deleted_at ? new Date(job.deleted_at).toLocaleString() : '-'} />}
       </div>
 
       <div className="mt-4 space-y-3">
@@ -454,6 +592,27 @@ function TrainingJobCard({
       </div>
 
       <div className="mt-5 flex flex-wrap justify-end gap-2">
+        {job.is_deleted ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RotateCcw className="h-4 w-4" />}
+            loading={restoring}
+            onClick={onRestore}
+          >
+            Restore
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Archive className="h-4 w-4" />}
+            loading={archiving}
+            onClick={onArchive}
+          >
+            Archive
+          </Button>
+        )}
         <Button
           variant="secondary"
           size="sm"

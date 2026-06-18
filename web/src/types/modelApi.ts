@@ -83,6 +83,8 @@ export interface TrainingJob {
   status: TrainingJobStatus;
   error_message: string;
   training_logs: string;
+  deleted_at: string | null;
+  is_deleted: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -43,6 +44,8 @@ def serialize_training_job(training_job: TrainingJob):
         "status": training_job.status,
         "error_message": training_job.error_message,
         "training_logs": training_job.training_logs,
+        "deleted_at": training_job.deleted_at,
+        "is_deleted": bool(training_job.deleted_at),
         "created_at": training_job.created_at,
         "updated_at": training_job.updated_at,
     }
@@ -105,7 +108,10 @@ class TrainingJobListCreateView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
+        include_deleted = (request.query_params.get("include_deleted") or "").lower() in {"1", "true", "yes"}
         training_jobs = TrainingJob.objects.filter(tenant=request.user)
+        if not include_deleted:
+            training_jobs = training_jobs.filter(deleted_at__isnull=True)
         return Response(
             {"training_jobs": [serialize_training_job(item) for item in training_jobs]},
             status=status.HTTP_200_OK,
@@ -162,6 +168,13 @@ class TrainingJobDetailView(APIView):
         training_job = self.get_training_job(request, training_job_id)
         return Response(serialize_training_job(training_job), status=status.HTTP_200_OK)
 
+    def delete(self, request, training_job_id):
+        training_job = self.get_training_job(request, training_job_id)
+        if not training_job.deleted_at:
+            training_job.deleted_at = timezone.now()
+            training_job.save(update_fields=["deleted_at", "updated_at"])
+        return Response(serialize_training_job(training_job), status=status.HTTP_200_OK)
+
 
 class TrainingJobRefreshStatusView(TrainingJobDetailView):
     def post(self, request, training_job_id):
@@ -210,3 +223,12 @@ class TrainingJobLogsView(TrainingJobDetailView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class TrainingJobRestoreView(TrainingJobDetailView):
+    def post(self, request, training_job_id):
+        training_job = self.get_training_job(request, training_job_id)
+        if training_job.deleted_at:
+            training_job.deleted_at = None
+            training_job.save(update_fields=["deleted_at", "updated_at"])
+        return Response(serialize_training_job(training_job), status=status.HTTP_200_OK)

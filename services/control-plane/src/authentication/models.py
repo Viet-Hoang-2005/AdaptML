@@ -237,6 +237,7 @@ class TrainingJob(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     error_message = models.TextField(blank=True)
     training_logs = models.TextField(blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -245,6 +246,7 @@ class TrainingJob(models.Model):
         indexes = [
             models.Index(fields=["tenant", "status"], name="authenticat_trainin_57fd0f_idx"),
             models.Index(fields=["tenant", "model_version"], name="authenticat_trainin_5cba8b_idx"),
+            models.Index(fields=["tenant", "deleted_at"], name="authenticat_trainin_6a33d7_idx"),
         ]
 
     def __str__(self):

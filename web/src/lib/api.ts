@@ -313,8 +313,10 @@ export const createTrainingJob = async (payload: TrainingJobFormValues): Promise
   return data;
 };
 
-export const listTrainingJobs = async (): Promise<TrainingJobListResponse> => {
-  const { data } = await axiosInstance.get<TrainingJobListResponse>(controlPlaneURL('/training-jobs/'));
+export const listTrainingJobs = async (includeDeleted = false): Promise<TrainingJobListResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobListResponse>(
+    controlPlaneURL(`/training-jobs/${includeDeleted ? '?include_deleted=true' : ''}`),
+  );
   return data;
 };
 
@@ -337,5 +339,15 @@ export const getTrainingJobDownloadUrl = async (jobId: number): Promise<Training
 
 export const getTrainingJobLogs = async (jobId: number): Promise<TrainingJobLogsResponse> => {
   const { data } = await axiosInstance.get<TrainingJobLogsResponse>(controlPlaneURL(`/training-jobs/${jobId}/logs/`));
+  return data;
+};
+
+export const deleteTrainingJob = async (jobId: number): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.delete<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/`));
+  return data;
+};
+
+export const restoreTrainingJob = async (jobId: number): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/restore/`));
   return data;
 };
