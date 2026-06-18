@@ -1,5 +1,6 @@
 import {
   Archive,
+  AlertTriangle,
   ChevronDown,
   ChevronUp,
   Clipboard,
@@ -8,6 +9,7 @@ import {
   Download,
   FileArchive,
   FileCode2,
+  FileText,
   HardDrive,
   RefreshCw,
   RotateCcw,
@@ -33,6 +35,8 @@ import {
 import { getApiErrorMessage } from '../../lib/apiError';
 import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
+import { downloadSampleTrainingTemplate } from '../../lib/trainingTemplate';
+import { inspectZipFile, readZipEntryText, rebuildZipWithEditedEntry } from '../../lib/trainingZip';
 import type { TrainingJob, TrainingJobFormValues, TrainingJobStatus } from '../../types/modelApi';
 import { FileDropzone, SummaryItem } from './UploadModelFormPage';
 
@@ -126,6 +130,26 @@ const transitionToast = (previousJob: TrainingJob, updatedJob: TrainingJob) => {
 type JobVisibilityFilter = 'active' | 'archived' | 'all';
 type JobSortMode = 'newest' | 'oldest' | 'status' | 'name';
 
+interface SourceZipState {
+  inspecting: boolean;
+  fileNames: string[];
+  entryExists: boolean;
+  requirementsInZip: boolean;
+  editable: boolean;
+  error: string;
+  entryText: string;
+}
+
+const emptySourceZipState: SourceZipState = {
+  inspecting: false,
+  fileNames: [],
+  entryExists: false,
+  requirementsInZip: false,
+  editable: false,
+  error: '',
+  entryText: '',
+};
+
 const statusRank: Record<TrainingJobStatus, number> = {
   running: 0,
   uploading: 1,
@@ -200,6 +224,10 @@ export default function TrainModelPage() {
   const [form, setForm] = useState<TrainingJobFormValues>(initialForm);
   const [logsByJobId, setLogsByJobId] = useState<Record<number, string>>({});
   const [expandedLogJobIds, setExpandedLogJobIds] = useState<Record<number, boolean>>({});
+  const [sourceZipState, setSourceZipState] = useState<SourceZipState>(emptySourceZipState);
+  const [editedEntryText, setEditedEntryText] = useState('');
+  const [entryEdited, setEntryEdited] = useState(false);
+  const [preparingSubmit, setPreparingSubmit] = useState(false);
   const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
   const [sortMode, setSortMode] = useState<JobSortMode>('newest');
   const statusNotificationRef = useRef<Record<number, TrainingJobStatus>>({});
@@ -294,6 +322,66 @@ export default function TrainModelPage() {
     };
   }, [activeTrainingJobs, expandedLogJobIds, invalidateUsage, queryClient]);
 
+  useEffect(() => {
+    const sourceZip = form.source_zip;
+    const entryPoint = form.entry_point.trim() || 'train.py';
+    if (!sourceZip) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const inspectSource = async () => {
+      try {
+        if (!sourceZip.name.toLowerCase().endsWith('.zip')) {
+          throw new Error('source_zip must be a .zip file.');
+        }
+        const inspection = await inspectZipFile(sourceZip);
+        const normalizedEntry = entryPoint.replace(/\\/g, '/').replace(/^\.\//, '');
+        const entryExists = inspection.fileNames.includes(normalizedEntry);
+        const requirementsInZip = inspection.fileNames.some((name) => name.split('/').pop()?.toLowerCase() === 'requirements.txt');
+        let entryText = '';
+        let editable = false;
+
+        if (entryExists) {
+          try {
+            entryText = await readZipEntryText(sourceZip, normalizedEntry, inspection.entries);
+            editable = true;
+          } catch (error) {
+            entryText = getApiErrorMessage(error, 'Entry point exists, but cannot be previewed in this browser.');
+          }
+        }
+
+        if (cancelled) return;
+        setSourceZipState({
+          inspecting: false,
+          fileNames: inspection.fileNames,
+          entryExists,
+          requirementsInZip,
+          editable,
+          error: '',
+          entryText,
+        });
+        setEditedEntryText(entryText);
+        setEntryEdited(false);
+      } catch (error) {
+        if (cancelled) return;
+        setSourceZipState({
+          ...emptySourceZipState,
+          inspecting: false,
+          error: getApiErrorMessage(error, 'Unable to inspect source.zip.'),
+        });
+        setEditedEntryText('');
+        setEntryEdited(false);
+      }
+    };
+
+    void inspectSource();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.source_zip, form.entry_point]);
+
   const createMutation = useMutation({
     mutationFn: createTrainingJob,
     onMutate: async (payload) => {
@@ -310,6 +398,9 @@ export default function TrainModelPage() {
     },
     onSuccess: async (job, _payload, context) => {
       setForm(initialForm);
+      setSourceZipState(emptySourceZipState);
+      setEditedEntryText('');
+      setEntryEdited(false);
       queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => {
         const withoutOptimistic = context?.optimisticId
           ? removeTrainingJob(current?.training_jobs ?? [], context.optimisticId)
@@ -415,6 +506,17 @@ export default function TrainModelPage() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const setSourceZip = (file: File | null) => {
+    setField('source_zip', file);
+    if (!file) {
+      setSourceZipState(emptySourceZipState);
+      setEditedEntryText('');
+      setEntryEdited(false);
+      return;
+    }
+    setSourceZipState({ ...emptySourceZipState, inspecting: true });
+  };
+
   const selectRuntimeProfile = (vcpu: number, memory: number) => {
     setForm((current) => ({ ...current, vcpu, memory }));
   };
@@ -440,12 +542,56 @@ export default function TrainModelPage() {
     }
   };
 
+  const validateBeforeSubmit = () => {
+    if (!form.source_zip) return 'Source code zip is required.';
+    if (!form.training_data) return 'Training data CSV is required.';
+    if (!form.source_zip.name.toLowerCase().endsWith('.zip')) return 'source_zip must be a .zip file.';
+    if (!form.training_data.name.toLowerCase().endsWith('.csv')) return 'training_data must be a .csv file.';
+    if (!form.entry_point.trim()) return 'Entry point is required.';
+    if (sourceZipState.inspecting) return 'Source zip is still being inspected.';
+    if (sourceZipState.error) return sourceZipState.error;
+    if (!sourceZipState.entryExists) return `Entry point ${form.entry_point || 'train.py'} was not found in source.zip.`;
+    if (usage && form.max_runtime_seconds > usage.remaining_seconds) {
+      return `Monthly quota exceeded. Remaining quota is ${formatDuration(usage.remaining_seconds)}.`;
+    }
+    return '';
+  };
+
+  const submitTrainingJob = async () => {
+    const validationError = validateBeforeSubmit();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    let sourceZip = form.source_zip;
+    if (sourceZip && entryEdited && sourceZipState.editable) {
+      try {
+        setPreparingSubmit(true);
+        sourceZip = await rebuildZipWithEditedEntry(sourceZip, form.entry_point.trim() || 'train.py', editedEntryText);
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, 'Unable to rebuild source.zip with edited entry point.'));
+        setPreparingSubmit(false);
+        return;
+      } finally {
+        setPreparingSubmit(false);
+      }
+    }
+
+    createMutation.mutate({ ...form, source_zip: sourceZip });
+  };
+
   const canSubmit =
     Boolean(form.name.trim()) &&
     Boolean(form.model_version.trim()) &&
     Boolean(form.entry_point.trim()) &&
     Boolean(form.source_zip) &&
+    !sourceZipState.inspecting &&
+    !sourceZipState.error &&
+    sourceZipState.entryExists &&
     Boolean(form.training_data) &&
+    form.source_zip?.name.toLowerCase().endsWith('.zip') &&
+    form.training_data?.name.toLowerCase().endsWith('.csv') &&
     (!usage || form.max_runtime_seconds <= usage.remaining_seconds);
 
   return (
@@ -523,7 +669,7 @@ export default function TrainModelPage() {
             accept=".zip,application/zip"
             title={form.source_zip ? form.source_zip.name : 'Source code zip'}
             subtitle="Required .zip"
-            onChange={(file) => setField('source_zip', file)}
+            onChange={setSourceZip}
           />
           <FileDropzone
             accept=".txt,text/plain"
@@ -537,6 +683,119 @@ export default function TrainModelPage() {
             subtitle="Required .csv"
             onChange={(file) => setField('training_data', file)}
           />
+        </div>
+
+        <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900">
+                <FileCode2 className="h-4 w-4" />
+                Source workspace
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                Inspect the uploaded zip, verify the entry point, and make a small edit before submit.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Download className="h-4 w-4" />}
+              onClick={() => void downloadSampleTrainingTemplate()}
+            >
+              Download sample template
+            </Button>
+          </div>
+
+          {!form.source_zip ? (
+            <p className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-sm text-gray-500">
+              Select a source.zip to preview its files and validate the entry point.
+            </p>
+          ) : (
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+              <div className="space-y-3">
+                <SourceValidationRow
+                  label="Source zip"
+                  ok={form.source_zip.name.toLowerCase().endsWith('.zip')}
+                  message={form.source_zip.name.toLowerCase().endsWith('.zip') ? form.source_zip.name : 'Must be a .zip file'}
+                />
+                <SourceValidationRow
+                  label="Entry point"
+                  ok={sourceZipState.entryExists}
+                  pending={sourceZipState.inspecting}
+                  message={
+                    sourceZipState.inspecting
+                      ? 'Inspecting...'
+                      : sourceZipState.entryExists
+                        ? `${form.entry_point || 'train.py'} found`
+                        : `${form.entry_point || 'train.py'} was not found`
+                  }
+                />
+                <SourceValidationRow
+                  label="requirements.txt"
+                  ok={sourceZipState.requirementsInZip || Boolean(form.requirements_file)}
+                  warning
+                  pending={sourceZipState.inspecting}
+                  message={
+                    sourceZipState.requirementsInZip
+                      ? 'Found inside zip'
+                      : form.requirements_file
+                        ? 'Using uploaded requirements file'
+                        : 'Missing. Job can still run if dependencies are already in the image.'
+                  }
+                />
+                {sourceZipState.error && (
+                  <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {sourceZipState.error}
+                  </div>
+                )}
+                <div className="rounded-lg border border-gray-200 bg-gray-950 p-3">
+                  <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-gray-300">
+                    <FileText className="h-4 w-4" />
+                    Files
+                  </p>
+                  <div className="max-h-48 overflow-auto font-mono text-xs text-gray-100">
+                    {sourceZipState.fileNames.length === 0 ? (
+                      <p className="text-gray-400">No files inspected yet.</p>
+                    ) : (
+                      sourceZipState.fileNames.map((name) => (
+                        <div key={name} className="truncate py-1" title={name}>
+                          {name}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase text-gray-400">Entry point editor</p>
+                  {entryEdited && (
+                    <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                      Edited
+                    </span>
+                  )}
+                </div>
+                {sourceZipState.editable ? (
+                  <textarea
+                    value={editedEntryText}
+                    onChange={(event) => {
+                      setEditedEntryText(event.target.value);
+                      setEntryEdited(event.target.value !== sourceZipState.entryText);
+                    }}
+                    spellCheck={false}
+                    className="min-h-80 w-full resize-y rounded-lg border border-gray-300 bg-gray-950 p-4 font-mono text-xs leading-5 text-gray-100 outline-none focus:border-black"
+                  />
+                ) : (
+                  <div className="flex min-h-80 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
+                    {sourceZipState.entryExists
+                      ? 'Entry point exists but cannot be previewed. You can still submit the original zip.'
+                      : 'Choose a zip that contains the configured entry point to preview and edit train.py.'}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -618,8 +877,8 @@ export default function TrainModelPage() {
             size="md"
             icon={<UploadCloud className="h-4 w-4" />}
             disabled={!canSubmit}
-            loading={createMutation.isPending}
-            onClick={() => createMutation.mutate(form)}
+            loading={createMutation.isPending || preparingSubmit}
+            onClick={submitTrainingJob}
           >
             Submit training job
           </Button>
@@ -758,6 +1017,38 @@ function UsageCard({
         {label}
       </p>
       <p className="mt-2 text-lg font-bold">{value}</p>
+    </div>
+  );
+}
+
+function SourceValidationRow({
+  label,
+  message,
+  ok,
+  pending = false,
+  warning = false,
+}: {
+  label: string;
+  message: string;
+  ok: boolean;
+  pending?: boolean;
+  warning?: boolean;
+}) {
+  const tone = pending ? 'gray' : ok ? 'green' : warning ? 'amber' : 'red';
+  const styles: Record<'gray' | 'green' | 'amber' | 'red', string> = {
+    gray: 'border-gray-200 bg-gray-50 text-gray-600',
+    green: 'border-emerald-100 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-100 bg-amber-50 text-amber-700',
+    red: 'border-red-100 bg-red-50 text-red-700',
+  };
+
+  return (
+    <div className={`rounded-lg border px-3 py-2 ${styles[tone]}`}>
+      <p className="text-xs font-semibold uppercase opacity-70">{label}</p>
+      <p className="mt-1 flex items-center gap-2 text-sm font-semibold">
+        {!ok && !pending && <AlertTriangle className="h-4 w-4" />}
+        {message}
+      </p>
     </div>
   );
 }
