@@ -1,17 +1,18 @@
-import { FileArchive, FileCode2, FlaskConical, ListTree, Rocket, UploadCloud } from 'lucide-react';
-import React from 'react';
+import { FileArchive, FileCode2, FlaskConical, Rocket, UploadCloud, Terminal, RefreshCw, ArrowLeft, ArrowRight, Play } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import type { ModelBuildFormValues, ModelFlavor } from '../../types/modelApi';
-import { AccessModePicker, FileDropzone, PackagePreview, StepTitle, SummaryItem, TextArea, } from './UploadModelFormPage';
+import { AccessModePicker, FileDropzone, StepTitle, SummaryItem, TextArea, } from './UploadModelFormPage';
+import { buildModelAPI, getBuildLogs, getModelAPI, cancelBuildAPI } from '../../lib/api';
+import { toast } from '../../lib/toast';
 
 const wizardSteps = [
   { id: 1, label: 'Metadata', icon: FileCode2 },
   { id: 2, label: 'Artifact', icon: UploadCloud },
   { id: 3, label: 'Flavor', icon: FlaskConical },
   { id: 4, label: 'Requirements', icon: FileArchive },
-  { id: 5, label: 'Preview', icon: ListTree },
-  { id: 6, label: 'Deploy', icon: Rocket },
+  { id: 5, label: 'Deploy', icon: Rocket },
 ];
 
 export default function BuildPackagePage({
@@ -24,6 +25,7 @@ export default function BuildPackagePage({
   submit,
   loading,
   canContinue,
+  onBuildSuccess,
 }: {
   step: number;
   setStep: React.Dispatch<React.SetStateAction<number>>;
@@ -34,6 +36,7 @@ export default function BuildPackagePage({
   submit: () => void;
   loading: boolean;
   canContinue: () => boolean;
+  onBuildSuccess: (modelId: number, previewTree: string[]) => void;
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -102,34 +105,33 @@ export default function BuildPackagePage({
           <RequirementsStep form={form} setField={setField} readRequirementsFile={readRequirementsFile} />
         )}
         {step === 5 && (
-          <PreviewStep preview={preview} form={form} />
-        )}
-        {step === 6 && (
-          <DeployStep form={form} preview={preview} submit={submit} loading={loading} />
+          <DeployStep form={form} preview={preview} onBuildSuccess={onBuildSuccess} canContinue={canContinue()} />
         )}
 
-        <div className="mt-8 flex justify-between border-t border-gray-200 pt-5">
+        <div className="mt-8 grid gap-3 pt-5 border-t border-gray-200 sm:grid-cols-2">
           <Button
             variant="secondary"
             size="md"
+            icon={<ArrowLeft className="h-4 w-4" />}
             disabled={step === 1 || loading}
             onClick={() => setStep((current) => Math.max(1, current - 1))}
           >
             Back
           </Button>
-          {step < 6 ? (
+          {step < 5 ? (
             <Button
               size="md"
               disabled={!canContinue() || loading}
-              onClick={() => setStep((current) => Math.min(6, current + 1))}
+              onClick={() => setStep((current) => Math.min(5, current + 1))}
             >
               Continue
+              <ArrowRight className="h-4 w-4" />
             </Button>
           ) : (
             <Button
               size="md"
               icon={<Rocket className="h-4 w-4" />}
-              disabled={!form.source_artifact || !form.name.trim()}
+              disabled={!canContinue() || !form.name.trim()}
               loading={loading}
               onClick={submit}
             >
@@ -265,48 +267,177 @@ function RequirementsStep({
   );
 }
 
-function PreviewStep({ preview, form }: { preview: string[]; form: ModelBuildFormValues }) {
-  return (
-    <div className="space-y-5">
-      <StepTitle title="Preview package structure" description="This is the expected MLflow package layout. Django stores the actual generated preview after deploy." />
-      <PackagePreview preview={preview} />
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-        Flavor: <span className="font-semibold text-gray-900">{form.flavor}</span>
-      </div>
-    </div>
-  );
-}
-
 function DeployStep({
   form,
-  preview,
-  submit,
-  loading,
+  onBuildSuccess,
 }: {
   form: ModelBuildFormValues;
   preview: string[];
-  submit: () => void;
-  loading: boolean;
+  onBuildSuccess: (modelId: number, previewTree: string[]) => void;
+  canContinue: boolean;
 }) {
+  const [building, setBuilding] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [buildStatus, setBuildStatus] = useState<string>('not_started');
+  const [errorMsg, setErrorMsg] = useState<string>('');
+  
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const offsetRef = useRef(0);
+  const modelIdRef = useRef<number | null>(null);
+
+  const startBuild = async () => {
+    try {
+      setBuilding(true);
+      setLogs(['[SYSTEM] Initiating build process...']);
+      setErrorMsg('');
+      setBuildStatus('building');
+      offsetRef.current = 0;
+      
+      const model = await buildModelAPI(form);
+      modelIdRef.current = model.id;
+    } catch (e) {
+      setBuilding(false);
+      setBuildStatus('error');
+      setErrorMsg(e.response?.data?.error || 'Failed to start build process.');
+      toast.error('Failed to start build process.');
+    }
+  };
+
+  const rebuild = async () => {
+    if (modelIdRef.current) {
+      try {
+        await cancelBuildAPI(modelIdRef.current);
+      } catch (e) {
+        // Ignore errors if container already dead or deleted
+        console.error(e);
+      }
+    }
+    startBuild();
+  };
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    
+    const fetchLogs = async () => {
+      if (!modelIdRef.current || buildStatus !== 'building') return;
+      try {
+        const data = await getBuildLogs(modelIdRef.current, offsetRef.current);
+        if (data.logs.length > 0) {
+          setLogs(prev => {
+            const newLogs = [...prev];
+            data.logs.forEach(log => {
+              if (log === 'BUILD_EOF_SUCCESS' || log === 'BUILD_EOF_ERROR') return;
+              newLogs.push(log);
+            });
+            return newLogs;
+          });
+          offsetRef.current = data.next_offset;
+        }
+        
+        if (data.build_status === 'ready' || data.build_status === 'error') {
+          setBuildStatus(data.build_status);
+          setBuilding(false);
+          if (data.build_status === 'ready') {
+             toast.success('Build completed successfully!');
+             const finalModel = await getModelAPI(modelIdRef.current);
+             onBuildSuccess(finalModel.id, finalModel.package_preview_tree || []);
+          } else {
+             setErrorMsg(data.build_error || 'Build failed.');
+             toast.error('Build failed.');
+          }
+        } else if (data.logs.includes('BUILD_EOF_ERROR')) {
+          setBuildStatus('error');
+          setBuilding(false);
+          setErrorMsg('Build process exited with an error.');
+        } else if (data.logs.includes('BUILD_EOF_SUCCESS')) {
+          setBuildStatus('ready');
+          setBuilding(false);
+          toast.success('Build completed successfully!');
+          const finalModel = await getModelAPI(modelIdRef.current);
+          onBuildSuccess(finalModel.id, finalModel.package_preview_tree || []);
+        }
+      } catch {
+        // silently ignore network errors during polling
+      }
+    };
+
+    if (building) {
+      interval = setInterval(fetchLogs, 1000);
+    }
+    
+    return () => clearInterval(interval);
+  }, [building, buildStatus, onBuildSuccess]);
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [logs]);
+
   return (
     <div className="space-y-5">
-      <StepTitle title="Deploy model API" description="The Control Plane will build the MLflow package, upload it to S3, then expose a model endpoint." />
+      <StepTitle title="Preview & Deploy" description="Review your model configuration, build the MLflow package, and then deploy it as a REST API." />
+      
       <div className="grid gap-4 md:grid-cols-2">
         <SummaryItem label="Model" value={form.name || 'Untitled model'} />
         <SummaryItem label="Access" value={`${form.access_mode} API`} />
         <SummaryItem label="Flavor" value={form.flavor} />
         <SummaryItem label="Artifact" value={form.source_artifact?.name || 'Missing artifact'} />
       </div>
-      <PackagePreview preview={preview} />
-      <Button
-        size="md"
-        icon={<Rocket className="h-4 w-4" />}
-        loading={loading}
-        disabled={!form.name.trim() || !form.source_artifact}
-        onClick={submit}
-      >
-        Build model
-      </Button>
+
+      {/* Terminal UI */}
+      <div className="overflow-hidden rounded-xl bg-gray-900 shadow-lg border border-gray-800">
+        <div className="flex items-center px-4 py-2 bg-gray-800/80 border-b border-gray-700">
+          <Terminal className="h-4 w-4 text-gray-400 mr-2" />
+          <span className="text-xs font-mono text-gray-400">Build Console</span>
+          {building && <span className="ml-auto flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>}
+          <div className="ml-auto flex items-center">
+            {buildStatus === 'not_started' ? (
+              <button
+                type="button"
+                onClick={startBuild}
+                disabled={!form.source_artifact}
+                className="flex items-center gap-1.5 rounded-md bg-gray-700 px-3 py-1 text-xs font-medium text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Start build process"
+              >
+                <Play className="h-3 w-3" />
+                Build
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={rebuild}
+                className="flex items-center gap-1.5 rounded-md bg-gray-700 px-3 py-1 text-xs font-medium text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                title="Force destroy current process and Rebuild"
+              >
+                <RefreshCw className={`h-3 w-3 ${building ? 'animate-spin' : ''}`} />
+                Rebuild
+              </button>
+            )}
+          </div>
+        </div>
+        <div 
+          ref={terminalRef}
+          className="p-4 h-64 overflow-y-auto font-mono text-sm text-green-400 whitespace-pre-wrap break-all custom-scrollbar"
+          style={{ scrollBehavior: 'smooth' }}
+        >
+          {logs.length === 0 && !building && buildStatus === 'not_started' && (
+            <div className="text-gray-500 italic">Click "Build" to start the model packager...</div>
+          )}
+          {logs.map((log, i) => (
+            <div key={i} className="mb-1 leading-relaxed opacity-90">{log}</div>
+          ))}
+          {building && <div className="animate-pulse">_</div>}
+          {errorMsg && <div className="text-red-400 mt-4">[ERROR] {errorMsg}</div>}
+        </div>
+      </div>
+
+      {buildStatus === 'ready' && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 flex items-center">
+          <div className="font-semibold">Build Successful!</div>
+          <div className="ml-auto">Click Deploy model below to continue.</div>
+        </div>
+      )}
     </div>
   );
 }

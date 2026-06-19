@@ -34,3 +34,19 @@ body {
 .ant-divider-inner-text {
   font-family: 'Inter', sans-serif !important;
 }
+
+/* Custom Scrollbar for Terminal / Dark areas */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}

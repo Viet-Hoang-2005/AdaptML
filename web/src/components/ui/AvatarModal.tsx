@@ -65,7 +65,6 @@ export function AvatarModal({
                 <Button
                   type="button"
                   size="md"
-                  variant="secondary"
                   icon={<ImageUp className="h-4 w-4" />}
                   onClick={onChange}
                 >

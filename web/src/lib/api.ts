@@ -264,14 +264,23 @@ export const updateModelAPI = async (modelId: number, payload: ModelAPIFormValue
   return data;
 };
 
-export const deleteModelAPI = async (modelId: number): Promise<MessageResponse> => {
-  const { data } = await axiosInstance.delete<MessageResponse>(controlPlaneURL(`/models/${modelId}/`));
+export const deleteModelAPI = async (modelId: number, force: boolean = false): Promise<MessageResponse> => {
+  const { data } = await axiosInstance.delete<MessageResponse>(controlPlaneURL(`/models/${modelId}/` + (force ? '?force=true' : '')));
   return data;
 };
 
 export const getModelPackagePreview = async (modelId: number): Promise<PackagePreviewResponse> => {
   const { data } = await axiosInstance.get<PackagePreviewResponse>(controlPlaneURL(`/models/${modelId}/package-preview/`));
   return data;
+};
+
+export const getBuildLogs = async (modelId: number, offset: number): Promise<{logs: string[], next_offset: number, build_status: string, build_error: string}> => {
+  const { data } = await axiosInstance.get(controlPlaneURL(`/models/${modelId}/build-logs/?offset=${offset}`));
+  return data;
+};
+
+export const cancelBuildAPI = async (modelId: number): Promise<void> => {
+  await axiosInstance.post(controlPlaneURL(`/models/${modelId}/cancel-build/`));
 };
 
 export const predictWithModelAPI = async (

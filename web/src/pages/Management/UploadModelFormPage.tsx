@@ -1,11 +1,14 @@
 import { ArrowLeft, Bot, Boxes, FileArchive, FileCode2, Trash2, UploadCloud } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useBlocker } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useModelAPIMutations, useModelAPIs } from '../../hooks/useModelAPIs';
+import { deleteModelAPI as deleteModelAPICore } from '../../lib/api';
 import type { ModelAccessMode, ModelAPI, ModelAPIFormValues, ModelBuildFormValues } from '../../types/modelApi';
 import BuildPackagePage from './BuildPackagePage';
 import MLflowZipPage from './MLflowZipPage';
+import { useRef, useEffect } from 'react';
 
 const emptyAdvancedForm: ModelAPIFormValues = {
   name: '',
@@ -53,17 +56,18 @@ function ModelAPIFormContent({
   modelId: number | null;
 }) {
   const {
-    buildModelAPI,
     createModelAPI,
     updateModelAPI,
     deleteModelAPI,
-    building,
     creating,
     updating,
     deleting,
   } = useModelAPIMutations();
   const [mode, setMode] = useState<'builder' | 'advanced'>('builder');
   const [step, setStep] = useState(1);
+  const [createdModelId, setCreatedModelId] = useState<number | null>(null);
+  const [realPreview, setRealPreview] = useState<string[]>([]);
+  const navigate = useNavigate();
   const [advancedForm, setAdvancedForm] = useState<ModelAPIFormValues>(() =>
     model
       ? {
@@ -110,10 +114,38 @@ function ModelAPIFormContent({
     if (step === 1) return Boolean(buildForm.name.trim());
     if (step === 2) return Boolean(buildForm.source_artifact);
     if (step === 3) return Boolean(buildForm.flavor);
+    if (step === 5) return Boolean(createdModelId);
     return true;
   };
 
+  const isSubmittingRef = useRef(false);
+
+  const isDirty = useMemo(() => {
+    if (editing) return false;
+    if (mode === 'advanced') {
+       return Boolean(advancedForm.name || advancedForm.artifact);
+    } else {
+       return Boolean(buildForm.name || buildForm.source_artifact || createdModelId);
+    }
+  }, [mode, advancedForm, buildForm, createdModelId, editing]);
+
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    if (isSubmittingRef.current) return false;
+    return isDirty && currentLocation.pathname !== nextLocation.pathname;
+  });
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isDirty || isSubmittingRef.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
   const submitAdvanced = () => {
+    isSubmittingRef.current = true;
     if (editing && modelId) {
       updateModelAPI({ modelId, payload: advancedForm });
       return;
@@ -122,7 +154,15 @@ function ModelAPIFormContent({
   };
 
   const submitBuild = () => {
-    buildModelAPI(buildForm);
+    if (createdModelId) {
+      isSubmittingRef.current = true;
+      navigate(`/dashboard/api-management/${createdModelId}`);
+    }
+  };
+
+  const handleBuildSuccess = (modelId: number, previewTree: string[]) => {
+    setCreatedModelId(modelId);
+    setRealPreview(previewTree);
   };
 
   const readRequirementsFile = async (file: File | null) => {
@@ -134,6 +174,22 @@ function ModelAPIFormContent({
 
   return (
     <section className="space-y-6">
+      <ConfirmModal
+        open={blocker.state === 'blocked'}
+        title="Discard Unsaved Changes?"
+        description="If you leave this page, your unsaved progress, uploaded artifacts, and running builds will be completely deleted. Are you sure you want to leave?"
+        tone="danger"
+        confirmText="Leave and Discard"
+        onConfirm={async () => {
+          if (createdModelId) {
+            await deleteModelAPICore(createdModelId, true).catch(() => {});
+          }
+          blocker.proceed?.();
+        }}
+        onCancel={() => {
+          blocker.reset?.();
+        }}
+      />
       <div className="flex flex-col gap-4 border-b border-gray-300 md:flex-row md:items-end md:justify-between">
         <div className="mb-2">
           <Link to="/dashboard/api-management" className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-black">
@@ -200,10 +256,11 @@ function ModelAPIFormContent({
           form={buildForm}
           setField={setBuildField}
           readRequirementsFile={readRequirementsFile}
-          preview={expectedPreview}
+          preview={realPreview.length > 0 ? realPreview : expectedPreview}
           submit={submitBuild}
-          loading={building}
+          loading={false}
           canContinue={canContinue}
+          onBuildSuccess={handleBuildSuccess}
         />
       )}
     </section>

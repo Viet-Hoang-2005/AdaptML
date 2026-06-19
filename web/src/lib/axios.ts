@@ -93,6 +93,9 @@ axiosInstance.interceptors.response.use(
     const originalRequest = error.config as RetryableRequestConfig | undefined;
 
     if (!originalRequest || originalRequest._retry || isPublicAuthRequest(originalRequest.url)) {
+      if (originalRequest?._retry) {
+        clearAuthAndRedirect();
+      }
       return Promise.reject(error);
     }
 
