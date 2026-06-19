@@ -36,8 +36,8 @@ module "dns" {
   source = "./modules/dns"
 }
 
-module "load_balancer" {
-  source              = "./modules/load_balancer"
+module "alb" {
+  source              = "./modules/alb"
   vpc_id              = module.network.vpc_id
   public_subnet_ids   = [module.network.public_subnet_1a_id, module.network.public_subnet_1b_id]
   lb_sg_id            = module.security.lb_sg_id
