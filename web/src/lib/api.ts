@@ -308,6 +308,8 @@ const trainingJobFormData = (payload: TrainingJobFormValues) => {
   formData.append('vcpu', String(payload.vcpu));
   formData.append('memory', String(payload.memory));
   formData.append('max_runtime_seconds', String(payload.max_runtime_seconds));
+  formData.append('accelerator_type', payload.accelerator_type);
+  formData.append('accelerator_count', String(payload.accelerator_count));
   if (payload.source_zip) {
     formData.append('source_zip', payload.source_zip);
   }

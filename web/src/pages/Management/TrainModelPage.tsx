@@ -39,7 +39,13 @@ import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import { downloadSampleTrainingTemplate } from '../../lib/trainingTemplate';
 import { inspectZipFile, readZipEntryText, rebuildZipWithEditedEntry } from '../../lib/trainingZip';
-import type { TrainingJob, TrainingJobFormValues, TrainingJobMetricsResponse, TrainingJobStatus } from '../../types/modelApi';
+import type {
+  TrainingAcceleratorType,
+  TrainingJob,
+  TrainingJobFormValues,
+  TrainingJobMetricsResponse,
+  TrainingJobStatus,
+} from '../../types/modelApi';
 import { SummaryItem } from './UploadModelFormPage';
 
 const initialForm: TrainingJobFormValues = {
@@ -49,6 +55,8 @@ const initialForm: TrainingJobFormValues = {
   vcpu: 2,
   memory: 4096,
   max_runtime_seconds: 3600,
+  accelerator_type: 'none',
+  accelerator_count: 0,
   source_zip: null,
   requirements_file: null,
   training_data: null,
@@ -69,6 +77,21 @@ const runtimeOptions = [
   { label: '12h', value: 43200 },
 ];
 
+const acceleratorOptions: Array<{
+  label: string;
+  type: TrainingAcceleratorType;
+  count: number;
+  disabled?: boolean;
+  helper: string;
+}> = [
+  { label: 'No accelerator', type: 'none', count: 0, helper: 'CPU/Fargate queue' },
+  { label: 'GPU x1', type: 'gpu', count: 1, disabled: true, helper: 'Requires AWS Batch EC2 GPU queue' },
+  { label: 'GPU x2', type: 'gpu', count: 2, disabled: true, helper: 'Requires AWS Batch EC2 GPU queue' },
+  { label: 'GPU x4', type: 'gpu', count: 4, disabled: true, helper: 'Requires AWS Batch EC2 GPU queue' },
+  { label: 'TPU', type: 'tpu', count: 1, disabled: true, helper: 'Coming soon' },
+  { label: 'Trainium', type: 'trainium', count: 1, disabled: true, helper: 'Coming soon' },
+];
+
 
 
 const statusLabels: Record<TrainingJobStatus, string> = {
@@ -82,6 +105,11 @@ const statusLabels: Record<TrainingJobStatus, string> = {
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
 
 const jobLabel = (job: Pick<TrainingJob, 'name' | 'model_version'>) => `${job.name} ${job.model_version}`.trim();
+
+const acceleratorSummary = (type?: TrainingAcceleratorType, count?: number) => {
+  if (!type || type === 'none' || !count) return 'No accelerator';
+  return `${type.toUpperCase()} x${count}`;
+};
 
 const AUTO_SYNC_INTERVAL_MS = 4000;
 const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
@@ -246,6 +274,8 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
     vcpu: payload.vcpu,
     memory: payload.memory,
     max_runtime_seconds: payload.max_runtime_seconds,
+    accelerator_type: payload.accelerator_type,
+    accelerator_count: payload.accelerator_count,
     source_zip: payload.source_zip?.name || '',
     requirements_file: payload.requirements_file?.name || '',
     training_data: payload.training_data?.name || '',
@@ -279,6 +309,7 @@ export default function TrainModelPage() {
   const [editedEntryText, setEditedEntryText] = useState('');
   const [entryEdited, setEntryEdited] = useState(false);
   const [preparingSubmit, setPreparingSubmit] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
   const [sortMode, setSortMode] = useState<JobSortMode>('newest');
   const statusNotificationRef = useRef<Record<number, TrainingJobStatus>>({});
@@ -517,6 +548,7 @@ export default function TrainModelPage() {
       setSourceZipState(emptySourceZipState);
       setEditedEntryText('');
       setEntryEdited(false);
+      setIsCreateOpen(false);
       queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => {
         const withoutOptimistic = context?.optimisticId
           ? removeTrainingJob(current?.training_jobs ?? [], context.optimisticId)
@@ -681,6 +713,9 @@ export default function TrainModelPage() {
     if (sourceZipState.inspecting) return 'Source zip is still being inspected.';
     if (sourceZipState.error) return sourceZipState.error;
     if (!sourceZipState.entryExists) return `Entry point ${form.entry_point || 'train.py'} was not found in source.zip.`;
+    if (form.accelerator_type !== 'none') {
+      return 'GPU/TPU/Trainium training is not enabled for the current CPU/Fargate queue.';
+    }
     if (usage && form.max_runtime_seconds > usage.remaining_seconds) {
       return `Monthly quota exceeded. Remaining quota is ${formatDuration(usage.remaining_seconds)}.`;
     }
@@ -722,6 +757,7 @@ export default function TrainModelPage() {
     Boolean(form.training_data) &&
     form.source_zip?.name.toLowerCase().endsWith('.zip') &&
     form.training_data?.name.toLowerCase().endsWith('.csv') &&
+    form.accelerator_type === 'none' &&
     (!usage || form.max_runtime_seconds <= usage.remaining_seconds);
 
   return (
@@ -730,14 +766,14 @@ export default function TrainModelPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Model Training</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Train models in the cloud, monitor resource metrics in real-time, and download artifacts.
+            Train, monitor, and manage model training runs.
           </p>
         </div>
         <Button
           icon={<Rocket className="h-4 w-4" />}
-          onClick={() => document.getElementById('start-training-section')?.scrollIntoView({ behavior: 'smooth' })}
+          onClick={() => setIsCreateOpen(true)}
         >
-          Start training job
+          New Training Job
         </Button>
       </div>
 
@@ -807,7 +843,9 @@ export default function TrainModelPage() {
         </div>
       </div>
 
-      <div id="start-training-section" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      {isCreateOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-6">
+          <div id="start-training-section" className="w-full max-w-6xl rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-gray-800 to-black text-white shadow-md">
@@ -821,6 +859,14 @@ export default function TrainModelPage() {
           <span className="w-fit rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
             Backend is selected by server config
           </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<X className="h-4 w-4" />}
+            onClick={() => setIsCreateOpen(false)}
+          >
+            Close
+          </Button>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -1080,6 +1126,54 @@ export default function TrainModelPage() {
             <SummaryItem label="Selected profile" value={`${form.vcpu} vCPU / ${form.memory / 1024} GB`} />
             <SummaryItem label="Requested runtime" value={formatDuration(form.max_runtime_seconds)} />
           </div>
+          <div className="mt-5 border-t border-gray-200 pt-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-bold text-gray-900">Accelerator</h3>
+              <p className="text-xs text-gray-500">
+                Current AWS Batch queue is CPU/Fargate. GPU requires a separate EC2 GPU Batch environment.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {acceleratorOptions.map((option) => {
+                const selected = form.accelerator_type === option.type && form.accelerator_count === option.count;
+                return (
+                  <button
+                    key={`${option.type}-${option.count}`}
+                    type="button"
+                    disabled={option.disabled}
+                    className={`rounded-lg border p-3 text-left transition ${
+                      selected
+                        ? 'border-black bg-white shadow-sm'
+                        : option.disabled
+                          ? 'cursor-not-allowed border-gray-200 bg-gray-100 opacity-60'
+                          : 'border-gray-200 bg-white hover:border-gray-400'
+                    }`}
+                    onClick={() => {
+                      if (!option.disabled) {
+                        setForm((current) => ({
+                          ...current,
+                          accelerator_type: option.type,
+                          accelerator_count: option.count,
+                        }));
+                      }
+                    }}
+                  >
+                    <p className="text-sm font-bold text-gray-900">{option.label}</p>
+                    <p className="mt-1 text-xs text-gray-500">{option.helper}</p>
+                  </button>
+                );
+              })}
+            </div>
+            {form.accelerator_type === 'gpu' ? (
+              <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                GPU requires an EC2 GPU AWS Batch compute environment. Current queue is CPU/Fargate.
+              </p>
+            ) : (
+              <p className="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
+                Accelerator selection: {acceleratorSummary(form.accelerator_type, form.accelerator_count)}
+              </p>
+            )}
+          </div>
           {usage && form.max_runtime_seconds > usage.remaining_seconds && (
             <p className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
               Monthly quota exceeded. Remaining quota is {formatDuration(usage.remaining_seconds)}, but this job requests{' '}
@@ -1105,7 +1199,9 @@ export default function TrainModelPage() {
             Submit training job
           </Button>
         </div>
-      </div>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <TrainingJobsSkeleton />
@@ -1122,12 +1218,15 @@ export default function TrainModelPage() {
           <FileCode2 className="mx-auto h-8 w-8 text-gray-400" />
           <h2 className="mt-3 text-base font-bold text-gray-900">No training jobs yet</h2>
           <p className="mt-1 text-sm text-gray-500">Submit a source zip and CSV dataset to start your first training job.</p>
+          <Button className="mt-4" icon={<Rocket className="h-4 w-4" />} onClick={() => setIsCreateOpen(true)}>
+            Create your first training job
+          </Button>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="flex flex-col gap-3 rounded-lg border border-gray-300 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Training jobs</h2>
+              <h2 className="text-sm font-bold text-gray-900">Training history</h2>
               <p className="mt-1 text-xs text-gray-500">
                 {trainingJobs.length} shown / {allTrainingJobs.length} total
               </p>
@@ -1520,6 +1619,9 @@ function TrainingJobCard({
             <span className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-gray-500">
               {runtimeSummary}
             </span>
+            <span className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-gray-500">
+              {acceleratorSummary(job.accelerator_type, job.accelerator_count)}
+            </span>
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2.5">
@@ -1542,6 +1644,8 @@ function TrainingJobCard({
       <div className="grid gap-3 px-5 py-4 sm:grid-cols-2 xl:grid-cols-4">
         <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Elapsed" value={formatDuration(elapsedForJob(job))} accent />
         <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Max runtime" value={formatDuration(job.max_runtime_seconds)} />
+        <InlineFact icon={<Cpu className="h-3.5 w-3.5" />} label="Compute" value={runtimeSummary} />
+        <InlineFact label="Accelerator" value={acceleratorSummary(job.accelerator_type, job.accelerator_count)} />
         <InlineFact label="Started" value={job.started_at ? new Date(job.started_at).toLocaleString() : '-'} />
         <InlineFact label="Completed" value={job.completed_at ? new Date(job.completed_at).toLocaleString() : '-'} />
       </div>

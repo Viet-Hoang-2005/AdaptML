@@ -26,7 +26,17 @@ def _logs_client():
     return boto3.client("logs", region_name=settings.AWS_BATCH_REGION)
 
 
-def _validate_batch_config() -> None:
+def _validate_batch_config(training_job: TrainingJob | None = None) -> None:
+    if training_job and training_job.accelerator_type == "gpu":
+        missing = []
+        if not settings.AWS_BATCH_GPU_JOB_QUEUE:
+            missing.append("AWS_BATCH_GPU_JOB_QUEUE")
+        if not settings.AWS_BATCH_GPU_JOB_DEFINITION:
+            missing.append("AWS_BATCH_GPU_JOB_DEFINITION")
+        if missing:
+            raise ValidationError({"error": "Missing AWS Batch GPU configuration: " + ", ".join(missing) + "."})
+        return
+
     missing = []
     if not settings.AWS_BATCH_JOB_QUEUE:
         missing.append("AWS_BATCH_JOB_QUEUE")
@@ -42,6 +52,27 @@ def _validate_batch_config() -> None:
                 )
             }
         )
+
+
+def _batch_submit_config(training_job: TrainingJob) -> tuple[str, str]:
+    if training_job.accelerator_type == "gpu":
+        if not settings.ENABLE_GPU_TRAINING:
+            raise ValidationError(
+                {
+                    "error": (
+                        "GPU training is not enabled. Configure AWS Batch EC2 GPU queue/job definition first."
+                    )
+                }
+            )
+        missing = []
+        if not settings.AWS_BATCH_GPU_JOB_QUEUE:
+            missing.append("AWS_BATCH_GPU_JOB_QUEUE")
+        if not settings.AWS_BATCH_GPU_JOB_DEFINITION:
+            missing.append("AWS_BATCH_GPU_JOB_DEFINITION")
+        if missing:
+            raise ValidationError({"error": "Missing AWS Batch GPU configuration: " + ", ".join(missing) + "."})
+        return settings.AWS_BATCH_GPU_JOB_QUEUE, settings.AWS_BATCH_GPU_JOB_DEFINITION
+    return settings.AWS_BATCH_JOB_QUEUE, settings.AWS_BATCH_JOB_DEFINITION
 
 
 def _safe_batch_job_name(training_job: TrainingJob) -> str:
@@ -69,7 +100,7 @@ def _upload_requirements_to_s3(training_job: TrainingJob, prefix: str) -> str:
 
 
 def start_aws_batch_training_job(training_job: TrainingJob) -> tuple[str, str]:
-    _validate_batch_config()
+    _validate_batch_config(training_job)
 
     source_uri, data_uri, prefix = upload_training_inputs_to_s3(training_job)
     requirements_uri = _upload_requirements_to_s3(training_job, prefix)
@@ -88,16 +119,21 @@ def start_aws_batch_training_job(training_job: TrainingJob) -> tuple[str, str]:
     if requirements_uri:
         environment.append({"name": "S3_REQUIREMENTS_URI", "value": requirements_uri})
 
+    job_queue, job_definition = _batch_submit_config(training_job)
+    resource_requirements = [
+        {"type": "VCPU", "value": str(training_job.vcpu)},
+        {"type": "MEMORY", "value": str(training_job.memory)},
+    ]
+    if training_job.accelerator_type == "gpu":
+        resource_requirements.append({"type": "GPU", "value": str(training_job.accelerator_count)})
+
     response = _batch_client().submit_job(
         jobName=_safe_batch_job_name(training_job),
-        jobQueue=settings.AWS_BATCH_JOB_QUEUE,
-        jobDefinition=settings.AWS_BATCH_JOB_DEFINITION,
+        jobQueue=job_queue,
+        jobDefinition=job_definition,
         containerOverrides={
             "environment": environment,
-            "resourceRequirements": [
-                {"type": "VCPU", "value": str(training_job.vcpu)},
-                {"type": "MEMORY", "value": str(training_job.memory)},
-            ],
+            "resourceRequirements": resource_requirements,
         },
         timeout={"attemptDurationSeconds": training_job.max_runtime_seconds},
     )

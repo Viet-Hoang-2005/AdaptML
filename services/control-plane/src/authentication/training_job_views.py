@@ -32,6 +32,8 @@ RUNTIME_PROFILES = {
     (2, 4096): "medium",
     (4, 8192): "large",
 }
+ACCELERATOR_TYPES = {"none", "gpu", "tpu", "trainium"}
+GPU_ACCELERATOR_COUNTS = {1, 2, 4}
 
 
 def _current_month_window():
@@ -85,6 +87,8 @@ def serialize_training_job(training_job: TrainingJob):
         "vcpu": training_job.vcpu,
         "memory": training_job.memory,
         "max_runtime_seconds": training_job.max_runtime_seconds,
+        "accelerator_type": training_job.accelerator_type,
+        "accelerator_count": training_job.accelerator_count,
         "source_zip": training_job.source_zip.url if training_job.source_zip else "",
         "requirements_file": training_job.requirements_file.url if training_job.requirements_file else "",
         "training_data": training_job.training_data.url if training_job.training_data else "",
@@ -122,6 +126,50 @@ def _parse_positive_int(value, field_name, default):
     if parsed <= 0:
         raise ValidationError({"error": f"{field_name} must be a positive integer."})
     return parsed
+
+
+def _parse_non_negative_int(value, field_name, default):
+    raw_value = value if value not in {None, ""} else default
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError):
+        raise ValidationError({"error": f"{field_name} must be a non-negative integer."})
+    if parsed < 0:
+        raise ValidationError({"error": f"{field_name} must be a non-negative integer."})
+    return parsed
+
+
+def _validate_accelerator_config(accelerator_type, accelerator_count, training_backend):
+    if accelerator_type not in ACCELERATOR_TYPES:
+        raise ValidationError({"error": "accelerator_type must be one of: none, gpu, tpu, trainium."})
+    if accelerator_type == "none":
+        if accelerator_count != 0:
+            raise ValidationError({"error": "accelerator_count must be 0 when accelerator_type is none."})
+        return
+    if accelerator_type in {"tpu", "trainium"}:
+        raise ValidationError({"error": f"{accelerator_type.upper()} training is not supported yet."})
+    if accelerator_type == "gpu":
+        if accelerator_count not in GPU_ACCELERATOR_COUNTS:
+            raise ValidationError({"error": "GPU accelerator_count must be one of: 1, 2, 4."})
+        if training_backend == "aws_batch" and not settings.ENABLE_GPU_TRAINING:
+            raise ValidationError(
+                {
+                    "error": (
+                        "GPU training is not enabled. Configure AWS Batch EC2 GPU queue/job definition first."
+                    )
+                }
+            )
+        if training_backend == "aws_batch" and (
+            not settings.AWS_BATCH_GPU_JOB_QUEUE or not settings.AWS_BATCH_GPU_JOB_DEFINITION
+        ):
+            raise ValidationError(
+                {
+                    "error": (
+                        "Missing AWS Batch GPU configuration: AWS_BATCH_GPU_JOB_QUEUE, "
+                        "AWS_BATCH_GPU_JOB_DEFINITION."
+                    )
+                }
+            )
 
 
 def _validate_source_zip_entry_point(source_zip, entry_point):
@@ -172,6 +220,8 @@ def validate_create_training_job_request(request):
     max_runtime_seconds = _parse_positive_int(request.data.get("max_runtime_seconds"), "max_runtime_seconds", 3600)
     vcpu = _parse_positive_int(request.data.get("vcpu"), "vcpu", 2)
     memory = _parse_positive_int(request.data.get("memory"), "memory", 4096)
+    accelerator_type = (request.data.get("accelerator_type") or "none").strip().lower()
+    accelerator_count = _parse_non_negative_int(request.data.get("accelerator_count"), "accelerator_count", 0)
     source_zip = request.FILES.get("source_zip")
     requirements_file = request.FILES.get("requirements_file")
     training_data = request.FILES.get("training_data")
@@ -193,6 +243,8 @@ def validate_create_training_job_request(request):
                 )
             }
         )
+    training_backend = settings.TRAINING_BACKEND
+    _validate_accelerator_config(accelerator_type, accelerator_count, training_backend)
     if not source_zip:
         raise ValidationError({"error": "Source code zip is required."})
     if not training_data:
@@ -224,6 +276,8 @@ def validate_create_training_job_request(request):
         "vcpu": vcpu,
         "memory": memory,
         "max_runtime_seconds": max_runtime_seconds,
+        "accelerator_type": accelerator_type,
+        "accelerator_count": accelerator_count,
         "source_zip": source_zip,
         "requirements_file": requirements_file,
         "training_data": training_data,
@@ -271,6 +325,8 @@ class TrainingJobListCreateView(APIView):
             vcpu=payload["vcpu"],
             memory=payload["memory"],
             max_runtime_seconds=payload["max_runtime_seconds"],
+            accelerator_type=payload["accelerator_type"],
+            accelerator_count=payload["accelerator_count"],
             source_zip=payload["source_zip"],
             requirements_file=payload["requirements_file"],
             training_data=payload["training_data"],

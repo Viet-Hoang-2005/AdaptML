@@ -217,6 +217,12 @@ class TrainingJob(models.Model):
         ("local", "Local"),
         ("aws_batch", "AWS Batch"),
     )
+    ACCELERATOR_CHOICES = (
+        ("none", "None"),
+        ("gpu", "GPU"),
+        ("tpu", "TPU"),
+        ("trainium", "Trainium"),
+    )
     STATUS_CHOICES = (
         ("pending", "Pending"),
         ("uploading", "Uploading"),
@@ -233,6 +239,8 @@ class TrainingJob(models.Model):
     vcpu = models.PositiveIntegerField(default=2)
     memory = models.PositiveIntegerField(default=4096)
     max_runtime_seconds = models.PositiveIntegerField(default=3600)
+    accelerator_type = models.CharField(max_length=20, choices=ACCELERATOR_CHOICES, default="none")
+    accelerator_count = models.PositiveIntegerField(default=0)
     source_zip = models.FileField(upload_to=training_source_zip_path, storage=training_upload_storage)
     requirements_file = models.FileField(upload_to=training_requirements_path, storage=training_upload_storage, blank=True, null=True)
     training_data = models.FileField(upload_to=training_data_path, storage=training_upload_storage)

@@ -64,6 +64,7 @@ export interface ModelPredictionResponse {
 }
 
 export type TrainingJobStatus = 'pending' | 'uploading' | 'running' | 'completed' | 'failed';
+export type TrainingAcceleratorType = 'none' | 'gpu' | 'tpu' | 'trainium';
 
 export interface TrainingJob {
   id: number;
@@ -74,6 +75,8 @@ export interface TrainingJob {
   vcpu: number;
   memory: number;
   max_runtime_seconds: number;
+  accelerator_type: TrainingAcceleratorType;
+  accelerator_count: number;
   source_zip: string;
   requirements_file: string;
   training_data: string;
@@ -107,6 +110,8 @@ export interface TrainingJobFormValues {
   vcpu: number;
   memory: number;
   max_runtime_seconds: number;
+  accelerator_type: TrainingAcceleratorType;
+  accelerator_count: number;
   source_zip: File | null;
   requirements_file: File | null;
   training_data: File | null;
