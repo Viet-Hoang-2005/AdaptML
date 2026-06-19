@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import type { ModelBuildFormValues, ModelFlavor } from '../../types/modelApi';
 import { AccessModePicker, FileDropzone, StepTitle, SummaryItem, TextArea, } from './UploadModelFormPage';
-import { buildModelAPI, getBuildLogs, getModelAPI, cancelBuildAPI } from '../../lib/api';
+import { buildModelAPI, getBuildLogs, getModelAPI, cancelBuildAPI, getApiErrorMessage } from '../../lib/api';
 import { toast } from '../../lib/toast';
 
 const wizardSteps = [
@@ -298,8 +298,9 @@ function DeployStep({
     } catch (e) {
       setBuilding(false);
       setBuildStatus('error');
-      setErrorMsg(e.response?.data?.error || 'Failed to start build process.');
-      toast.error('Failed to start build process.');
+      const msg = getApiErrorMessage(e, 'Failed to start build process.');
+      setErrorMsg(msg);
+      toast.error(msg);
     }
   };
 
@@ -308,8 +309,9 @@ function DeployStep({
       try {
         await cancelBuildAPI(modelIdRef.current);
       } catch (e) {
-        // Ignore errors if container already dead or deleted
-        console.error(e);
+        const msg = getApiErrorMessage(e, 'Failed to cancel build process.');
+        setErrorMsg(msg);
+        toast.error(msg);
       }
     }
     startBuild();

@@ -1,4 +1,6 @@
 import axiosInstance from './axios';
+import { AxiosError } from 'axios';
+import type { ApiErrorResponse } from '../types/api';
 import type {
   LoginCredentials,
   SignUpRequest,
@@ -375,3 +377,11 @@ export const restoreTrainingJob = async (jobId: number): Promise<TrainingJob> =>
   const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/restore/`));
   return data;
 };
+
+export function getApiErrorMessage(e: unknown, defaultMessage = 'An unexpected error occurred'): string {
+  const axiosError = e as AxiosError<ApiErrorResponse>;
+  return axiosError.response?.data?.error 
+      || axiosError.response?.data?.message 
+      || axiosError.message 
+      || defaultMessage;
+}
