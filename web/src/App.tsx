@@ -16,6 +16,7 @@ import ModelApiPage from './pages/Home/ModelApiPage';
 import ModelTestingPage from './pages/Home/ModelTestingPage';
 import APIManagementPage from './pages/Management/APIManagementPage';
 import TrainModelPage from './pages/Management/TrainModelPage';
+import TrainingJobDetailPage from './pages/Management/TrainingJobDetailPage';
 import ModelAPIFormPage from './pages/Management/UploadModelFormPage';
 import DeveloperSettingPage from './pages/Settings/DeveloperSettingPage';
 import ProfileSettingPage from './pages/Settings/ProfileSettingPage';
@@ -61,6 +62,7 @@ const router = createBrowserRouter(
         <Route path="api-management/:modelId" element={<ModelAPIFormPage />} />
         <Route path="drift-monitoring" element={dashboardPlaceholders.driftMonitoring} />
         <Route path="model-training" element={<TrainModelPage />} />
+        <Route path="model-training/:jobId" element={<TrainingJobDetailPage />} />
         <Route path="model-evolution" element={dashboardPlaceholders.modelEvolution} />
         <Route path="notifications" element={dashboardPlaceholders.notifications} />
         <Route path="settings" element={<SettingsLayout />}>
