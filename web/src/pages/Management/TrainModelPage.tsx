@@ -290,6 +290,7 @@ export default function TrainModelPage() {
   const [editedEntryText, setEditedEntryText] = useState('');
   const [entryEdited, setEntryEdited] = useState(false);
   const [preparingSubmit, setPreparingSubmit] = useState(false);
+  const [refreshingJobId, setRefreshingJobId] = useState<number | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
   const [sortMode, setSortMode] = useState<JobSortMode>('newest');
@@ -534,6 +535,15 @@ export default function TrainModelPage() {
       );
     },
   });
+
+    const handleRefreshJob = async (job: TrainingJob) => {
+    setRefreshingJobId(job.id);
+    try {
+      await refreshMutation.mutateAsync(job);
+    } finally {
+      setRefreshingJobId(null);
+    }
+  };
 
   const refreshMutation = useMutation({
     mutationFn: (job: TrainingJob) => refreshTrainingJobStatus(job.id),
@@ -1121,7 +1131,7 @@ export default function TrainModelPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 rounded-lg border border-gray-300 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4 sm:flex-row sm:items-center sm:justify-between shadow-sm">
             <div>
               <h2 className="text-sm font-bold text-gray-900">Training history</h2>
               <p className="mt-1 text-xs text-gray-500">
@@ -1158,9 +1168,9 @@ export default function TrainModelPage() {
                 <TrainingJobRow
                   key={job.id}
                   job={job}
-                  refreshing={refreshMutation.isPending}
+                  refreshing={refreshingJobId === job.id}
                   downloading={downloadMutation.isPending}
-                  onRefresh={() => refreshMutation.mutate(job)}
+                  onRefresh={() => handleRefreshJob(job)}
                   onDownload={() => downloadMutation.mutate(job)}
                 />
               ))}
@@ -1448,7 +1458,7 @@ function TrainingJobsSkeleton() {
   return (
     <div className="space-y-4">
       {[0, 1].map((item) => (
-        <div key={item} className="animate-pulse rounded-lg border border-gray-300 bg-white p-5">
+        <div key={item} className="animate-pulse rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div className="h-5 w-48 rounded bg-gray-200" />
             <div className="h-7 w-24 rounded-full bg-gray-200" />
