@@ -73,7 +73,7 @@ module "serverless" {
 
 module "batch_training" {
   count  = var.enable_batch_training ? 1 : 0
-  source = "./modules/batch_training"
+  source = "./modules/batch"
 
   project_name          = var.project_name
   aws_region            = var.aws_region
