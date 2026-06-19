@@ -219,14 +219,35 @@ GITHUB_OAUTH_REDIRECT_URI = os.environ.get(
 MODEL_SERVER_PUBLIC_URL = os.environ.get('MODEL_SERVER_PUBLIC_URL', 'http://localhost:5000')
 MODEL_PACKAGER_URL = os.environ.get('MODEL_PACKAGER_URL', 'http://model_packager:7000')
 
-# Cấu hình lưu trữ AWS S3
+# SageMaker Training PaaS configuration.
+TRAINING_BACKEND = os.environ.get('TRAINING_BACKEND', 'sagemaker').strip().lower()
+AWS_SAGEMAKER_ROLE_ARN = os.environ.get('AWS_SAGEMAKER_ROLE_ARN', '').strip()
+SAGEMAKER_INSTANCE_TYPE = os.environ.get('SAGEMAKER_INSTANCE_TYPE', 'ml.m5.large')
+SAGEMAKER_MAX_RUN = int(os.environ.get('SAGEMAKER_MAX_RUN', '3600'))
+SAGEMAKER_MAX_WAIT = int(os.environ.get('SAGEMAKER_MAX_WAIT', '7200'))
+SAGEMAKER_OUTPUT_PREFIX = os.environ.get('SAGEMAKER_OUTPUT_PREFIX', 'tenants').strip().strip('/')
+SAGEMAKER_SKLEARN_FRAMEWORK_VERSION = os.environ.get('SAGEMAKER_SKLEARN_FRAMEWORK_VERSION', '1.2-1')
+SAGEMAKER_PY_VERSION = os.environ.get('SAGEMAKER_PY_VERSION', 'py3')
+SAGEMAKER_USE_SPOT = env_bool('SAGEMAKER_USE_SPOT', True)
+LOCAL_TRAINING_TIMEOUT = int(os.environ.get('LOCAL_TRAINING_TIMEOUT', '1800'))
+LOCAL_TRAINING_MAX_OUTPUT_MB = int(os.environ.get('LOCAL_TRAINING_MAX_OUTPUT_MB', '500'))
+LOCAL_TRAINING_ALLOW_PIP_INSTALL = env_bool('LOCAL_TRAINING_ALLOW_PIP_INSTALL', True)
+AWS_BATCH_REGION = os.environ.get('AWS_BATCH_REGION', os.environ.get('AWS_DEFAULT_REGION', 'ap-southeast-1'))
+AWS_BATCH_JOB_QUEUE = os.environ.get('AWS_BATCH_JOB_QUEUE', '').strip()
+AWS_BATCH_JOB_DEFINITION = os.environ.get('AWS_BATCH_JOB_DEFINITION', '').strip()
+AWS_BATCH_LOG_GROUP = os.environ.get('AWS_BATCH_LOG_GROUP', '/aws/batch/mlops-training').strip()
+
+# Cấu hình lưu trữ AWS S3 (cho Avatar & File)
+# Lưu ý: Không khai báo AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY
+# boto3 sẽ tự động sử dụng IAM Role được gán cho EC2 instance (cấu hình trong main.tf)
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_BUCKET_NAME', 'mlops-paas-artifacts')
 AWS_S3_REGION_NAME = os.environ.get('AWS_DEFAULT_REGION', 'ap-southeast-1')
-AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
+AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN') or None
 
 # Tự động gán quyền đọc cho file khi upload lên S3
 AWS_DEFAULT_ACL = None
-AWS_QUERYSTRING_AUTH = False
+AWS_QUERYSTRING_AUTH = env_bool('AWS_QUERYSTRING_AUTH', True)
+# Giữ nguyên tên file, tránh ghi đè ngẫu nhiên quá mức nếu cần
 AWS_S3_FILE_OVERWRITE = False
 
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'

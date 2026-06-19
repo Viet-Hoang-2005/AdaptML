@@ -9,6 +9,12 @@ def get_required_env(name):
         raise RuntimeError(f"Missing required environment variable: {name}")
     return value
 
+def get_bool_env(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 def main():
     # Khởi tạo các biến môi trường cấu hình từ GitHub Actions
     role_arn = get_required_env("AWS_SAGEMAKER_ROLE_ARN")
@@ -21,6 +27,13 @@ def main():
     mlflow_pass = get_required_env("MLFLOW_TRACKING_PASSWORD")
     mlflow_model_name = get_required_env("MLFLOW_MODEL_NAME")
     region = os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1")
+    instance_type = os.environ.get("SAGEMAKER_INSTANCE_TYPE", "ml.m5.large")
+    max_run = int(os.environ.get("SAGEMAKER_MAX_RUN", "3600"))
+    max_wait = int(os.environ.get("SAGEMAKER_MAX_WAIT", "7200"))
+    output_prefix = os.environ.get("SAGEMAKER_OUTPUT_PREFIX", "tenants").strip().strip("/")
+    framework_version = os.environ.get("SAGEMAKER_SKLEARN_FRAMEWORK_VERSION", "1.2-1")
+    py_version = os.environ.get("SAGEMAKER_PY_VERSION", "py3")
+    use_spot = get_bool_env("SAGEMAKER_USE_SPOT", True)
 
     # Khởi tạo SageMaker Session
     boto_session = boto3.Session(region_name=region)
@@ -39,7 +52,7 @@ def main():
     }
 
     print(f"Triggering SageMaker Training Job for {model_version}...")
-    output_path = f"s3://{bucket}/sagemaker-output/{model_version}/"
+    output_path = f"s3://{bucket}/{output_prefix}/sagemaker-output/{model_version}/"
     
     # Sử dụng SKLearn framework base image, hỗ trợ tự động cài requirements.txt
     estimator = SKLearn(
@@ -47,16 +60,16 @@ def main():
         source_dir="sagemaker",
         role=role_arn,
         instance_count=1,
-        instance_type="ml.m5.large", # Cấu hình máy ảo CPU m5.large cho XGBoost
-        framework_version="1.2-1",
-        py_version="py3",
+        instance_type=instance_type,
+        framework_version=framework_version,
+        py_version=py_version,
         sagemaker_session=sagemaker_session,
         output_path=output_path,
         environment=training_env,
         base_job_name=f"mlops-paas-{model_version.replace('.', '-')}",
-        use_spot_instances=True,
-        max_run=3600,
-        max_wait=7200
+        use_spot_instances=use_spot,
+        max_run=max_run,
+        max_wait=max_wait
     )
 
     # Đường dẫn thư mục chứa dữ liệu trên S3

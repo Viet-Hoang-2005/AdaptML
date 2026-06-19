@@ -14,20 +14,35 @@ import { toast } from '../../lib/toast';
 import GitHubIcon from '../../assets/icons/GitHub.png';
 import GoogleIcon from '../../assets/icons/Google.png';
 
+function GoogleSignUpButton({ onSuccess }: { onSuccess: (accessToken: string) => void }) {
+  const openGoogleLogin = useGoogleLogin({
+    scope: 'openid email profile',
+    onSuccess: (tokenResponse) => {
+      onSuccess(tokenResponse.access_token);
+    },
+    onError: () => toast.error('Google sign up failed. Please try again.'),
+  });
+
+  return (
+    <button
+      id="btn-google-signup"
+      onClick={() => openGoogleLogin()}
+      className="flex-1 flex items-center justify-center gap-2 px-4 py-3
+                  border border-gray-300 rounded-xl hover:opacity-70
+                  transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
+    >
+      <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
+      Google
+    </button>
+  );
+}
+
 export default function SignUpPage() {
   const navigate = useNavigate();
   const { loginWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
-  const openGoogleLogin = useGoogleLogin({
-    scope: 'openid email profile',
-    onSuccess: (tokenResponse) => {
-      void loginWithGoogle(tokenResponse.access_token);
-    },
-    onError: () => toast.error('Google sign up failed. Please try again.'),
-  });
 
   const handleRequestOTP = async () => {
     if (!email) {
@@ -45,14 +60,6 @@ export default function SignUpPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGoogleSignUp = () => {
-    if (!googleClientId) {
-      toast.error('VITE_GOOGLE_CLIENT_ID is not configured.');
-      return;
-    }
-    openGoogleLogin();
   };
 
   const handleGitHubSignUp = () => {
@@ -73,16 +80,20 @@ export default function SignUpPage() {
       <p className="text-gray-500 text-center text-sm mb-8">Sign up for your account</p>
 
       <div className="flex gap-3 mb-6">
-        <button
-          id="btn-google-signup"
-          onClick={handleGoogleSignUp}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3
-                      border border-gray-300 rounded-xl hover:opacity-70
-                      transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
-        >
-          <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
-          Google
-        </button>
+        {googleClientId ? (
+          <GoogleSignUpButton onSuccess={(accessToken) => void loginWithGoogle(accessToken)} />
+        ) : (
+          <button
+            id="btn-google-signup"
+            onClick={() => toast.error('VITE_GOOGLE_CLIENT_ID is not configured.')}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3
+                        border border-gray-300 rounded-xl hover:opacity-70
+                        transition-colors duration-200 text-sm font-medium text-gray-700 cursor-pointer"
+          >
+            <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
+            Google
+          </button>
+        )}
         <button
           id="btn-github-signup"
           onClick={handleGitHubSignUp}

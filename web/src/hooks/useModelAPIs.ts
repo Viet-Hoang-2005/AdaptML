@@ -63,7 +63,7 @@ export function useModelAPIMutations() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteModelAPI,
+    mutationFn: (modelId: number) => deleteModelAPI(modelId, true),
     onSuccess: async () => {
       await invalidateModels();
       toast.success('Model API disabled successfully.');

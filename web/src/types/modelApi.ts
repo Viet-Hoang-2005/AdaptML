@@ -62,3 +62,50 @@ export interface ModelPredictionResponse {
   tenant_id: string;
   model_id: string;
 }
+
+export type TrainingJobStatus = 'pending' | 'uploading' | 'running' | 'completed' | 'failed';
+
+export interface TrainingJob {
+  id: number;
+  name: string;
+  model_version: string;
+  entry_point: string;
+  training_backend: 'sagemaker' | 'local' | 'aws_batch';
+  source_zip: string;
+  requirements_file: string;
+  training_data: string;
+  s3_source_uri: string;
+  s3_training_data_uri: string;
+  sagemaker_job_name: string;
+  external_job_id: string;
+  output_s3_uri: string;
+  model_artifact_uri: string;
+  status: TrainingJobStatus;
+  error_message: string;
+  training_logs: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrainingJobListResponse {
+  training_jobs: TrainingJob[];
+}
+
+export interface TrainingJobFormValues {
+  name: string;
+  model_version: string;
+  entry_point: string;
+  source_zip: File | null;
+  requirements_file: File | null;
+  training_data: File | null;
+}
+
+export interface TrainingJobDownloadURLResponse {
+  download_url: string;
+}
+
+export interface TrainingJobLogsResponse {
+  training_job_id: number;
+  status: TrainingJobStatus;
+  logs: string;
+}

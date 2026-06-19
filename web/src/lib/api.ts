@@ -26,6 +26,11 @@ import type {
   ModelAPIListResponse,
   ModelPredictionResponse,
   PackagePreviewResponse,
+  TrainingJob,
+  TrainingJobDownloadURLResponse,
+  TrainingJobFormValues,
+  TrainingJobListResponse,
+  TrainingJobLogsResponse,
 } from '../types/modelApi';
 
 const authApiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/auth';
@@ -288,5 +293,58 @@ export const predictWithModelAPI = async (
   features: Record<string, unknown>,
 ): Promise<ModelPredictionResponse> => {
   const { data } = await axiosInstance.post<ModelPredictionResponse>(endpointUrl, { features });
+  return data;
+};
+
+const trainingJobFormData = (payload: TrainingJobFormValues) => {
+  const formData = new FormData();
+  formData.append('name', payload.name);
+  formData.append('model_version', payload.model_version);
+  formData.append('entry_point', payload.entry_point || 'train.py');
+  if (payload.source_zip) {
+    formData.append('source_zip', payload.source_zip);
+  }
+  if (payload.requirements_file) {
+    formData.append('requirements_file', payload.requirements_file);
+  }
+  if (payload.training_data) {
+    formData.append('training_data', payload.training_data);
+  }
+  return formData;
+};
+
+export const createTrainingJob = async (payload: TrainingJobFormValues): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.post<TrainingJob>(
+    controlPlaneURL('/training-jobs/'),
+    trainingJobFormData(payload),
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+  return data;
+};
+
+export const listTrainingJobs = async (): Promise<TrainingJobListResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobListResponse>(controlPlaneURL('/training-jobs/'));
+  return data;
+};
+
+export const getTrainingJob = async (jobId: number): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.get<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/`));
+  return data;
+};
+
+export const refreshTrainingJobStatus = async (jobId: number): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/refresh-status/`));
+  return data;
+};
+
+export const getTrainingJobDownloadUrl = async (jobId: number): Promise<TrainingJobDownloadURLResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobDownloadURLResponse>(
+    controlPlaneURL(`/training-jobs/${jobId}/download-url/`),
+  );
+  return data;
+};
+
+export const getTrainingJobLogs = async (jobId: number): Promise<TrainingJobLogsResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobLogsResponse>(controlPlaneURL(`/training-jobs/${jobId}/logs/`));
   return data;
 };

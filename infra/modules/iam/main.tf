@@ -94,13 +94,15 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 }
 
 resource "aws_iam_role" "lambda_exec_role" {
+  count              = var.enable_serverless ? 1 : 0
   name               = "mlops-lambda-github-webhook-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
 # Gán quyền IAM Rule cho Lambda thực thi
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
-  role       = aws_iam_role.lambda_exec_role.name
+  count      = var.enable_serverless ? 1 : 0
+  role       = aws_iam_role.lambda_exec_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
@@ -118,14 +120,16 @@ data "aws_iam_policy_document" "lambda_secrets_policy" {
 }
 
 resource "aws_iam_role_policy" "lambda_secrets_policy_attach" {
+  count  = var.enable_serverless ? 1 : 0
   name   = "mlops-lambda-secrets-policy"
-  role   = aws_iam_role.lambda_exec_role.id
+  role   = aws_iam_role.lambda_exec_role[0].id
   policy = data.aws_iam_policy_document.lambda_secrets_policy.json
 }
 
 # GITHUB ACTIONS OIDC
 # Tạo OIDC Provider cho GitHub
 resource "aws_iam_openid_connect_provider" "github_actions" {
+  count           = var.enable_legacy_sagemaker_pipeline ? 1 : 0
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["1c58a3a8518e8759bf075b76b750d4f2df264fcd", "6938fd4d98bab03faadb97b34396831e3780aea1"]
@@ -133,13 +137,15 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
 
 # Tạo IAM Role cho GitHub Actions
 data "aws_iam_policy_document" "github_actions_assume_role" {
+  count = var.enable_legacy_sagemaker_pipeline ? 1 : 0
+
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+      identifiers = [aws_iam_openid_connect_provider.github_actions[0].arn]
     }
 
     condition {
@@ -158,12 +164,15 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
 }
 
 resource "aws_iam_role" "github_actions_role" {
+  count              = var.enable_legacy_sagemaker_pipeline ? 1 : 0
   name               = "mlops-github-actions-role"
-  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role[0].json
 }
 
 # Cấp quyền đọc Secret và S3 cho Role của GitHub Actions
 data "aws_iam_policy_document" "github_actions_policy" {
+  count = var.enable_legacy_sagemaker_pipeline ? 1 : 0
+
   statement {
     effect = "Allow"
     actions = [
@@ -204,15 +213,16 @@ data "aws_iam_policy_document" "github_actions_policy" {
       "iam:PassRole"
     ]
     resources = [
-      aws_iam_role.sagemaker_execution_role.arn
+      aws_iam_role.sagemaker_execution_role[0].arn
     ]
   }
 }
 
 resource "aws_iam_role_policy" "github_actions_policy_attach" {
+  count  = var.enable_legacy_sagemaker_pipeline ? 1 : 0
   name   = "mlops-github-actions-policy"
-  role   = aws_iam_role.github_actions_role.id
-  policy = data.aws_iam_policy_document.github_actions_policy.json
+  role   = aws_iam_role.github_actions_role[0].id
+  policy = data.aws_iam_policy_document.github_actions_policy[0].json
 }
 
 # AWS SAGEMAKER FOR TRAINING
@@ -229,24 +239,28 @@ data "aws_iam_policy_document" "sagemaker_assume_role" {
 }
 
 resource "aws_iam_role" "sagemaker_execution_role" {
+  count              = var.enable_legacy_sagemaker_pipeline ? 1 : 0
   name               = "mlops-sagemaker-execution-role"
   assume_role_policy = data.aws_iam_policy_document.sagemaker_assume_role.json
 }
 
 # Gắn managed policy AmazonSageMakerFullAccess
 resource "aws_iam_role_policy_attachment" "sagemaker_full_access" {
-  role       = aws_iam_role.sagemaker_execution_role.name
+  count      = var.enable_legacy_sagemaker_pipeline ? 1 : 0
+  role       = aws_iam_role.sagemaker_execution_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
 }
 
 # Gắn policy đọc/ghi S3 (dùng lại policy của Worker)
 resource "aws_iam_role_policy_attachment" "sagemaker_s3_attach" {
-  role       = aws_iam_role.sagemaker_execution_role.name
+  count      = var.enable_legacy_sagemaker_pipeline ? 1 : 0
+  role       = aws_iam_role.sagemaker_execution_role[0].name
   policy_arn = aws_iam_policy.worker_s3_policy.arn
 }
 
 # Gắn policy đọc Secrets Manager (dùng lại policy của Worker)
 resource "aws_iam_role_policy_attachment" "sagemaker_secrets_attach" {
-  role       = aws_iam_role.sagemaker_execution_role.name
+  count      = var.enable_legacy_sagemaker_pipeline ? 1 : 0
+  role       = aws_iam_role.sagemaker_execution_role[0].name
   policy_arn = aws_iam_policy.worker_secrets_policy.arn
 }

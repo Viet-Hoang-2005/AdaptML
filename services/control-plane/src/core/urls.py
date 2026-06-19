@@ -25,6 +25,13 @@ from authentication.model_api_views import (
     ModelAPIBuildWebhookView,
     ModelAPICancelBuildView,
 )
+from authentication.training_job_views import (
+    TrainingJobDetailView,
+    TrainingJobDownloadURLView,
+    TrainingJobListCreateView,
+    TrainingJobLogsView,
+    TrainingJobRefreshStatusView,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -36,4 +43,9 @@ urlpatterns = [
     path('api/models/<int:model_id>/cancel-build/', ModelAPICancelBuildView.as_view(), name='model_api_cancel_build'),
     path('api/auth/models/<int:model_id>/build-webhook', ModelAPIBuildWebhookView.as_view(), name='model_api_build_webhook'),
     path('api/models/<int:model_id>/', ModelAPIDetailView.as_view(), name='model_api_detail'),
+    path('api/training-jobs/', TrainingJobListCreateView.as_view(), name='training_job_list_create'),
+    path('api/training-jobs/<int:training_job_id>/', TrainingJobDetailView.as_view(), name='training_job_detail'),
+    path('api/training-jobs/<int:training_job_id>/refresh-status/', TrainingJobRefreshStatusView.as_view(), name='training_job_refresh_status'),
+    path('api/training-jobs/<int:training_job_id>/download-url/', TrainingJobDownloadURLView.as_view(), name='training_job_download_url'),
+    path('api/training-jobs/<int:training_job_id>/logs/', TrainingJobLogsView.as_view(), name='training_job_logs'),
 ]
