@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Eye,
   Archive,
@@ -19,12 +19,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import {
+  cancelTrainingJob,
   createTrainingJob,
   getTrainingJobDownloadUrl,
   getTrainingUsage,
   listTrainingJobs,
   refreshTrainingJobStatus,
-  } from '../../lib/api';
+  retryTrainingJob,
+} from '../../lib/api';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
@@ -90,6 +92,7 @@ const statusLabels: Record<TrainingJobStatus, string> = {
   running: 'Running',
   completed: 'Completed',
   failed: 'Failed',
+  cancelled: 'Cancelled',
 };
 
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
@@ -217,7 +220,8 @@ const statusRank: Record<TrainingJobStatus, number> = {
   uploading: 1,
   pending: 2,
   failed: 3,
-  completed: 4,
+  cancelled: 4,
+  completed: 5,
 };
 
 const sortTrainingJobs = (jobs: TrainingJob[], sortMode: JobSortMode) => {
@@ -276,6 +280,7 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
     completed_at: null,
     runtime_seconds: 0,
     stop_reason: '',
+    retry_of: null,
     deleted_at: null,
     is_deleted: false,
     created_at: now,
@@ -285,6 +290,7 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
 
 export default function TrainModelPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [form, setForm] = useState<TrainingJobFormValues>(initialForm);
         const [sourceZipState, setSourceZipState] = useState<SourceZipState>(emptySourceZipState);
   const [editedEntryText, setEditedEntryText] = useState('');
@@ -292,6 +298,7 @@ export default function TrainModelPage() {
   const [preparingSubmit, setPreparingSubmit] = useState(false);
   const [refreshingJobId, setRefreshingJobId] = useState<number | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'retry'; job: TrainingJob } | null>(null);
   const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
   const [sortMode, setSortMode] = useState<JobSortMode>('newest');
   const statusNotificationRef = useRef<Record<number, TrainingJobStatus>>({});
@@ -583,6 +590,39 @@ export default function TrainModelPage() {
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: (job: TrainingJob) => cancelTrainingJob(job.id),
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
+        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
+      }));
+      void invalidateJobs();
+      void invalidateUsage();
+      setConfirmAction(null);
+      toast.success('Training job cancelled.');
+    },
+    onError: (error, job) => {
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to cancel training job.')}`);
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (job: TrainingJob) => retryTrainingJob(job.id),
+    onSuccess: (newJob) => {
+      queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
+        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], newJob),
+      }));
+      void invalidateJobs();
+      void invalidateUsage();
+      setConfirmAction(null);
+      toast.success(`Retry job created for ${jobLabel(newJob)}.`);
+      navigate(`/dashboard/model-training/${newJob.id}`);
+    },
+    onError: (error, job) => {
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to retry training job.')}`);
+    },
+  });
+
   
   
   
@@ -665,6 +705,7 @@ export default function TrainModelPage() {
     form.source_zip?.name.toLowerCase().endsWith('.zip') &&
     form.training_data?.name.toLowerCase().endsWith('.csv') &&
     form.accelerator_type === 'none' &&
+    activeTrainingJobs.length < 1 &&
     (!usage || form.max_runtime_seconds <= usage.remaining_seconds);
 
   return (
@@ -1087,6 +1128,11 @@ export default function TrainModelPage() {
               {formatDuration(form.max_runtime_seconds)}.
             </p>
           )}
+          {activeTrainingJobs.length >= 1 && (
+            <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              You already have an active training job. Wait for it to finish or cancel it first.
+            </p>
+          )}
         </div>
 
         <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-600">
@@ -1170,12 +1216,49 @@ export default function TrainModelPage() {
                   job={job}
                   refreshing={refreshingJobId === job.id}
                   downloading={downloadMutation.isPending}
+                  cancelling={cancelMutation.isPending}
+                  retrying={retryMutation.isPending}
                   onRefresh={() => handleRefreshJob(job)}
                   onDownload={() => downloadMutation.mutate(job)}
+                  onCancel={() => setConfirmAction({ type: 'cancel', job })}
+                  onRetry={() => setConfirmAction({ type: 'retry', job })}
                 />
               ))}
             </div>
           )}
+        </div>
+      )}
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">
+              {confirmAction.type === 'cancel' ? 'Cancel training job?' : 'Retry training job?'}
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              {confirmAction.type === 'cancel'
+                ? `This will stop ${jobLabel(confirmAction.job)} if it is still active.`
+                : `Create a new training job using the same configuration as ${jobLabel(confirmAction.job)}?`}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setConfirmAction(null)}>
+                Close
+              </Button>
+              <Button
+                size="sm"
+                variant={confirmAction.type === 'cancel' ? 'danger' : 'primary'}
+                loading={cancelMutation.isPending || retryMutation.isPending}
+                onClick={() => {
+                  if (confirmAction.type === 'cancel') {
+                    cancelMutation.mutate(confirmAction.job);
+                  } else {
+                    retryMutation.mutate(confirmAction.job);
+                  }
+                }}
+              >
+                {confirmAction.type === 'cancel' ? 'Cancel job' : 'Retry job'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </section>
@@ -1486,15 +1569,25 @@ function TrainingJobRow({
   refreshing,
   onDownload,
   downloading,
+  onCancel,
+  cancelling,
+  onRetry,
+  retrying,
 }: {
   job: TrainingJob;
   onRefresh: (id: number) => void;
   refreshing: boolean;
   onDownload: (id: number) => void;
   downloading: boolean;
+  onCancel: () => void;
+  cancelling: boolean;
+  onRetry: () => void;
+  retrying: boolean;
 }) {
   const isArchived = job.is_deleted;
   const backendLabel = job.training_backend || 'sagemaker';
+  const isActive = ACTIVE_STATUSES.includes(job.status);
+  const canRetry = job.status === 'failed' || job.status === 'cancelled';
 
   const elapsed = () => {
     if (job.completed_at && job.started_at) {
@@ -1520,6 +1613,7 @@ function TrainingJobRow({
     if (isArchived) return 'border-l-4 border-l-gray-400 opacity-70 grayscale-[0.5]';
     if (job.status === 'completed') return 'border-l-4 border-l-emerald-500';
     if (job.status === 'failed') return 'border-l-4 border-l-red-500';
+    if (job.status === 'cancelled') return 'border-l-4 border-l-amber-500';
     if (job.status === 'running') return 'border-l-4 border-l-blue-500';
     return 'border-l-4 border-l-gray-300';
   };
@@ -1538,6 +1632,7 @@ function TrainingJobRow({
              isArchived ? 'bg-gray-100 text-gray-600' :
              job.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
              job.status === 'failed' ? 'bg-red-50 text-red-700' :
+             job.status === 'cancelled' ? 'bg-amber-50 text-amber-700' :
              job.status === 'running' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' :
              'bg-gray-50 text-gray-700'
           }`}>
@@ -1576,6 +1671,26 @@ function TrainingJobRow({
              onClick={() => onDownload(job.id)}
            >
              Download
+           </Button>
+         )}
+         {!isArchived && isActive && (
+           <Button
+             variant="danger"
+             size="sm"
+             loading={cancelling}
+             onClick={onCancel}
+           >
+             Cancel
+           </Button>
+         )}
+         {!isArchived && canRetry && (
+           <Button
+             variant="secondary"
+             size="sm"
+             loading={retrying}
+             onClick={onRetry}
+           >
+             Retry
            </Button>
          )}
          <Link to={`/dashboard/model-training/${job.id}`}>

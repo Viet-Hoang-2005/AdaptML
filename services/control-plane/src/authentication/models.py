@@ -229,6 +229,7 @@ class TrainingJob(models.Model):
         ("running", "Running"),
         ("completed", "Completed"),
         ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
     )
 
     tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="training_jobs")
@@ -241,6 +242,7 @@ class TrainingJob(models.Model):
     max_runtime_seconds = models.PositiveIntegerField(default=3600)
     accelerator_type = models.CharField(max_length=20, choices=ACCELERATOR_CHOICES, default="none")
     accelerator_count = models.PositiveIntegerField(default=0)
+    retry_of = models.ForeignKey("self", on_delete=models.SET_NULL, related_name="retries", blank=True, null=True)
     source_zip = models.FileField(upload_to=training_source_zip_path, storage=training_upload_storage)
     requirements_file = models.FileField(upload_to=training_requirements_path, storage=training_upload_storage, blank=True, null=True)
     training_data = models.FileField(upload_to=training_data_path, storage=training_upload_storage)
@@ -293,3 +295,20 @@ class TrainingJob(models.Model):
 
         if save:
             self.save(update_fields=["started_at", "completed_at", "runtime_seconds", "stop_reason", "updated_at"])
+
+
+class TrainingJobEvent(models.Model):
+    training_job = models.ForeignKey(TrainingJob, on_delete=models.CASCADE, related_name="events")
+    event_type = models.CharField(max_length=40)
+    message = models.CharField(max_length=500)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["training_job", "created_at"], name="authenticat_tjevent_4b0b_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} - {self.training_job_id}"

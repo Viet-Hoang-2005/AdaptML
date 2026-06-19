@@ -165,6 +165,18 @@ def start_aws_batch_training_job(training_job: TrainingJob) -> tuple[str, str]:
     return external_job_id, output_s3_uri
 
 
+def cancel_aws_batch_training_job(training_job: TrainingJob, reason: str = "User cancelled training job") -> None:
+    if not training_job.external_job_id:
+        return
+    try:
+        _batch_client().terminate_job(jobId=training_job.external_job_id, reason=reason)
+    except Exception as exc:
+        message = str(exc).lower()
+        if "not found" in message or "not in a cancellable state" in message or "status" in message:
+            return
+        raise
+
+
 def _batch_diagnostics(job: dict) -> dict:
     container = job.get("container") or {}
     status_reason = job.get("statusReason", "") or ""
@@ -342,9 +354,15 @@ def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:
             training_job.completed_at = stopped_at
         training_job.mark_finished(save=False)
     elif batch_status == "FAILED":
-        training_job.status = "failed"
-        training_job.error_message = _failure_message(job)
-        training_job.stop_reason = training_job.error_message
+        failure_message = _failure_message(job)
+        if "user cancelled" in failure_message.lower() or "terminated" in failure_message.lower():
+            training_job.status = "cancelled"
+            training_job.error_message = ""
+            training_job.stop_reason = "User cancelled training job"
+        else:
+            training_job.status = "failed"
+            training_job.error_message = failure_message
+            training_job.stop_reason = training_job.error_message
         training_job.training_logs = get_aws_batch_training_logs(training_job)
         if started_at and not training_job.started_at:
             training_job.started_at = started_at

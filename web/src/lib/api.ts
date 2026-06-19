@@ -30,6 +30,7 @@ import type {
   PackagePreviewResponse,
   TrainingJob,
   TrainingJobDownloadURLResponse,
+  TrainingJobEventsResponse,
   TrainingJobFormValues,
   TrainingJobListResponse,
   TrainingJobLogsResponse,
@@ -367,6 +368,23 @@ export const getTrainingJobLogs = async (jobId: number): Promise<TrainingJobLogs
 
 export const getTrainingJobMetrics = async (jobId: number): Promise<TrainingJobMetricsResponse> => {
   const { data } = await axiosInstance.get<TrainingJobMetricsResponse>(controlPlaneURL(`/training-jobs/${jobId}/metrics/`));
+  return data;
+};
+
+export const getTrainingJobEvents = async (jobId: number): Promise<TrainingJobEventsResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobEventsResponse>(controlPlaneURL(`/training-jobs/${jobId}/events/`));
+  return data;
+};
+
+export const cancelTrainingJob = async (jobId: number): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.post<TrainingJob | { training_job: TrainingJob }>(
+    controlPlaneURL(`/training-jobs/${jobId}/cancel/`),
+  );
+  return 'training_job' in data ? data.training_job : data;
+};
+
+export const retryTrainingJob = async (jobId: number): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/retry/`));
   return data;
 };
 

@@ -63,7 +63,7 @@ export interface ModelPredictionResponse {
   model_id: string;
 }
 
-export type TrainingJobStatus = 'pending' | 'uploading' | 'running' | 'completed' | 'failed';
+export type TrainingJobStatus = 'pending' | 'uploading' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type TrainingAcceleratorType = 'none' | 'gpu' | 'tpu' | 'trainium';
 
 export interface TrainingJob {
@@ -93,6 +93,7 @@ export interface TrainingJob {
   completed_at: string | null;
   runtime_seconds: number;
   stop_reason: string;
+  retry_of: number | null;
   deleted_at: string | null;
   is_deleted: boolean;
   created_at: string;
@@ -156,6 +157,19 @@ export interface TrainingJobMetricsResponse {
   log_stream_name: string;
   message: string;
   updated_at: string;
+}
+
+export interface TrainingJobEvent {
+  id: number;
+  training_job: number;
+  event_type: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TrainingJobEventsResponse {
+  events: TrainingJobEvent[];
 }
 
 export interface TrainingUsageResponse {

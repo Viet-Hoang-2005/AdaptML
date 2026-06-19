@@ -28,6 +28,7 @@ import type { ReactNode } from 'react';
 import { Button } from '../../components/ui/Button';
 import {
   getTrainingJob,
+  getTrainingJobEvents,
   getTrainingJobLogs,
   getTrainingJobMetrics,
   getTrainingJobDownloadUrl,
@@ -38,7 +39,7 @@ import {
 import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import { getApiErrorMessage } from '../../lib/apiError';
-import type { TrainingJob, TrainingJobMetricsResponse, TrainingJobStatus } from '../../types/modelApi';
+import type { TrainingJob, TrainingJobEvent, TrainingJobMetricsResponse, TrainingJobStatus } from '../../types/modelApi';
 
 // -- Shared formatting helpers --
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
@@ -63,6 +64,7 @@ const statusLabels: Record<TrainingJobStatus, string> = {
   running: 'Running',
   completed: 'Completed',
   failed: 'Failed',
+  cancelled: 'Cancelled',
 };
 
 const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
@@ -124,6 +126,19 @@ export default function TrainingJobDetailPage() {
     },
   });
 
+  const {
+    data: eventsResponse,
+    refetch: refetchEvents,
+  } = useQuery({
+    queryKey: [...queryKeys.trainingJobs, 'events', parsedJobId],
+    queryFn: () => getTrainingJobEvents(parsedJobId),
+    enabled: !!job,
+    refetchInterval: () => {
+      if (job && ACTIVE_STATUSES.includes(job.status)) return AUTO_SYNC_INTERVAL_MS;
+      return false;
+    },
+  });
+
   // -- Mutations --
   
   const handleRefreshHeader = async () => {
@@ -159,6 +174,7 @@ export default function TrainingJobDetailPage() {
       queryClient.setQueryData([...queryKeys.trainingJobs, 'detail', parsedJobId], data);
       refetchLogs();
       refetchMetrics();
+      refetchEvents();
       toast.success('Job status refreshed');
     },
     onError: (err) => {
@@ -257,6 +273,7 @@ export default function TrainingJobDetailPage() {
     if (job.is_deleted) return 'border-t-2 border-t-gray-300';
     if (job.status === 'completed') return 'border-t-2 border-t-emerald-400';
     if (job.status === 'failed') return 'border-t-2 border-t-red-400';
+    if (job.status === 'cancelled') return 'border-t-2 border-t-amber-400';
     if (job.status === 'running') return 'border-t-2 border-t-blue-400';
     return 'border-t-2 border-t-gray-200';
   };
@@ -264,6 +281,7 @@ export default function TrainingJobDetailPage() {
   const getMilestones = () => {
     const isCompleted = job.status === 'completed';
     const isFailed = job.status === 'failed';
+    const isCancelled = job.status === 'cancelled';
     const isRunning = job.status === 'running';
     const isUploading = job.status === 'uploading';
 
@@ -273,22 +291,25 @@ export default function TrainingJobDetailPage() {
     
     let submittedState: 'pending' | 'active' | 'completed' = 'pending';
     if (isUploading) submittedState = 'active';
-    else if (isRunning || isCompleted || isFailed) submittedState = 'completed';
+    else if (isRunning || isCompleted || isFailed || isCancelled) submittedState = 'completed';
     
     let runningState: 'pending' | 'active' | 'completed' | 'skipped' = 'pending';
     if (isRunning) runningState = 'active';
     else if (isCompleted) runningState = 'completed';
-    else if (isFailed) {
+    else if (isFailed || isCancelled) {
       runningState = hasStarted ? 'completed' : 'skipped';
     }
     
     let finalLabel = 'Completed';
-    let finalState: 'pending' | 'completed' | 'failed' = 'pending';
+    let finalState: 'pending' | 'completed' | 'failed' | 'cancelled' = 'pending';
     if (isCompleted) {
       finalState = 'completed';
     } else if (isFailed) {
       finalLabel = 'Failed';
       finalState = 'failed';
+    } else if (isCancelled) {
+      finalLabel = 'Cancelled';
+      finalState = 'cancelled';
     }
     
     const formatTime = (iso?: string | null) => iso ? new Date(iso).toLocaleString() : 'Timestamp unavailable';
@@ -327,9 +348,9 @@ export default function TrainingJobDetailPage() {
       {
         id: 'final',
         label: finalLabel,
-        state: finalState as 'pending' | 'completed' | 'failed',
-        icon: finalState === 'failed' ? XCircle : CheckCircle,
-        timestamp: (finalState === 'completed' || finalState === 'failed') ? formatTime(job.completed_at) : 'Pending',
+        state: finalState as 'pending' | 'completed' | 'failed' | 'cancelled',
+        icon: finalState === 'failed' || finalState === 'cancelled' ? XCircle : CheckCircle,
+        timestamp: (finalState === 'completed' || finalState === 'failed' || finalState === 'cancelled') ? formatTime(job.completed_at) : 'Pending',
         helper: job.completed_at && job.started_at ? `Finished in ${formatDurationDiff(job.started_at, job.completed_at)}` : undefined
       }
     ];
@@ -423,6 +444,7 @@ export default function TrainingJobDetailPage() {
                   job.is_deleted ? 'bg-gray-100 text-gray-600 ring-gray-200' : 
                   job.status === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' :
                   job.status === 'failed' ? 'bg-red-50 text-red-700 ring-red-200' :
+                  job.status === 'cancelled' ? 'bg-amber-50 text-amber-700 ring-amber-200' :
                   job.status === 'running' ? 'bg-blue-50 text-blue-700 ring-blue-300' :
                   'bg-white text-gray-700 ring-gray-200'
                 }`}>
@@ -497,6 +519,18 @@ export default function TrainingJobDetailPage() {
               </div>
             )}
 
+            {job.status === 'cancelled' && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                <h4 className="flex items-center gap-2 text-base font-bold text-amber-800 mb-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Training Cancelled
+                </h4>
+                <p className="text-sm font-medium text-amber-700">
+                  {job.stop_reason || 'This training job was cancelled before completion.'}
+                </p>
+              </div>
+            )}
+
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Job Metadata</h3>
@@ -527,6 +561,13 @@ export default function TrainingJobDetailPage() {
                   <p className="text-sm font-medium text-red-800">{job.error_message || job.stop_reason}</p>
                 </div>
               )}
+              {job.status === 'cancelled' && job.stop_reason && (
+                <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-1 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Cancel Reason</p>
+                  <p className="text-sm font-medium text-amber-800">{job.stop_reason}</p>
+                </div>
+              )}
+              <TrainingEventHistory events={eventsResponse?.events || []} />
             </div>
           </div>
         )}
@@ -672,7 +713,7 @@ function MetadataRow({ label, value, monospace = false }: { label: string; value
   );
 }
 
-type MilestoneState = 'pending' | 'active' | 'completed' | 'failed' | 'skipped';
+type MilestoneState = 'pending' | 'active' | 'completed' | 'failed' | 'cancelled' | 'skipped';
 
 function MilestoneTracker({
   milestones,
@@ -696,12 +737,14 @@ function MilestoneTracker({
         if (m.state === 'completed') circleClass = 'border-emerald-500 bg-emerald-50 text-emerald-600';
         if (m.state === 'active') circleClass = 'border-blue-500 bg-blue-50 text-blue-600 ring-4 ring-blue-50';
         if (m.state === 'failed') circleClass = 'border-red-500 bg-red-50 text-red-600 ring-4 ring-red-50';
+        if (m.state === 'cancelled') circleClass = 'border-amber-500 bg-amber-50 text-amber-600 ring-4 ring-amber-50';
         if (m.state === 'skipped') circleClass = 'border-gray-200 bg-gray-50 text-gray-300';
 
         let lineClass = 'bg-gray-200';
         if (m.state === 'completed') lineClass = 'bg-emerald-500';
         else if (m.state === 'active') lineClass = 'bg-blue-400';
         else if (m.state === 'failed') lineClass = 'bg-red-500';
+        else if (m.state === 'cancelled') lineClass = 'bg-amber-500';
 
         return (
           <div key={m.id} className={`flex ${isLast ? 'flex-none' : 'flex-1'} flex-col relative`}>
@@ -717,7 +760,7 @@ function MilestoneTracker({
             </div>
             
             <div className="mt-4 flex flex-col pr-4 w-36">
-              <span className={`text-sm font-bold tracking-tight ${m.state === 'failed' ? 'text-red-700' : m.state === 'active' ? 'text-blue-700' : m.state === 'completed' ? 'text-gray-900' : 'text-gray-400'}`}>
+              <span className={`text-sm font-bold tracking-tight ${m.state === 'failed' ? 'text-red-700' : m.state === 'cancelled' ? 'text-amber-700' : m.state === 'active' ? 'text-blue-700' : m.state === 'completed' ? 'text-gray-900' : 'text-gray-400'}`}>
                 {m.label}
               </span>
               <span className="mt-1 text-[11px] font-semibold text-gray-500">
@@ -732,6 +775,35 @@ function MilestoneTracker({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function TrainingEventHistory({ events }: { events: TrainingJobEvent[] }) {
+  if (!events.length) {
+    return (
+      <div className="mt-6 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 text-sm font-medium text-gray-500">
+        Event history will appear as the backend records lifecycle updates.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-600">Event History</h4>
+      <div className="space-y-3">
+        {events.map((event) => (
+          <div key={event.id} className="flex gap-3 text-sm">
+            <span className="w-36 shrink-0 font-semibold text-gray-500">
+              {new Date(event.created_at).toLocaleString()}
+            </span>
+            <div className="min-w-0">
+              <p className="font-bold text-gray-900">{event.event_type.replace(/_/g, ' ')}</p>
+              <p className="break-words text-gray-600">{event.message}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

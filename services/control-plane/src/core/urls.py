@@ -28,10 +28,13 @@ from authentication.model_api_views import (
 from authentication.training_job_views import (
     TrainingJobDetailView,
     TrainingJobDownloadURLView,
+    TrainingJobCancelView,
+    TrainingJobEventsView,
     TrainingJobListCreateView,
     TrainingJobLogsView,
     TrainingJobMetricsView,
     TrainingJobRefreshStatusView,
+    TrainingJobRetryView,
     TrainingJobRestoreView,
     TrainingUsageView,
 )
@@ -50,6 +53,9 @@ urlpatterns = [
     path('api/training-jobs/<int:training_job_id>/', TrainingJobDetailView.as_view(), name='training_job_detail'),
     path('api/training-jobs/<int:training_job_id>/refresh-status/', TrainingJobRefreshStatusView.as_view(), name='training_job_refresh_status'),
     path('api/training-jobs/<int:training_job_id>/download-url/', TrainingJobDownloadURLView.as_view(), name='training_job_download_url'),
+    path('api/training-jobs/<int:training_job_id>/cancel/', TrainingJobCancelView.as_view(), name='training_job_cancel'),
+    path('api/training-jobs/<int:training_job_id>/retry/', TrainingJobRetryView.as_view(), name='training_job_retry'),
+    path('api/training-jobs/<int:training_job_id>/events/', TrainingJobEventsView.as_view(), name='training_job_events'),
     path('api/training-jobs/<int:training_job_id>/logs/', TrainingJobLogsView.as_view(), name='training_job_logs'),
     path('api/training-jobs/<int:training_job_id>/metrics/', TrainingJobMetricsView.as_view(), name='training_job_metrics'),
     path('api/training-jobs/<int:training_job_id>/restore/', TrainingJobRestoreView.as_view(), name='training_job_restore'),
