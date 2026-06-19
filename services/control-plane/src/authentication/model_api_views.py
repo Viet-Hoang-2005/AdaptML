@@ -5,14 +5,17 @@ import zipfile
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.utils.text import slugify
+from django.utils.text import slugify
 import requests
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.core.cache import cache
 
 from .models import ModelAPI
+from .build_adapter import get_build_adapter
 
 MAX_MODEL_ARTIFACT_SIZE_BYTES = 512 * 1024 * 1024
 SUPPORTED_BUILD_FLAVORS = {"sklearn", "xgboost"}
@@ -221,69 +224,30 @@ class ModelAPIBuildView(APIView):
         model_api.endpoint_url = build_endpoint_url(model_api)
         model_api.save(update_fields=["source_artifact", "endpoint_url", "updated_at"])
 
-        try:
-            model_api.source_artifact.open("rb")
-            files = {
-                "artifact": (
-                    source_artifact.name,
-                    model_api.source_artifact.file,
-                    source_artifact.content_type or "application/octet-stream",
-                )
-            }
-            data = {
-                "flavor": flavor,
-                "requirements_text": requirements_text,
-                "package_name": "model",
-            }
-            response = requests.post(
-                f"{get_model_packager_url()}/build",
-                data=data,
-                files=files,
-                timeout=300,
-            )
-        except requests.RequestException as exc:
-            model_api.status = "error"
-            model_api.build_status = "error"
-            model_api.error_message = "Unable to reach model packager service."
-            model_api.build_error = str(exc)
-            model_api.save()
-            return Response(serialize_model_api(model_api), status=status.HTTP_502_BAD_GATEWAY)
-        finally:
-            try:
-                model_api.source_artifact.close()
-            except Exception:
-                pass
-
-        if response.status_code != 200:
-            try:
-                detail = response.json().get("detail") or response.json().get("error")
-            except ValueError:
-                detail = response.text
-            model_api.status = "error"
-            model_api.build_status = "error"
-            model_api.error_message = "Unable to build MLflow package."
-            model_api.build_error = detail or "Model packager returned an error."
-            model_api.save()
-            return Response(serialize_model_api(model_api), status=status.HTTP_400_BAD_REQUEST)
-
+        # Gọi adapter chạy ngầm
         safe_name = slugify(name) or "model"
         package_filename = f"{safe_name}-mlflow-package.zip"
-        model_api.artifact.save(package_filename, ContentFile(response.content), save=False)
-        model_api.model_uri = model_api.artifact.url
-        model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.status = "ready"
-        model_api.build_status = "ready"
-        model_api.error_message = ""
-        model_api.build_error = ""
-        model_api.package_preview_tree = decode_header_json(
-            response.headers.get("X-Package-Preview-Tree"),
-            [],
-        )
-        model_api.package_manifest = decode_header_json(
-            response.headers.get("X-Package-Manifest"),
-            {},
-        )
-        model_api.save()
+        
+        # Đường dẫn dự kiến lưu file artifact sau khi build xong
+        from .models import model_artifact_path
+        output_key = model_artifact_path(model_api, package_filename)
+        
+        try:
+            adapter = get_build_adapter()
+            adapter.trigger_build(
+                model_id=str(model_api.id),
+                flavor=flavor,
+                requirements_text=requirements_text,
+                source_key=model_api.source_artifact.name,
+                output_key=output_key
+            )
+        except Exception as exc:
+            model_api.status = "error"
+            model_api.build_status = "error"
+            model_api.error_message = "Unable to start build process."
+            model_api.build_error = str(exc)
+            model_api.save()
+            return Response(serialize_model_api(model_api), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
 
@@ -364,6 +328,100 @@ class ModelAPIDetailView(APIView):
         if not model_api:
             return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        force = request.query_params.get("force", "").lower() == "true"
+        if force:
+            from .build_adapter import DockerBuildAdapter
+            # Kill build process if running
+            DockerBuildAdapter().cancel_build(model_id)
+            # Delete file from S3 if exists
+            if model_api.artifact:
+                model_api.artifact.delete(save=False)
+            # Physically delete from database
+            model_api.delete()
+            return Response({"message": "Model API has been completely destroyed."}, status=status.HTTP_200_OK)
+
         model_api.status = "disabled"
         model_api.save(update_fields=["status", "updated_at"])
         return Response({"message": "Model API has been disabled."}, status=status.HTTP_200_OK)
+
+
+class ModelAPIBuildLogsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, model_id):
+        model_api = ModelAPI.objects.filter(id=model_id, tenant=request.user).first()
+        if not model_api:
+            return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        offset = int(request.query_params.get("offset", 0))
+        limit = int(request.query_params.get("limit", 100))
+
+        log_key = f"build_logs:{model_id}"
+        
+        try:
+            # Lấy logs từ Redis (lrange là O(N))
+            logs = cache.client.get_client().lrange(log_key, offset, offset + limit - 1)
+            # logs là list of bytes
+            logs_str = [log.decode('utf-8') for log in logs]
+            
+            return Response({
+                "logs": logs_str,
+                "next_offset": offset + len(logs),
+                "build_status": model_api.build_status,
+                "build_error": model_api.build_error,
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": f"Failed to fetch logs: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ModelAPIBuildWebhookView(APIView):
+    permission_classes = [AllowAny] # Nội bộ gọi hoặc được bảo mật bằng secret token
+
+    def post(self, request, model_id):
+        # Xác thực Webhook Secret nếu cần... (có thể dùng request.headers.get("X-Webhook-Secret"))
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        if not model_api:
+            return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data
+        status_val = data.get("status")
+        
+        if status_val == "success":
+            model_api.status = "ready"
+            model_api.build_status = "ready"
+            model_api.package_manifest = data.get("package_manifest", {})
+            model_api.package_preview_tree = data.get("package_preview_tree", [])
+            
+            # Giả định packager đã upload file lên output_key (model_api.artifact.name)
+            # Chúng ta cần đảm bảo model_uri / url map đúng với S3 bucket.
+            # Ở bước trước adapter đã tính output_key.
+            from .models import model_artifact_path
+            from django.utils.text import slugify
+            safe_name = slugify(model_api.name) or "model"
+            package_filename = f"{safe_name}-mlflow-package.zip"
+            model_api.artifact.name = model_artifact_path(model_api, package_filename)
+            model_api.model_uri = model_api.artifact.url
+            model_api.endpoint_url = build_endpoint_url(model_api)
+        else:
+            model_api.status = "error"
+            model_api.build_status = "error"
+            model_api.error_message = "Model build failed."
+            model_api.build_error = data.get("error_message", "Unknown error")
+            
+        model_api.save()
+        return Response({"message": "Webhook received successfully"}, status=status.HTTP_200_OK)
+
+class ModelAPICancelBuildView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, model_id):
+        try:
+            model_api = ModelAPI.objects.get(pk=model_id, tenant=request.user)
+            adapter = get_build_adapter()
+            adapter.cancel_build(str(model_api.id))
+            
+            # Delete the model so it doesn't clutter the UI since it was cancelled
+            model_api.delete()
+            return Response({"status": "cancelled and deleted"}, status=status.HTTP_200_OK)
+        except ModelAPI.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)

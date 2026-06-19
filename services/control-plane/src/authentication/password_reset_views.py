@@ -11,7 +11,6 @@ from .otp_service import normalize_email, request_otp, verify_otp
 User = get_user_model()
 PASSWORD_RESET_TOKEN_TTL_SECONDS = 600
 
-
 class PasswordResetRequestOTPView(APIView):
     authentication_classes = []
     permission_classes = []

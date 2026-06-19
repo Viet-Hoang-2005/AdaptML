@@ -8,17 +8,21 @@ from django.core.cache import cache
 def user_avatar_path(instance, filename):
     # Lấy username từ email (phần trước @) để tạo thư mục
     email_prefix = instance.email.split('@')[0]
-    return f'{email_prefix}/avatar/{filename}'
+    return f'{email_prefix}/avatars/{filename}'
 
 def user_avatar_history_path(instance, filename):
     email_prefix = instance.user.email.split('@')[0]
-    return f'{email_prefix}/avatar/{filename}'
+    return f'{email_prefix}/avatars/{filename}'
 
 def model_artifact_path(instance, filename):
-    return f'{instance.tenant.tenant_id}/models/{instance.id or "new"}/{filename}'
+    email_prefix = instance.tenant.email.split('@')[0]
+    safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
+    return f'{email_prefix}/models/{safe_model_name}/{filename}'
 
 def model_source_artifact_path(instance, filename):
-    return f'{instance.tenant.tenant_id}/models/{instance.id or "new"}/source/{filename}'
+    email_prefix = instance.tenant.email.split('@')[0]
+    safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
+    return f'{email_prefix}/models/{safe_model_name}/source/{filename}'
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):

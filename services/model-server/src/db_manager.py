@@ -43,10 +43,10 @@ def _create_engine_safe(host: str, label: str):
         return None
 
 # Engine cho API ghi log production data (-> Primary)
-engine_rw = _create_engine_safe(DB_HOST_RW, "READ-WRITE -> Primary")
+engine_rw = _create_engine_safe(DB_HOST_RW, "Read Write")
 
 # Engine cho các tác vụ đọc nếu cần trong tương lai (-> Standby)
-engine_ro = _create_engine_safe(DB_HOST_RO, "READ-ONLY  -> Standby")
+engine_ro = _create_engine_safe(DB_HOST_RO, "Read Only")
 
 # 3. HÀM GHI DỮ LIỆU (dùng engine_rw -> PRIMARY)
 def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:

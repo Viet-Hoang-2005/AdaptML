@@ -219,9 +219,7 @@ GITHUB_OAUTH_REDIRECT_URI = os.environ.get(
 MODEL_SERVER_PUBLIC_URL = os.environ.get('MODEL_SERVER_PUBLIC_URL', 'http://localhost:5000')
 MODEL_PACKAGER_URL = os.environ.get('MODEL_PACKAGER_URL', 'http://model_packager:7000')
 
-# Cấu hình lưu trữ AWS S3 (cho Avatar & File)
-# Lưu ý: Không khai báo AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY
-# boto3 sẽ tự động sử dụng IAM Role được gán cho EC2 instance (cấu hình trong main.tf)
+# Cấu hình lưu trữ AWS S3
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_BUCKET_NAME', 'mlops-paas-artifacts')
 AWS_S3_REGION_NAME = os.environ.get('AWS_DEFAULT_REGION', 'ap-southeast-1')
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
@@ -229,7 +227,6 @@ AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazo
 # Tự động gán quyền đọc cho file khi upload lên S3
 AWS_DEFAULT_ACL = None
 AWS_QUERYSTRING_AUTH = False
-# Giữ nguyên tên file, tránh ghi đè ngẫu nhiên quá mức nếu cần
 AWS_S3_FILE_OVERWRITE = False
 
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'

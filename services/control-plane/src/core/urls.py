@@ -21,6 +21,9 @@ from authentication.model_api_views import (
     ModelAPIDetailView,
     ModelAPIListCreateView,
     ModelAPIPackagePreviewView,
+    ModelAPIBuildLogsView,
+    ModelAPIBuildWebhookView,
+    ModelAPICancelBuildView,
 )
 
 urlpatterns = [
@@ -29,5 +32,8 @@ urlpatterns = [
     path('api/models/', ModelAPIListCreateView.as_view(), name='model_api_list_create'),
     path('api/models/build/', ModelAPIBuildView.as_view(), name='model_api_build'),
     path('api/models/<int:model_id>/package-preview/', ModelAPIPackagePreviewView.as_view(), name='model_api_package_preview'),
+    path('api/models/<int:model_id>/build-logs/', ModelAPIBuildLogsView.as_view(), name='model_api_build_logs'),
+    path('api/models/<int:model_id>/cancel-build/', ModelAPICancelBuildView.as_view(), name='model_api_cancel_build'),
+    path('api/auth/models/<int:model_id>/build-webhook', ModelAPIBuildWebhookView.as_view(), name='model_api_build_webhook'),
     path('api/models/<int:model_id>/', ModelAPIDetailView.as_view(), name='model_api_detail'),
 ]
