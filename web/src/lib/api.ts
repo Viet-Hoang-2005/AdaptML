@@ -31,6 +31,8 @@ import type {
   TrainingJobFormValues,
   TrainingJobListResponse,
   TrainingJobLogsResponse,
+  TrainingJobMetricsResponse,
+  TrainingUsageResponse,
 } from '../types/modelApi';
 
 const authApiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/auth';
@@ -301,6 +303,9 @@ const trainingJobFormData = (payload: TrainingJobFormValues) => {
   formData.append('name', payload.name);
   formData.append('model_version', payload.model_version);
   formData.append('entry_point', payload.entry_point || 'train.py');
+  formData.append('vcpu', String(payload.vcpu));
+  formData.append('memory', String(payload.memory));
+  formData.append('max_runtime_seconds', String(payload.max_runtime_seconds));
   if (payload.source_zip) {
     formData.append('source_zip', payload.source_zip);
   }
@@ -322,8 +327,15 @@ export const createTrainingJob = async (payload: TrainingJobFormValues): Promise
   return data;
 };
 
-export const listTrainingJobs = async (): Promise<TrainingJobListResponse> => {
-  const { data } = await axiosInstance.get<TrainingJobListResponse>(controlPlaneURL('/training-jobs/'));
+export const listTrainingJobs = async (includeDeleted = false): Promise<TrainingJobListResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobListResponse>(
+    controlPlaneURL(`/training-jobs/${includeDeleted ? '?include_deleted=true' : ''}`),
+  );
+  return data;
+};
+
+export const getTrainingUsage = async (): Promise<TrainingUsageResponse> => {
+  const { data } = await axiosInstance.get<TrainingUsageResponse>(controlPlaneURL('/training-usage/'));
   return data;
 };
 
@@ -346,5 +358,20 @@ export const getTrainingJobDownloadUrl = async (jobId: number): Promise<Training
 
 export const getTrainingJobLogs = async (jobId: number): Promise<TrainingJobLogsResponse> => {
   const { data } = await axiosInstance.get<TrainingJobLogsResponse>(controlPlaneURL(`/training-jobs/${jobId}/logs/`));
+  return data;
+};
+
+export const getTrainingJobMetrics = async (jobId: number): Promise<TrainingJobMetricsResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobMetricsResponse>(controlPlaneURL(`/training-jobs/${jobId}/metrics/`));
+  return data;
+};
+
+export const deleteTrainingJob = async (jobId: number): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.delete<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/`));
+  return data;
+};
+
+export const restoreTrainingJob = async (jobId: number): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/restore/`));
   return data;
 };

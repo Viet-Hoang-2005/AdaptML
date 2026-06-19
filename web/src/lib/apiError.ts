@@ -23,11 +23,11 @@ const getFieldErrorMessage = (data: ApiErrorBody) => {
 
 export const getApiErrorMessage = (error: unknown, fallback: string) => {
   if (!axios.isAxiosError<ApiErrorBody>(error)) {
-    return fallback;
+    return error instanceof Error ? error.message : fallback;
   }
 
   const data = error.response?.data;
-  if (!data) return fallback;
+  if (!data) return error.message || fallback;
 
-  return data.error || data.detail || data.message || getFieldErrorMessage(data) || fallback;
+  return data.error || data.detail || data.message || getFieldErrorMessage(data) || error.message || fallback;
 };

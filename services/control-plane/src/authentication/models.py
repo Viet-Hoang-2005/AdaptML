@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
+from django.utils import timezone
 import uuid
 import secrets
 import os
@@ -229,6 +230,9 @@ class TrainingJob(models.Model):
     model_version = models.CharField(max_length=80)
     entry_point = models.CharField(max_length=160, default="train.py")
     training_backend = models.CharField(max_length=20, choices=BACKEND_CHOICES, default="sagemaker")
+    vcpu = models.PositiveIntegerField(default=2)
+    memory = models.PositiveIntegerField(default=4096)
+    max_runtime_seconds = models.PositiveIntegerField(default=3600)
     source_zip = models.FileField(upload_to=training_source_zip_path, storage=training_upload_storage)
     requirements_file = models.FileField(upload_to=training_requirements_path, storage=training_upload_storage, blank=True, null=True)
     training_data = models.FileField(upload_to=training_data_path, storage=training_upload_storage)
@@ -241,6 +245,11 @@ class TrainingJob(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     error_message = models.TextField(blank=True)
     training_logs = models.TextField(blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    runtime_seconds = models.PositiveIntegerField(default=0)
+    stop_reason = models.TextField(blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -249,7 +258,30 @@ class TrainingJob(models.Model):
         indexes = [
             models.Index(fields=["tenant", "status"], name="authenticat_trainin_57fd0f_idx"),
             models.Index(fields=["tenant", "model_version"], name="authenticat_trainin_5cba8b_idx"),
+            models.Index(fields=["tenant", "deleted_at"], name="authenticat_trainin_6a33d7_idx"),
         ]
 
     def __str__(self):
         return f"{self.name} {self.model_version} ({self.tenant.tenant_id})"
+
+    def mark_started(self, save=True):
+        if not self.started_at:
+            self.started_at = timezone.now()
+            if save:
+                self.save(update_fields=["started_at", "updated_at"])
+
+    def mark_finished(self, stop_reason="", save=True):
+        if not self.completed_at:
+            self.completed_at = timezone.now()
+        if not self.started_at:
+            self.started_at = self.created_at or self.completed_at
+
+        if self.started_at and self.completed_at:
+            elapsed = int((self.completed_at - self.started_at).total_seconds())
+            self.runtime_seconds = max(elapsed, 0)
+
+        if stop_reason:
+            self.stop_reason = stop_reason
+
+        if save:
+            self.save(update_fields=["started_at", "completed_at", "runtime_seconds", "stop_reason", "updated_at"])

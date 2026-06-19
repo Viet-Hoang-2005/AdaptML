@@ -236,6 +236,8 @@ AWS_BATCH_REGION = os.environ.get('AWS_BATCH_REGION', os.environ.get('AWS_DEFAUL
 AWS_BATCH_JOB_QUEUE = os.environ.get('AWS_BATCH_JOB_QUEUE', '').strip()
 AWS_BATCH_JOB_DEFINITION = os.environ.get('AWS_BATCH_JOB_DEFINITION', '').strip()
 AWS_BATCH_LOG_GROUP = os.environ.get('AWS_BATCH_LOG_GROUP', '/aws/batch/mlops-training').strip()
+TRAINING_MAX_RUNTIME_SECONDS = int(os.environ.get('TRAINING_MAX_RUNTIME_SECONDS', '43200'))
+TRAINING_MONTHLY_QUOTA_SECONDS = int(os.environ.get('TRAINING_MONTHLY_QUOTA_SECONDS', '43200'))
 
 # Cấu hình lưu trữ AWS S3 (cho Avatar & File)
 # Lưu ý: Không khai báo AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY

@@ -4,4 +4,5 @@ export const queryKeys = {
   apiKeys: ['api-keys'] as const,
   modelApis: ['model-apis'] as const,
   trainingJobs: ['training-jobs'] as const,
+  trainingUsage: ['training-usage'] as const,
 };
