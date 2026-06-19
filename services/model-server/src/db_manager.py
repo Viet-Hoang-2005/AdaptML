@@ -1,5 +1,7 @@
 # db_manager.py: Quản lý kết nối đến CloudNativePG
 import os
+import uuid
+from datetime import datetime
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -103,9 +105,6 @@ def get_production_data_count() -> int:
 
 # 5. TEST CHẠY THỬ ĐỘC LẬP
 if __name__ == "__main__":
-    import uuid
-    from datetime import datetime
-
     CSV_PATH = os.path.join(ROOT_DIR, 'data', 'test_data.csv')
 
     if os.path.exists(CSV_PATH):

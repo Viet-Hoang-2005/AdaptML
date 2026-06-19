@@ -4,11 +4,13 @@ import os
 import shutil
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 
 import boto3
 import redis
 import requests
+import docker
 
 from core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
 
@@ -112,6 +114,14 @@ def main():
             if requirements_text.strip():
                 (package_dir / "requirements.txt").write_text(requirements_text.strip() + "\n", encoding="utf-8")
 
+            label_mapping_key = os.environ.get("LABEL_MAPPING_KEY")
+            if label_mapping_key:
+                print(f"Downloading label mapping file from s3://{bucket_name}/{label_mapping_key}...")
+                mapping_artifact_name = Path(label_mapping_key).name
+                mapping_path = package_dir / mapping_artifact_name
+                s3.download_file(bucket_name, label_mapping_key, str(mapping_path))
+                print("Label mapping download completed.")
+
             print("Generating package manifest...")
             preview_tree = build_preview_tree(package_dir)
             manifest = {
@@ -128,6 +138,38 @@ def main():
             print(f"Uploading output to s3://{bucket_name}/{output_key}...")
             s3.upload_file(str(zip_path), bucket_name, output_key)
             print("Upload completed.")
+
+            print("Building custom Docker image...")
+            try:
+                dockerfile_content = """FROM mlops_paas_model_server:latest
+USER root
+COPY requirements.txt /tmp/custom_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+"""
+                (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
+                
+                # Requirements are in package_dir/requirements.txt or requirements_text
+                if requirements_text.strip():
+                    (workspace / "requirements.txt").write_text(requirements_text.strip() + "\n", encoding="utf-8")
+                else:
+                    (workspace / "requirements.txt").write_text("\n", encoding="utf-8")
+                    
+                docker_client = docker.from_env()
+                image_tag = f"mlops_paas_model_{model_id}:latest"
+                print(f"Building Docker image {image_tag} from workspace {workspace}...")
+                
+                # Build image directly, stream logs to stdout
+                for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
+                    if 'stream' in line:
+                        print(line['stream'].strip())
+                    elif 'errorDetail' in line:
+                        raise RuntimeError(line['errorDetail'].get('message', 'Unknown Docker build error'))
+                        
+                print(f"Docker image {image_tag} built successfully!")
+            except Exception as docker_err:
+                logger.error(f"Failed to build Docker image: {docker_err}")
+                logger.error(traceback.format_exc())
+                raise RuntimeError(f"Docker build failed: {docker_err}")
 
             print("Build completed successfully!")
 
@@ -149,7 +191,7 @@ def main():
 
     except Exception as exc:
         logger.error(f"Build failed with error: {str(exc)}")
-        import traceback
+
         logger.error(traceback.format_exc())
         
         # Notify Control Plane of failure

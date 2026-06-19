@@ -6,22 +6,21 @@ import time
 from dotenv import load_dotenv
 
 # 1. CẤU HÌNH ĐƯỜNG DẪN VÀ ENDPOINT
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 TEST_CSV_PATH = os.path.join(ROOT_DIR, 'data', 'test_data.csv')
 
 # Tự động load biến môi trường từ file .env
 load_dotenv(os.path.join(ROOT_DIR, '.env'))
 
 # Đọc API_URL và đảm bảo nó trỏ đúng vào endpoint /predict
-base_url = os.environ.get("API_URL", "http://localhost:5000").rstrip('/')
-API_URL = f"{base_url}/predict"
+API_URL = os.environ.get("API_URL", "http://localhost:5000").rstrip('/')
 
 def api_test_continuous(samples_per_class=1):
-    print(f"🚀 STARTING CONTINUOUS API INFERENCE TEST...")
+    print(f"STARTING CONTINUOUS API INFERENCE TEST...")
     
     # 2. NẠP DỮ LIỆU TEST
     if not os.path.exists(TEST_CSV_PATH):
-        print(f"🔎 Could not find file {TEST_CSV_PATH}. Please check the path!")
+        print(f"Could not find file {TEST_CSV_PATH}. Please check the path!")
         return
 
     df = pd.read_csv(TEST_CSV_PATH)
@@ -49,7 +48,7 @@ def api_test_continuous(samples_per_class=1):
                     "features": features
                 }
 
-                print(f"📦 Sending network packet (Actual label: {actual_label})...")
+                print(f"Sending network packet (Actual label: {actual_label})...")
                 
                 try:
                     # Đo thời gian từ lúc gửi request đến khi nhận được phản hồi để tính độ trễ (latency)
@@ -67,15 +66,15 @@ def api_test_continuous(samples_per_class=1):
                         confidence = result.get('confidence')
                         
                         # So sánh dự đoán với nhãn thực tế để đánh giá đúng/sai
-                        status_icon = "✅ CORRECT" if predicted_label == actual_label else "❌ WRONG"
+                        status_icon = "CORRECT" if predicted_label == actual_label else "WRONG"
                         
                         print(f"{status_icon} | Predicted: {predicted_label} (Confidence: {confidence}%) | Latency: {latency}ms")
-                        print(f"📊 Probability details: {result.get('probabilities')}")
+                        print(f"Probability details: {result.get('probabilities')}")
                     else:
-                        print(f"⚠️ API Error (Status {response.status_code}): {response.text}")
+                        print(f"API Error (Status {response.status_code}): {response.text}")
 
                 except requests.exceptions.ConnectionError:
-                    print("⚠️ Connection Error: API is not running!")
+                    print("Connection Error: API is not running!")
                     return
                     
                 time.sleep(2) # Chờ 2s giữa các lần bắn request

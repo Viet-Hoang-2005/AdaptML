@@ -38,6 +38,11 @@ def model_source_artifact_path(instance, filename):
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     return f'{email_prefix}/models/{safe_model_name}/source/{filename}'
 
+def label_mapping_path(instance, filename):
+    email_prefix = instance.tenant.email.split('@')[0]
+    safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
+    return f'{email_prefix}/models/{safe_model_name}/mapping/{filename}'
+
 def training_source_zip_path(instance, filename):
     return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/source/{filename}'
 
@@ -186,6 +191,7 @@ class ModelAPI(models.Model):
     model_info = models.TextField(blank=True)
     access_mode = models.CharField(max_length=20, choices=ACCESS_MODE_CHOICES, default="private")
     source_artifact = models.FileField(upload_to=model_source_artifact_path, blank=True, null=True)
+    label_mapping_file = models.FileField(upload_to=label_mapping_path, blank=True, null=True)
     flavor = models.CharField(max_length=40, blank=True)
     requirements_text = models.TextField(blank=True)
     package_manifest = models.JSONField(default=dict, blank=True)
