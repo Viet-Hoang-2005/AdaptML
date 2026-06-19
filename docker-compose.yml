@@ -25,15 +25,15 @@ services:
       start_period: 10s
 
   # Init Container để tạo schema riêng cho Control Plane và MLflow
-  db_schema_init:
+  schema-init:
     image: postgres:15-alpine
-    container_name: mlops_paas_db_schema_init
+    container_name: mlops_paas_schema_init
     restart: "no"
     environment:
       PGPASSWORD: ${DB_PASSWORD}
     command: >
       sh -c "psql -h postgres -U ${DB_USER} -d ${DB_NAME} -v ON_ERROR_STOP=1
-      -c 'CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA:-control_plane};'
+      -c 'CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA:-control-plane};'
       -c 'CREATE SCHEMA IF NOT EXISTS ${MLFLOW_DB_SCHEMA:-mlflow};'"
     depends_on:
       postgres:
@@ -58,7 +58,7 @@ services:
       - mlops_paas_network
 
   # 2. Django Control Plane (Auth & Users)
-  control_plane:
+  control-plane:
     build:
       context: ./services/control-plane
       dockerfile: Dockerfile
@@ -70,14 +70,14 @@ services:
       PYTHONUNBUFFERED: 1
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-local-dev-change-me}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,control_plane}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,control-plane}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       DB_HOST: postgres
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
-      DB_SCHEMA: ${DB_SCHEMA:-control_plane}
+      DB_SCHEMA: ${DB_SCHEMA:-control-plane}
       REDIS_URL: redis://redis:6379/1
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
@@ -90,24 +90,25 @@ services:
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-mlops-paas-artifacts}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
       MODEL_SERVER_PUBLIC_URL: ${MODEL_SERVER_PUBLIC_URL:-http://localhost:5000}
-      MODEL_PACKAGER_URL: http://model_packager:7000
+      MODEL_PACKAGER_URL: http://model-packager:7000
     volumes:
       - ./services/control-plane:/app
+      - /var/run/docker.sock:/var/run/docker.sock
     command: sh -c "python src/manage.py ensure_db_schema && python src/manage.py migrate && python src/manage.py runserver 0.0.0.0:8000"
     depends_on:
       postgres:
         condition: service_healthy
-      db_schema_init:
+      schema-init:
         condition: service_completed_successfully
       redis:
         condition: service_started
-      model_packager:
+      model-packager:
         condition: service_started
     networks:
       - mlops_paas_network
 
   # 3. FastAPI Inference Server (Data Plane)
-  model_server:
+  model-server:
     build:
       context: ./services/model-server
       dockerfile: Dockerfile
@@ -128,9 +129,9 @@ services:
       DB_NAME: ${DB_NAME}
       REDPANDA_BROKERS: redpanda:9092
       KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_logs}
-      JWKS_URL: http://control_plane:8000/api/auth/.well-known/jwks.json
-      CONTROL_PLANE_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control_plane}
+      JWKS_URL: http://control-plane:8000/api/auth/.well-known/jwks.json
+      control-plane_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control-plane}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
@@ -150,12 +151,13 @@ services:
       - mlops_paas_network
 
   # 4. Internal MLflow Package Builder
-  model_packager:
+  model-packager:
     build:
       context: ./services/model-packager
       dockerfile: Dockerfile
     container_name: mlops_paas_model_packager
-    restart: always
+    restart: "no"
+    command: ["echo", "Model Packager Image Built Successfully. Waiting for dynamic execution..."]
     environment:
       PYTHONUNBUFFERED: 1
     networks:
@@ -185,7 +187,7 @@ services:
       MODEL_URI: ${MODEL_URI:-models:/demo-model/Production}
       REFERENCE_DATA_S3_URI: ${REFERENCE_DATA_S3_URI:-s3://mlops-paas-artifacts/reference-data/demo-model/reference.csv}
       MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
-      WEBHOOK_URL: ${WEBHOOK_URL:-http://control_plane:8000/api/v1/internal/drift-webhook}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://control-plane:8000/api/v1/internal/drift-webhook}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-super-secret-key}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
@@ -222,7 +224,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      db_schema_init:
+      schema-init:
         condition: service_completed_successfully
     networks:
       - mlops_paas_network
@@ -282,7 +284,7 @@ services:
       - mlops_paas_network
 
   # Redpanda Console UI
-  console:
+  redpanda-console:
     image: docker.redpanda.com/redpandadata/console:latest
     container_name: mlops_paas_redpanda_console
     ports:
