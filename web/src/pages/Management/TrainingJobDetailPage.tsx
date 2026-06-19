@@ -67,6 +67,7 @@ export default function TrainingJobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [refreshingSection, setRefreshingSection] = useState<'header' | 'logs' | 'metrics' | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'logs' | 'metrics' | 'artifacts' | 'config'>('overview');
 
   const parsedJobId = Number(jobId);
@@ -119,6 +120,34 @@ export default function TrainingJobDetailPage() {
   });
 
   // -- Mutations --
+  
+  const handleRefreshHeader = async () => {
+    setRefreshingSection('header');
+    try {
+      await refreshStatusMutation.mutateAsync();
+    } finally {
+      setRefreshingSection(null);
+    }
+  };
+
+  const handleRefreshLogs = async () => {
+    setRefreshingSection('logs');
+    try {
+      await refetchLogs();
+    } finally {
+      setRefreshingSection(null);
+    }
+  };
+
+  const handleRefreshMetrics = async () => {
+    setRefreshingSection('metrics');
+    try {
+      await refetchMetrics();
+    } finally {
+      setRefreshingSection(null);
+    }
+  };
+
   const refreshStatusMutation = useMutation({
     mutationFn: () => refreshTrainingJobStatus(parsedJobId),
     onSuccess: (data) => {
@@ -220,11 +249,11 @@ export default function TrainingJobDetailPage() {
   };
 
   const getAccentBorderClass = () => {
-    if (job.is_deleted) return 'border-t-4 border-t-gray-400';
-    if (job.status === 'completed') return 'border-t-4 border-t-emerald-500';
-    if (job.status === 'failed') return 'border-t-4 border-t-red-500';
-    if (job.status === 'running') return 'border-t-4 border-t-blue-500';
-    return 'border-t-4 border-t-gray-300';
+    if (job.is_deleted) return 'border-t-2 border-t-gray-300';
+    if (job.status === 'completed') return 'border-t-2 border-t-emerald-400';
+    if (job.status === 'failed') return 'border-t-2 border-t-red-400';
+    if (job.status === 'running') return 'border-t-2 border-t-blue-400';
+    return 'border-t-2 border-t-gray-200';
   };
 
   const tabs = [
@@ -236,7 +265,7 @@ export default function TrainingJobDetailPage() {
   ] as const;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <section className="flex w-full flex-1 flex-col space-y-6">
       {/* Back button */}
       <button
         onClick={() => navigate('/dashboard/model-training')}
@@ -247,7 +276,7 @@ export default function TrainingJobDetailPage() {
       </button>
 
       {/* Header Card */}
-      <div className={`mb-8 rounded-xl border bg-white shadow-sm overflow-hidden ${getAccentBorderClass()} ${job.is_deleted ? 'opacity-80 grayscale-[0.2]' : ''}`}>
+      <div className={`rounded-xl border border-gray-200 bg-white shadow-md overflow-hidden ${getAccentBorderClass()} ${job.is_deleted ? 'opacity-80 grayscale-[0.2]' : ''}`}>
         <div className="flex flex-col gap-4 border-b border-gray-100 p-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
@@ -278,8 +307,8 @@ export default function TrainingJobDetailPage() {
                 variant="secondary"
                 size="sm"
                 icon={<RefreshCw className="h-4 w-4" />}
-                loading={refreshStatusMutation.isPending}
-                onClick={() => refreshStatusMutation.mutate()}
+                loading={refreshingSection === 'header'}
+                onClick={handleRefreshHeader}
                 title="Refresh Status"
               >
                 Refresh
@@ -338,7 +367,7 @@ export default function TrainingJobDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 border-b border-gray-200">
+      <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -438,8 +467,8 @@ export default function TrainingJobDetailPage() {
              )}
             <LogTerminal 
               text={logsResponse?.text || (ACTIVE_STATUSES.includes(job.status) ? 'Logs will appear after the training container starts...' : 'No logs available for this job.')} 
-              loading={loadingLogs} 
-              onRefresh={() => refetchLogs()} 
+              loading={loadingLogs || refreshingSection === 'logs'} 
+              onRefresh={handleRefreshLogs} 
             />
           </div>
         )}
@@ -459,7 +488,7 @@ export default function TrainingJobDetailPage() {
                 <p className="text-sm text-gray-500 mt-2">This job did not emit any runtime metrics.</p>
               </div>
             ) : (
-              <RuntimeMetricsPanel metrics={metrics} loading={loadingMetrics} />
+              <RuntimeMetricsPanel metrics={metrics} loading={loadingMetrics || refreshingSection === 'metrics'} onRefresh={handleRefreshMetrics} />
             )}
           </div>
         )}
@@ -526,19 +555,34 @@ export default function TrainingJobDetailPage() {
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Submitted Configuration</h3>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8 p-6">
-              <MetadataRow label="Training Backend" value={backendLabel(job.training_backend)} />
-              <MetadataRow label="Entry Point" value={job.entry_point} monospace />
-              <MetadataRow label="vCPU" value={String(job.vcpu)} />
-              <MetadataRow label="Memory (MB)" value={String(job.memory)} />
-              <MetadataRow label="Max Runtime (Seconds)" value={String(job.max_runtime_seconds)} />
-              <MetadataRow label="Accelerator Type" value={job.accelerator_type.toUpperCase()} />
-              <MetadataRow label="Accelerator Count" value={String(job.accelerator_count)} />
+            <div className="p-6 space-y-8">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-4 border-b border-gray-100 pb-2">Compute & Runtime</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-8">
+                  <MetadataRow label="Training Backend" value={backendLabel(job.training_backend)} />
+                  <MetadataRow label="vCPU" value={String(job.vcpu)} />
+                  <MetadataRow label="Memory (MB)" value={String(job.memory)} />
+                  <MetadataRow label="Max Runtime (Seconds)" value={String(job.max_runtime_seconds)} />
+                </div>
+              </div>
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-4 border-b border-gray-100 pb-2">Accelerator</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-8">
+                  <MetadataRow label="Accelerator Type" value={job.accelerator_type === 'none' ? 'None' : job.accelerator_type.toUpperCase()} />
+                  {job.accelerator_type !== 'none' && <MetadataRow label="Accelerator Count" value={String(job.accelerator_count)} />}
+                </div>
+              </div>
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-4 border-b border-gray-100 pb-2">Source</h4>
+                <div className="grid grid-cols-1 gap-y-6 gap-x-8">
+                  <MetadataRow label="Entry Point" value={job.entry_point} monospace />
+                </div>
+              </div>
             </div>
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -575,9 +619,11 @@ function TimelineStep({ label, active, completed, isError = false }: { label: st
 function RuntimeMetricsPanel({
   metrics,
   loading,
+  onRefresh,
 }: {
   metrics?: TrainingJobMetricsResponse;
   loading: boolean;
+  onRefresh: () => void;
 }) {
   const isHighCpu = metrics?.latest?.cpu_percent != null && metrics.latest.cpu_percent > 85;
   const isHighRam = metrics?.latest?.memory_percent != null && metrics.latest.memory_percent > 85;
@@ -609,12 +655,19 @@ function RuntimeMetricsPanel({
           Runtime metrics
         </p>
         <div className="flex items-center gap-3">
-          {loading && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500">Refreshing...</span>}
           <span className="text-xs font-bold text-gray-400">
             {latest?.timestamp
               ? `Sampled ${new Date(latest.timestamp).toLocaleTimeString()}`
               : 'Pending metrics...'}
           </span>
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="flex h-7 items-center gap-1.5 rounded bg-gray-50 border border-gray-200 px-2.5 text-[11px] font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
@@ -785,7 +838,7 @@ function UriLine({
           {icon}
           {label}
         </div>
-        <code className="mt-1 block truncate text-sm font-semibold text-gray-700" title={value || '-'}>
+        <code className="mt-1 block truncate text-xs sm:text-sm font-semibold text-gray-700 max-w-[200px] sm:max-w-md lg:max-w-xl" title={value || '-'}>
           {value || '-'}
         </code>
       </div>
