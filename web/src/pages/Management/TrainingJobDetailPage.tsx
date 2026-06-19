@@ -13,6 +13,11 @@ import {
   RefreshCw,
   RotateCcw,
   Rocket,
+  Clock,
+  UploadCloud,
+  Loader2,
+  CheckCircle,
+  XCircle,
   ScrollText,
   Activity,
   Settings,
@@ -256,6 +261,80 @@ export default function TrainingJobDetailPage() {
     return 'border-t-2 border-t-gray-200';
   };
 
+  const getMilestones = () => {
+    const isCompleted = job.status === 'completed';
+    const isFailed = job.status === 'failed';
+    const isRunning = job.status === 'running';
+    const isUploading = job.status === 'uploading';
+
+    const hasStarted = Boolean(job.started_at);
+    
+    const createdState = 'completed';
+    
+    let submittedState: 'pending' | 'active' | 'completed' = 'pending';
+    if (isUploading) submittedState = 'active';
+    else if (isRunning || isCompleted || isFailed) submittedState = 'completed';
+    
+    let runningState: 'pending' | 'active' | 'completed' | 'skipped' = 'pending';
+    if (isRunning) runningState = 'active';
+    else if (isCompleted) runningState = 'completed';
+    else if (isFailed) {
+      runningState = hasStarted ? 'completed' : 'skipped';
+    }
+    
+    let finalLabel = 'Completed';
+    let finalState: 'pending' | 'completed' | 'failed' = 'pending';
+    if (isCompleted) {
+      finalState = 'completed';
+    } else if (isFailed) {
+      finalLabel = 'Failed';
+      finalState = 'failed';
+    }
+    
+    const formatTime = (iso?: string | null) => iso ? new Date(iso).toLocaleString() : 'Timestamp unavailable';
+    const formatDurationDiff = (start?: string | null, end?: string | null) => {
+      if (!start || !end) return undefined;
+      const s = (new Date(end).getTime() - new Date(start).getTime()) / 1000;
+      if (s < 0) return undefined;
+      return formatDuration(s);
+    };
+
+    return [
+      {
+        id: 'created',
+        label: 'Created',
+        state: createdState as 'completed',
+        icon: Clock,
+        timestamp: formatTime(job.created_at),
+        helper: undefined
+      },
+      {
+        id: 'submitted',
+        label: 'Submitted',
+        state: submittedState as 'pending' | 'active' | 'completed',
+        icon: UploadCloud,
+        timestamp: (submittedState === 'completed' || submittedState === 'active') ? formatTime(job.updated_at) : 'Pending',
+        helper: undefined
+      },
+      {
+        id: 'running',
+        label: 'Running',
+        state: runningState as 'pending' | 'active' | 'completed' | 'skipped',
+        icon: Loader2,
+        timestamp: (runningState === 'completed' || runningState === 'active') ? formatTime(job.started_at) : (runningState === 'skipped' ? 'Skipped' : 'Pending'),
+        helper: hasStarted && job.created_at ? `Started after ${formatDurationDiff(job.created_at, job.started_at)}` : undefined
+      },
+      {
+        id: 'final',
+        label: finalLabel,
+        state: finalState as 'pending' | 'completed' | 'failed',
+        icon: finalState === 'failed' ? XCircle : CheckCircle,
+        timestamp: (finalState === 'completed' || finalState === 'failed') ? formatTime(job.completed_at) : 'Pending',
+        helper: job.completed_at && job.started_at ? `Finished in ${formatDurationDiff(job.started_at, job.completed_at)}` : undefined
+      }
+    ];
+  };
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Info },
     { id: 'logs', label: 'Logs', icon: ScrollText },
@@ -437,19 +516,17 @@ export default function TrainingJobDetailPage() {
             </div>
 
             {/* Visual Timeline */}
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden p-8">
-              <h3 className="text-sm font-bold text-gray-900 mb-8 uppercase tracking-wider">Status Timeline</h3>
-              <div className="relative flex items-center justify-between w-full max-w-3xl mx-auto px-4">
-                <div className="absolute left-4 right-4 top-1/2 h-1 bg-gray-100 -z-10 -translate-y-1/2 rounded-full"></div>
-                <div className="absolute left-4 top-1/2 h-1 bg-blue-500 -z-10 -translate-y-1/2 rounded-full transition-all duration-700 ease-in-out" style={{
-                  width: job.status === 'completed' || job.status === 'failed' ? 'calc(100% - 2rem)' : job.status === 'running' ? '66%' : job.status === 'uploading' ? '33%' : '0%'
-                }}></div>
-                
-                <TimelineStep label="Created" active={true} completed={true} />
-                <TimelineStep label="Uploading" active={job.status === 'uploading'} completed={['running', 'completed', 'failed'].includes(job.status)} />
-                <TimelineStep label="Running" active={job.status === 'running'} completed={['completed', 'failed'].includes(job.status)} />
-                <TimelineStep label={job.status === 'failed' ? 'Failed' : 'Completed'} active={['completed', 'failed'].includes(job.status)} completed={job.status === 'completed'} isError={job.status === 'failed'} />
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden p-6 sm:p-8">
+              <h3 className="text-sm font-bold text-gray-900 mb-6 uppercase tracking-wider">Status Timeline</h3>
+              <div className="w-full overflow-x-auto pb-4">
+                <MilestoneTracker milestones={getMilestones()} />
               </div>
+              {job.status === 'failed' && (job.error_message || job.stop_reason) && (
+                <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-1 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Failure Reason</p>
+                  <p className="text-sm font-medium text-red-800">{job.error_message || job.stop_reason}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -595,21 +672,66 @@ function MetadataRow({ label, value, monospace = false }: { label: string; value
   );
 }
 
-function TimelineStep({ label, active, completed, isError = false }: { label: string; active: boolean; completed: boolean; isError?: boolean }) {
+type MilestoneState = 'pending' | 'active' | 'completed' | 'failed' | 'skipped';
+
+function MilestoneTracker({
+  milestones,
+}: {
+  milestones: Array<{
+    id: string;
+    label: string;
+    state: MilestoneState;
+    icon: React.ElementType;
+    timestamp: string;
+    helper?: string;
+  }>;
+}) {
   return (
-    <div className="flex flex-col items-center gap-2.5 relative z-10 w-24">
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center border-4 transition-colors shadow-sm ${
-        isError ? 'border-red-500 bg-white text-red-500 ring-4 ring-red-50' :
-        completed ? 'border-blue-500 bg-blue-500 text-white' :
-        active ? 'border-blue-500 bg-white text-blue-500 ring-4 ring-blue-50' :
-        'border-gray-200 bg-white text-gray-300'
-      }`}>
-        {isError ? <AlertTriangle className="w-4 h-4" /> : <div className={`w-2.5 h-2.5 rounded-full ${completed ? 'bg-white' : 'bg-current'}`} />}
-      </div>
-      <span className={`text-xs font-bold uppercase tracking-wider text-center ${
-        isError ? 'text-red-600' :
-        active || completed ? 'text-gray-900' : 'text-gray-400'
-      }`}>{label}</span>
+    <div className="flex items-start justify-between min-w-[600px] w-full">
+      {milestones.map((m, i) => {
+        const Icon = m.icon;
+        const isLast = i === milestones.length - 1;
+        
+        let circleClass = 'border-gray-200 bg-white text-gray-400';
+        if (m.state === 'completed') circleClass = 'border-emerald-500 bg-emerald-50 text-emerald-600';
+        if (m.state === 'active') circleClass = 'border-blue-500 bg-blue-50 text-blue-600 ring-4 ring-blue-50';
+        if (m.state === 'failed') circleClass = 'border-red-500 bg-red-50 text-red-600 ring-4 ring-red-50';
+        if (m.state === 'skipped') circleClass = 'border-gray-200 bg-gray-50 text-gray-300';
+
+        let lineClass = 'bg-gray-200';
+        if (m.state === 'completed') lineClass = 'bg-emerald-500';
+        else if (m.state === 'active') lineClass = 'bg-blue-400';
+        else if (m.state === 'failed') lineClass = 'bg-red-500';
+
+        return (
+          <div key={m.id} className={`flex ${isLast ? 'flex-none' : 'flex-1'} flex-col relative`}>
+            <div className="flex items-center w-full">
+              <div className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300 ${circleClass}`}>
+                <Icon className={`h-5 w-5 ${m.state === 'active' ? 'animate-pulse' : ''}`} />
+              </div>
+              {!isLast && (
+                <div className="flex-1 px-2">
+                  <div className={`h-1 w-full rounded-full transition-all duration-500 ${lineClass}`} />
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-4 flex flex-col pr-4 w-36">
+              <span className={`text-sm font-bold tracking-tight ${m.state === 'failed' ? 'text-red-700' : m.state === 'active' ? 'text-blue-700' : m.state === 'completed' ? 'text-gray-900' : 'text-gray-400'}`}>
+                {m.label}
+              </span>
+              <span className="mt-1 text-[11px] font-semibold text-gray-500">
+                {m.timestamp}
+              </span>
+              {m.helper && (
+                <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  {m.helper}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
