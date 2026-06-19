@@ -13,7 +13,6 @@ from urllib.parse import urlparse
 
 import boto3
 
-
 WORKSPACE = Path("/workspace")
 SOURCE_DIR = WORKSPACE / "source"
 INPUT_TRAIN_DIR = WORKSPACE / "input" / "train"

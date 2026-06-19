@@ -14,7 +14,6 @@ from sagemaker.sklearn.estimator import SKLearn
 
 from .models import TrainingJob
 
-
 @dataclass(frozen=True)
 class SageMakerTrainingConfig:
     role_arn: str
