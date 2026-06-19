@@ -28,7 +28,7 @@ def get_model_server_public_url():
 
 
 def get_model_packager_url():
-    return getattr(settings, "MODEL_PACKAGER_URL", "http://model_packager:7000").rstrip("/")
+    return getattr(settings, "MODEL_PACKAGER_URL", "http://model-packager:7000").rstrip("/")
 
 
 def serialize_model_api(model_api):

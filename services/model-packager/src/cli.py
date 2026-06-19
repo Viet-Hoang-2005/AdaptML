@@ -141,7 +141,7 @@ def main():
 
             print("Building custom Docker image...")
             try:
-                dockerfile_content = """FROM mlops_paas_model_server:latest
+                dockerfile_content = """FROM mlops-paas-model-server:latest
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
 RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
@@ -155,7 +155,7 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
                     (workspace / "requirements.txt").write_text("\n", encoding="utf-8")
                     
                 docker_client = docker.from_env()
-                image_tag = f"mlops_paas_model_{model_id}:latest"
+                image_tag = f"mlops-paas-model-{model_id}:latest"
                 print(f"Building Docker image {image_tag} from workspace {workspace}...")
                 
                 # Build image directly, stream logs to stdout

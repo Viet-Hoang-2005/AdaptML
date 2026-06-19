@@ -62,6 +62,7 @@ services:
     build:
       context: ./services/control-plane
       dockerfile: Dockerfile
+    image: mlops-paas-django
     container_name: mlops_paas_django
     restart: always
     ports:
@@ -146,7 +147,7 @@ services:
     build:
       context: ./services/model-server
       dockerfile: Dockerfile
-    image: mlops_paas_model_server
+    image: mlops-paas-model-server
     restart: "no"
     command: ["echo", "Model Server Image Built Successfully. Waiting for dynamic execution..."]
     environment:
@@ -188,6 +189,7 @@ services:
     build:
       context: ./services/model-packager
       dockerfile: Dockerfile
+    image: mlops-paas-model-packager
     container_name: mlops_paas_model_packager
     restart: "no"
     command: ["echo", "Model Packager Image Built Successfully. Waiting for dynamic execution..."]
@@ -201,6 +203,7 @@ services:
     build:
       context: ./services/evidently
       dockerfile: Dockerfile
+    image: mlops-paas-evidently
     container_name: mlops_paas_evidently
     # Không restart tự động - đây là job chạy 1 lần như CronJob trong K3s
     restart: "no"
@@ -267,6 +270,7 @@ services:
     build:
       context: ./services/model-server
       dockerfile: Dockerfile
+    image: mlops-paas-consumer
     container_name: mlops_paas_consumer
     restart: always
     environment:

@@ -196,7 +196,7 @@ function ArtifactStep({
         onChange={(file) => setField('source_artifact', file)}
       />
 
-      <StepTitle title="Upload Label Mapping (Optional)" description="Choose a dictionary file to map numeric outputs to string labels (e.g. 0 -> BENIGN, 1 -> DDoS)." />
+      <StepTitle title="Upload Label Mapping (Optional)" description="Choose a dictionary file to map numeric outputs to string labels." />
       <FileDropzone
         accept=".pkl,.json"
         title={form.label_mapping_file ? form.label_mapping_file.name : 'Choose label mapping file'}

@@ -17,13 +17,13 @@ class DockerDeployAdapter(DeployAdapter):
         def _run_container():
             try:
                 client = docker.from_env()
-                custom_image_name = f"mlops_paas_model_{model_id}:latest"
+                custom_image_name = f"mlops-paas-model-{model_id}:latest"
                 try:
                     client.images.get(custom_image_name)
                     image_name = custom_image_name
                     logger.info(f"Found custom Docker image {image_name} for model {model_id}. Using it.")
                 except docker.errors.ImageNotFound:
-                    image_name = "mlops_paas_model_server"
+                    image_name = "mlops-paas-model-server"
                     logger.info(f"Custom image not found. Falling back to {image_name} for model {model_id}.")
                     
                 container_name = f"model_endpoint_{model_id}"

@@ -21,17 +21,12 @@ class DockerBuildAdapter(BuildAdapter):
             try:
                 client = docker.from_env()
                 # Use the same image as the packager
-                # Assuming the image is named mlops-nids-system-model_packager locally
-                # We will find the image name based on running containers or hardcode.
-                # Actually docker-compose builds it as mlops-nids-system-model_packager
-                image_name = "mlops-nids-system-model_packager" 
-                
-                # Check if image exists
+                # Assuming the image is named mlops-paas-model-packager locally
+                image_name = "mlops-paas-model-packager"
                 try:
                     client.images.get(image_name)
                 except docker.errors.ImageNotFound:
-                    # try alternative names like mlops-nids-system_model_packager
-                    image_name = "mlops-nids-system_model_packager"
+                    logger.error(f"Image {image_name} not found.")
                 
                 webhook_url = f"http://control-plane:8000/api/auth/models/{model_id}/build-webhook"
                 
