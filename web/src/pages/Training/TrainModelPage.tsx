@@ -40,7 +40,7 @@ import { toast } from '../../lib/toast';
 import { downloadSampleTrainingTemplate } from '../../lib/trainingTemplate';
 import { inspectZipFile, readZipEntryText, rebuildZipWithEditedEntry } from '../../lib/trainingZip';
 import type { TrainingJob, TrainingJobFormValues, TrainingJobMetricsResponse, TrainingJobStatus } from '../../types/modelApi';
-import { SummaryItem } from './UploadModelFormPage';
+import { SummaryItem } from '../Management/UploadModelFormPage';
 
 const initialForm: TrainingJobFormValues = {
   name: '',
@@ -810,7 +810,7 @@ export default function TrainModelPage() {
       <div id="start-training-section" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-gray-800 to-black text-white shadow-md">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-gray-800 to-black text-white shadow-md">
               <Rocket className="h-6 w-6" />
             </div>
             <div>
@@ -1615,7 +1615,7 @@ function TrainingJobCard({
           </p>
           {job.error_message && (
             <div className="mt-3 rounded-lg border border-red-100 bg-white p-3 shadow-sm">
-              <code className="whitespace-pre-wrap break-words text-xs text-red-900">
+              <code className="whitespace-pre-wrap wrap-break-words text-xs text-red-900">
                 {job.error_message}
               </code>
             </div>
@@ -1903,7 +1903,7 @@ function LogTerminal({
       <pre
         ref={scrollRef}
         onScroll={handleScroll}
-        className="max-h-[420px] min-h-[320px] overflow-x-auto overflow-y-auto whitespace-pre p-5 font-mono text-[13px] leading-6 text-gray-300"
+        className="max-h-105 min-h-80 overflow-x-auto overflow-y-auto whitespace-pre p-5 font-mono text-[13px] leading-6 text-gray-300"
       >
         {text}
       </pre>

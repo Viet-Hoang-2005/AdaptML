@@ -236,6 +236,9 @@ const modelBuildFormData = (payload: ModelBuildFormValues) => {
   if (payload.source_artifact) {
     formData.append('source_artifact', payload.source_artifact);
   }
+  if (payload.label_mapping_file) {
+    formData.append('label_mapping_file', payload.label_mapping_file);
+  }
   if (payload.requirements_file) {
     formData.append('requirements_file', payload.requirements_file);
   }
@@ -264,6 +267,10 @@ export const buildModelAPI = async (payload: ModelBuildFormValues): Promise<Mode
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return data;
+};
+
+export const deployModelAPI = async (modelId: number): Promise<void> => {
+  await axiosInstance.post(controlPlaneURL(`/models/${modelId}/deploy/`));
 };
 
 export const updateModelAPI = async (modelId: number, payload: ModelAPIFormValues): Promise<ModelAPI> => {
