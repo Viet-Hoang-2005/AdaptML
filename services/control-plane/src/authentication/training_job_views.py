@@ -66,7 +66,12 @@ def _current_month_window():
 
 def _training_usage_for_user(user):
     month_start, month_end = _current_month_window()
-    jobs = TrainingJob.objects.filter(tenant=user, created_at__gte=month_start, created_at__lt=month_end)
+    jobs = TrainingJob.objects.filter(
+        tenant=user,
+        created_at__gte=month_start,
+        created_at__lt=month_end,
+        deleted_at__isnull=True,
+    )
     stored_runtime = jobs.aggregate(total=Sum("runtime_seconds"))["total"] or 0
     running_runtime = 0
     now = timezone.now()
@@ -77,6 +82,7 @@ def _training_usage_for_user(user):
     monthly_runtime_seconds = stored_runtime + running_runtime
     monthly_quota_seconds = settings.TRAINING_MONTHLY_QUOTA_SECONDS
     counts = jobs.aggregate(
+        active_jobs_count=Count("id", filter=Q(status__in=ACTIVE_STATUSES)),
         running_jobs_count=Count("id", filter=Q(status="running")),
         completed_jobs_count=Count("id", filter=Q(status="completed")),
         failed_jobs_count=Count("id", filter=Q(status="failed")),
@@ -87,6 +93,7 @@ def _training_usage_for_user(user):
         "monthly_quota_seconds": monthly_quota_seconds,
         "monthly_runtime_seconds": monthly_runtime_seconds,
         "remaining_seconds": max(monthly_quota_seconds - monthly_runtime_seconds, 0),
+        "active_jobs_count": counts["active_jobs_count"],
         "running_jobs_count": counts["running_jobs_count"],
         "completed_jobs_count": counts["completed_jobs_count"],
         "failed_jobs_count": counts["failed_jobs_count"],
