@@ -114,7 +114,7 @@ services:
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock
-    command: sh -c "python src/manage.py ensure_db_schema && python src/manage.py migrate && python src/manage.py runserver 0.0.0.0:8000"
+    command: sh -c "python src/manage.py ensure_db_schema && python src/manage.py migrate && cd src && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
     depends_on:
       postgres:
         condition: service_healthy
