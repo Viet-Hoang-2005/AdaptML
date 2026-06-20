@@ -492,6 +492,29 @@ async def predict(
             tenant_id=model_record["tenant_id"], model_id=str(model_record["id"]), status="error_400"
         ).inc()
         raise
+    except ValueError as exc:
+        exc_str = str(exc)
+        paas_predictions_counter.labels(
+            tenant_id=model_record["tenant_id"], model_id=str(model_record["id"]), status="error_400"
+        ).inc()
+        # Sklearn raises ValueError for feature name mismatches; return 400 with a helpful message.
+        if "feature names" in exc_str.lower() or "feature_names" in exc_str.lower():
+            received = list(payload.model_dump().get("features", {}).keys())
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "success": False,
+                    "error": "Invalid feature columns",
+                    "message": exc_str,
+                    "received_features": received,
+                    "hint": (
+                        "The input columns do not match the model's training features. "
+                        "Remove label/target columns (e.g. 'label', 'target', 'y', 'class') "
+                        "from your prediction input."
+                    ),
+                },
+            )
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         paas_predictions_counter.labels(
             tenant_id=model_record["tenant_id"], model_id=str(model_record["id"]), status="error_500"

@@ -83,6 +83,10 @@ class DockerDeployAdapter(DeployAdapter):
                     "CONTROL_PLANE_DATABASE_URL": control_plane_db_url,
                     "CONTROL_PLANE_DB_SCHEMA": os.environ.get("DB_SCHEMA", "control_plane"),
                     "REDIS_URL": "redis://redis:6379/1",
+                    "AWS_ACCESS_KEY_ID": os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                    "AWS_SECRET_ACCESS_KEY": os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                    "AWS_DEFAULT_REGION": os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1"),
+                    "AWS_BUCKET_NAME": os.environ.get("AWS_BUCKET_NAME", ""),
                 }
 
                 logger.info(

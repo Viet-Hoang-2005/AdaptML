@@ -518,7 +518,12 @@ class ModelAPIBuildWebhookView(APIView):
             safe_name = slugify(model_api.name) or "model"
             package_filename = f"{safe_name}-mlflow-package.zip"
             model_api.artifact.name = model_artifact_path(model_api, package_filename)
-            model_api.model_uri = model_api.artifact.url
+            bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "") or getattr(settings, "AWS_BUCKET_NAME", "")
+            model_api.model_uri = (
+                f"s3://{bucket_name}/{model_api.artifact.name}"
+                if bucket_name
+                else model_api.artifact.url
+            )
             model_api.endpoint_url = build_endpoint_url(model_api)
             logger.info("Model %s build marked ready. Artifact key=%s", model_id, model_api.artifact.name)
         else:

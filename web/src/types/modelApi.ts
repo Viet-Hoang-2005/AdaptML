@@ -67,6 +67,7 @@ export interface PackagePreviewResponse {
 export interface ModelPredictionResponse {
   success: boolean;
   prediction: unknown;
+  confidence: number | null;
   tenant_id: string;
   model_id: string;
 }
