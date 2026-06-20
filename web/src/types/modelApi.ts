@@ -177,6 +177,7 @@ export interface TrainingUsageResponse {
   monthly_quota_seconds: number;
   monthly_runtime_seconds: number;
   remaining_seconds: number;
+  active_jobs_count: number;
   running_jobs_count: number;
   completed_jobs_count: number;
   failed_jobs_count: number;
