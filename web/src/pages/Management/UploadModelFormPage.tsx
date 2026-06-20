@@ -18,6 +18,7 @@ const emptyAdvancedForm: ModelAPIFormValues = {
   description: '',
   model_info: '',
   access_mode: 'public',
+  version: 'v1',
   artifact: null,
 };
 
@@ -26,6 +27,7 @@ const emptyBuildForm: ModelBuildFormValues = {
   description: '',
   model_info: '',
   access_mode: 'public',
+  version: 'v1',
   source_artifact: null,
   flavor: 'sklearn',
   requirements_text: '',
@@ -79,6 +81,7 @@ function ModelAPIFormContent({
         description: model.description,
         model_info: model.model_info,
         access_mode: model.access_mode,
+        version: model.version || 'v1',
         artifact: null,
       }
       : emptyAdvancedForm,
@@ -90,6 +93,7 @@ function ModelAPIFormContent({
         description: model.description,
         model_info: model.model_info,
         access_mode: model.access_mode,
+        version: model.version || 'v1',
         source_artifact: null,
         flavor: model.flavor || 'sklearn',
         requirements_text: model.requirements_text || '',
@@ -208,6 +212,18 @@ function ModelAPIFormContent({
             Back to API Management
           </Link>
           <h1 className="text-xl font-bold text-gray-900">{editing ? 'Edit model API' : 'Upload model'}</h1>
+          {editing && model && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                {model.version || 'v1'}
+              </span>
+              <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                {model.source_type === 'training_job'
+                  ? `Training job #${model.source_training_job ?? '-'}`
+                  : 'Manual upload'}
+              </span>
+            </div>
+          )}
         </div>
         
         {editing && modelId ? (
