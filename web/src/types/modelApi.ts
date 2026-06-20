@@ -2,13 +2,18 @@ export type ModelAccessMode = 'private' | 'public';
 export type ModelAPIStatus = 'ready' | 'uploading' | 'error' | 'disabled';
 export type ModelBuildStatus = 'not_started' | 'building' | 'ready' | 'error';
 export type ModelFlavor = 'sklearn' | 'xgboost';
+export type ModelSourceType = 'manual_upload' | 'training_job';
 
 export interface ModelAPI {
   id: number;
   name: string;
+  version: string;
   description: string;
   model_info: string;
   access_mode: ModelAccessMode;
+  source_type: ModelSourceType;
+  source_training_job: number | null;
+  source_artifact_uri: string;
   model_uri: string;
   endpoint_url: string;
   health_url: string;
@@ -34,6 +39,7 @@ export interface ModelAPIFormValues {
   description: string;
   model_info: string;
   access_mode: ModelAccessMode;
+  version?: string;
   artifact?: File | null;
 }
 
@@ -42,6 +48,7 @@ export interface ModelBuildFormValues {
   description: string;
   model_info: string;
   access_mode: ModelAccessMode;
+  version?: string;
   source_artifact: File | null;
   label_mapping_file?: File | null;
   flavor: ModelFlavor;
@@ -97,8 +104,18 @@ export interface TrainingJob {
   retry_of: number | null;
   deleted_at: string | null;
   is_deleted: boolean;
+  registered_model: ModelAPI | null;
+  registered_model_id: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TrainingJobRegisterModelValues {
+  model_name: string;
+  model_version?: string;
+  flavor?: ModelFlavor | '';
+  access_mode?: ModelAccessMode;
+  description?: string;
 }
 
 export interface TrainingJobListResponse {
