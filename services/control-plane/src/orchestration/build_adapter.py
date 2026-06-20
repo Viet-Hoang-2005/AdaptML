@@ -28,7 +28,7 @@ class DockerBuildAdapter(BuildAdapter):
                 except docker.errors.ImageNotFound:
                     logger.error(f"Image {image_name} not found.")
                 
-                webhook_url = f"http://control-plane:8000/api/auth/models/{model_id}/build-webhook"
+                webhook_url = f"http://control-plane:8000/api/models/{model_id}/build-webhook"
                 
                 environment = {
                     "MODEL_ID": str(model_id),
@@ -51,7 +51,7 @@ class DockerBuildAdapter(BuildAdapter):
                     name=f"model_build_{model_id}",
                     command=["python", "src/cli.py"],
                     environment=environment,
-                    network="mlops-nids-system_mlops_paas_network",
+                    network="mlops_paas_network",
                     volumes={
                         '/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'rw'}
                     },
@@ -61,7 +61,7 @@ class DockerBuildAdapter(BuildAdapter):
             except Exception as e:
                 logger.error(f"Error starting Docker build for {model_id}: {e}")
                 # Update DB via webhook to mark error since container failed to start
-                webhook_url = f"http://control-plane:8000/api/auth/models/{model_id}/build-webhook"
+                webhook_url = f"http://control-plane:8000/api/models/{model_id}/build-webhook"
                 try:
                     requests.post(webhook_url, json={"status": "error", "error_message": f"Failed to start container: {str(e)}"}, timeout=5)
                 except:
@@ -97,7 +97,7 @@ class ArgoBuildAdapter(BuildAdapter):
             "requirements_text": requirements_text,
             "source_key": source_key,
             "output_key": output_key,
-            "control_plane_webhook_url": f"http://control-plane.mlops-paas.svc.cluster.local:8000/api/auth/models/{model_id}/build-webhook"
+            "control_plane_webhook_url": f"http://control-plane.mlops-paas.svc.cluster.local:8000/api/models/{model_id}/build-webhook"
         }
         
         def _send_webhook():

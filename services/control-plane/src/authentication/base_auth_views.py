@@ -47,7 +47,6 @@ class RequestOTPView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
 class VerifyOTPView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -78,7 +77,6 @@ class VerifyOTPView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-
 
 class CompleteRegistrationView(APIView):
     authentication_classes = []

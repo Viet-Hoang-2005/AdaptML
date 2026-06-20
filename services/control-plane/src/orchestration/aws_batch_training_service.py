@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from .models import TrainingJob
-from .sagemaker_service import (
+from .orchestration.sagemaker_service import (
     _copy_django_file_to_s3,
     _s3_uri,
     get_training_job_prefix,

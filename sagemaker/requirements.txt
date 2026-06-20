@@ -1,9 +1,9 @@
 mlflow==3.11.1
-xgboost==1.7.6
-pandas==1.1.3
+xgboost==2.0.3
+pandas==2.2.1
 numpy==1.26.4
-scipy==1.8.0
-scikit-learn==1.2.1
+scipy==1.15.3
+scikit-learn==1.7.2
 boto3==1.34.0
-protobuf==3.20.2
-databricks-sdk==0.67.0
+protobuf==6.33.6
+databricks-sdk==0.118.0

@@ -20,7 +20,6 @@ from .otp_service import request_otp, verify_otp
 PASSWORD_CHANGE_TOKEN_TTL_SECONDS = 600
 MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024
 
-
 def avatar_url(avatar):
     if not avatar:
         return ""
@@ -28,7 +27,6 @@ def avatar_url(avatar):
         return avatar.url
     except Exception:
         return str(avatar)
-
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -105,7 +103,6 @@ class ProfileView(APIView):
 
         return Response({"message": "Profile updated successfully."}, status=status.HTTP_200_OK)
 
-
 class AvatarHistoryView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -125,7 +122,6 @@ class AvatarHistoryView(APIView):
             ]
         }, status=status.HTTP_200_OK)
 
-
 class AvatarSelectView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -139,7 +135,6 @@ class AvatarSelectView(APIView):
 
         return Response({"message": "Avatar selected successfully."}, status=status.HTTP_200_OK)
 
-
 class PasswordChangeRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -152,7 +147,6 @@ class PasswordChangeRequestView(APIView):
             return Response({"message": f"OTP code has been sent: {user.email}"}, status=status.HTTP_200_OK)
         except Exception as exc:
             return Response({"error": f"Unable to send email: {str(exc)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class PasswordChangeVerifyOTPView(APIView):
     permission_classes = [IsAuthenticated]
@@ -179,7 +173,6 @@ class PasswordChangeVerifyOTPView(APIView):
             "password_change_token": password_change_token,
         }, status=status.HTTP_200_OK)
 
-
 class PasswordChangeCompleteView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -203,7 +196,6 @@ class PasswordChangeCompleteView(APIView):
             return Response({"message": "Password set successfully! You can now log in using Base Auth."}, status=status.HTTP_200_OK)
 
         return Response({"error": "The OTP code or password change token is invalid or has expired."}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class AccountDeleteView(APIView):
     permission_classes = [IsAuthenticated]
@@ -235,7 +227,6 @@ class AccountDeleteView(APIView):
             print(f"Failed to publish event to Redpanda: {exc}")
 
         return Response({"message": "Your account has been disabled! API models will be paused."}, status=status.HTTP_200_OK)
-
 
 class APIKeyManagementView(APIView):
     permission_classes = [IsAuthenticated]
@@ -288,7 +279,6 @@ class APIKeyManagementView(APIView):
             "description": api_key.description,
         }, status=status.HTTP_201_CREATED)
 
-
 class APIKeyDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -330,7 +320,6 @@ class APIKeyDetailView(APIView):
             cache.delete(f"api_key_reverse:{api_key.id}")
 
         return Response({"message": "API key deleted successfully."}, status=status.HTTP_200_OK)
-
 
 class APIKeyRegenerateView(APIView):
     permission_classes = [IsAuthenticated]

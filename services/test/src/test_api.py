@@ -29,7 +29,7 @@ def api_test_continuous(samples_per_class=1):
     try:
         # 3. VÒNG LẶP VÔ HẠN
         while True:
-            # Bốc ngẫu nhiên số lượng đều nhau cho mỗi nhãn ở mỗi chu kỳ
+            # Bốc ngẫu nhiên số lượ ng đều nhau cho mỗi nhãn ở mỗi chu kỳ
             sample_df = df.groupby('Label').sample(n=samples_per_class, random_state=None)
             
             # Xáo trộn dữ liệu đã bốc mẫu 

@@ -9,8 +9,8 @@ from urllib.parse import urlparse
 import boto3
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
-from sagemaker.session import Session
-from sagemaker.sklearn.estimator import SKLearn
+from sagemaker.session import Session  # type: ignore
+from sagemaker.sklearn.estimator import SKLearn  # type: ignore
 
 from .models import TrainingJob
 

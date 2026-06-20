@@ -5,7 +5,7 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: mlops_paas_postgres
-    restart: always
+    restart: on-failure:3
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -45,7 +45,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4
     container_name: mlops_paas_pgadmin
-    restart: always
+    restart: on-failure:3
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
@@ -64,7 +64,7 @@ services:
       dockerfile: Dockerfile
     image: mlops-paas-django
     container_name: mlops_paas_django
-    restart: always
+    restart: on-failure:3
     ports:
       - "8000:8000"
     environment:
@@ -246,7 +246,7 @@ services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: mlops_paas_mlflow
-    restart: always
+    restart: on-failure:3
     ports:
       - "5001:5000"
     environment:
@@ -276,7 +276,7 @@ services:
       dockerfile: Dockerfile
     image: mlops-paas-consumer
     container_name: mlops_paas_consumer
-    restart: always
+    restart: on-failure:3
     environment:
       PYTHONUNBUFFERED: 1
       DB_HOST_RW: postgres
@@ -341,7 +341,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: mlops_paas_redis
-    restart: always
+    restart: on-failure:3
     ports:
       - "6379:6379"
     networks:
@@ -350,10 +350,12 @@ services:
 # Mạng nội bộ cho các container
 networks:
   mlops_paas_network:
+    name: mlops_paas_network
     driver: bridge
 
 # Volume để lưu trữ dữ liệu của PostgreSQL và Redpanda
 volumes:
   mlops_paas_pgdata:
-    external: false
+    name: mlops_paas_pgdata
   redpanda_data:
+    name: mlops_paas_redpanda_data
