@@ -35,6 +35,7 @@ import type {
   TrainingJobListResponse,
   TrainingJobLogsResponse,
   TrainingJobMetricsResponse,
+  TrainingJobRegisterModelValues,
   TrainingUsageResponse,
 } from '../types/modelApi';
 
@@ -220,6 +221,7 @@ const modelFormData = (payload: ModelAPIFormValues) => {
   formData.append('description', payload.description);
   formData.append('model_info', payload.model_info);
   formData.append('access_mode', payload.access_mode);
+  formData.append('version', payload.version || 'v1');
   if (payload.artifact) {
     formData.append('artifact', payload.artifact);
   }
@@ -232,6 +234,7 @@ const modelBuildFormData = (payload: ModelBuildFormValues) => {
   formData.append('description', payload.description);
   formData.append('model_info', payload.model_info);
   formData.append('access_mode', payload.access_mode);
+  formData.append('version', payload.version || 'v1');
   formData.append('flavor', payload.flavor);
   formData.append('requirements_text', payload.requirements_text);
   if (payload.source_artifact) {
@@ -272,6 +275,11 @@ export const buildModelAPI = async (payload: ModelBuildFormValues): Promise<Mode
 
 export const deployModelAPI = async (modelId: number): Promise<void> => {
   await axiosInstance.post(controlPlaneURL(`/models/${modelId}/deploy/`));
+};
+
+export const triggerModelAPIBuild = async (modelId: number): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/build/`));
+  return data;
 };
 
 export const updateModelAPI = async (modelId: number, payload: ModelAPIFormValues): Promise<ModelAPI> => {
@@ -365,6 +373,14 @@ export const getTrainingJobDownloadUrl = async (jobId: number): Promise<Training
   const { data } = await axiosInstance.get<TrainingJobDownloadURLResponse>(
     controlPlaneURL(`/training-jobs/${jobId}/download-url/`),
   );
+  return data;
+};
+
+export const registerTrainingJobModel = async (
+  jobId: number,
+  payload: TrainingJobRegisterModelValues,
+): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/training-jobs/${jobId}/register-model/`), payload);
   return data;
 };
 
