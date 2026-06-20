@@ -24,6 +24,7 @@ export default function MLflowZipPage({
     setField('description', '');
     setField('model_info', '');
     setField('access_mode', 'public');
+    setField('version', 'v1');
     setField('artifact', null);
   };
 
@@ -48,6 +49,12 @@ export default function MLflowZipPage({
           value={form.name}
           onChange={(event) => setField('name', event.target.value)}
           placeholder="e.g. CICIDS Classifier"
+        />
+        <Input
+          label="Version"
+          value={form.version || 'v1'}
+          onChange={(event) => setField('version', event.target.value)}
+          placeholder="v1"
         />
         <TextArea
           id="advanced-description"
