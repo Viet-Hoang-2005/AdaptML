@@ -20,6 +20,7 @@ import TrainingJobDetailPage from './pages/Training/TrainingJobDetailPage';
 import ModelAPIFormPage from './pages/Management/UploadModelFormPage';
 import DeveloperSettingPage from './pages/Settings/DeveloperSettingPage';
 import ProfileSettingPage from './pages/Settings/ProfileSettingPage';
+import ApiKeyPage from './pages/Settings/ApiKeyPage';
 import SettingsLayout from './pages/Settings/SettingsLayout';
 import { dashboardPlaceholders } from './pages/Dashboard/DashboardPage';
 
@@ -70,6 +71,8 @@ const router = createBrowserRouter(
           <Route path="profile" element={<ProfileSettingPage />} />
           <Route path="developer" element={<DeveloperSettingPage />} />
         </Route>
+        <Route path="settings/api-keys/create" element={<ApiKeyPage />} />
+        <Route path="settings/api-keys/:keyId" element={<ApiKeyPage />} />
         <Route path="*" element={<Navigate to="/dashboard/home/model-api" replace />} />
       </Route>
 

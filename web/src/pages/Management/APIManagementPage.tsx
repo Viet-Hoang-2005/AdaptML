@@ -1,64 +1,158 @@
-import { Bot } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Bot, Edit3, Trash2, Search, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Table, Space, Button as AntButton, Popconfirm } from 'antd';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import Placeholder from '../../components/layout/Placeholder';
-import { useModelAPIs } from '../../hooks/useModelAPIs';
+import { useModelAPIs, useModelAPIMutations } from '../../hooks/useModelAPIs';
+import type { ModelAPI } from '../../types/modelApi';
 
 export default function APIManagementPage() {
   const navigate = useNavigate();
   const { data, isLoading } = useModelAPIs();
+  const { deleteModelAPI } = useModelAPIMutations();
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const models = data?.models ?? [];
+  const filteredModels = models.filter((model) =>
+    model.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const columns = [
+    {
+      title: '#',
+      dataIndex: 'index',
+      key: 'index',
+      render: (_text: unknown, _record: ModelAPI, index: number) => index + 1,
+    },
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
+      render: (text: string, record: ModelAPI) => (
+        <a 
+          className="font-medium text-black! hover:opacity-60!" 
+          onClick={(e) => {
+            e.preventDefault();
+            navigate(`/dashboard/api-management/${record.id}`);
+          }}
+        >
+          {text}
+        </a>
+      ),
+    },
+    {
+      title: 'Description',
+      dataIndex: 'description',
+      key: 'description',
+      render: (text: string) => (
+        <span className="line-clamp-2 max-w-sm text-sm text-gray-500">
+          {text || 'No description provided.'}
+        </span>
+      ),
+    },
+    {
+      title: 'Flavor',
+      dataIndex: 'flavor',
+      key: 'flavor',
+      render: (text: string) => (
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold capitalize text-gray-700">
+          {text ? text : '-'}
+        </span>
+      ),
+    },
+    {
+      title: 'Access',
+      dataIndex: 'access_mode',
+      key: 'access',
+      render: (text: string) => (
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold capitalize text-gray-700">
+          {text}
+        </span>
+      ),
+    },
+    {
+      title: 'Update',
+      dataIndex: 'updated_at',
+      key: 'updated',
+      render: (text: string) => new Date(text).toLocaleString(),
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      render: (_: unknown, record: ModelAPI) => (
+        <Space size="middle">
+          <AntButton 
+            type="text" 
+            className="text-blue-600! hover:text-blue-800!"
+            icon={<Edit3 className="h-4 w-4" />} 
+            onClick={() => navigate(`/dashboard/api-management/${record.id}`)} 
+          />
+          <Popconfirm
+            title="Delete the model API"
+            description="Are you sure to delete this model API?"
+            onConfirm={() => deleteModelAPI(record.id)}
+            okText="Yes"
+            cancelText="No"
+            okButtonProps={{ className: 'bg-red-500! hover:bg-red-600! border-none! text-white!' }}
+            cancelButtonProps={{ className: 'bg-white! hover:bg-gray-100! border! border-gray-300! text-black!' }}
+          >
+            <AntButton 
+              type="text" 
+              className="text-red-400! hover:text-red-600!"
+              icon={<Trash2 className="h-4 w-4" />} 
+            />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   return (
     <section className="flex w-full flex-1 flex-col space-y-6">
-      <div className="flex flex-col gap-4 border-b border-gray-300 pb-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-gray-900">API Management</h1>
+      <div className="border-b border-gray-300 pb-2">
+        <h1 className="text-lg font-bold text-gray-900">API Management</h1>
+      </div>
+
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="w-full md:w-96">
+          <Input
+            placeholder="Search model by name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            icon={<Search className="h-4 w-4" />}
+            className="h-10! rounded-lg!"
+          />
         </div>
         <Button
           size="md"
           onClick={() => navigate('/dashboard/api-management/upload')}
           className="px-4"
         >
+          <Plus className="h-4 w-4"/>
           Upload model
         </Button>
       </div>
 
       {isLoading ? (
         <div className="flex-1 rounded-lg border border-gray-300 bg-white" />
-      ) : models.length === 0 ? (
+      ) : filteredModels.length === 0 ? (
         <Placeholder
-          title="No model APIs"
-          description="Upload your first MLflow model package to create a prediction endpoint."
+          title="No models found"
+          description={searchQuery ? `No models matching "${searchQuery}"` : "Upload your first MLflow model package to create a prediction endpoint."}
           icon={<Bot className="h-6 w-6" />}
           showModelName={false}
-          action={<Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>Upload model</Button>}
+          action={!searchQuery && <Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>Upload model</Button>}
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {models.map((model) => (
-            <Link
-              key={model.id}
-              to={`/dashboard/api-management/${model.id}`}
-              className="rounded-lg border border-gray-300 bg-white p-5 transition-colors hover:border-black"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase text-gray-400">Model API</p>
-                  <h2 className="mt-2 text-lg font-bold text-gray-900">{model.name}</h2>
-                </div>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold capitalize text-gray-700">
-                  {model.access_mode}
-                </span>
-              </div>
-              <p className="mt-3 line-clamp-2 text-sm leading-6 text-gray-500">
-                {model.description || 'No description provided.'}
-              </p>
-              <code className="mt-4 block truncate rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                {model.endpoint_url}
-              </code>
-            </Link>
-          ))}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <Table 
+            columns={columns} 
+            dataSource={filteredModels} 
+            rowKey="id" 
+            pagination={{ pageSize: 10 }} 
+          />
         </div>
       )}
     </section>
