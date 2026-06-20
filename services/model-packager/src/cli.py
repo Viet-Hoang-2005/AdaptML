@@ -3,9 +3,11 @@ import logging
 import os
 import shutil
 import sys
+import tarfile
 import tempfile
 import traceback
 from pathlib import Path
+from urllib.parse import urlparse
 
 import boto3
 import redis
@@ -13,6 +15,9 @@ import requests
 import docker
 
 from core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
+
+SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
+PREFERRED_MODEL_FILENAMES = ("model.pkl", "model.joblib", "model.xgb")
 
 class RedisLogHandler(logging.Handler):
     def __init__(self, redis_url: str, model_id: str):
@@ -30,6 +35,64 @@ class RedisLogHandler(logging.Handler):
             self.redis_client.expire(self.log_key, 3600)
         except Exception:
             self.handleError(record)
+
+
+def parse_s3_uri(uri: str) -> tuple[str, str]:
+    parsed = urlparse(uri)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        raise ValueError(f"Invalid S3 URI: {uri}")
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def download_s3_uri(s3, uri: str, destination: Path) -> None:
+    bucket, key = parse_s3_uri(uri)
+    print(f"Downloading training artifact from s3://{bucket}/{key}...")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    s3.download_file(bucket, key, str(destination))
+    print("Download completed.")
+
+
+def safe_extract_tar(archive_path: Path, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    destination_root = destination.resolve()
+    with tarfile.open(archive_path, "r:gz") as archive:
+        for member in archive.getmembers():
+            member_path = destination / member.name
+            resolved = member_path.resolve()
+            if not str(resolved).startswith(str(destination_root)):
+                raise ValueError("Training artifact contains an unsafe path.")
+            if member.islnk() or member.issym():
+                raise ValueError("Training artifact contains links, which are not supported.")
+        archive.extractall(destination)
+
+
+def find_supported_model_file(root: Path) -> Path:
+    files = [item for item in root.rglob("*") if item.is_file() and item.suffix.lower() in SUPPORTED_MODEL_EXTENSIONS]
+    if not files:
+        raise ValueError("Training artifact is not deployable because no .pkl, .joblib, or .xgb file was found.")
+
+    by_name = {item.name: item for item in sorted(files)}
+    for preferred in PREFERRED_MODEL_FILENAMES:
+        if preferred in by_name:
+            if len(files) > 1:
+                print(f"Warning: multiple model files found; using {preferred}.")
+            return by_name[preferred]
+
+    selected = sorted(files, key=lambda item: item.as_posix())[0]
+    if len(files) > 1:
+        print(f"Warning: multiple model files found; using {selected.relative_to(root).as_posix()}.")
+    return selected
+
+
+def find_label_mapping_file(root: Path) -> Path | None:
+    candidates = []
+    for item in root.rglob("*"):
+        if not item.is_file() or item.suffix.lower() not in {".json", ".pkl"}:
+            continue
+        lowered = item.name.lower()
+        if "mapping" in lowered or "label" in lowered or "dictionary" in lowered:
+            candidates.append(item)
+    return sorted(candidates, key=lambda item: item.as_posix())[0] if candidates else None
 
 def main():
     model_id = os.environ.get("MODEL_ID")
@@ -78,11 +141,16 @@ def main():
         flavor = os.environ.get("FLAVOR", "").lower()
         requirements_text = os.environ.get("REQUIREMENTS_TEXT", "")
         source_key = os.environ.get("SOURCE_KEY")
+        source_type = os.environ.get("SOURCE_TYPE", "manual_upload")
+        training_artifact_uri = os.environ.get("TRAINING_ARTIFACT_URI", "")
         output_key = os.environ.get("OUTPUT_KEY")
         bucket_name = os.environ.get("AWS_BUCKET_NAME")
         webhook_url = os.environ.get("CONTROL_PLANE_WEBHOOK_URL")
 
-        if not all([flavor, source_key, output_key, bucket_name]):
+        if source_type == "training_job":
+            if not all([flavor, training_artifact_uri, output_key, bucket_name]):
+                raise ValueError("Missing required environment variables for training artifact build.")
+        elif not all([flavor, source_key, output_key, bucket_name]):
             raise ValueError("Missing required environment variables for build.")
 
         s3 = boto3.client(
@@ -94,12 +162,35 @@ def main():
 
         workspace = Path(tempfile.mkdtemp(prefix=f"build-{model_id}-"))
         try:
-            artifact_name = Path(source_key).name
-            artifact_path = workspace / artifact_name
+            artifact_name = ""
+            artifact_path = None
+            extracted_label_mapping_path = None
 
-            print(f"Downloading source artifact from s3://{bucket_name}/{source_key}...")
-            s3.download_file(bucket_name, source_key, str(artifact_path))
-            print("Download completed.")
+            if source_type == "training_job":
+                training_archive_path = workspace / "training-model.tar.gz"
+                extracted_dir = workspace / "training-artifact"
+                download_s3_uri(s3, training_artifact_uri, training_archive_path)
+                print("Extracting training artifact safely...")
+                safe_extract_tar(training_archive_path, extracted_dir)
+                artifact_path = find_supported_model_file(extracted_dir)
+                artifact_name = artifact_path.name
+
+                if not requirements_text.strip():
+                    requirements_file = next(iter(sorted(extracted_dir.rglob("requirements.txt"))), None)
+                    if requirements_file:
+                        requirements_text = requirements_file.read_text(encoding="utf-8").strip()
+                        print("Using requirements.txt from training artifact.")
+
+                extracted_label_mapping_path = find_label_mapping_file(extracted_dir)
+                if extracted_label_mapping_path:
+                    print(f"Using label mapping from training artifact: {extracted_label_mapping_path.name}")
+            else:
+                artifact_name = Path(source_key).name
+                artifact_path = workspace / artifact_name
+
+                print(f"Downloading source artifact from s3://{bucket_name}/{source_key}...")
+                s3.download_file(bucket_name, source_key, str(artifact_path))
+                print("Download completed.")
 
             print(f"Loading {flavor} model...")
             model = load_model(artifact_path, flavor)
@@ -121,11 +212,14 @@ def main():
                 mapping_path = package_dir / mapping_artifact_name
                 s3.download_file(bucket_name, label_mapping_key, str(mapping_path))
                 print("Label mapping download completed.")
+            elif extracted_label_mapping_path:
+                shutil.copy2(extracted_label_mapping_path, package_dir / extracted_label_mapping_path.name)
 
             print("Generating package manifest...")
             preview_tree = build_preview_tree(package_dir)
             manifest = {
                 "flavor": flavor,
+                "source_type": source_type,
                 "source_artifact": artifact_name,
                 "package_root": package_name,
                 "requirements_count": len(requirements or []),
