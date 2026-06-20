@@ -275,7 +275,12 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
                     "package_manifest": manifest,
                     "package_preview_tree": preview_tree,
                 }
-                requests.post(webhook_url, json=payload, timeout=10)
+                print(f"Calling build webhook: {webhook_url}")
+                response = requests.post(webhook_url, json=payload, timeout=10)
+                if response.status_code >= 400:
+                    raise RuntimeError(
+                        f"Build webhook failed with HTTP {response.status_code}: {response.text[:500]}"
+                    )
 
             # Đánh dấu EOF cho frontend biết tiến trình đã xong
             logger.info("BUILD_EOF_SUCCESS")
@@ -297,9 +302,15 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
                 "error_message": str(exc)
             }
             try:
-                requests.post(webhook_url, json=payload, timeout=10)
-            except:
-                pass
+                response = requests.post(webhook_url, json=payload, timeout=10)
+                if response.status_code >= 400:
+                    logger.error(
+                        "Failure webhook returned HTTP %s: %s",
+                        response.status_code,
+                        response.text[:500],
+                    )
+            except Exception as webhook_exc:
+                logger.error(f"Failed to notify Control Plane failure webhook: {webhook_exc}")
 
         logger.info("BUILD_EOF_ERROR")
         sys.exit(1)
