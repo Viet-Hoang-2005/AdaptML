@@ -8,16 +8,13 @@ import secrets
 import os
 from django.core.cache import cache
 
-
 class TrainingUploadStorage(FileSystemStorage):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("location", os.path.join(settings.BASE_DIR, "media", "training_uploads"))
         kwargs.setdefault("base_url", "/media/training_uploads/")
         super().__init__(*args, **kwargs)
 
-
 training_upload_storage = TrainingUploadStorage()
-
 
 def user_avatar_path(instance, filename):
     # Lấy username từ email (phần trước @) để tạo thư mục
@@ -138,7 +135,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f"{self.email} ({self.tenant_id})"
 
-
 class UserAPIKey(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="api_keys")
     name = models.CharField(max_length=120)
@@ -165,7 +161,6 @@ class UserAvatar(models.Model):
 
     def __str__(self):
         return f"{self.user.email} avatar {self.id}"
-
 
 class ModelAPI(models.Model):
     ACCESS_MODE_CHOICES = (

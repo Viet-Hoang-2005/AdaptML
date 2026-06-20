@@ -15,8 +15,8 @@ from rest_framework.views import APIView
 from django.core.cache import cache
 
 from .models import ModelAPI
-from .build_adapter import get_build_adapter
-from .deploy_adapter import DockerDeployAdapter
+from .orchestration.build_adapter import get_build_adapter, DockerBuildAdapter
+from .orchestration.deploy_adapter import DockerDeployAdapter
 
 MAX_MODEL_ARTIFACT_SIZE_BYTES = 512 * 1024 * 1024
 SUPPORTED_BUILD_FLAVORS = {"sklearn", "xgboost"}
@@ -353,7 +353,6 @@ class ModelAPIDetailView(APIView):
 
         force = request.query_params.get("force", "").lower() == "true"
         if force:
-            from .build_adapter import DockerBuildAdapter
             # Kill build process if running
             DockerBuildAdapter().cancel_build(model_id)
             # Kill endpoint container

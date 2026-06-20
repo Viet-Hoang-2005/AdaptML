@@ -46,7 +46,7 @@ class DockerDeployAdapter(DeployAdapter):
                     f"traefik.http.services.model_{model_id}.loadbalancer.server.port": "5000",
                 }
                 
-                network_name = "mlops-nids-system_mlops_paas_network"
+                network_name = "mlops_paas_network"
                 
                 db_user = os.environ.get("DB_USER", "postgres")
                 db_password = os.environ.get("DB_PASSWORD", "postgres")

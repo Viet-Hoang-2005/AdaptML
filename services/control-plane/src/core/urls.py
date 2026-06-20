@@ -16,44 +16,9 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from authentication.model_api_views import (
-    ModelAPIBuildView,
-    ModelAPIDetailView,
-    ModelAPIListCreateView,
-    ModelAPIPackagePreviewView,
-    ModelAPIBuildLogsView,
-    ModelAPIBuildWebhookView,
-    ModelAPICancelBuildView,
-    ModelAPIDeployView,
-)
-from authentication.training_job_views import (
-    TrainingJobDetailView,
-    TrainingJobDownloadURLView,
-    TrainingJobListCreateView,
-    TrainingJobLogsView,
-    TrainingJobMetricsView,
-    TrainingJobRefreshStatusView,
-    TrainingJobRestoreView,
-    TrainingUsageView,
-)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('authentication.urls')),
-    path('api/models/', ModelAPIListCreateView.as_view(), name='model_api_list_create'),
-    path('api/models/build/', ModelAPIBuildView.as_view(), name='model_api_build'),
-    path('api/models/<int:model_id>/package-preview/', ModelAPIPackagePreviewView.as_view(), name='model_api_package_preview'),
-    path('api/models/<int:model_id>/build-logs/', ModelAPIBuildLogsView.as_view(), name='model_api_build_logs'),
-    path('api/models/<int:model_id>/cancel-build/', ModelAPICancelBuildView.as_view(), name='model_api_cancel_build'),
-    path('api/models/<int:model_id>/deploy/', ModelAPIDeployView.as_view(), name='model_api_deploy'),
-    path('api/auth/models/<int:model_id>/build-webhook', ModelAPIBuildWebhookView.as_view(), name='model_api_build_webhook'),
-    path('api/models/<int:model_id>/', ModelAPIDetailView.as_view(), name='model_api_detail'),
-    path('api/training-jobs/', TrainingJobListCreateView.as_view(), name='training_job_list_create'),
-    path('api/training-jobs/<int:training_job_id>/', TrainingJobDetailView.as_view(), name='training_job_detail'),
-    path('api/training-jobs/<int:training_job_id>/refresh-status/', TrainingJobRefreshStatusView.as_view(), name='training_job_refresh_status'),
-    path('api/training-jobs/<int:training_job_id>/download-url/', TrainingJobDownloadURLView.as_view(), name='training_job_download_url'),
-    path('api/training-jobs/<int:training_job_id>/logs/', TrainingJobLogsView.as_view(), name='training_job_logs'),
-    path('api/training-jobs/<int:training_job_id>/metrics/', TrainingJobMetricsView.as_view(), name='training_job_metrics'),
-    path('api/training-jobs/<int:training_job_id>/restore/', TrainingJobRestoreView.as_view(), name='training_job_restore'),
-    path('api/training-usage/', TrainingUsageView.as_view(), name='training_usage'),
+    path('api/', include('orchestration.urls')),
 ]
