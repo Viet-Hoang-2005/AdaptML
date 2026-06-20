@@ -2,6 +2,8 @@
 import os
 import uuid
 from datetime import datetime
+from urllib.parse import quote_plus
+
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -28,7 +30,9 @@ DB_HOST_RO = os.environ.get("DB_HOST_RO", "localhost")
 
 # 2. KHỞI TẠO 2 CONNECTION POOL (READ-WRITE và READ-ONLY)
 def _create_engine_safe(host: str, label: str):
-    db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{host}:{DB_PORT}/{DB_NAME}"
+    # URL-encode password to handle special characters (e.g. @, %, #)
+    db_password_encoded = quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
+    db_url = f"postgresql://{DB_USER}:{db_password_encoded}@{host}:{DB_PORT}/{DB_NAME}"
     try:
         eng = create_engine(
             db_url,
