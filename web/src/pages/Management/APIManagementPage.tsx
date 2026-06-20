@@ -46,6 +46,16 @@ export default function APIManagementPage() {
                 <div>
                   <p className="text-xs font-semibold uppercase text-gray-400">Model API</p>
                   <h2 className="mt-2 text-lg font-bold text-gray-900">{model.name}</h2>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                      {model.version || 'v1'}
+                    </span>
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                      {model.source_type === 'training_job'
+                        ? `Training job #${model.source_training_job ?? '-'}`
+                        : 'Manual upload'}
+                    </span>
+                  </div>
                 </div>
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold capitalize text-gray-700">
                   {model.access_mode}
