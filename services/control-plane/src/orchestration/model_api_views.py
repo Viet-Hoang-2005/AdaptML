@@ -35,9 +35,13 @@ def serialize_model_api(model_api):
     return {
         "id": model_api.id,
         "name": model_api.name,
+        "version": model_api.version or "v1",
         "description": model_api.description,
         "model_info": model_api.model_info,
         "access_mode": model_api.access_mode,
+        "source_type": model_api.source_type,
+        "source_training_job": model_api.source_training_job_id,
+        "source_artifact_uri": model_api.source_artifact_uri,
         "model_uri": model_api.model_uri,
         "endpoint_url": model_api.endpoint_url,
         "health_url": f"{get_model_server_public_url()}/models/{model_api.id}/health",
@@ -129,7 +133,21 @@ def combine_requirements_text(request):
 
 def build_endpoint_url(model_api):
     safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
-    return f"{get_model_server_public_url()}/{model_api.tenant.tenant_id}/models/{safe_model_name}/v1/predict"
+    version = (model_api.version or "v1").strip().strip("/") or "v1"
+    return f"{get_model_server_public_url()}/{model_api.tenant.tenant_id}/models/{safe_model_name}/{version}/predict"
+
+
+def validate_unique_model_version(tenant, name, version, exclude_model_id=None):
+    queryset = ModelAPI.objects.filter(
+        tenant=tenant,
+        name=name,
+        version=version or "v1",
+    ).exclude(status="disabled")
+    if exclude_model_id:
+        queryset = queryset.exclude(id=exclude_model_id)
+    if queryset.exists():
+        return f"A model named '{name}' with version '{version or 'v1'}' already exists."
+    return ""
 
 
 class ModelAPIListCreateView(APIView):
@@ -145,6 +163,7 @@ class ModelAPIListCreateView(APIView):
         description = (request.data.get("description") or "").strip()
         model_info = (request.data.get("model_info") or "").strip()
         access_mode = (request.data.get("access_mode") or "private").strip().lower()
+        version = (request.data.get("version") or "v1").strip() or "v1"
         artifact_file = request.FILES.get("artifact")
 
         if not name:
@@ -152,6 +171,9 @@ class ModelAPIListCreateView(APIView):
 
         if access_mode not in {"private", "public"}:
             return Response({"error": "Access mode must be private or public."}, status=status.HTTP_400_BAD_REQUEST)
+        duplicate_error = validate_unique_model_version(request.user, name, version)
+        if duplicate_error:
+            return Response({"error": duplicate_error}, status=status.HTTP_400_BAD_REQUEST)
 
         if not artifact_file:
             return Response({"error": "Model artifact is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -163,9 +185,11 @@ class ModelAPIListCreateView(APIView):
         model_api = ModelAPI.objects.create(
             tenant=request.user,
             name=name,
+            version=version,
             description=description,
             model_info=model_info,
             access_mode=access_mode,
+            source_type="manual_upload",
             status="ready",
         )
         model_api.artifact = artifact_file
@@ -179,7 +203,7 @@ class ModelAPIListCreateView(APIView):
             model_id=model_api.id,
             tenant_id=model_api.tenant.tenant_id,
             model_name=model_api.name,
-            version="v1"
+            version=model_api.version or "v1"
         )
 
         return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
@@ -195,6 +219,7 @@ class ModelAPIBuildView(APIView):
         model_info = (request.data.get("model_info") or "").strip()
         access_mode = (request.data.get("access_mode") or "private").strip().lower()
         flavor = (request.data.get("flavor") or "").strip().lower()
+        version = (request.data.get("version") or "v1").strip() or "v1"
         source_artifact = request.FILES.get("source_artifact")
 
         if not name:
@@ -202,6 +227,9 @@ class ModelAPIBuildView(APIView):
 
         if access_mode not in {"private", "public"}:
             return Response({"error": "Access mode must be private or public."}, status=status.HTTP_400_BAD_REQUEST)
+        duplicate_error = validate_unique_model_version(request.user, name, version)
+        if duplicate_error:
+            return Response({"error": duplicate_error}, status=status.HTTP_400_BAD_REQUEST)
 
         if flavor not in SUPPORTED_BUILD_FLAVORS:
             return Response({"error": "Flavor must be sklearn or xgboost."}, status=status.HTTP_400_BAD_REQUEST)
@@ -221,9 +249,11 @@ class ModelAPIBuildView(APIView):
         model_api = ModelAPI.objects.create(
             tenant=request.user,
             name=name,
+            version=version,
             description=description,
             model_info=model_info,
             access_mode=access_mode,
+            source_type="manual_upload",
             flavor=flavor,
             requirements_text=requirements_text,
             status="uploading",
@@ -309,6 +339,7 @@ class ModelAPIDetailView(APIView):
         description = (request.data.get("description") or "").strip()
         model_info = (request.data.get("model_info") or "").strip()
         access_mode = (request.data.get("access_mode") or model_api.access_mode).strip().lower()
+        version = (request.data.get("version") or model_api.version or "v1").strip() or "v1"
         artifact_file = request.FILES.get("artifact")
 
         if not name:
@@ -316,6 +347,9 @@ class ModelAPIDetailView(APIView):
 
         if access_mode not in {"private", "public"}:
             return Response({"error": "Access mode must be private or public."}, status=status.HTTP_400_BAD_REQUEST)
+        duplicate_error = validate_unique_model_version(request.user, name, version, exclude_model_id=model_api.id)
+        if duplicate_error:
+            return Response({"error": duplicate_error}, status=status.HTTP_400_BAD_REQUEST)
 
         if artifact_file:
             artifact_error = validate_model_artifact(artifact_file)
@@ -327,6 +361,7 @@ class ModelAPIDetailView(APIView):
         model_api.description = description
         model_api.model_info = model_info
         model_api.access_mode = access_mode
+        model_api.version = version
         model_api.status = "ready"
         model_api.error_message = ""
         model_api.save()
@@ -341,7 +376,7 @@ class ModelAPIDetailView(APIView):
                 model_id=model_api.id,
                 tenant_id=model_api.tenant.tenant_id,
                 model_name=model_api.name,
-                version="v1"
+                version=model_api.version or "v1"
             )
 
         return Response(serialize_model_api(model_api), status=status.HTTP_200_OK)
@@ -399,6 +434,58 @@ class ModelAPIBuildLogsView(APIView):
             return Response({"error": f"Failed to fetch logs: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class ModelAPITriggerBuildView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, model_id):
+        model_api = ModelAPI.objects.filter(id=model_id, tenant=request.user).exclude(status="disabled").first()
+        if not model_api:
+            return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
+        if model_api.source_type != "training_job":
+            return Response(
+                {"error": "This endpoint only builds models registered from training jobs."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not model_api.source_artifact_uri:
+            return Response(
+                {"error": "Registered training model does not have a source artifact URI."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if model_api.flavor not in SUPPORTED_BUILD_FLAVORS:
+            return Response({"error": "Flavor must be sklearn or xgboost."}, status=status.HTTP_400_BAD_REQUEST)
+
+        safe_name = slugify(model_api.name) or "model"
+        package_filename = f"{safe_name}-mlflow-package.zip"
+        from authentication.models import model_artifact_path
+        output_key = model_artifact_path(model_api, package_filename)
+
+        model_api.status = "uploading"
+        model_api.build_status = "building"
+        model_api.build_error = ""
+        model_api.error_message = ""
+        model_api.endpoint_url = build_endpoint_url(model_api)
+        model_api.save(update_fields=["status", "build_status", "build_error", "error_message", "endpoint_url", "updated_at"])
+
+        try:
+            get_build_adapter().trigger_build(
+                model_id=str(model_api.id),
+                flavor=model_api.flavor,
+                requirements_text=model_api.requirements_text,
+                source_key="",
+                output_key=output_key,
+                training_artifact_uri=model_api.source_artifact_uri,
+            )
+        except Exception as exc:
+            model_api.status = "error"
+            model_api.build_status = "error"
+            model_api.error_message = "Unable to start build process."
+            model_api.build_error = str(exc)
+            model_api.save()
+            return Response(serialize_model_api(model_api), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(serialize_model_api(model_api), status=status.HTTP_200_OK)
+
+
 class ModelAPIBuildWebhookView(APIView):
     permission_classes = [AllowAny] # Nội bộ gọi hoặc được bảo mật bằng secret token
 
@@ -449,7 +536,7 @@ class ModelAPIDeployView(APIView):
                 model_id=model_api.id,
                 tenant_id=model_api.tenant.tenant_id,
                 model_name=model_api.name,
-                version="v1"
+                version=model_api.version or "v1"
             )
             return Response({"message": "Deployment started successfully."}, status=status.HTTP_200_OK)
         except ModelAPI.DoesNotExist:
