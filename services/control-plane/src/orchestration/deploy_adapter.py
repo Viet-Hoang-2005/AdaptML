@@ -1,6 +1,8 @@
 import logging
 import os
 import threading
+from urllib.parse import quote_plus
+
 import docker
 from django.conf import settings
 
@@ -50,6 +52,16 @@ class DockerDeployAdapter(DeployAdapter):
                 db_user = os.environ.get("DB_USER", "postgres")
                 db_password = os.environ.get("DB_PASSWORD", "postgres")
                 db_name = os.environ.get("DB_NAME", "mlops_paas")
+                db_host = os.environ.get("DB_HOST", "postgres")
+                db_port = os.environ.get("DB_PORT", "5432")
+
+                # URL-encode password so special chars (e.g. @, %, #) don't break the connection URL.
+                db_password_encoded = quote_plus(db_password)
+
+                # Prefer an explicitly set (already-encoded) URL from env, otherwise build a safe one.
+                control_plane_db_url = os.environ.get("CONTROL_PLANE_DATABASE_URL") or (
+                    f"postgresql://{db_user}:{db_password_encoded}@{db_host}:{db_port}/{db_name}"
+                )
 
                 # FastAPI container env vars
                 environment = {
@@ -57,10 +69,13 @@ class DockerDeployAdapter(DeployAdapter):
                     "DB_USER": db_user,
                     "DB_PASSWORD": db_password,
                     "DB_NAME": db_name,
+                    "DB_HOST_RW": db_host,
+                    "DB_HOST_RO": db_host,
+                    "DB_PORT": db_port,
                     "REDPANDA_BROKERS": "redpanda:9092",
                     "KAFKA_TOPIC": os.environ.get("KAFKA_TOPIC", "mlops_paas_production_logs"),
                     "JWKS_URL": "http://control-plane:8000/api/auth/.well-known/jwks.json",
-                    "CONTROL_PLANE_DATABASE_URL": os.environ.get("CONTROL_PLANE_DATABASE_URL", f"postgresql://{db_user}:{db_password}@postgres:5432/{db_name}"),
+                    "CONTROL_PLANE_DATABASE_URL": control_plane_db_url,
                     "CONTROL_PLANE_DB_SCHEMA": os.environ.get("DB_SCHEMA", "control_plane"),
                     "REDIS_URL": "redis://redis:6379/1",
                 }
