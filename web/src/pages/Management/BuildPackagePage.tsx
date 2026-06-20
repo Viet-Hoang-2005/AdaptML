@@ -160,6 +160,12 @@ function MetadataStep({
         onChange={(event) => setField('name', event.target.value)}
         placeholder="e.g. CICIDS Classifier"
       />
+      <Input
+        label="Version"
+        value={form.version || 'v1'}
+        onChange={(event) => setField('version', event.target.value)}
+        placeholder="v1"
+      />
       <TextArea
         id="build-description"
         label="Description"
@@ -390,6 +396,7 @@ function DeployStep({
       
       <div className="grid gap-4 md:grid-cols-2">
         <SummaryItem label="Model" value={form.name || 'Untitled model'} />
+        <SummaryItem label="Version" value={form.version || 'v1'} />
         <SummaryItem label="Access" value={`${form.access_mode} API`} />
         <SummaryItem label="Flavor" value={form.flavor} />
         <SummaryItem label="Artifact" value={form.source_artifact?.name || 'Missing artifact'} />
