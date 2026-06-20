@@ -26,6 +26,7 @@ import type {
   ModelBuildFormValues,
   ModelAPIFormValues,
   ModelAPIListResponse,
+  ModelEndpointLogsResponse,
   ModelPredictionResponse,
   PackagePreviewResponse,
   TrainingJob,
@@ -273,8 +274,37 @@ export const buildModelAPI = async (payload: ModelBuildFormValues): Promise<Mode
   return data;
 };
 
-export const deployModelAPI = async (modelId: number): Promise<void> => {
-  await axiosInstance.post(controlPlaneURL(`/models/${modelId}/deploy/`));
+export const deployModelAPI = async (modelId: number): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/deploy/`));
+  return data;
+};
+
+export const redeployModelAPI = async (modelId: number): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/redeploy/`));
+  return data;
+};
+
+export const stopModelEndpoint = async (modelId: number): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/stop-endpoint/`));
+  return data;
+};
+
+export const checkModelEndpointHealth = async (modelId: number): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/check-health/`));
+  return data;
+};
+
+export const getModelEndpointLogs = async (modelId: number): Promise<ModelEndpointLogsResponse> => {
+  const { data } = await axiosInstance.get<ModelEndpointLogsResponse>(controlPlaneURL(`/models/${modelId}/endpoint-logs/`));
+  return data;
+};
+
+export const cleanupModelResources = async (modelId: number, removeImages = false): Promise<{ removed: unknown; model: ModelAPI }> => {
+  const { data } = await axiosInstance.post<{ removed: unknown; model: ModelAPI }>(
+    controlPlaneURL(`/models/${modelId}/cleanup/`),
+    { remove_images: removeImages },
+  );
+  return data;
 };
 
 export const triggerModelAPIBuild = async (modelId: number): Promise<ModelAPI> => {

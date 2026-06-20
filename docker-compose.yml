@@ -115,6 +115,7 @@ services:
       MODEL_PACKAGER_URL: ${MODEL_PACKAGER_URL:-http://model-packager:7000}
       CONTROL_PLANE_INTERNAL_URL: ${CONTROL_PLANE_INTERNAL_URL:-http://control-plane:8000}
       DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME:-mlops_paas_network}
+      MODEL_BUILD_WEBHOOK_SECRET: ${MODEL_BUILD_WEBHOOK_SECRET}
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock

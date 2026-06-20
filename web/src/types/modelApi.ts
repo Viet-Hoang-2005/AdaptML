@@ -1,6 +1,18 @@
 export type ModelAccessMode = 'private' | 'public';
-export type ModelAPIStatus = 'ready' | 'uploading' | 'error' | 'disabled';
+export type ModelAPIStatus =
+  | 'registered'
+  | 'ready'
+  | 'uploading'
+  | 'deploying'
+  | 'deployed'
+  | 'unhealthy'
+  | 'deploy_failed'
+  | 'stopped'
+  | 'archived'
+  | 'error'
+  | 'disabled';
 export type ModelBuildStatus = 'not_started' | 'building' | 'ready' | 'error';
+export type ModelEndpointStatus = 'not_deployed' | 'deploying' | 'healthy' | 'unhealthy' | 'deploy_failed' | 'stopped';
 export type ModelFlavor = 'sklearn' | 'xgboost';
 export type ModelSourceType = 'manual_upload' | 'training_job';
 
@@ -19,6 +31,13 @@ export interface ModelAPI {
   health_url: string;
   status: ModelAPIStatus;
   error_message: string;
+  endpoint_status: ModelEndpointStatus;
+  endpoint_error: string;
+  endpoint_last_checked_at: string | null;
+  endpoint_container_name: string;
+  endpoint_image_name: string;
+  endpoint_public_path: string;
+  endpoint_internal_path: string;
   source_artifact: string;
   flavor: ModelFlavor | '';
   requirements_text: string;
@@ -62,6 +81,12 @@ export interface PackagePreviewResponse {
   package_preview_tree: string[];
   build_status: ModelBuildStatus;
   build_error: string;
+}
+
+export interface ModelEndpointLogsResponse {
+  model_id: number;
+  container_name: string;
+  logs: string;
 }
 
 export interface ModelPredictionResponse {

@@ -80,6 +80,7 @@ class DockerBuildAdapter(BuildAdapter):
                     "AWS_BUCKET_NAME": getattr(settings, "AWS_STORAGE_BUCKET_NAME", ""),
                     "AWS_DEFAULT_REGION": getattr(settings, "AWS_S3_REGION_NAME", "ap-southeast-1"),
                     "CONTROL_PLANE_WEBHOOK_URL": webhook_url,
+                    "MODEL_BUILD_WEBHOOK_SECRET": getattr(settings, "MODEL_BUILD_WEBHOOK_SECRET", ""),
                 }
                 
                 network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")

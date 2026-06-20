@@ -38,6 +38,10 @@ import {
   registerTrainingJobModel,
   triggerModelAPIBuild,
   deployModelAPI,
+  checkModelEndpointHealth,
+  getModelEndpointLogs,
+  redeployModelAPI,
+  stopModelEndpoint,
 } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
@@ -88,6 +92,8 @@ export default function TrainingJobDetailPage() {
     access_mode: 'public' as ModelAccessMode,
     description: '',
   });
+  const [endpointLogs, setEndpointLogs] = useState('');
+  const [endpointLogsOpen, setEndpointLogsOpen] = useState(false);
 
   const parsedJobId = Number(jobId);
   const [liveElapsed, setLiveElapsed] = useState<number | null>(null);
@@ -299,14 +305,55 @@ export default function TrainingJobDetailPage() {
 
   const deployRegisteredModelMutation = useMutation({
     mutationFn: (modelId: number) => deployModelAPI(modelId),
-    onSuccess: async () => {
-      toast.success('Deployment started.');
+    onSuccess: async (model) => {
+      toast.success(model.endpoint_status === 'healthy' ? 'Endpoint deployed and healthy.' : 'Deployment started.');
       await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
       await refetchJob();
     },
     onError: (err) => {
       toast.error(getApiErrorMessage(err, 'Unable to deploy endpoint.'));
     },
+  });
+
+  const checkHealthMutation = useMutation({
+    mutationFn: (modelId: number) => checkModelEndpointHealth(modelId),
+    onSuccess: async (model) => {
+      toast[model.endpoint_status === 'healthy' ? 'success' : 'warning'](
+        model.endpoint_status === 'healthy' ? 'Endpoint is healthy.' : 'Endpoint is unhealthy.',
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await refetchJob();
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to check endpoint health.')),
+  });
+
+  const redeployMutation = useMutation({
+    mutationFn: (modelId: number) => redeployModelAPI(modelId),
+    onSuccess: async () => {
+      toast.success('Redeploy started.');
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await refetchJob();
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to redeploy endpoint.')),
+  });
+
+  const stopEndpointMutation = useMutation({
+    mutationFn: (modelId: number) => stopModelEndpoint(modelId),
+    onSuccess: async () => {
+      toast.success('Endpoint stopped.');
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await refetchJob();
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to stop endpoint.')),
+  });
+
+  const endpointLogsMutation = useMutation({
+    mutationFn: (modelId: number) => getModelEndpointLogs(modelId),
+    onSuccess: (payload) => {
+      setEndpointLogs(payload.logs || 'No endpoint logs available.');
+      setEndpointLogsOpen(true);
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to read endpoint logs.')),
   });
 
   const restoreMutation = useMutation({
@@ -728,6 +775,16 @@ export default function TrainingJobDetailPage() {
               onRegister={openRegisterModal}
               onBuild={(model) => buildRegisteredModelMutation.mutate(model.id)}
               onDeploy={(model) => deployRegisteredModelMutation.mutate(model.id)}
+              onRedeploy={(model) => redeployMutation.mutate(model.id)}
+              onStop={(model) => {
+                if (window.confirm('Stop this endpoint container?')) stopEndpointMutation.mutate(model.id);
+              }}
+              onCheckHealth={(model) => checkHealthMutation.mutate(model.id)}
+              onViewLogs={(model) => {
+                setEndpointLogs('Loading endpoint logs...');
+                setEndpointLogsOpen(true);
+                endpointLogsMutation.mutate(model.id);
+              }}
               onOpenApiManagement={(model) => navigate(`/dashboard/api-management/${model.id}`)}
               onTestPrediction={() => navigate('/dashboard/home/model-testing')}
               buildingModelId={buildRegisteredModelMutation.isPending ? buildRegisteredModelMutation.variables ?? null : null}
@@ -895,6 +952,25 @@ export default function TrainingJobDetailPage() {
           </div>
         </div>
       )}
+
+      {endpointLogsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-4xl rounded-xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Endpoint logs</h3>
+                <p className="text-sm text-gray-500">Recent Docker logs for the deployed model endpoint.</p>
+              </div>
+              <Button variant="secondary" onClick={() => setEndpointLogsOpen(false)}>
+                Close
+              </Button>
+            </div>
+            <pre className="max-h-[480px] overflow-auto rounded-lg bg-black p-4 text-xs text-green-100">
+              {endpointLogs}
+            </pre>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -913,6 +989,10 @@ function DeploymentPanel({
   onRegister,
   onBuild,
   onDeploy,
+  onRedeploy,
+  onStop,
+  onCheckHealth,
+  onViewLogs,
   onOpenApiManagement,
   onTestPrediction,
   buildingModelId,
@@ -923,6 +1003,10 @@ function DeploymentPanel({
   onRegister: () => void;
   onBuild: (model: ModelAPI) => void;
   onDeploy: (model: ModelAPI) => void;
+  onRedeploy: (model: ModelAPI) => void;
+  onStop: (model: ModelAPI) => void;
+  onCheckHealth: (model: ModelAPI) => void;
+  onViewLogs: (model: ModelAPI) => void;
   onOpenApiManagement: (model: ModelAPI) => void;
   onTestPrediction: () => void;
   buildingModelId: number | null;
@@ -960,7 +1044,8 @@ function DeploymentPanel({
   }
 
   const readyToDeploy = model.build_status === 'ready';
-  const deployed = Boolean(model.endpoint_url) && model.status === 'ready' && model.build_status === 'ready';
+  const deployed = Boolean(model.endpoint_url) && model.endpoint_status === 'healthy' && model.build_status === 'ready';
+  const endpointStatus = model.endpoint_status || 'not_deployed';
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -981,6 +1066,17 @@ function DeploymentPanel({
             <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
               build: {model.build_status}
             </span>
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
+              endpointStatus === 'healthy'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : endpointStatus === 'unhealthy' || endpointStatus === 'deploy_failed'
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : endpointStatus === 'deploying'
+                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 bg-gray-50 text-gray-700'
+            }`}>
+              endpoint: {endpointStatus.replace(/_/g, ' ')}
+            </span>
           </div>
           {model.endpoint_url && (
             <code className="mt-3 block max-w-full truncate rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" title={model.endpoint_url}>
@@ -988,6 +1084,13 @@ function DeploymentPanel({
             </code>
           )}
           {model.build_error && <p className="mt-2 text-sm font-medium text-red-600">{model.build_error}</p>}
+          {model.endpoint_error && <p className="mt-2 text-sm font-medium text-red-600">{model.endpoint_error}</p>}
+          {(model.endpoint_container_name || model.endpoint_image_name) && (
+            <div className="mt-3 grid gap-1 text-xs text-gray-500 sm:grid-cols-2">
+              <span>Container: <span className="font-mono">{model.endpoint_container_name || '-'}</span></span>
+              <span>Image: <span className="font-mono">{model.endpoint_image_name || '-'}</span></span>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => onOpenApiManagement(model)}>
@@ -1006,6 +1109,26 @@ function DeploymentPanel({
           {readyToDeploy && (
             <Button icon={<Rocket className="h-4 w-4" />} loading={deployingModelId === model.id} onClick={() => onDeploy(model)}>
               Deploy Endpoint
+            </Button>
+          )}
+          {readyToDeploy && (
+            <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => onRedeploy(model)}>
+              Redeploy
+            </Button>
+          )}
+          {model.endpoint_url && (
+            <Button variant="secondary" icon={<Activity className="h-4 w-4" />} onClick={() => onCheckHealth(model)}>
+              Check Health
+            </Button>
+          )}
+          {model.endpoint_status !== 'not_deployed' && (
+            <Button variant="secondary" onClick={() => onStop(model)}>
+              Stop
+            </Button>
+          )}
+          {model.endpoint_container_name && (
+            <Button variant="secondary" onClick={() => onViewLogs(model)}>
+              Endpoint Logs
             </Button>
           )}
           {deployed && (

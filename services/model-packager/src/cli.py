@@ -275,8 +275,12 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
                     "package_manifest": manifest,
                     "package_preview_tree": preview_tree,
                 }
+                headers = {}
+                webhook_secret = os.environ.get("MODEL_BUILD_WEBHOOK_SECRET", "").strip()
+                if webhook_secret:
+                    headers["X-Build-Webhook-Secret"] = webhook_secret
                 print(f"Calling build webhook: {webhook_url}")
-                response = requests.post(webhook_url, json=payload, timeout=10)
+                response = requests.post(webhook_url, json=payload, headers=headers, timeout=10)
                 if response.status_code >= 400:
                     raise RuntimeError(
                         f"Build webhook failed with HTTP {response.status_code}: {response.text[:500]}"
@@ -302,7 +306,11 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
                 "error_message": str(exc)
             }
             try:
-                response = requests.post(webhook_url, json=payload, timeout=10)
+                headers = {}
+                webhook_secret = os.environ.get("MODEL_BUILD_WEBHOOK_SECRET", "").strip()
+                if webhook_secret:
+                    headers["X-Build-Webhook-Secret"] = webhook_secret
+                response = requests.post(webhook_url, json=payload, headers=headers, timeout=10)
                 if response.status_code >= 400:
                     logger.error(
                         "Failure webhook returned HTTP %s: %s",

@@ -11,6 +11,8 @@ Use a real `.env` for AWS/S3 credentials when testing AWS Batch. Keep the Docker
 ```env
 DOCKER_NETWORK_NAME=mlops_paas_network
 MODEL_PACKAGER_URL=http://model-packager:7000
+CONTROL_PLANE_INTERNAL_URL=http://control-plane:8000
+MODEL_BUILD_WEBHOOK_SECRET=change-me-local-build-webhook-secret
 ```
 
 Start the required services. `--remove-orphans` and `--force-recreate` are intentional after branch merges because older compose revisions used different service names or network definitions while keeping the same container names:
@@ -23,6 +25,12 @@ Check compose syntax without starting containers:
 
 ```powershell
 docker compose config --quiet
+```
+
+If you need the old local database volume for testing, set:
+
+```env
+POSTGRES_VOLUME_NAME=mlops-nids-system_mlops_paas_pgdata
 ```
 
 ## 2. Prepare the sample training files
@@ -70,13 +78,31 @@ Expected result:
 1. Click `Build Package` from the Training Job Detail deployment section, or open API Management and build the registered model.
 2. Wait for build status to become ready/successful.
 3. Click `Deploy Endpoint`.
-4. Verify the endpoint URL includes the selected version:
+4. Wait for endpoint status to become `healthy`.
+5. Verify the endpoint URL includes the selected version:
 
 ```text
 http://localhost:5000/<tenant-id>/models/<model-name>/<version>/predict
 ```
 
 The older manual-upload flow should continue to use `v1` by default.
+
+## 5.1 Deployment lifecycle checks
+
+From API Management or the Training Job Detail deployment card:
+
+- `Check health`: calls the endpoint health route and updates endpoint status.
+- `Redeploy`: replaces the local endpoint container and waits for health.
+- `Stop endpoint`: removes the local endpoint container but keeps the model registry record and S3 artifacts.
+- `Endpoint logs`: reads recent Docker logs from the endpoint container.
+- `Cleanup`: removes local Docker resources for the model. It does not delete S3 artifacts.
+
+Useful backend checks:
+
+```powershell
+docker compose exec -T control-plane python src/manage.py shell -c "from authentication.models import ModelAPI; m=ModelAPI.objects.get(id=<model-id>); print(m.status, m.build_status, m.endpoint_status, m.endpoint_error)"
+docker logs --tail=100 mlops_paas_model_endpoint_<model-id>
+```
 
 ## 6. Test prediction
 
@@ -115,5 +141,10 @@ Also verify the original API Management flow:
 ## Troubleshooting
 
 - If `control-plane` cannot resolve `postgres`, confirm all services are on the same compose network and `DOCKER_NETWORK_NAME` is consistent.
+- If the build webhook returns 400, confirm `DJANGO_ALLOWED_HOSTS` includes `control-plane`.
+- If the build webhook returns 403, confirm `MODEL_BUILD_WEBHOOK_SECRET` is identical in control-plane and model-packager build containers.
+- If endpoint health is unhealthy, open endpoint logs and check whether the model artifact can be downloaded from S3.
+- If the public route returns 404, confirm the Traefik route path includes `/<tenant-id>/models/<model-name>/<version>/predict`.
+- If PowerShell curl requests fail with JSON decode errors, write the JSON to a temporary file and use `--data-binary "@file.json"`.
 - If the registered training model cannot build, download the artifact and run `scripts/validate_training_artifact.py`.
 - If the artifact has no `.pkl`, `.joblib`, or `.xgb`, the training job completed but did not produce a deployable model for the current deploy flow.

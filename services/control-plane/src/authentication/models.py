@@ -172,10 +172,25 @@ class ModelAPI(models.Model):
         ("public", "Public"),
     )
     STATUS_CHOICES = (
+        ("registered", "Registered"),
         ("ready", "Ready"),
         ("uploading", "Uploading"),
+        ("deploying", "Deploying"),
+        ("deployed", "Deployed"),
+        ("unhealthy", "Unhealthy"),
+        ("deploy_failed", "Deploy Failed"),
+        ("stopped", "Stopped"),
+        ("archived", "Archived"),
         ("error", "Error"),
         ("disabled", "Disabled"),
+    )
+    ENDPOINT_STATUS_CHOICES = (
+        ("not_deployed", "Not Deployed"),
+        ("deploying", "Deploying"),
+        ("healthy", "Healthy"),
+        ("unhealthy", "Unhealthy"),
+        ("deploy_failed", "Deploy Failed"),
+        ("stopped", "Stopped"),
     )
     BUILD_STATUS_CHOICES = (
         ("not_started", "Not Started"),
@@ -210,6 +225,17 @@ class ModelAPI(models.Model):
     artifact = models.FileField(upload_to=model_artifact_path, blank=True, null=True)
     model_uri = models.CharField(max_length=1024, blank=True)
     endpoint_url = models.CharField(max_length=1024, blank=True)
+    endpoint_status = models.CharField(
+        max_length=30,
+        choices=ENDPOINT_STATUS_CHOICES,
+        default="not_deployed",
+    )
+    endpoint_error = models.TextField(blank=True)
+    endpoint_last_checked_at = models.DateTimeField(blank=True, null=True)
+    endpoint_container_name = models.CharField(max_length=160, blank=True)
+    endpoint_image_name = models.CharField(max_length=200, blank=True)
+    endpoint_public_path = models.CharField(max_length=512, blank=True)
+    endpoint_internal_path = models.CharField(max_length=160, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ready")
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

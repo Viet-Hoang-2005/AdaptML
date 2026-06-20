@@ -251,6 +251,7 @@ MODEL_SERVER_PUBLIC_URL = os.environ.get('MODEL_SERVER_PUBLIC_URL', 'http://loca
 MODEL_PACKAGER_URL = os.environ.get('MODEL_PACKAGER_URL', 'http://model-packager:7000')
 CONTROL_PLANE_INTERNAL_URL = os.environ.get('CONTROL_PLANE_INTERNAL_URL', 'http://control-plane:8000').rstrip('/')
 DOCKER_NETWORK_NAME = os.environ.get('DOCKER_NETWORK_NAME', 'mlops_paas_network').strip() or 'mlops_paas_network'
+MODEL_BUILD_WEBHOOK_SECRET = os.environ.get('MODEL_BUILD_WEBHOOK_SECRET', '').strip()
 
 # SageMaker Training PaaS configuration.
 TRAINING_BACKEND = os.environ.get('TRAINING_BACKEND', 'sagemaker').strip().lower()
