@@ -72,7 +72,7 @@ services:
       PYTHONUNBUFFERED: 1
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-local-dev-change-me}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,control-plane}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,control-plane,mlops_paas_django}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       DB_HOST: postgres
       DB_USER: ${DB_USER}
@@ -113,6 +113,7 @@ services:
       TRAINING_MAX_ACTIVE_JOBS_PER_TENANT: ${TRAINING_MAX_ACTIVE_JOBS_PER_TENANT:-1}
       MODEL_SERVER_PUBLIC_URL: ${MODEL_SERVER_PUBLIC_URL:-http://localhost:5000}
       MODEL_PACKAGER_URL: ${MODEL_PACKAGER_URL:-http://model-packager:7000}
+      CONTROL_PLANE_INTERNAL_URL: ${CONTROL_PLANE_INTERNAL_URL:-http://control-plane:8000}
       DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME:-mlops_paas_network}
     volumes:
       - ./services/control-plane:/app
@@ -359,6 +360,6 @@ networks:
 # Volume để lưu trữ dữ liệu của PostgreSQL và Redpanda
 volumes:
   mlops_paas_pgdata:
-    name: mlops_paas_pgdata
+    name: ${POSTGRES_VOLUME_NAME:-mlops_paas_pgdata}
   redpanda_data:
     name: mlops_paas_redpanda_data
