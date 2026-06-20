@@ -12,7 +12,7 @@ from rest_framework.exceptions import ValidationError
 from sagemaker.session import Session  # type: ignore
 from sagemaker.sklearn.estimator import SKLearn  # type: ignore
 
-from .models import TrainingJob
+from authentication.models import TrainingJob
 
 @dataclass(frozen=True)
 class SageMakerTrainingConfig:

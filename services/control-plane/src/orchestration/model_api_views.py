@@ -14,9 +14,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.core.cache import cache
 
-from .models import ModelAPI
-from .orchestration.build_adapter import get_build_adapter, DockerBuildAdapter
-from .orchestration.deploy_adapter import DockerDeployAdapter
+from authentication.models import ModelAPI
+from .build_adapter import get_build_adapter, DockerBuildAdapter
+from .deploy_adapter import DockerDeployAdapter
 
 MAX_MODEL_ARTIFACT_SIZE_BYTES = 512 * 1024 * 1024
 SUPPORTED_BUILD_FLAVORS = {"sklearn", "xgboost"}
@@ -242,7 +242,7 @@ class ModelAPIBuildView(APIView):
         package_filename = f"{safe_name}-mlflow-package.zip"
         
         # Đường dẫn dự kiến lưu file artifact sau khi build xong
-        from .models import model_artifact_path
+        from authentication.models import model_artifact_path
         output_key = model_artifact_path(model_api, package_filename)
         
         try:
@@ -420,7 +420,7 @@ class ModelAPIBuildWebhookView(APIView):
             # Giả định packager đã upload file lên output_key (model_api.artifact.name)
             # Chúng ta cần đảm bảo model_uri / url map đúng với S3 bucket.
             # Ở bước trước adapter đã tính output_key.
-            from .models import model_artifact_path
+            from authentication.models import model_artifact_path
             from django.utils.text import slugify
             safe_name = slugify(model_api.name) or "model"
             package_filename = f"{safe_name}-mlflow-package.zip"

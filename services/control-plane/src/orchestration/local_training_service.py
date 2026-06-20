@@ -10,8 +10,8 @@ from pathlib import Path
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
-from .models import TrainingJob
-from .orchestration.sagemaker_service import (
+from authentication.models import TrainingJob
+from .sagemaker_service import (
     _safe_extract_zip,
     _s3_client,
     _s3_uri,

@@ -11,7 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import TrainingJob
+from authentication.models import TrainingJob
 from .aws_batch_training_service import (
     get_aws_batch_training_log_payload,
     get_training_metrics_payload,
