@@ -32,6 +32,7 @@ import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import { downloadSampleTrainingTemplate } from '../../lib/trainingTemplate';
 import { inspectZipFile, readZipEntryText, rebuildZipWithEditedEntry } from '../../lib/trainingZip';
+import { formatDuration } from '../../lib/formatDuration';
 import type {
   TrainingAcceleratorType,
   TrainingJob,
@@ -107,15 +108,6 @@ const acceleratorSummary = (type?: TrainingAcceleratorType, count?: number) => {
 const AUTO_SYNC_INTERVAL_MS = 4000;
 const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
 
-const formatDuration = (seconds?: number | null) => {
-  const totalSeconds = Math.max(Number(seconds || 0), 0);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const secs = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
-};
 
 
 
@@ -323,6 +315,7 @@ export default function TrainModelPage() {
     () => allTrainingJobs.filter((job) => !job.is_deleted && job.id > 0 && isActiveJob(job)),
     [allTrainingJobs],
   );
+  const activeUsageCount = usage?.active_jobs_count ?? usage?.running_jobs_count ?? 0;
   const filteredTrainingJobs = allTrainingJobs.filter((job) => {
     if (visibilityFilter === 'archived') return job.is_deleted;
     if (visibilityFilter === 'active') return !job.is_deleted;
@@ -767,7 +760,7 @@ export default function TrainModelPage() {
         </div>
 
         <div className={`flex flex-col justify-center rounded-xl border p-5 shadow-sm transition-colors ${
-          (usage?.running_jobs_count || 0) > 0 
+          activeUsageCount > 0
             ? 'border-blue-200 bg-blue-50/50' 
             : 'border-gray-200 bg-white'
         }`}>
@@ -777,11 +770,11 @@ export default function TrainModelPage() {
           </p>
           <div className="mt-3 flex items-baseline gap-2">
             <span className={`text-3xl font-bold ${
-              (usage?.running_jobs_count || 0) > 0 ? 'text-blue-700' : 'text-gray-900'
+              activeUsageCount > 0 ? 'text-blue-700' : 'text-gray-900'
             }`}>
-              {usage?.running_jobs_count ?? 0}
+              {activeUsageCount}
             </span>
-            {(usage?.running_jobs_count || 0) > 0 && (
+            {activeUsageCount > 0 && (
               <span className="relative flex h-3 w-3">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
                 <span className="relative inline-flex h-3 w-3 rounded-full bg-blue-500"></span>
