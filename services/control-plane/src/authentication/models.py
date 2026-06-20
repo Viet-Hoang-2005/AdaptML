@@ -163,6 +163,10 @@ class UserAvatar(models.Model):
         return f"{self.user.email} avatar {self.id}"
 
 class ModelAPI(models.Model):
+    SOURCE_TYPE_CHOICES = (
+        ("manual_upload", "Manual Upload"),
+        ("training_job", "Training Job"),
+    )
     ACCESS_MODE_CHOICES = (
         ("private", "Private"),
         ("public", "Public"),
@@ -182,9 +186,19 @@ class ModelAPI(models.Model):
 
     tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_apis")
     name = models.CharField(max_length=160)
+    version = models.CharField(max_length=80, default="v1")
     description = models.TextField(blank=True)
     model_info = models.TextField(blank=True)
     access_mode = models.CharField(max_length=20, choices=ACCESS_MODE_CHOICES, default="private")
+    source_type = models.CharField(max_length=30, choices=SOURCE_TYPE_CHOICES, default="manual_upload")
+    source_training_job = models.ForeignKey(
+        "TrainingJob",
+        on_delete=models.SET_NULL,
+        related_name="registered_model_apis",
+        blank=True,
+        null=True,
+    )
+    source_artifact_uri = models.CharField(max_length=1024, blank=True)
     source_artifact = models.FileField(upload_to=model_source_artifact_path, blank=True, null=True)
     label_mapping_file = models.FileField(upload_to=label_mapping_path, blank=True, null=True)
     flavor = models.CharField(max_length=40, blank=True)
@@ -206,6 +220,7 @@ class ModelAPI(models.Model):
         indexes = [
             models.Index(fields=["tenant", "status"], name="authenticat_tenant__dcb6f3_idx"),
             models.Index(fields=["tenant", "access_mode"], name="authenticat_tenant__e54007_idx"),
+            models.Index(fields=["tenant", "name", "version"], name="authenticat_model_v_lookup_idx"),
         ]
 
     def __str__(self):
