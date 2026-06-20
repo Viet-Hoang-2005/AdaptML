@@ -5,7 +5,7 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: mlops_paas_postgres
-    restart: on-failure:3
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -45,7 +45,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4
     container_name: mlops_paas_pgadmin
-    restart: on-failure:3
+    restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
@@ -64,7 +64,7 @@ services:
       dockerfile: Dockerfile
     image: mlops-paas-django
     container_name: mlops_paas_django
-    restart: on-failure:3
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
@@ -247,7 +247,7 @@ services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: mlops_paas_mlflow
-    restart: on-failure:3
+    restart: unless-stopped
     ports:
       - "5001:5000"
     environment:
@@ -277,7 +277,7 @@ services:
       dockerfile: Dockerfile
     image: mlops-paas-consumer
     container_name: mlops_paas_consumer
-    restart: on-failure:3
+    restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: 1
       DB_HOST_RW: postgres
@@ -342,7 +342,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: mlops_paas_redis
-    restart: on-failure:3
+    restart: unless-stopped
     ports:
       - "6379:6379"
     networks:
