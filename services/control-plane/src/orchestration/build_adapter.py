@@ -9,14 +9,32 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 class BuildAdapter:
-    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str, label_mapping_key: str = None):
+    def trigger_build(
+        self,
+        model_id: str,
+        flavor: str,
+        requirements_text: str,
+        source_key: str,
+        output_key: str,
+        label_mapping_key: str = None,
+        training_artifact_uri: str = "",
+    ):
         raise NotImplementedError()
 
     def cancel_build(self, model_id: str):
         raise NotImplementedError()
 
 class DockerBuildAdapter(BuildAdapter):
-    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str, label_mapping_key: str = None):
+    def trigger_build(
+        self,
+        model_id: str,
+        flavor: str,
+        requirements_text: str,
+        source_key: str,
+        output_key: str,
+        label_mapping_key: str = None,
+        training_artifact_uri: str = "",
+    ):
         def _run_container():
             try:
                 client = docker.from_env()
@@ -35,6 +53,8 @@ class DockerBuildAdapter(BuildAdapter):
                     "FLAVOR": flavor,
                     "REQUIREMENTS_TEXT": requirements_text,
                     "SOURCE_KEY": source_key,
+                    "SOURCE_TYPE": "training_job" if training_artifact_uri else "manual_upload",
+                    "TRAINING_ARTIFACT_URI": training_artifact_uri or "",
                     "OUTPUT_KEY": output_key,
                     "LABEL_MAPPING_KEY": label_mapping_key or "",
                     "REDIS_URL": "redis://redis:6379/1",
@@ -85,7 +105,16 @@ class DockerBuildAdapter(BuildAdapter):
             logger.error(f"Error cancelling build {model_id}: {e}")
 
 class ArgoBuildAdapter(BuildAdapter):
-    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str):
+    def trigger_build(
+        self,
+        model_id: str,
+        flavor: str,
+        requirements_text: str,
+        source_key: str,
+        output_key: str,
+        label_mapping_key: str = None,
+        training_artifact_uri: str = "",
+    ):
         argo_webhook_url = os.environ.get("ARGO_EVENTS_WEBHOOK_URL")
         if not argo_webhook_url:
             logger.error("ARGO_EVENTS_WEBHOOK_URL is not set.")
@@ -96,6 +125,8 @@ class ArgoBuildAdapter(BuildAdapter):
             "flavor": flavor,
             "requirements_text": requirements_text,
             "source_key": source_key,
+            "source_type": "training_job" if training_artifact_uri else "manual_upload",
+            "training_artifact_uri": training_artifact_uri,
             "output_key": output_key,
             "control_plane_webhook_url": f"http://control-plane.mlops-paas.svc.cluster.local:8000/api/models/{model_id}/build-webhook"
         }
