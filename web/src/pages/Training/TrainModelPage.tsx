@@ -33,6 +33,7 @@ import { toast } from '../../lib/toast';
 import { downloadSampleTrainingTemplate } from '../../lib/trainingTemplate';
 import { inspectZipFile, readZipEntryText, rebuildZipWithEditedEntry } from '../../lib/trainingZip';
 import { formatDuration } from '../../lib/formatDuration';
+import { useModelSelection } from '../../hooks/useModelSelection';
 import type {
   TrainingAcceleratorType,
   TrainingJob,
@@ -99,6 +100,8 @@ const statusLabels: Record<TrainingJobStatus, string> = {
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
 
 const jobLabel = (job: Pick<TrainingJob, 'name' | 'model_version'>) => `${job.name} ${job.model_version}`.trim();
+
+const trainingTargetVersion = (modelId: number) => `model-${modelId}`;
 
 const acceleratorSummary = (type?: TrainingAcceleratorType, count?: number) => {
   if (!type || type === 'none' || !count) return 'No accelerator';
@@ -283,8 +286,9 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
 export default function TrainModelPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { selectedModel, loading: loadingSelectedModel } = useModelSelection();
   const [form, setForm] = useState<TrainingJobFormValues>(initialForm);
-        const [sourceZipState, setSourceZipState] = useState<SourceZipState>(emptySourceZipState);
+  const [sourceZipState, setSourceZipState] = useState<SourceZipState>(emptySourceZipState);
   const [editedEntryText, setEditedEntryText] = useState('');
   const [entryEdited, setEntryEdited] = useState(false);
   const [preparingSubmit, setPreparingSubmit] = useState(false);
@@ -311,6 +315,8 @@ export default function TrainModelPage() {
     refetchInterval: 15000,
   });
   const allTrainingJobs = useMemo(() => data?.training_jobs ?? [], [data?.training_jobs]);
+  const targetModelVersion = selectedModel ? trainingTargetVersion(selectedModel.id) : '';
+  const targetModelLabel = selectedModel ? `${selectedModel.name} ${targetModelVersion}` : 'No model selected';
   const activeTrainingJobs = useMemo(
     () => allTrainingJobs.filter((job) => !job.is_deleted && job.id > 0 && isActiveJob(job)),
     [allTrainingJobs],
@@ -645,6 +651,7 @@ export default function TrainModelPage() {
 
 
   const validateBeforeSubmit = () => {
+    if (!selectedModel) return 'Select a model from the header before starting training.';
     if (!form.source_zip) return 'Source code zip is required.';
     if (!form.training_data) return 'Training data CSV is required.';
     if (!form.source_zip.name.toLowerCase().endsWith('.zip')) return 'source_zip must be a .zip file.';
@@ -683,12 +690,16 @@ export default function TrainModelPage() {
       }
     }
 
-    createMutation.mutate({ ...form, source_zip: sourceZip });
+    createMutation.mutate({
+      ...form,
+      name: selectedModel?.name || '',
+      model_version: selectedModel ? trainingTargetVersion(selectedModel.id) : '',
+      source_zip: sourceZip,
+    });
   };
 
   const canSubmit =
-    Boolean(form.name.trim()) &&
-    Boolean(form.model_version.trim()) &&
+    Boolean(selectedModel) &&
     Boolean(form.entry_point.trim()) &&
     Boolean(form.source_zip) &&
     !sourceZipState.inspecting &&
@@ -712,11 +723,17 @@ export default function TrainModelPage() {
         </div>
         <Button
           icon={<Rocket className="h-4 w-4" />}
+          disabled={!selectedModel}
           onClick={() => setIsCreateOpen(true)}
         >
           New Training Job
         </Button>
       </div>
+      {!selectedModel && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+          Select a model from the header before starting a training job.
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -794,7 +811,7 @@ export default function TrainModelPage() {
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight text-gray-900">Configure Training Job</h2>
-              <p className="text-sm text-gray-500">Upload code, select resources, and start your experiment.</p>
+              <p className="text-sm text-gray-500">Retrain the selected model with new code and data.</p>
             </div>
           </div>
           <span className="w-fit rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
@@ -810,19 +827,25 @@ export default function TrainModelPage() {
           </Button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
-          <Input
-            label="Model name"
-            value={form.name}
-            onChange={(event) => setField('name', event.target.value)}
-            placeholder="CICIDS Classifier"
-          />
-          <Input
-            label="Model version"
-            value={form.model_version}
-            onChange={(event) => setField('model_version', event.target.value)}
-            placeholder="v1"
-          />
+        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className={`rounded-lg border px-4 py-3 ${
+            selectedModel ? 'border-gray-200 bg-gray-50' : 'border-amber-200 bg-amber-50'
+          }`}>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Target model</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-bold text-gray-900">
+                {loadingSelectedModel ? 'Loading selected model...' : targetModelLabel}
+              </span>
+              {selectedModel && (
+                <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs font-semibold text-gray-500">
+                  {selectedModel.status}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Change this from the model selector in the header. Training will update this model target.
+            </p>
+          </div>
           <Input
             label="Entry point"
             value={form.entry_point}
