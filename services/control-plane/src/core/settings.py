@@ -29,6 +29,14 @@ def env_list(name, default=""):
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def env_list_first(names, default=""):
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return [item.strip() for item in value.split(",") if item.strip()]
+    return [item.strip() for item in default.split(",") if item.strip()]
+
+
 def env_db_identifier(name, default):
     value = os.environ.get(name, default).strip()
     if not value.replace("_", "").isalnum() or value[0].isdigit():
@@ -45,7 +53,13 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or 'django-insecure-local-dev-c
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool('DJANGO_DEBUG', True)
 
-ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,control_plane')
+ALLOWED_HOSTS = env_list_first(
+    ('DJANGO_ALLOWED_HOSTS', 'ALLOWED_HOSTS'),
+    'localhost,127.0.0.1,0.0.0.0,control-plane,mlops_paas_django',
+)
+for host in ('localhost', '127.0.0.1', '0.0.0.0', 'control-plane', 'mlops_paas_django'):
+    if host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
 
 
 # Application definition
@@ -235,6 +249,7 @@ GITHUB_OAUTH_REDIRECT_URI = os.environ.get(
 
 MODEL_SERVER_PUBLIC_URL = os.environ.get('MODEL_SERVER_PUBLIC_URL', 'http://localhost:5000')
 MODEL_PACKAGER_URL = os.environ.get('MODEL_PACKAGER_URL', 'http://model-packager:7000')
+CONTROL_PLANE_INTERNAL_URL = os.environ.get('CONTROL_PLANE_INTERNAL_URL', 'http://control-plane:8000').rstrip('/')
 DOCKER_NETWORK_NAME = os.environ.get('DOCKER_NETWORK_NAME', 'mlops_paas_network').strip() or 'mlops_paas_network'
 
 # SageMaker Training PaaS configuration.
