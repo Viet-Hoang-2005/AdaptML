@@ -8,12 +8,14 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+
 class DeployAdapter:
     def deploy_model(self, model_id: int, tenant_id: str, model_name: str, version: str):
         raise NotImplementedError()
 
     def remove_model(self, model_id: int):
         raise NotImplementedError()
+
 
 class DockerDeployAdapter(DeployAdapter):
     def deploy_model(self, model_id: int, tenant_id: str, model_name: str, version: str):
@@ -40,14 +42,17 @@ class DockerDeployAdapter(DeployAdapter):
                 # Normalize model_name for URL (no spaces)
                 safe_model_name = model_name.replace(' ', '')
 
-                # Traefik labels
+                # Traefik labels — tenant_id must be the tenant code (e.g. T-24B1E790), NOT the DB PK integer.
+                public_path = f"/{tenant_id}/models/{safe_model_name}/{version}/predict"
+                internal_path = f"/models/{model_id}/predict"
                 labels = {
                     "traefik.enable": "true",
-                    f"traefik.http.routers.model_{model_id}.rule": f"PathPrefix(`/{tenant_id}/models/{safe_model_name}/{version}/predict`)",
-                    f"traefik.http.middlewares.rewrite_{model_id}.replacepath.path": f"/models/{model_id}/predict",
+                    f"traefik.http.routers.model_{model_id}.rule": f"PathPrefix(`{public_path}`)",
+                    f"traefik.http.middlewares.rewrite_{model_id}.replacepath.path": internal_path,
                     f"traefik.http.routers.model_{model_id}.middlewares": f"rewrite_{model_id}",
                     f"traefik.http.services.model_{model_id}.loadbalancer.server.port": "5000",
                 }
+
                 network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
                 db_user = os.environ.get("DB_USER", "postgres")
                 db_password = os.environ.get("DB_PASSWORD", "postgres")
@@ -80,7 +85,13 @@ class DockerDeployAdapter(DeployAdapter):
                     "REDIS_URL": "redis://redis:6379/1",
                 }
 
-                logger.info(f"Starting Model Endpoint Container {container_name} for model {model_id} on network {network_name}")
+                logger.info(
+                    "Deploying endpoint container=%s model=%s | "
+                    "public_path=%s -> internal=%s | network=%s image=%s",
+                    container_name, model_id,
+                    public_path, internal_path,
+                    network_name, image_name,
+                )
                 client.containers.run(
                     image=image_name,
                     name=container_name,
