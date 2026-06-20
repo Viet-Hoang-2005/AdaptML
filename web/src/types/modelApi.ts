@@ -64,7 +64,8 @@ export interface ModelPredictionResponse {
   model_id: string;
 }
 
-export type TrainingJobStatus = 'pending' | 'uploading' | 'running' | 'completed' | 'failed';
+export type TrainingJobStatus = 'pending' | 'uploading' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TrainingAcceleratorType = 'none' | 'gpu' | 'tpu' | 'trainium';
 
 export interface TrainingJob {
   id: number;
@@ -75,6 +76,8 @@ export interface TrainingJob {
   vcpu: number;
   memory: number;
   max_runtime_seconds: number;
+  accelerator_type: TrainingAcceleratorType;
+  accelerator_count: number;
   source_zip: string;
   requirements_file: string;
   training_data: string;
@@ -91,6 +94,7 @@ export interface TrainingJob {
   completed_at: string | null;
   runtime_seconds: number;
   stop_reason: string;
+  retry_of: number | null;
   deleted_at: string | null;
   is_deleted: boolean;
   created_at: string;
@@ -108,6 +112,8 @@ export interface TrainingJobFormValues {
   vcpu: number;
   memory: number;
   max_runtime_seconds: number;
+  accelerator_type: TrainingAcceleratorType;
+  accelerator_count: number;
   source_zip: File | null;
   requirements_file: File | null;
   training_data: File | null;
@@ -154,11 +160,25 @@ export interface TrainingJobMetricsResponse {
   updated_at: string;
 }
 
+export interface TrainingJobEvent {
+  id: number;
+  training_job: number;
+  event_type: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TrainingJobEventsResponse {
+  events: TrainingJobEvent[];
+}
+
 export interface TrainingUsageResponse {
   training_backend: 'sagemaker' | 'local' | 'aws_batch';
   monthly_quota_seconds: number;
   monthly_runtime_seconds: number;
   remaining_seconds: number;
+  active_jobs_count: number;
   running_jobs_count: number;
   completed_jobs_count: number;
   failed_jobs_count: number;

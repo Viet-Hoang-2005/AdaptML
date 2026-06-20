@@ -25,9 +25,9 @@ class DockerDeployAdapter(DeployAdapter):
                 except docker.errors.ImageNotFound:
                     image_name = "mlops-paas-model-server"
                     logger.info(f"Custom image not found. Falling back to {image_name} for model {model_id}.")
-                    
+
                 container_name = f"model_endpoint_{model_id}"
-                
+
                 try:
                     old_container = client.containers.get(container_name)
                     old_container.remove(force=True)
@@ -36,7 +36,7 @@ class DockerDeployAdapter(DeployAdapter):
 
                 # Normalize model_name for URL (no spaces)
                 safe_model_name = model_name.replace(' ', '')
-                
+
                 # Traefik labels
                 labels = {
                     "traefik.enable": "true",
@@ -45,13 +45,11 @@ class DockerDeployAdapter(DeployAdapter):
                     f"traefik.http.routers.model_{model_id}.middlewares": f"rewrite_{model_id}",
                     f"traefik.http.services.model_{model_id}.loadbalancer.server.port": "5000",
                 }
-                
                 network_name = "mlops_paas_network"
-                
                 db_user = os.environ.get("DB_USER", "postgres")
                 db_password = os.environ.get("DB_PASSWORD", "postgres")
                 db_name = os.environ.get("DB_NAME", "mlops_paas")
-                
+
                 # FastAPI container env vars
                 environment = {
                     "PYTHONUNBUFFERED": "1",
@@ -65,7 +63,7 @@ class DockerDeployAdapter(DeployAdapter):
                     "CONTROL_PLANE_DB_SCHEMA": os.environ.get("DB_SCHEMA", "control_plane"),
                     "REDIS_URL": "redis://redis:6379/1",
                 }
-                
+
                 logger.info(f"Starting Model Endpoint Container {container_name} for model {model_id}")
                 client.containers.run(
                     image=image_name,

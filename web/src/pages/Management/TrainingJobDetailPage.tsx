@@ -39,19 +39,12 @@ import {
 import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import { getApiErrorMessage } from '../../lib/apiError';
+import { formatDuration, computeElapsed } from '../../lib/formatDuration';
+import { useTrainingJobRealtime } from '../../hooks/useTrainingJobRealtime';
 import type { TrainingJob, TrainingJobEvent, TrainingJobMetricsResponse, TrainingJobStatus } from '../../types/modelApi';
 
 // -- Shared formatting helpers --
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
-const formatDuration = (seconds?: number | null) => {
-  const totalSeconds = Math.max(Number(seconds || 0), 0);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const secs = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
-};
 const formatMetricPercent = (val: number) => `${Math.round(val)}%`;
 const formatMegabytes = (mb: number) => {
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
@@ -78,6 +71,25 @@ export default function TrainingJobDetailPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'logs' | 'metrics' | 'artifacts' | 'config'>('overview');
 
   const parsedJobId = Number(jobId);
+  const [liveElapsed, setLiveElapsed] = useState<number | null>(null);
+  const lastToastedStatus = useRef<string | null>(null);
+
+  // -- WebSocket realtime hook --
+  const { wsStatus } = useTrainingJobRealtime(
+    !isNaN(parsedJobId) ? parsedJobId : null,
+    {
+      onStatusTransition: (prevStatus, nextStatus) => {
+        // Only toast once per status transition to avoid duplicates
+        const key = `${prevStatus}->${nextStatus}`;
+        if (lastToastedStatus.current === key) return;
+        lastToastedStatus.current = key;
+        if (nextStatus === 'completed') toast.success('Training job completed!');
+        else if (nextStatus === 'failed') toast.error('Training job failed.');
+        else if (nextStatus === 'cancelled') toast.warning('Training job cancelled.');
+      },
+    },
+  );
+  const isPollingFallback = wsStatus !== 'connected';
 
   // -- Queries --
   const {
@@ -91,6 +103,7 @@ export default function TrainingJobDetailPage() {
     enabled: !isNaN(parsedJobId),
     refetchInterval: (query) => {
       const data = query.state.data;
+      if (!isPollingFallback) return false;
       if (data && ACTIVE_STATUSES.includes(data.status)) return AUTO_SYNC_INTERVAL_MS;
       return false;
     },
@@ -106,7 +119,7 @@ export default function TrainingJobDetailPage() {
     enabled: !!job && (activeTab === 'logs' || ACTIVE_STATUSES.includes(job.status)),
     refetchInterval: () => {
       // Refresh logs actively if on the logs tab and job is active
-      if (job && ACTIVE_STATUSES.includes(job.status) && activeTab === 'logs') return AUTO_SYNC_INTERVAL_MS;
+      if (isPollingFallback && job && ACTIVE_STATUSES.includes(job.status) && activeTab === 'logs') return AUTO_SYNC_INTERVAL_MS;
       return false;
     },
   });
@@ -121,7 +134,7 @@ export default function TrainingJobDetailPage() {
     enabled: !!job && (activeTab === 'metrics' || ACTIVE_STATUSES.includes(job.status)),
     refetchInterval: () => {
       // Refresh metrics actively if on the metrics tab and job is active
-      if (job && ACTIVE_STATUSES.includes(job.status) && activeTab === 'metrics') return AUTO_SYNC_INTERVAL_MS;
+      if (isPollingFallback && job && ACTIVE_STATUSES.includes(job.status) && activeTab === 'metrics') return AUTO_SYNC_INTERVAL_MS;
       return false;
     },
   });
@@ -134,10 +147,28 @@ export default function TrainingJobDetailPage() {
     queryFn: () => getTrainingJobEvents(parsedJobId),
     enabled: !!job,
     refetchInterval: () => {
-      if (job && ACTIVE_STATUSES.includes(job.status)) return AUTO_SYNC_INTERVAL_MS;
+      if (isPollingFallback && job && ACTIVE_STATUSES.includes(job.status)) return AUTO_SYNC_INTERVAL_MS;
       return false;
     },
   });
+
+  // -- Live elapsed ticker for running jobs --
+  // Placed AFTER queries so 'job' is in scope
+  useEffect(() => {
+    if (!job || job.status !== 'running' || !job.started_at) return;
+    const startedAt = job.started_at;
+    const tick = () => {
+      const elapsed = computeElapsed(startedAt);
+      setLiveElapsed(elapsed != null ? Math.round(elapsed) : null);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => {
+      clearInterval(id);
+      setLiveElapsed(null);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.status, job?.started_at]);
 
   // -- Mutations --
   
@@ -259,14 +290,13 @@ export default function TrainingJobDetailPage() {
     );
   }
 
-  const elapsedForJob = (j: TrainingJob) => {
+  const elapsedForJob = (j: TrainingJob): number | null => {
+    if (j.status === 'running' && liveElapsed != null) return liveElapsed;
+    if (j.runtime_seconds) return Math.round(j.runtime_seconds);
     if (j.completed_at && j.started_at) {
-      return (new Date(j.completed_at).getTime() - new Date(j.started_at).getTime()) / 1000;
+      return Math.round((new Date(j.completed_at).getTime() - new Date(j.started_at).getTime()) / 1000);
     }
-    if (j.started_at && ACTIVE_STATUSES.includes(j.status)) {
-      return (new Date().getTime() - new Date(j.started_at).getTime()) / 1000;
-    }
-    return j.runtime_seconds || null;
+    return null;
   };
 
   const getAccentBorderClass = () => {
@@ -314,10 +344,8 @@ export default function TrainingJobDetailPage() {
     
     const formatTime = (iso?: string | null) => iso ? new Date(iso).toLocaleString() : 'Timestamp unavailable';
     const formatDurationDiff = (start?: string | null, end?: string | null) => {
-      if (!start || !end) return undefined;
-      const s = (new Date(end).getTime() - new Date(start).getTime()) / 1000;
-      if (s < 0) return undefined;
-      return formatDuration(s);
+      const elapsed = computeElapsed(start, end ?? undefined);
+      return elapsed != null ? formatDuration(elapsed) : undefined;
     };
 
     return [
@@ -403,6 +431,7 @@ export default function TrainingJobDetailPage() {
           </div>
           <div className="flex shrink-0 flex-col items-end gap-3">
             <div className="flex flex-wrap items-center gap-2">
+              <WsStatusBadge status={wsStatus} />
               <Button
                 variant="secondary"
                 size="sm"
@@ -454,7 +483,7 @@ export default function TrainingJobDetailPage() {
           </div>
           <div className="p-5 flex flex-col justify-center">
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Runtime Elapsed</p>
-            <p className="text-xl font-bold text-gray-900">{formatDuration(elapsedForJob(job)) || '-'}</p>
+            <p className="text-xl font-bold text-gray-900">{formatDuration(elapsedForJob(job)) || '-'}{job.status === 'running' && <span className="ml-1 text-xs font-normal text-blue-500 animate-pulse">live</span>}</p>
           </div>
           <div className="p-5 flex flex-col justify-center">
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Max Runtime</p>
@@ -715,6 +744,35 @@ function MetadataRow({ label, value, monospace = false }: { label: string; value
 
 type MilestoneState = 'pending' | 'active' | 'completed' | 'failed' | 'cancelled' | 'skipped';
 
+
+
+type WsStatusBadgeProps = { status: 'connecting' | 'connected' | 'disconnected' | 'fallback' };
+function WsStatusBadge({ status }: WsStatusBadgeProps) {
+  if (status === 'connected') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        Live
+      </span>
+    );
+  }
+  if (status === 'connecting' || status === 'disconnected') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
+        Reconnecting...
+      </span>
+    );
+  }
+  // fallback
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+      <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+      Polling fallback
+    </span>
+  );
+}
+
 function MilestoneTracker({
   milestones,
 }: {
@@ -957,18 +1015,34 @@ function LogTerminal({
 }) {
   const scrollRef = useRef<HTMLPreElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
+  const [hasNewLogs, setHasNewLogs] = useState(false);
 
   useEffect(() => {
     const element = scrollRef.current;
-    if (!element || !shouldStickToBottomRef.current) return;
-    element.scrollTop = element.scrollHeight;
+    if (!element) return;
+    if (shouldStickToBottomRef.current) {
+      element.scrollTop = element.scrollHeight;
+      setHasNewLogs(false);
+    } else {
+      setHasNewLogs(true);
+    }
   }, [text]);
 
   const handleScroll = () => {
     const element = scrollRef.current;
     if (!element) return;
     const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
-    shouldStickToBottomRef.current = distanceFromBottom < 24;
+    const isAtBottom = distanceFromBottom < 80;
+    shouldStickToBottomRef.current = isAtBottom;
+    if (isAtBottom) setHasNewLogs(false);
+  };
+
+  const scrollToBottom = () => {
+    const element = scrollRef.current;
+    if (!element) return;
+    element.scrollTop = element.scrollHeight;
+    shouldStickToBottomRef.current = true;
+    setHasNewLogs(false);
   };
 
   const handleCopy = () => {
@@ -1003,13 +1077,24 @@ function LogTerminal({
           </button>
         </div>
       </div>
-      <pre
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="max-h-[600px] min-h-[400px] overflow-x-auto overflow-y-auto whitespace-pre p-6 font-mono text-[13px] leading-6 text-gray-300"
-      >
-        {text}
-      </pre>
+      <div className="relative">
+        <pre
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="max-h-[600px] min-h-[400px] overflow-x-auto overflow-y-auto whitespace-pre p-6 font-mono text-[13px] leading-6 text-gray-300"
+        >
+          {text}
+        </pre>
+        {hasNewLogs && (
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            className="absolute bottom-4 right-4 rounded-full border border-blue-400/40 bg-blue-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg transition hover:bg-blue-400"
+          >
+            New logs ↓
+          </button>
+        )}
+      </div>
     </div>
   );
 }

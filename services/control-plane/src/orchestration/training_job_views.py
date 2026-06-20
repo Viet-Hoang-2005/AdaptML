@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from authentication.models import TrainingJob
 from .aws_batch_training_service import (
+    cancel_aws_batch_training_job,
     get_aws_batch_training_log_payload,
     get_training_metrics_payload,
     refresh_aws_batch_training_job,
@@ -32,6 +33,25 @@ RUNTIME_PROFILES = {
     (2, 4096): "medium",
     (4, 8192): "large",
 }
+ACCELERATOR_TYPES = {"none", "gpu", "tpu", "trainium"}
+GPU_ACCELERATOR_COUNTS = {1, 2, 4}
+ACTIVE_STATUSES = {"pending", "uploading", "running"}
+TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
+
+
+def create_training_job_event(training_job, event_type, message, metadata=None):
+    training_job.events.create(event_type=event_type, message=message, metadata=metadata or {})
+
+
+def serialize_training_job_event(event):
+    return {
+        "id": event.id,
+        "training_job": event.training_job_id,
+        "event_type": event.event_type,
+        "message": event.message,
+        "metadata": event.metadata,
+        "created_at": event.created_at,
+    }
 
 
 def _current_month_window():
@@ -46,7 +66,12 @@ def _current_month_window():
 
 def _training_usage_for_user(user):
     month_start, month_end = _current_month_window()
-    jobs = TrainingJob.objects.filter(tenant=user, created_at__gte=month_start, created_at__lt=month_end)
+    jobs = TrainingJob.objects.filter(
+        tenant=user,
+        created_at__gte=month_start,
+        created_at__lt=month_end,
+        deleted_at__isnull=True,
+    )
     stored_runtime = jobs.aggregate(total=Sum("runtime_seconds"))["total"] or 0
     running_runtime = 0
     now = timezone.now()
@@ -57,6 +82,7 @@ def _training_usage_for_user(user):
     monthly_runtime_seconds = stored_runtime + running_runtime
     monthly_quota_seconds = settings.TRAINING_MONTHLY_QUOTA_SECONDS
     counts = jobs.aggregate(
+        active_jobs_count=Count("id", filter=Q(status__in=ACTIVE_STATUSES)),
         running_jobs_count=Count("id", filter=Q(status="running")),
         completed_jobs_count=Count("id", filter=Q(status="completed")),
         failed_jobs_count=Count("id", filter=Q(status="failed")),
@@ -67,6 +93,7 @@ def _training_usage_for_user(user):
         "monthly_quota_seconds": monthly_quota_seconds,
         "monthly_runtime_seconds": monthly_runtime_seconds,
         "remaining_seconds": max(monthly_quota_seconds - monthly_runtime_seconds, 0),
+        "active_jobs_count": counts["active_jobs_count"],
         "running_jobs_count": counts["running_jobs_count"],
         "completed_jobs_count": counts["completed_jobs_count"],
         "failed_jobs_count": counts["failed_jobs_count"],
@@ -85,6 +112,9 @@ def serialize_training_job(training_job: TrainingJob):
         "vcpu": training_job.vcpu,
         "memory": training_job.memory,
         "max_runtime_seconds": training_job.max_runtime_seconds,
+        "accelerator_type": training_job.accelerator_type,
+        "accelerator_count": training_job.accelerator_count,
+        "retry_of": training_job.retry_of_id,
         "source_zip": training_job.source_zip.url if training_job.source_zip else "",
         "requirements_file": training_job.requirements_file.url if training_job.requirements_file else "",
         "training_data": training_job.training_data.url if training_job.training_data else "",
@@ -122,6 +152,50 @@ def _parse_positive_int(value, field_name, default):
     if parsed <= 0:
         raise ValidationError({"error": f"{field_name} must be a positive integer."})
     return parsed
+
+
+def _parse_non_negative_int(value, field_name, default):
+    raw_value = value if value not in {None, ""} else default
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError):
+        raise ValidationError({"error": f"{field_name} must be a non-negative integer."})
+    if parsed < 0:
+        raise ValidationError({"error": f"{field_name} must be a non-negative integer."})
+    return parsed
+
+
+def _validate_accelerator_config(accelerator_type, accelerator_count, training_backend):
+    if accelerator_type not in ACCELERATOR_TYPES:
+        raise ValidationError({"error": "accelerator_type must be one of: none, gpu, tpu, trainium."})
+    if accelerator_type == "none":
+        if accelerator_count != 0:
+            raise ValidationError({"error": "accelerator_count must be 0 when accelerator_type is none."})
+        return
+    if accelerator_type in {"tpu", "trainium"}:
+        raise ValidationError({"error": f"{accelerator_type.upper()} training is not supported yet."})
+    if accelerator_type == "gpu":
+        if accelerator_count not in GPU_ACCELERATOR_COUNTS:
+            raise ValidationError({"error": "GPU accelerator_count must be one of: 1, 2, 4."})
+        if training_backend == "aws_batch" and not settings.ENABLE_GPU_TRAINING:
+            raise ValidationError(
+                {
+                    "error": (
+                        "GPU training is not enabled. Configure AWS Batch EC2 GPU queue/job definition first."
+                    )
+                }
+            )
+        if training_backend == "aws_batch" and (
+            not settings.AWS_BATCH_GPU_JOB_QUEUE or not settings.AWS_BATCH_GPU_JOB_DEFINITION
+        ):
+            raise ValidationError(
+                {
+                    "error": (
+                        "Missing AWS Batch GPU configuration: AWS_BATCH_GPU_JOB_QUEUE, "
+                        "AWS_BATCH_GPU_JOB_DEFINITION."
+                    )
+                }
+            )
 
 
 def _validate_source_zip_entry_point(source_zip, entry_point):
@@ -165,6 +239,32 @@ def _validate_source_zip_entry_point(source_zip, entry_point):
         )
 
 
+def _ensure_active_job_capacity(user):
+    active_count = TrainingJob.objects.filter(
+        tenant=user,
+        deleted_at__isnull=True,
+        status__in=ACTIVE_STATUSES,
+    ).count()
+    if active_count >= settings.TRAINING_MAX_ACTIVE_JOBS_PER_TENANT:
+        raise ValidationError(
+            {
+                "error": (
+                    "You already have an active training job. Please wait for it to finish or cancel it first."
+                )
+            }
+        )
+
+
+def _submit_training_job(training_job, training_backend):
+    if training_backend == "local":
+        run_local_training_job(training_job)
+    elif training_backend == "aws_batch":
+        start_aws_batch_training_job(training_job)
+    else:
+        start_sagemaker_training_job(training_job)
+    create_training_job_event(training_job, "JOB_SUBMITTED", "Training job submitted to backend.")
+
+
 def validate_create_training_job_request(request):
     name = (request.data.get("name") or "").strip()
     model_version = (request.data.get("model_version") or "").strip()
@@ -172,6 +272,8 @@ def validate_create_training_job_request(request):
     max_runtime_seconds = _parse_positive_int(request.data.get("max_runtime_seconds"), "max_runtime_seconds", 3600)
     vcpu = _parse_positive_int(request.data.get("vcpu"), "vcpu", 2)
     memory = _parse_positive_int(request.data.get("memory"), "memory", 4096)
+    accelerator_type = (request.data.get("accelerator_type") or "none").strip().lower()
+    accelerator_count = _parse_non_negative_int(request.data.get("accelerator_count"), "accelerator_count", 0)
     source_zip = request.FILES.get("source_zip")
     requirements_file = request.FILES.get("requirements_file")
     training_data = request.FILES.get("training_data")
@@ -193,6 +295,8 @@ def validate_create_training_job_request(request):
                 )
             }
         )
+    training_backend = settings.TRAINING_BACKEND
+    _validate_accelerator_config(accelerator_type, accelerator_count, training_backend)
     if not source_zip:
         raise ValidationError({"error": "Source code zip is required."})
     if not training_data:
@@ -224,6 +328,8 @@ def validate_create_training_job_request(request):
         "vcpu": vcpu,
         "memory": memory,
         "max_runtime_seconds": max_runtime_seconds,
+        "accelerator_type": accelerator_type,
+        "accelerator_count": accelerator_count,
         "source_zip": source_zip,
         "requirements_file": requirements_file,
         "training_data": training_data,
@@ -249,6 +355,7 @@ class TrainingJobListCreateView(APIView):
         training_backend = settings.TRAINING_BACKEND
         if training_backend not in {"sagemaker", "local", "aws_batch"}:
             raise ValidationError({"error": "TRAINING_BACKEND must be 'sagemaker', 'local', or 'aws_batch'."})
+        _ensure_active_job_capacity(request.user)
 
         usage = _training_usage_for_user(request.user)
         if payload["max_runtime_seconds"] > usage["remaining_seconds"]:
@@ -271,27 +378,27 @@ class TrainingJobListCreateView(APIView):
             vcpu=payload["vcpu"],
             memory=payload["memory"],
             max_runtime_seconds=payload["max_runtime_seconds"],
+            accelerator_type=payload["accelerator_type"],
+            accelerator_count=payload["accelerator_count"],
             source_zip=payload["source_zip"],
             requirements_file=payload["requirements_file"],
             training_data=payload["training_data"],
             status="pending",
         )
+        create_training_job_event(training_job, "JOB_CREATED", "Training job created.")
 
         try:
-            if training_backend == "local":
-                run_local_training_job(training_job)
-            elif training_backend == "aws_batch":
-                start_aws_batch_training_job(training_job)
-            else:
-                start_sagemaker_training_job(training_job)
+            _submit_training_job(training_job, training_backend)
         except ValidationError:
             training_job.status = "failed"
             training_job.save(update_fields=["status", "updated_at"])
+            create_training_job_event(training_job, "JOB_FAILED", "Training job failed before submission.")
             raise
         except Exception as exc:
             training_job.status = "failed"
             training_job.error_message = str(exc)
             training_job.save(update_fields=["status", "error_message", "updated_at"])
+            create_training_job_event(training_job, "JOB_FAILED", str(exc))
             return Response(serialize_training_job(training_job), status=status.HTTP_502_BAD_GATEWAY)
 
         return Response(serialize_training_job(training_job), status=status.HTTP_201_CREATED)
@@ -321,6 +428,7 @@ class TrainingJobDetailView(APIView):
 class TrainingJobRefreshStatusView(TrainingJobDetailView):
     def post(self, request, training_job_id):
         training_job = self.get_training_job(request, training_job_id)
+        previous_status = training_job.status
         if training_job.training_backend == "local":
             return Response(serialize_training_job(training_job), status=status.HTTP_200_OK)
 
@@ -329,11 +437,113 @@ class TrainingJobRefreshStatusView(TrainingJobDetailView):
                 refresh_aws_batch_training_job(training_job)
             else:
                 refresh_sagemaker_training_job(training_job)
+            if previous_status != training_job.status:
+                event_type = {
+                    "running": "JOB_RUNNING",
+                    "completed": "JOB_COMPLETED",
+                    "failed": "JOB_FAILED",
+                    "cancelled": "JOB_CANCELLED",
+                }.get(training_job.status, "JOB_STATUS_CHANGED")
+                create_training_job_event(
+                    training_job,
+                    event_type,
+                    f"Training job status changed from {previous_status} to {training_job.status}.",
+                )
         except Exception as exc:
             training_job.error_message = str(exc)
             training_job.save(update_fields=["error_message", "updated_at"])
             return Response(serialize_training_job(training_job), status=status.HTTP_502_BAD_GATEWAY)
         return Response(serialize_training_job(training_job), status=status.HTTP_200_OK)
+
+
+class TrainingJobCancelView(TrainingJobDetailView):
+    def post(self, request, training_job_id):
+        training_job = self.get_training_job(request, training_job_id)
+        if training_job.status in TERMINAL_STATUSES:
+            return Response(
+                {
+                    "message": f"Training job is already {training_job.status}.",
+                    "training_job": serialize_training_job(training_job),
+                },
+                status=status.HTTP_200_OK,
+            )
+        if training_job.status not in ACTIVE_STATUSES:
+            raise ValidationError({"error": "Only pending, uploading, or running jobs can be cancelled."})
+
+        reason = "User cancelled training job"
+        if training_job.training_backend == "aws_batch":
+            cancel_aws_batch_training_job(training_job, reason)
+        elif training_job.training_backend == "local":
+            raise ValidationError({"error": "Cancel is not supported for local training jobs in this demo backend."})
+
+        training_job.status = "cancelled"
+        training_job.error_message = ""
+        training_job.mark_finished(reason, save=False)
+        training_job.save(
+            update_fields=[
+                "status",
+                "error_message",
+                "completed_at",
+                "runtime_seconds",
+                "stop_reason",
+                "updated_at",
+            ]
+        )
+        create_training_job_event(training_job, "JOB_CANCELLED", reason)
+        return Response(serialize_training_job(training_job), status=status.HTTP_200_OK)
+
+
+class TrainingJobRetryView(TrainingJobDetailView):
+    def post(self, request, training_job_id):
+        original = self.get_training_job(request, training_job_id)
+        if original.status not in {"failed", "cancelled"}:
+            raise ValidationError({"error": "Only failed or cancelled jobs can be retried."})
+        if not original.source_zip or not original.training_data:
+            raise ValidationError({"error": "Retry from existing artifacts is not available for this job."})
+
+        _ensure_active_job_capacity(request.user)
+        usage = _training_usage_for_user(request.user)
+        if original.max_runtime_seconds > usage["remaining_seconds"]:
+            raise ValidationError(
+                {
+                    "error": (
+                        "Monthly training quota exceeded. "
+                        f"Remaining quota is {usage['remaining_seconds']} seconds, "
+                        f"but this retry requests {original.max_runtime_seconds} seconds."
+                    )
+                }
+            )
+
+        retry_job = TrainingJob.objects.create(
+            tenant=request.user,
+            name=original.name,
+            model_version=original.model_version,
+            entry_point=original.entry_point,
+            training_backend=original.training_backend,
+            vcpu=original.vcpu,
+            memory=original.memory,
+            max_runtime_seconds=original.max_runtime_seconds,
+            accelerator_type=original.accelerator_type,
+            accelerator_count=original.accelerator_count,
+            source_zip=original.source_zip.name,
+            requirements_file=original.requirements_file.name if original.requirements_file else None,
+            training_data=original.training_data.name,
+            retry_of=original,
+            status="pending",
+        )
+        create_training_job_event(retry_job, "JOB_CREATED", f"Retry job created from training job #{original.id}.")
+        create_training_job_event(original, "JOB_RETRIED", f"Retry job #{retry_job.id} created.")
+
+        try:
+            _submit_training_job(retry_job, retry_job.training_backend)
+        except Exception as exc:
+            retry_job.status = "failed"
+            retry_job.error_message = str(exc)
+            retry_job.save(update_fields=["status", "error_message", "updated_at"])
+            create_training_job_event(retry_job, "JOB_FAILED", str(exc))
+            return Response(serialize_training_job(retry_job), status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response(serialize_training_job(retry_job), status=status.HTTP_201_CREATED)
 
 
 class TrainingJobDownloadURLView(TrainingJobDetailView):
@@ -382,6 +592,15 @@ class TrainingJobMetricsView(TrainingJobDetailView):
     def get(self, request, training_job_id):
         training_job = self.get_training_job(request, training_job_id)
         return Response(get_training_metrics_payload(training_job), status=status.HTTP_200_OK)
+
+
+class TrainingJobEventsView(TrainingJobDetailView):
+    def get(self, request, training_job_id):
+        training_job = self.get_training_job(request, training_job_id)
+        return Response(
+            {"events": [serialize_training_job_event(event) for event in training_job.events.all()]},
+            status=status.HTTP_200_OK,
+        )
 
 
 class TrainingJobRestoreView(TrainingJobDetailView):

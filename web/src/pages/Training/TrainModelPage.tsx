@@ -1,45 +1,45 @@
+import { Link, useNavigate } from 'react-router-dom';
 import {
+  Eye,
   Archive,
   AlertTriangle,
-  ChevronDown,
-  ChevronUp,
-  Clipboard,
   Clock3,
   Cpu,
   Download,
-  FileArchive,
   FileCode2,
   FileText,
   HardDrive,
   RefreshCw,
-  RotateCcw,
   Rocket,
-  ScrollText,
   UploadCloud,
   X,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import {
+  cancelTrainingJob,
   createTrainingJob,
-  deleteTrainingJob,
   getTrainingJobDownloadUrl,
-  getTrainingJobLogs,
-  getTrainingJobMetrics,
   getTrainingUsage,
   listTrainingJobs,
   refreshTrainingJobStatus,
-  restoreTrainingJob,
+  retryTrainingJob,
 } from '../../lib/api';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import { downloadSampleTrainingTemplate } from '../../lib/trainingTemplate';
 import { inspectZipFile, readZipEntryText, rebuildZipWithEditedEntry } from '../../lib/trainingZip';
-import type { TrainingJob, TrainingJobFormValues, TrainingJobMetricsResponse, TrainingJobStatus } from '../../types/modelApi';
+import { formatDuration } from '../../lib/formatDuration';
+import { useModelSelection } from '../../hooks/useModelSelection';
+import type {
+  TrainingAcceleratorType,
+  TrainingJob,
+  TrainingJobFormValues,
+  TrainingJobStatus,
+} from '../../types/modelApi';
 import { SummaryItem } from '../Management/UploadModelFormPage';
 
 const initialForm: TrainingJobFormValues = {
@@ -49,6 +49,8 @@ const initialForm: TrainingJobFormValues = {
   vcpu: 2,
   memory: 4096,
   max_runtime_seconds: 3600,
+  accelerator_type: 'none',
+  accelerator_count: 0,
   source_zip: null,
   requirements_file: null,
   training_data: null,
@@ -69,6 +71,21 @@ const runtimeOptions = [
   { label: '12h', value: 43200 },
 ];
 
+const acceleratorOptions: Array<{
+  label: string;
+  type: TrainingAcceleratorType;
+  count: number;
+  disabled?: boolean;
+  helper: string;
+}> = [
+  { label: 'No accelerator', type: 'none', count: 0, helper: 'CPU/Fargate queue' },
+  { label: 'GPU x1', type: 'gpu', count: 1, disabled: true, helper: 'Requires AWS Batch EC2 GPU queue' },
+  { label: 'GPU x2', type: 'gpu', count: 2, disabled: true, helper: 'Requires AWS Batch EC2 GPU queue' },
+  { label: 'GPU x4', type: 'gpu', count: 4, disabled: true, helper: 'Requires AWS Batch EC2 GPU queue' },
+  { label: 'TPU', type: 'tpu', count: 1, disabled: true, helper: 'Coming soon' },
+  { label: 'Trainium', type: 'trainium', count: 1, disabled: true, helper: 'Coming soon' },
+];
+
 
 
 const statusLabels: Record<TrainingJobStatus, string> = {
@@ -77,32 +94,25 @@ const statusLabels: Record<TrainingJobStatus, string> = {
   running: 'Running',
   completed: 'Completed',
   failed: 'Failed',
+  cancelled: 'Cancelled',
 };
 
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
 
 const jobLabel = (job: Pick<TrainingJob, 'name' | 'model_version'>) => `${job.name} ${job.model_version}`.trim();
 
+const trainingTargetVersion = (modelId: number) => `model-${modelId}`;
+
+const acceleratorSummary = (type?: TrainingAcceleratorType, count?: number) => {
+  if (!type || type === 'none' || !count) return 'No accelerator';
+  return `${type.toUpperCase()} x${count}`;
+};
+
 const AUTO_SYNC_INTERVAL_MS = 4000;
 const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
 
-const formatDuration = (seconds?: number | null) => {
-  const totalSeconds = Math.max(Number(seconds || 0), 0);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const secs = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
-};
 
-const formatMetricPercent = (value?: number | null) => (value == null ? '-' : `${Math.round(value)}%`);
 
-const formatMegabytes = (value?: number | null) => {
-  if (value == null) return '-';
-  if (value >= 1024) return `${(value / 1024).toFixed(1)} GB`;
-  return `${Math.round(value)} MB`;
-};
 
 const elapsedForJob = (job: TrainingJob) => {
   if (job.runtime_seconds) return job.runtime_seconds;
@@ -205,7 +215,8 @@ const statusRank: Record<TrainingJobStatus, number> = {
   uploading: 1,
   pending: 2,
   failed: 3,
-  completed: 4,
+  cancelled: 4,
+  completed: 5,
 };
 
 const sortTrainingJobs = (jobs: TrainingJob[], sortMode: JobSortMode) => {
@@ -246,6 +257,8 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
     vcpu: payload.vcpu,
     memory: payload.memory,
     max_runtime_seconds: payload.max_runtime_seconds,
+    accelerator_type: payload.accelerator_type,
+    accelerator_count: payload.accelerator_count,
     source_zip: payload.source_zip?.name || '',
     requirements_file: payload.requirements_file?.name || '',
     training_data: payload.training_data?.name || '',
@@ -262,6 +275,7 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
     completed_at: null,
     runtime_seconds: 0,
     stop_reason: '',
+    retry_of: null,
     deleted_at: null,
     is_deleted: false,
     created_at: now,
@@ -271,14 +285,16 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
 
 export default function TrainModelPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { selectedModel, loading: loadingSelectedModel } = useModelSelection();
   const [form, setForm] = useState<TrainingJobFormValues>(initialForm);
-  const [logsByJobId, setLogsByJobId] = useState<Record<number, string>>({});
-  const [metricsByJobId, setMetricsByJobId] = useState<Record<number, TrainingJobMetricsResponse>>({});
-  const [expandedLogJobIds, setExpandedLogJobIds] = useState<Record<number, boolean>>({});
   const [sourceZipState, setSourceZipState] = useState<SourceZipState>(emptySourceZipState);
   const [editedEntryText, setEditedEntryText] = useState('');
   const [entryEdited, setEntryEdited] = useState(false);
   const [preparingSubmit, setPreparingSubmit] = useState(false);
+  const [refreshingJobId, setRefreshingJobId] = useState<number | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'retry'; job: TrainingJob } | null>(null);
   const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
   const [sortMode, setSortMode] = useState<JobSortMode>('newest');
   const statusNotificationRef = useRef<Record<number, TrainingJobStatus>>({});
@@ -299,10 +315,13 @@ export default function TrainModelPage() {
     refetchInterval: 15000,
   });
   const allTrainingJobs = useMemo(() => data?.training_jobs ?? [], [data?.training_jobs]);
+  const targetModelVersion = selectedModel ? trainingTargetVersion(selectedModel.id) : '';
+  const targetModelLabel = selectedModel ? `${selectedModel.name} ${targetModelVersion}` : 'No model selected';
   const activeTrainingJobs = useMemo(
     () => allTrainingJobs.filter((job) => !job.is_deleted && job.id > 0 && isActiveJob(job)),
     [allTrainingJobs],
   );
+  const activeUsageCount = usage?.active_jobs_count ?? usage?.running_jobs_count ?? 0;
   const filteredTrainingJobs = allTrainingJobs.filter((job) => {
     if (visibilityFilter === 'archived') return job.is_deleted;
     if (visibilityFilter === 'active') return !job.is_deleted;
@@ -328,55 +347,35 @@ export default function TrainModelPage() {
 
     let cancelled = false;
 
-    const syncTrainingJobs = async () => {
-      await Promise.all(
-        syncableJobs.map(async (job) => {
-          try {
-            const shouldRefreshLogs = job.status === 'running' && expandedLogJobIds[job.id];
-            const shouldRefreshMetrics = job.status === 'running';
-            const [updatedJob, logsResponse, metricsResponse] = await Promise.all([
-              refreshTrainingJobStatus(job.id),
-              shouldRefreshLogs ? getTrainingJobLogs(job.id).catch(() => null) : Promise.resolve(null),
-              shouldRefreshMetrics ? getTrainingJobMetrics(job.id).catch(() => null) : Promise.resolve(null),
-            ]);
+    const intervalId = window.setInterval(async () => {
+      for (const job of syncableJobs) {
+        if (cancelled) break;
+        try {
+          const res = await refreshTrainingJobStatus(job.id);
+          const updated = Array.isArray(res) ? res[0] : res;
+          queryClient.setQueryData(queryKeys.trainingJobs, (oldData: { training_jobs: TrainingJob[] } | undefined) => {
+            if (!oldData?.training_jobs) return oldData;
+            return {
+              ...oldData,
+              training_jobs: upsertTrainingJob(oldData.training_jobs, updated),
+            };
+          });
 
-            if (cancelled) return;
-
-            queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
-              training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
-            }));
-
-            if (logsResponse?.text || logsResponse?.logs) {
-              setLogsByJobId((current) => ({ ...current, [job.id]: logsResponse.text || logsResponse.logs }));
-            }
-            if (metricsResponse) {
-              setMetricsByJobId((current) => ({ ...current, [job.id]: metricsResponse }));
-            }
-
-            if (updatedJob.status !== job.status) {
-              void invalidateUsage();
-              if (statusNotificationRef.current[updatedJob.id] !== updatedJob.status) {
-                statusNotificationRef.current[updatedJob.id] = updatedJob.status;
-                transitionToast(job, updatedJob);
-              }
-            }
-          } catch {
-            // Auto-sync stays quiet on transient backend/AWS polling errors.
+          if (statusNotificationRef.current[job.id] && statusNotificationRef.current[job.id] !== updated.status) {
+            transitionToast({ ...job, status: statusNotificationRef.current[job.id] }, updated);
           }
-        }),
-      );
-    };
-
-    void syncTrainingJobs();
-    const intervalId = window.setInterval(() => {
-      void syncTrainingJobs();
+          statusNotificationRef.current[job.id] = updated.status;
+        } catch {
+          // ignore
+        }
+      }
     }, AUTO_SYNC_INTERVAL_MS);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [activeTrainingJobs, expandedLogJobIds, invalidateUsage, queryClient]);
+  }, [activeTrainingJobs, queryClient]);
 
   useEffect(() => {
     const sourceZip = form.source_zip;
@@ -517,6 +516,7 @@ export default function TrainModelPage() {
       setSourceZipState(emptySourceZipState);
       setEditedEntryText('');
       setEntryEdited(false);
+      setIsCreateOpen(false);
       queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => {
         const withoutOptimistic = context?.optimisticId
           ? removeTrainingJob(current?.training_jobs ?? [], context.optimisticId)
@@ -541,6 +541,15 @@ export default function TrainModelPage() {
       );
     },
   });
+
+    const handleRefreshJob = async (job: TrainingJob) => {
+    setRefreshingJobId(job.id);
+    try {
+      await refreshMutation.mutateAsync(job);
+    } finally {
+      setRefreshingJobId(null);
+    }
+  };
 
   const refreshMutation = useMutation({
     mutationFn: (job: TrainingJob) => refreshTrainingJobStatus(job.id),
@@ -580,54 +589,43 @@ export default function TrainModelPage() {
     },
   });
 
-  const logsMutation = useMutation({
-    mutationFn: (job: TrainingJob) => getTrainingJobLogs(job.id),
-    onSuccess: ({ logs, text }, job) => {
-      setLogsByJobId((current) => ({ ...current, [job.id]: text || logs }));
-    },
-    onError: (error, job) => {
-      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to load training logs.')}`);
-    },
-  });
-
-  const metricsMutation = useMutation({
-    mutationFn: (job: TrainingJob) => getTrainingJobMetrics(job.id),
-    onSuccess: (metrics, job) => {
-      setMetricsByJobId((current) => ({ ...current, [job.id]: metrics }));
-    },
-    onError: (error, job) => {
-      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to load runtime metrics.')}`);
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (job: TrainingJob) => deleteTrainingJob(job.id),
+  const cancelMutation = useMutation({
+    mutationFn: (job: TrainingJob) => cancelTrainingJob(job.id),
     onSuccess: (updatedJob) => {
       queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
         training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
       }));
+      void invalidateJobs();
       void invalidateUsage();
-      toast.success(`${jobLabel(updatedJob)} archived. You can restore it from Archived jobs.`);
+      setConfirmAction(null);
+      toast.success('Training job cancelled.');
     },
     onError: (error, job) => {
-      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to archive training job.')}`);
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to cancel training job.')}`);
     },
   });
 
-  const restoreMutation = useMutation({
-    mutationFn: (job: TrainingJob) => restoreTrainingJob(job.id),
-    onSuccess: (updatedJob) => {
+  const retryMutation = useMutation({
+    mutationFn: (job: TrainingJob) => retryTrainingJob(job.id),
+    onSuccess: (newJob) => {
       queryClient.setQueryData(queryKeys.trainingJobs, (current: { training_jobs: TrainingJob[] } | undefined) => ({
-        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
+        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], newJob),
       }));
+      void invalidateJobs();
       void invalidateUsage();
-      toast.success(`${jobLabel(updatedJob)} restored.`);
+      setConfirmAction(null);
+      toast.success(`Retry job created for ${jobLabel(newJob)}.`);
+      navigate(`/dashboard/model-training/${newJob.id}`);
     },
     onError: (error, job) => {
-      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to restore training job.')}`);
+      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to retry training job.')}`);
     },
   });
 
+  
+  
+  
+  
   const setField = (field: keyof TrainingJobFormValues, value: string | number | File | null) => {
     setForm((current) => ({ ...current, [field]: value }));
     if (field === 'entry_point' && form.source_zip) {
@@ -650,29 +648,10 @@ export default function TrainModelPage() {
     setForm((current) => ({ ...current, vcpu, memory }));
   };
 
-  const copyUri = async (value: string) => {
-    if (!value) {
-      toast.warning('No S3 URI to copy.');
-      return;
-    }
 
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success('Copied S3 URI.');
-    } catch {
-      toast.warning('Unable to copy S3 URI automatically.');
-    }
-  };
-
-  const toggleLogs = (job: TrainingJob) => {
-    setExpandedLogJobIds((current) => ({ ...current, [job.id]: !current[job.id] }));
-    if (!expandedLogJobIds[job.id]) {
-      logsMutation.mutate(job);
-      metricsMutation.mutate(job);
-    }
-  };
 
   const validateBeforeSubmit = () => {
+    if (!selectedModel) return 'Select a model from the header before starting training.';
     if (!form.source_zip) return 'Source code zip is required.';
     if (!form.training_data) return 'Training data CSV is required.';
     if (!form.source_zip.name.toLowerCase().endsWith('.zip')) return 'source_zip must be a .zip file.';
@@ -681,6 +660,9 @@ export default function TrainModelPage() {
     if (sourceZipState.inspecting) return 'Source zip is still being inspected.';
     if (sourceZipState.error) return sourceZipState.error;
     if (!sourceZipState.entryExists) return `Entry point ${form.entry_point || 'train.py'} was not found in source.zip.`;
+    if (form.accelerator_type !== 'none') {
+      return 'GPU/TPU/Trainium training is not enabled for the current CPU/Fargate queue.';
+    }
     if (usage && form.max_runtime_seconds > usage.remaining_seconds) {
       return `Monthly quota exceeded. Remaining quota is ${formatDuration(usage.remaining_seconds)}.`;
     }
@@ -708,12 +690,16 @@ export default function TrainModelPage() {
       }
     }
 
-    createMutation.mutate({ ...form, source_zip: sourceZip });
+    createMutation.mutate({
+      ...form,
+      name: selectedModel?.name || '',
+      model_version: selectedModel ? trainingTargetVersion(selectedModel.id) : '',
+      source_zip: sourceZip,
+    });
   };
 
   const canSubmit =
-    Boolean(form.name.trim()) &&
-    Boolean(form.model_version.trim()) &&
+    Boolean(selectedModel) &&
     Boolean(form.entry_point.trim()) &&
     Boolean(form.source_zip) &&
     !sourceZipState.inspecting &&
@@ -722,6 +708,8 @@ export default function TrainModelPage() {
     Boolean(form.training_data) &&
     form.source_zip?.name.toLowerCase().endsWith('.zip') &&
     form.training_data?.name.toLowerCase().endsWith('.csv') &&
+    form.accelerator_type === 'none' &&
+    activeTrainingJobs.length < 1 &&
     (!usage || form.max_runtime_seconds <= usage.remaining_seconds);
 
   return (
@@ -730,16 +718,22 @@ export default function TrainModelPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Model Training</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Train models in the cloud, monitor resource metrics in real-time, and download artifacts.
+            Train, monitor, and manage model training runs.
           </p>
         </div>
         <Button
           icon={<Rocket className="h-4 w-4" />}
-          onClick={() => document.getElementById('start-training-section')?.scrollIntoView({ behavior: 'smooth' })}
+          disabled={!selectedModel}
+          onClick={() => setIsCreateOpen(true)}
         >
-          Start training job
+          New Training Job
         </Button>
       </div>
+      {!selectedModel && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+          Select a model from the header before starting a training job.
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -783,7 +777,7 @@ export default function TrainModelPage() {
         </div>
 
         <div className={`flex flex-col justify-center rounded-xl border p-5 shadow-sm transition-colors ${
-          (usage?.running_jobs_count || 0) > 0 
+          activeUsageCount > 0
             ? 'border-blue-200 bg-blue-50/50' 
             : 'border-gray-200 bg-white'
         }`}>
@@ -793,11 +787,11 @@ export default function TrainModelPage() {
           </p>
           <div className="mt-3 flex items-baseline gap-2">
             <span className={`text-3xl font-bold ${
-              (usage?.running_jobs_count || 0) > 0 ? 'text-blue-700' : 'text-gray-900'
+              activeUsageCount > 0 ? 'text-blue-700' : 'text-gray-900'
             }`}>
-              {usage?.running_jobs_count ?? 0}
+              {activeUsageCount}
             </span>
-            {(usage?.running_jobs_count || 0) > 0 && (
+            {activeUsageCount > 0 && (
               <span className="relative flex h-3 w-3">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
                 <span className="relative inline-flex h-3 w-3 rounded-full bg-blue-500"></span>
@@ -807,35 +801,51 @@ export default function TrainModelPage() {
         </div>
       </div>
 
-      <div id="start-training-section" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      {isCreateOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-6">
+          <div id="start-training-section" className="w-full max-w-6xl rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-gray-800 to-black text-white shadow-md">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-gray-800 to-black text-white shadow-md">
               <Rocket className="h-6 w-6" />
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight text-gray-900">Configure Training Job</h2>
-              <p className="text-sm text-gray-500">Upload code, select resources, and start your experiment.</p>
+              <p className="text-sm text-gray-500">Retrain the selected model with new code and data.</p>
             </div>
           </div>
           <span className="w-fit rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
             Backend is selected by server config
           </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<X className="h-4 w-4" />}
+            onClick={() => setIsCreateOpen(false)}
+          >
+            Close
+          </Button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
-          <Input
-            label="Model name"
-            value={form.name}
-            onChange={(event) => setField('name', event.target.value)}
-            placeholder="CICIDS Classifier"
-          />
-          <Input
-            label="Model version"
-            value={form.model_version}
-            onChange={(event) => setField('model_version', event.target.value)}
-            placeholder="v1"
-          />
+        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className={`rounded-lg border px-4 py-3 ${
+            selectedModel ? 'border-gray-200 bg-gray-50' : 'border-amber-200 bg-amber-50'
+          }`}>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Target model</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-bold text-gray-900">
+                {loadingSelectedModel ? 'Loading selected model...' : targetModelLabel}
+              </span>
+              {selectedModel && (
+                <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs font-semibold text-gray-500">
+                  {selectedModel.status}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Change this from the model selector in the header. Training will update this model target.
+            </p>
+          </div>
           <Input
             label="Entry point"
             value={form.entry_point}
@@ -1080,10 +1090,63 @@ export default function TrainModelPage() {
             <SummaryItem label="Selected profile" value={`${form.vcpu} vCPU / ${form.memory / 1024} GB`} />
             <SummaryItem label="Requested runtime" value={formatDuration(form.max_runtime_seconds)} />
           </div>
+          <div className="mt-5 border-t border-gray-200 pt-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-bold text-gray-900">Accelerator</h3>
+              <p className="text-xs text-gray-500">
+                Current AWS Batch queue is CPU/Fargate. GPU requires a separate EC2 GPU Batch environment.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {acceleratorOptions.map((option) => {
+                const selected = form.accelerator_type === option.type && form.accelerator_count === option.count;
+                return (
+                  <button
+                    key={`${option.type}-${option.count}`}
+                    type="button"
+                    disabled={option.disabled}
+                    className={`rounded-lg border p-3 text-left transition ${
+                      selected
+                        ? 'border-black bg-white shadow-sm'
+                        : option.disabled
+                          ? 'cursor-not-allowed border-gray-200 bg-gray-100 opacity-60'
+                          : 'border-gray-200 bg-white hover:border-gray-400'
+                    }`}
+                    onClick={() => {
+                      if (!option.disabled) {
+                        setForm((current) => ({
+                          ...current,
+                          accelerator_type: option.type,
+                          accelerator_count: option.count,
+                        }));
+                      }
+                    }}
+                  >
+                    <p className="text-sm font-bold text-gray-900">{option.label}</p>
+                    <p className="mt-1 text-xs text-gray-500">{option.helper}</p>
+                  </button>
+                );
+              })}
+            </div>
+            {form.accelerator_type === 'gpu' ? (
+              <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                GPU requires an EC2 GPU AWS Batch compute environment. Current queue is CPU/Fargate.
+              </p>
+            ) : (
+              <p className="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
+                Accelerator selection: {acceleratorSummary(form.accelerator_type, form.accelerator_count)}
+              </p>
+            )}
+          </div>
           {usage && form.max_runtime_seconds > usage.remaining_seconds && (
             <p className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
               Monthly quota exceeded. Remaining quota is {formatDuration(usage.remaining_seconds)}, but this job requests{' '}
               {formatDuration(form.max_runtime_seconds)}.
+            </p>
+          )}
+          {activeTrainingJobs.length >= 1 && (
+            <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              You already have an active training job. Wait for it to finish or cancel it first.
             </p>
           )}
         </div>
@@ -1105,7 +1168,9 @@ export default function TrainModelPage() {
             Submit training job
           </Button>
         </div>
-      </div>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <TrainingJobsSkeleton />
@@ -1122,12 +1187,15 @@ export default function TrainModelPage() {
           <FileCode2 className="mx-auto h-8 w-8 text-gray-400" />
           <h2 className="mt-3 text-base font-bold text-gray-900">No training jobs yet</h2>
           <p className="mt-1 text-sm text-gray-500">Submit a source zip and CSV dataset to start your first training job.</p>
+          <Button className="mt-4" icon={<Rocket className="h-4 w-4" />} onClick={() => setIsCreateOpen(true)}>
+            Create your first training job
+          </Button>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 rounded-lg border border-gray-300 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4 sm:flex-row sm:items-center sm:justify-between shadow-sm">
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Training jobs</h2>
+              <h2 className="text-sm font-bold text-gray-900">Training history</h2>
               <p className="mt-1 text-xs text-gray-500">
                 {trainingJobs.length} shown / {allTrainingJobs.length} total
               </p>
@@ -1159,30 +1227,54 @@ export default function TrainModelPage() {
           ) : (
             <div className="space-y-4">
               {trainingJobs.map((job) => (
-                <TrainingJobCard
+                <TrainingJobRow
                   key={job.id}
                   job={job}
-                  refreshing={refreshMutation.isPending}
+                  refreshing={refreshingJobId === job.id}
                   downloading={downloadMutation.isPending}
-                  loadingLogs={logsMutation.isPending}
-                  loadingMetrics={metricsMutation.isPending}
-                  archiving={deleteMutation.isPending}
-                  restoring={restoreMutation.isPending}
-                  logText={logsByJobId[job.id] || job.training_logs || job.error_message}
-                  metrics={metricsByJobId[job.id]}
-                  logsExpanded={Boolean(expandedLogJobIds[job.id])}
-                  onRefresh={() => refreshMutation.mutate(job)}
+                  cancelling={cancelMutation.isPending}
+                  retrying={retryMutation.isPending}
+                  onRefresh={() => handleRefreshJob(job)}
                   onDownload={() => downloadMutation.mutate(job)}
-                  onRefreshLogs={() => logsMutation.mutate(job)}
-                  onRefreshMetrics={() => metricsMutation.mutate(job)}
-                  onToggleLogs={() => toggleLogs(job)}
-                  onArchive={() => deleteMutation.mutate(job)}
-                  onRestore={() => restoreMutation.mutate(job)}
-                  onCopyUri={copyUri}
+                  onCancel={() => setConfirmAction({ type: 'cancel', job })}
+                  onRetry={() => setConfirmAction({ type: 'retry', job })}
                 />
               ))}
             </div>
           )}
+        </div>
+      )}
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">
+              {confirmAction.type === 'cancel' ? 'Cancel training job?' : 'Retry training job?'}
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              {confirmAction.type === 'cancel'
+                ? `This will stop ${jobLabel(confirmAction.job)} if it is still active.`
+                : `Create a new training job using the same configuration as ${jobLabel(confirmAction.job)}?`}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setConfirmAction(null)}>
+                Close
+              </Button>
+              <Button
+                size="sm"
+                variant={confirmAction.type === 'cancel' ? 'danger' : 'primary'}
+                loading={cancelMutation.isPending || retryMutation.isPending}
+                onClick={() => {
+                  if (confirmAction.type === 'cancel') {
+                    cancelMutation.mutate(confirmAction.job);
+                  } else {
+                    retryMutation.mutate(confirmAction.job);
+                  }
+                }}
+              >
+                {confirmAction.type === 'cancel' ? 'Cancel job' : 'Retry job'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </section>
@@ -1240,15 +1332,18 @@ function TrainingFilePicker({
   onChange: (file: File | null) => void;
 }) {
   const inputId = `training-file-${label.replace(/\W+/g, '-').toLowerCase()}`;
+  const [isDragActive, setIsDragActive] = useState(false);
   const isSelected = Boolean(file);
   const isValid = isSelected && valid;
   const status = isSelected ? (valid ? 'Selected' : 'Invalid') : required ? 'Missing' : 'Optional';
   
-  const containerClass = isSelected
-    ? isValid
-      ? 'border-emerald-200 ring-1 ring-emerald-100 bg-emerald-50/30'
-      : 'border-red-300 ring-1 ring-red-100 bg-red-50/50'
-    : 'border-dashed border-gray-300 hover:border-gray-400 bg-gray-50/50 hover:bg-gray-50 transition-colors';
+  const containerClass = isDragActive
+    ? 'border-blue-400 ring-2 ring-blue-200 bg-blue-50/50 scale-[1.02]'
+    : isSelected
+      ? isValid
+        ? 'border-emerald-200 ring-1 ring-emerald-100 bg-emerald-50/30'
+        : 'border-red-300 ring-1 ring-red-100 bg-red-50/50'
+      : 'border-dashed border-gray-300 hover:border-blue-400 bg-gray-50/50 hover:bg-blue-50 transition-colors';
 
   const statusClass = isSelected
     ? isValid
@@ -1258,47 +1353,86 @@ function TrainingFilePicker({
       ? 'bg-amber-100 text-amber-700'
       : 'bg-gray-200 text-gray-600';
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(true);
+  };
+  
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(false);
+  };
+  
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onChange(e.dataTransfer.files[0]);
+    }
+  };
+
   return (
-    <div className={`rounded-xl border p-4 ${containerClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-gray-900">{label}</p>
-          <p className="mt-1 text-xs text-gray-500">{required ? `Required ${expected}` : `Optional ${expected}`}</p>
+    <div 
+      className={`relative flex flex-col justify-between rounded-xl border p-4 transition-all duration-200 ease-in-out ${containerClass}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-900">{label}</p>
+            <p className="mt-1 text-xs text-gray-500">{required ? `Required ${expected}` : `Optional ${expected}`}</p>
+          </div>
+          <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase shadow-sm ${statusClass}`}>{status}</span>
         </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase ${statusClass}`}>{status}</span>
+
+        {file ? (
+          <div className={`mt-4 rounded-lg border p-3 shadow-sm transition-all ${isValid ? 'border-emerald-200 bg-white' : 'border-red-200 bg-white'}`}>
+            <div className="flex items-center gap-3">
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${isValid ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                {isValid ? <FileCode2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className={`truncate text-sm font-semibold ${isValid ? 'text-gray-900' : 'text-red-900'}`} title={file.name}>
+                  {file.name}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">{formatFileSize(file)}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <label htmlFor={inputId} className="mt-4 flex min-h-[100px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-5 text-center hover:bg-blue-50 hover:border-blue-300 transition-colors group">
+            <div className="rounded-full bg-blue-100 p-2 text-blue-600 group-hover:bg-blue-200 group-hover:scale-110 transition-transform">
+              <UploadCloud className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-700">Click to upload or drag and drop</p>
+              <p className="text-xs text-gray-500 mt-1">Accepts {accept.split(',').map(a => a.split('/')[0]).join(', ')}</p>
+            </div>
+          </label>
+        )}
       </div>
 
-      {file ? (
-        <div className={`mt-4 rounded-lg border p-3 ${isValid ? 'border-emerald-200 bg-white' : 'border-red-200 bg-white'}`}>
-          <p className={`truncate text-sm font-semibold ${isValid ? 'text-gray-900' : 'text-red-900'}`} title={file.name}>
-            {file.name}
-          </p>
-          <p className="mt-1 text-xs text-gray-500">{formatFileSize(file)}</p>
-        </div>
-      ) : (
-        <div className="mt-4 flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-200 bg-white px-3 py-4 text-center">
-          <UploadCloud className="h-5 w-5 text-gray-400" />
-          <span className="text-xs text-gray-500">No file selected</span>
-        </div>
-      )}
-
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
         {file && (
           <Button variant="ghost" size="sm" icon={<X className="h-4 w-4" />} onClick={() => onChange(null)}>
             Remove
           </Button>
         )}
-        <label
-          htmlFor={inputId}
-          className={`inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors ${
-            isSelected 
-              ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' 
-              : 'border-transparent bg-black text-white hover:bg-gray-800'
-          }`}
-        >
-          {isSelected ? <RefreshCw className="h-3.5 w-3.5" /> : <UploadCloud className="h-4 w-4" />}
-          {file ? 'Replace' : 'Select file'}
-        </label>
+        {file && (
+          <label
+            htmlFor={inputId}
+            className={`inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold shadow-sm transition-all hover:shadow-md ${
+              isSelected 
+                ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' 
+                : 'border-transparent bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Replace
+          </label>
+        )}
         <input
           id={inputId}
           key={file?.name || 'empty'}
@@ -1423,7 +1557,7 @@ function TrainingJobsSkeleton() {
   return (
     <div className="space-y-4">
       {[0, 1].map((item) => (
-        <div key={item} className="animate-pulse rounded-lg border border-gray-300 bg-white p-5">
+        <div key={item} className="animate-pulse rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div className="h-5 w-48 rounded bg-gray-200" />
             <div className="h-7 w-24 rounded-full bg-gray-200" />
@@ -1441,507 +1575,151 @@ function TrainingJobsSkeleton() {
   );
 }
 
-function TrainingJobCard({
+
+
+
+
+function TrainingJobRow({
   job,
-  refreshing,
-  downloading,
-  loadingLogs,
-  loadingMetrics,
-  archiving,
-  restoring,
-  logText,
-  metrics,
-  logsExpanded,
   onRefresh,
+  refreshing,
   onDownload,
-  onRefreshLogs,
-  onRefreshMetrics,
-  onToggleLogs,
-  onArchive,
-  onRestore,
-  onCopyUri,
+  downloading,
+  onCancel,
+  cancelling,
+  onRetry,
+  retrying,
 }: {
   job: TrainingJob;
+  onRefresh: (id: number) => void;
   refreshing: boolean;
+  onDownload: (id: number) => void;
   downloading: boolean;
-  loadingLogs: boolean;
-  loadingMetrics: boolean;
-  archiving: boolean;
-  restoring: boolean;
-  logText?: string;
-  metrics?: TrainingJobMetricsResponse;
-  logsExpanded: boolean;
-  onRefresh: () => void;
-  onDownload: () => void;
-  onRefreshLogs: () => void;
-  onRefreshMetrics: () => void;
-  onToggleLogs: () => void;
-  onArchive: () => void;
-  onRestore: () => void;
-  onCopyUri: (value: string) => void;
+  onCancel: () => void;
+  cancelling: boolean;
+  onRetry: () => void;
+  retrying: boolean;
 }) {
-  const runtimeSummary = `${job.vcpu} vCPU / ${job.memory / 1024} GB`;
-  const externalJobId = job.external_job_id || job.sagemaker_job_name || '';
-  const updatedAt = job.updated_at ? new Date(job.updated_at).toLocaleString() : '-';
+  const isArchived = job.is_deleted;
+  const backendLabel = job.training_backend || 'sagemaker';
+  const isActive = ACTIVE_STATUSES.includes(job.status);
+  const canRetry = job.status === 'failed' || job.status === 'cancelled';
 
-  const getAccentBorderClass = () => {
-    if (job.is_deleted) return 'border-l-[4px] border-l-gray-400';
-    if (job.status === 'completed') return 'border-l-[4px] border-l-emerald-500';
-    if (job.status === 'failed') return 'border-l-[4px] border-l-red-500';
-    if (job.status === 'running') return 'border-l-[4px] border-l-blue-500';
-    return 'border-l-[4px] border-l-gray-300';
+  const elapsed = () => {
+    if (job.completed_at && job.started_at) {
+      return (new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000;
+    }
+    if (job.started_at && ['pending', 'uploading', 'running'].includes(job.status)) {
+      return (new Date().getTime() - new Date(job.started_at).getTime()) / 1000;
+    }
+    return job.runtime_seconds || null;
+  };
+  const durationStr = (() => {
+    const s = elapsed();
+    if (!s) return '-';
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const secs = Math.floor(s % 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
+  })();
+
+  const getAccentBorder = () => {
+    if (isArchived) return 'border-l-4 border-l-gray-400 opacity-70 grayscale-[0.5]';
+    if (job.status === 'completed') return 'border-l-4 border-l-emerald-500';
+    if (job.status === 'failed') return 'border-l-4 border-l-red-500';
+    if (job.status === 'cancelled') return 'border-l-4 border-l-amber-500';
+    if (job.status === 'running') return 'border-l-4 border-l-blue-500';
+    return 'border-l-4 border-l-gray-300';
   };
 
   return (
-    <article className={`rounded-xl border bg-white shadow-sm transition-all overflow-hidden flex flex-col ${
-      job.is_deleted ? 'opacity-75 grayscale-[0.3]' : ''
-    } ${getAccentBorderClass()} ${
-      job.status === 'running' ? 'ring-1 ring-blue-100 border-y-blue-100 border-r-blue-100' : 'border-y-gray-200 border-r-gray-200'
-    }`}>
-      {/* Header */}
-      <div className="flex flex-col gap-4 border-b border-gray-100 p-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <h3 className="truncate text-xl font-extrabold tracking-tight text-gray-900">{job.name}</h3>
-            <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-bold tracking-wide text-gray-600 border border-gray-200">
-              {job.model_version}
-            </span>
-            {job.status === 'failed' && (
-              <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700 border border-red-200">
-                Failed
-              </span>
-            )}
-          </div>
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
-            <span className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-gray-500">
-              <Cpu className="h-3 w-3" />
-              {backendLabel(job.training_backend)}
-            </span>
-            <span className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-gray-500">
-              {runtimeSummary}
-            </span>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-2.5">
-          <span className={`w-fit rounded-full border px-4 py-1 text-xs font-bold uppercase tracking-wider ${
-            job.is_deleted ? 'border-gray-200 bg-gray-100 text-gray-600' : 
-            job.status === 'completed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
-            job.status === 'failed' ? 'border-red-200 bg-red-50 text-red-700' :
-            job.status === 'running' ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm' :
-            'border-gray-200 bg-gray-50 text-gray-700'
+    <div className={`rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:shadow-md ${getAccentBorder()}`}>
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <div className="flex items-center gap-2.5">
+          <Link to={`/dashboard/model-training/${job.id}`} className="text-lg font-bold text-gray-900 hover:text-blue-600 hover:underline truncate">
+            {job.name}
+          </Link>
+          <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 border border-gray-200 shrink-0">
+            {job.model_version}
+          </span>
+          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+             isArchived ? 'bg-gray-100 text-gray-600' :
+             job.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
+             job.status === 'failed' ? 'bg-red-50 text-red-700' :
+             job.status === 'cancelled' ? 'bg-amber-50 text-amber-700' :
+             job.status === 'running' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' :
+             'bg-gray-50 text-gray-700'
           }`}>
-            {job.is_deleted ? 'Archived' : statusLabels[job.status]}
+             {isArchived ? 'Archived' : job.status}
           </span>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-            Updated {updatedAt}
-          </span>
-        </div>
-      </div>
-
-      {/* Main Info */}
-      <div className="grid gap-3 px-5 py-4 sm:grid-cols-2 xl:grid-cols-4">
-        <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Elapsed" value={formatDuration(elapsedForJob(job))} accent />
-        <InlineFact icon={<Clock3 className="h-3.5 w-3.5" />} label="Max runtime" value={formatDuration(job.max_runtime_seconds)} />
-        <InlineFact label="Started" value={job.started_at ? new Date(job.started_at).toLocaleString() : '-'} />
-        <InlineFact label="Completed" value={job.completed_at ? new Date(job.completed_at).toLocaleString() : '-'} />
-      </div>
-
-      {/* Tech info */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-gray-100 bg-gray-50/50 px-5 py-3 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Ext ID</span>
-          <code className="rounded border border-gray-200 bg-white px-2 py-0.5 text-xs font-bold text-gray-600 shadow-sm">
-            {externalJobId || '-'}
-          </code>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Entry</span>
-          <code className="rounded border border-gray-200 bg-white px-2 py-0.5 text-xs font-bold text-blue-700 shadow-sm">
-            {job.entry_point || '-'}
-          </code>
-        </div>
-        {job.is_deleted && (
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Archived</span>
-            <span className="text-xs font-semibold text-gray-600">{job.deleted_at ? new Date(job.deleted_at).toLocaleString() : '-'}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Artifacts */}
-      <div className="border-t border-gray-100 px-5 py-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex-1 min-w-0 space-y-3">
-            <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-              <FileArchive className="h-4 w-4" />
-              Artifacts
-            </p>
-            <div className="flex flex-col gap-2 xl:flex-row xl:gap-4">
-              <UriLine
-                label="Output URI"
-                value={job.output_s3_uri}
-                onCopy={onCopyUri}
-              />
-              <UriLine
-                label="Model URI"
-                value={job.model_artifact_uri}
-                onCopy={onCopyUri}
-              />
-            </div>
-          </div>
-          <div className="shrink-0 pt-7">
-            <Button
-              size="sm"
-              icon={<Download className="h-4 w-4" />}
-              disabled={job.status !== 'completed'}
-              loading={downloading}
-              onClick={onDownload}
-            >
-              Download model
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Diagnostics */}
-      {job.status === 'failed' && (
-        <div className="mx-5 mb-4 mt-2 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
-          <h4 className="flex items-center gap-2 text-sm font-bold text-red-800">
-            <AlertTriangle className="h-5 w-5" />
-            Training Failed
-          </h4>
-          <p className="mt-2 text-sm font-medium text-red-700">
-            {job.stop_reason || 'The training job exited unexpectedly.'}
-          </p>
-          {job.error_message && (
-            <div className="mt-3 rounded-lg border border-red-100 bg-white p-3 shadow-sm">
-              <code className="whitespace-pre-wrap wrap-break-words text-xs text-red-900">
-                {job.error_message}
-              </code>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Metrics */}
-      <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/30">
-        <RuntimeMetricsPanel metrics={metrics} loading={loadingMetrics} />
-      </div>
-
-      {/* Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={logsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            onClick={onToggleLogs}
-            className="text-gray-600 hover:bg-gray-200 hover:text-gray-900"
-          >
-            {logsExpanded ? 'Hide logs' : 'Show logs'}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<RefreshCw className="h-4 w-4" />}
-            loading={refreshing}
-            onClick={onRefresh}
-            className="text-gray-600 hover:bg-gray-200 hover:text-gray-900"
-          >
-            Status
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<RefreshCw className="h-4 w-4" />}
-            loading={loadingMetrics}
-            onClick={onRefreshMetrics}
-            className="text-gray-600 hover:bg-gray-200 hover:text-gray-900"
-          >
-            Metrics
-          </Button>
-        </div>
-        <div>
-          {job.is_deleted ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<RotateCcw className="h-4 w-4" />}
-              loading={restoring}
-              onClick={onRestore}
-            >
-              Restore
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Archive className="h-4 w-4 text-gray-400" />}
-              loading={archiving}
-              onClick={onArchive}
-              className="text-gray-500 hover:bg-red-50 hover:text-red-600"
-            >
-              Archive
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {logsExpanded && (
-        <div className="border-t border-gray-200 px-5 pb-5 pt-3 bg-gray-50">
-          <LogTerminal
-            text={logText || 'Logs are not available yet. They usually appear after the Batch container starts.'}
-            loading={loadingLogs}
-            onRefresh={onRefreshLogs}
-          />
-        </div>
-      )}
-    </article>
-  );
-}
-
-function InlineFact({
-  icon,
-  label,
-  value,
-  accent = false,
-}: {
-  icon?: ReactNode;
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className={`min-w-0 rounded-xl border p-3 shadow-sm transition-colors ${
-      accent ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-white'
-    }`}>
-      <p className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${
-        accent ? 'text-blue-500' : 'text-gray-500'
-      }`}>
-        {icon}
-        {label}
-      </p>
-      <p className={`mt-1.5 truncate text-lg font-bold ${
-        accent ? 'text-blue-900' : 'text-gray-900'
-      }`} title={value}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function RuntimeMetricsPanel({
-  metrics,
-  loading,
-}: {
-  metrics?: TrainingJobMetricsResponse;
-  loading: boolean;
-}) {
-  const isHighCpu = metrics?.latest?.cpu_percent != null && metrics.latest.cpu_percent > 85;
-  const isHighRam = metrics?.latest?.memory_percent != null && metrics.latest.memory_percent > 85;
-
-  const latest = metrics?.latest;
-  const memoryValue =
-    latest?.memory_percent != null
-      ? `${formatMetricPercent(latest.memory_percent)}`
-      : latest?.memory_used_mb != null
-        ? `${formatMegabytes(latest.memory_used_mb)} used`
-        : '-';
-  const memoryDetail =
-    latest?.memory_used_mb != null && latest?.memory_limit_mb != null
-      ? `${formatMegabytes(latest.memory_used_mb)} / ${formatMegabytes(latest.memory_limit_mb)}`
-      : latest?.memory_used_mb != null
-        ? `${formatMegabytes(latest.memory_used_mb)} used`
-        : metrics?.message || 'Waiting for runner metrics';
-  const gpuValue = latest?.gpu_available ? formatMetricPercent(latest.gpu_percent) : 'N/A';
-  const gpuDetail =
-    latest?.gpu_available && latest.gpu_memory_used_mb != null && latest.gpu_memory_total_mb != null
-      ? `${formatMegabytes(latest.gpu_memory_used_mb)} / ${formatMegabytes(latest.gpu_memory_total_mb)}`
-      : 'No GPU detected by runner';
-
-  return (
-    <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-          <Cpu className="h-4 w-4" />
-          Runtime metrics
-        </p>
-        <div className="flex items-center gap-3">
-          {loading && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500">Refreshing...</span>}
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-            {latest?.timestamp
-              ? `Sampled ${new Date(latest.timestamp).toLocaleTimeString()}`
-              : 'Pending metrics...'}
-          </span>
-        </div>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <MetricCell
-          icon={<Cpu className="h-3.5 w-3.5" />}
-          label="CPU"
-          value={latest?.cpu_percent == null ? '-' : formatMetricPercent(latest.cpu_percent)}
-          detail={latest?.cpu_limit_cores ? `${latest.cpu_limit_cores} vCPU limit` : 'Container CPU usage'}
-          warning={isHighCpu}
-          progress={latest?.cpu_percent}
-          progressColor={isHighCpu ? 'bg-amber-500' : 'bg-emerald-500'}
-        />
-        <MetricCell
-          icon={<HardDrive className="h-3.5 w-3.5" />}
-          label="RAM"
-          value={memoryValue}
-          detail={memoryDetail}
-          warning={isHighRam}
-          progress={latest?.memory_percent}
-          progressColor={isHighRam ? 'bg-red-500' : 'bg-blue-500'}
-        />
-        <MetricCell
-          icon={<Rocket className="h-3.5 w-3.5" />}
-          label="GPU"
-          value={gpuValue}
-          detail={gpuDetail}
-          muted={!latest?.gpu_available}
-          progress={latest?.gpu_percent}
-          progressColor="bg-purple-500"
-        />
-      </div>
-    </div>
-  );
-}
-
-function MetricCell({
-  icon,
-  label,
-  value,
-  detail,
-  muted = false,
-  warning = false,
-  progress,
-  progressColor,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  detail: string;
-  muted?: boolean;
-  warning?: boolean;
-  progress?: number | null;
-  progressColor?: string;
-}) {
-  return (
-    <div className={`min-w-0 flex flex-col justify-between rounded-xl bg-white px-4 py-3 shadow-sm border ${warning ? 'border-amber-300 ring-1 ring-amber-100' : 'border-gray-200'} ${muted ? 'opacity-50 grayscale bg-gray-50 border-dashed' : ''}`}>
-      <div>
-        <div className="flex items-start justify-between">
-          <p className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${warning ? 'text-amber-600' : 'text-gray-500'}`}>
-            {icon}
-            {label}
-          </p>
-          <p className={`truncate text-xl font-black tracking-tight ${warning ? 'text-amber-700' : muted ? 'text-gray-400' : 'text-gray-900'}`} title={value}>
-            {value}
-          </p>
         </div>
         
-        {progress != null && !muted && (
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-            <div
-              className={`h-full transition-all duration-500 ${progressColor || 'bg-gray-400'}`}
-              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-            />
-          </div>
-        )}
-      </div>
-      
-      <p className={`mt-2 truncate text-[11px] font-bold ${warning ? 'text-amber-600/80' : 'text-gray-400'}`} title={detail}>
-        {detail}
-      </p>
-    </div>
-  );
-}
-
-function LogTerminal({
-  text,
-  loading,
-  onRefresh,
-}: {
-  text: string;
-  loading: boolean;
-  onRefresh: () => void;
-}) {
-  const scrollRef = useRef<HTMLPreElement | null>(null);
-  const shouldStickToBottomRef = useRef(true);
-
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (!element || !shouldStickToBottomRef.current) return;
-    element.scrollTop = element.scrollHeight;
-  }, [text]);
-
-  const handleScroll = () => {
-    const element = scrollRef.current;
-    if (!element) return;
-    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
-    shouldStickToBottomRef.current = distanceFromBottom < 24;
-  };
-
-  return (
-    <div className="mt-2 overflow-hidden rounded-xl border border-gray-800 bg-[#0d1117] shadow-md">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-800 bg-[#161b22] px-4 py-2.5">
-        <div className="flex items-center gap-2.5">
-          <ScrollText className="h-4 w-4 text-gray-400" />
-          <p className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
-            Training Output
-          </p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-gray-500">
+           <span className="flex items-center gap-1"><Cpu className="w-3 h-3"/> {backendLabel}</span>
+           <span className="flex items-center gap-1"><HardDrive className="w-3 h-3"/> {job.vcpu} vCPU, {job.memory / 1024} GB</span>
+           {job.accelerator_type !== 'none' && (
+             <span className="flex items-center gap-1 text-purple-600"><Rocket className="w-3 h-3"/> {job.accelerator_type.toUpperCase()} x{job.accelerator_count}</span>
+           )}
+           <span className="flex items-center gap-1"><Clock3 className="w-3 h-3"/> {durationStr} / {job.max_runtime_seconds}s</span>
         </div>
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          className="flex h-7 items-center gap-1.5 rounded bg-gray-800 px-2.5 text-[11px] font-bold text-gray-300 hover:bg-gray-700 disabled:opacity-50 transition-colors"
-        >
-          <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
       </div>
-      <pre
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="max-h-105 min-h-80 overflow-x-auto overflow-y-auto whitespace-pre p-5 font-mono text-[13px] leading-6 text-gray-300"
-      >
-        {text}
-      </pre>
+
+      <div className="flex shrink-0 items-center gap-2">
+         {!isArchived && (
+           <Button
+             variant="secondary"
+             size="sm"
+             icon={<RefreshCw className="h-4 w-4" />}
+             loading={refreshing}
+             onClick={() => onRefresh(job.id)}
+           >
+             Refresh
+           </Button>
+         )}
+         {!isArchived && job.status === 'completed' && (
+           <Button
+             variant="secondary"
+             size="sm"
+             icon={<Download className="h-4 w-4" />}
+             loading={downloading}
+             onClick={() => onDownload(job.id)}
+           >
+             Download
+           </Button>
+         )}
+         {!isArchived && isActive && (
+           <Button
+             variant="danger"
+             size="sm"
+             loading={cancelling}
+             onClick={onCancel}
+           >
+             Cancel
+           </Button>
+         )}
+         {!isArchived && canRetry && (
+           <Button
+             variant="secondary"
+             size="sm"
+             loading={retrying}
+             onClick={onRetry}
+           >
+             Retry
+           </Button>
+         )}
+         <Link to={`/dashboard/model-training/${job.id}`}>
+           <Button
+             variant="primary"
+             size="sm"
+             icon={<Eye className="h-4 w-4" />}
+           >
+             View details
+           </Button>
+         </Link>
+      </div>
     </div>
   );
 }
 
-function UriLine({
-  icon,
-  label,
-  value,
-  onCopy,
-}: {
-  icon?: ReactNode;
-  label: string;
-  value: string;
-  onCopy: (value: string) => void;
-}) {
-  return (
-    <div className="flex w-full min-w-0 items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm">
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-          {icon}
-          {label}
-        </p>
-        <code className="mt-0.5 block truncate text-xs font-semibold text-gray-700" title={value || '-'}>
-          {value || '-'}
-        </code>
-      </div>
-      <button
-        type="button"
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-gray-50 text-gray-500 hover:bg-white hover:text-gray-900 hover:shadow-sm transition-all disabled:opacity-40"
-        disabled={!value}
-        onClick={() => onCopy(value)}
-        aria-label={`Copy ${label}`}
-      >
-        <Clipboard className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}

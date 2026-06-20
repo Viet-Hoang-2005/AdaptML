@@ -233,18 +233,18 @@ class ModelAPIBuildView(APIView):
         label_mapping_file = request.FILES.get("label_mapping_file")
         if label_mapping_file:
             model_api.label_mapping_file = label_mapping_file
-            
+
         model_api.endpoint_url = build_endpoint_url(model_api)
         model_api.save(update_fields=["source_artifact", "label_mapping_file", "endpoint_url", "updated_at"])
 
         # Gọi adapter chạy ngầm
         safe_name = slugify(name) or "model"
         package_filename = f"{safe_name}-mlflow-package.zip"
-        
+
         # Đường dẫn dự kiến lưu file artifact sau khi build xong
         from authentication.models import model_artifact_path
         output_key = model_artifact_path(model_api, package_filename)
-        
+
         try:
             adapter = get_build_adapter()
             label_mapping_key = model_api.label_mapping_file.name if model_api.label_mapping_file else None
@@ -382,13 +382,13 @@ class ModelAPIBuildLogsView(APIView):
         limit = int(request.query_params.get("limit", 100))
 
         log_key = f"build_logs:{model_id}"
-        
+
         try:
             # Lấy logs từ Redis (lrange là O(N))
             logs = cache.client.get_client().lrange(log_key, offset, offset + limit - 1)
             # logs là list of bytes
             logs_str = [log.decode('utf-8') for log in logs]
-            
+
             return Response({
                 "logs": logs_str,
                 "next_offset": offset + len(logs),
@@ -410,13 +410,13 @@ class ModelAPIBuildWebhookView(APIView):
 
         data = request.data
         status_val = data.get("status")
-        
+
         if status_val == "success":
             model_api.status = "ready"
             model_api.build_status = "ready"
             model_api.package_manifest = data.get("package_manifest", {})
             model_api.package_preview_tree = data.get("package_preview_tree", [])
-            
+
             # Giả định packager đã upload file lên output_key (model_api.artifact.name)
             # Chúng ta cần đảm bảo model_uri / url map đúng với S3 bucket.
             # Ở bước trước adapter đã tính output_key.
@@ -432,7 +432,7 @@ class ModelAPIBuildWebhookView(APIView):
             model_api.build_status = "error"
             model_api.error_message = "Model build failed."
             model_api.build_error = data.get("error_message", "Unknown error")
-            
+
         model_api.save()
         return Response({"message": "Webhook received successfully"}, status=status.HTTP_200_OK)
 
@@ -444,7 +444,7 @@ class ModelAPIDeployView(APIView):
             model_api = ModelAPI.objects.get(pk=model_id, tenant=request.user)
             if model_api.build_status and model_api.build_status != "ready":
                 return Response({"error": "Model build is not ready yet."}, status=status.HTTP_400_BAD_REQUEST)
-                
+
             DockerDeployAdapter().deploy_model(
                 model_id=model_api.id,
                 tenant_id=model_api.tenant.tenant_id,
@@ -463,7 +463,7 @@ class ModelAPICancelBuildView(APIView):
             model_api = ModelAPI.objects.get(pk=model_id, tenant=request.user)
             adapter = get_build_adapter()
             adapter.cancel_build(str(model_api.id))
-            
+
             # Delete the model so it doesn't clutter the UI since it was cancelled
             model_api.delete()
             return Response({"status": "cancelled and deleted"}, status=status.HTTP_200_OK)

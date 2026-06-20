@@ -106,12 +106,16 @@ services:
       AWS_BATCH_JOB_QUEUE: ${AWS_BATCH_JOB_QUEUE}
       AWS_BATCH_JOB_DEFINITION: ${AWS_BATCH_JOB_DEFINITION}
       AWS_BATCH_LOG_GROUP: ${AWS_BATCH_LOG_GROUP:-/aws/batch/mlops-training}
+      ENABLE_GPU_TRAINING: ${ENABLE_GPU_TRAINING:-False}
+      AWS_BATCH_GPU_JOB_QUEUE: ${AWS_BATCH_GPU_JOB_QUEUE}
+      AWS_BATCH_GPU_JOB_DEFINITION: ${AWS_BATCH_GPU_JOB_DEFINITION}
+      TRAINING_MAX_ACTIVE_JOBS_PER_TENANT: ${TRAINING_MAX_ACTIVE_JOBS_PER_TENANT:-1}
       MODEL_SERVER_PUBLIC_URL: ${MODEL_SERVER_PUBLIC_URL:-http://localhost:5000}
       MODEL_PACKAGER_URL: http://model-packager:7000
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock
-    command: sh -c "python src/manage.py ensure_db_schema && python src/manage.py migrate && python src/manage.py runserver 0.0.0.0:8000"
+    command: sh -c "python src/manage.py ensure_db_schema && python src/manage.py migrate && cd src && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
     depends_on:
       postgres:
         condition: service_healthy

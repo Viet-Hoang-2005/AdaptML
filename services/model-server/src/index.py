@@ -220,7 +220,7 @@ def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
         pyfunc_model = mlflow.pyfunc.load_model(str(mlflow_model_dir))
         signature = pyfunc_model.metadata.signature
         expected_features = [inp.name for inp in signature.inputs] if signature and signature.inputs else None
-        
+
         label_mapping = None
         for ext, loader, mode in [(".json", json.load, "r"), (".pkl", pickle.load, "rb")]:
             mapping_file = next(mlflow_model_dir.glob(f"*{ext}"), None)
