@@ -11,7 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from authentication.models import TrainingJob
+from authentication.models import ModelAPI, TrainingJob
+from .model_api_views import serialize_model_api, validate_unique_model_version
 from .aws_batch_training_service import (
     cancel_aws_batch_training_job,
     get_aws_batch_training_log_payload,
@@ -103,6 +104,11 @@ def _training_usage_for_user(user):
 
 
 def serialize_training_job(training_job: TrainingJob):
+    registered_model = (
+        training_job.registered_model_apis.exclude(status="disabled")
+        .order_by("-updated_at")
+        .first()
+    )
     return {
         "id": training_job.id,
         "name": training_job.name,
@@ -133,6 +139,8 @@ def serialize_training_job(training_job: TrainingJob):
         "stop_reason": training_job.stop_reason,
         "deleted_at": training_job.deleted_at,
         "is_deleted": bool(training_job.deleted_at),
+        "registered_model": serialize_model_api(registered_model) if registered_model else None,
+        "registered_model_id": registered_model.id if registered_model else None,
         "created_at": training_job.created_at,
         "updated_at": training_job.updated_at,
     }
@@ -551,6 +559,61 @@ class TrainingJobDownloadURLView(TrainingJobDetailView):
         training_job = self.get_training_job(request, training_job_id)
         download_url = create_model_artifact_presigned_url(training_job)
         return Response({"download_url": download_url}, status=status.HTTP_200_OK)
+
+
+class TrainingJobRegisterModelView(TrainingJobDetailView):
+    parser_classes = [JSONParser, FormParser]
+
+    def post(self, request, training_job_id):
+        training_job = self.get_training_job(request, training_job_id)
+        if training_job.deleted_at:
+            raise ValidationError({"error": "Archived training jobs cannot be registered as models."})
+        if training_job.status != "completed":
+            raise ValidationError({"error": "Only completed training jobs can be registered as models."})
+        if not training_job.model_artifact_uri:
+            raise ValidationError({"error": "Training job does not have a model artifact URI."})
+
+        model_name = (request.data.get("model_name") or training_job.name).strip()
+        model_version = (request.data.get("model_version") or training_job.model_version or "v1").strip() or "v1"
+        flavor = (request.data.get("flavor") or "").strip().lower()
+        access_mode = (request.data.get("access_mode") or "private").strip().lower()
+        description = (request.data.get("description") or "").strip()
+
+        if not model_name:
+            raise ValidationError({"error": "Model name is required."})
+        if access_mode not in {"private", "public"}:
+            raise ValidationError({"error": "Access mode must be private or public."})
+        if flavor and flavor not in {"sklearn", "xgboost"}:
+            raise ValidationError({"error": "Flavor must be sklearn or xgboost."})
+
+        duplicate_error = validate_unique_model_version(request.user, model_name, model_version)
+        if duplicate_error:
+            raise ValidationError({"error": duplicate_error})
+
+        model_api = ModelAPI.objects.create(
+            tenant=request.user,
+            name=model_name,
+            version=model_version,
+            description=description,
+            model_info=f"Registered from training job #{training_job.id}",
+            access_mode=access_mode,
+            source_type="training_job",
+            source_training_job=training_job,
+            source_artifact_uri=training_job.model_artifact_uri,
+            flavor=flavor,
+            status="uploading",
+            build_status="not_started",
+        )
+        from .model_api_views import build_endpoint_url
+        model_api.endpoint_url = build_endpoint_url(model_api)
+        model_api.save(update_fields=["endpoint_url", "updated_at"])
+        create_training_job_event(
+            training_job,
+            "MODEL_REGISTERED",
+            f"Registered model API #{model_api.id} ({model_api.name} {model_api.version}).",
+            {"model_api_id": model_api.id, "model_name": model_api.name, "version": model_api.version},
+        )
+        return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
 
 
 class TrainingJobLogsView(TrainingJobDetailView):
