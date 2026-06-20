@@ -1,5 +1,6 @@
 import json
 import os
+import pickle
 import shutil
 import uuid
 import zipfile
@@ -219,12 +220,41 @@ def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
         pyfunc_model = mlflow.pyfunc.load_model(str(mlflow_model_dir))
         signature = pyfunc_model.metadata.signature
         expected_features = [inp.name for inp in signature.inputs] if signature and signature.inputs else None
+
+        label_mapping = None
+        for ext, loader, mode in [(".json", json.load, "r"), (".pkl", pickle.load, "rb")]:
+            mapping_file = next(mlflow_model_dir.glob(f"*{ext}"), None)
+            if mapping_file and ("mapping" in mapping_file.name.lower() or "label" in mapping_file.name.lower() or "dictionary" in mapping_file.name.lower()):
+                try:
+                    with mapping_file.open(mode) as f:
+                        label_mapping = loader(f)
+                        if isinstance(label_mapping, list):
+                            label_mapping = {i: v for i, v in enumerate(label_mapping)}
+                    break
+                except Exception as e:
+                    print(f"Failed to load mapping file {mapping_file}: {e}")
+
+        # Fallback to check entire source_dir if not found in mlflow_model_dir
+        if not label_mapping:
+            for ext, loader, mode in [(".json", json.load, "r"), (".pkl", pickle.load, "rb")]:
+                mapping_file = next(source_dir.rglob(f"*{ext}"), None)
+                if mapping_file and ("mapping" in mapping_file.name.lower() or "label" in mapping_file.name.lower() or "dictionary" in mapping_file.name.lower()):
+                    try:
+                        with mapping_file.open(mode) as f:
+                            label_mapping = loader(f)
+                            if isinstance(label_mapping, list):
+                                label_mapping = {i: v for i, v in enumerate(label_mapping)}
+                        break
+                    except Exception as e:
+                        pass
+
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Unable to load model artifact: {exc}")
 
     MODEL_CACHE[model_id] = {
         "model": pyfunc_model,
         "expected_features": expected_features,
+        "label_mapping": label_mapping,
         "version_marker": version_marker,
     }
     return MODEL_CACHE[model_id]
@@ -375,6 +405,37 @@ async def predict(
         tenant_id = model_record["tenant_id"]
         resolved_model_id = str(model_record["id"])
 
+        # Map label if mapping exists
+        label_mapping = loaded_model.get("label_mapping")
+        if label_mapping is not None:
+            # Try to map the result. Convert to string to check if the keys are strings.
+            str_result = str(single_result)
+            if single_result in label_mapping:
+                single_result = label_mapping[single_result]
+            elif str_result in label_mapping:
+                single_result = label_mapping[str_result]
+            elif type(single_result) == int or type(single_result) == float:
+                # sometimes mapping keys are integers
+                if int(single_result) in label_mapping:
+                    single_result = label_mapping[int(single_result)]
+
+        confidence = None
+        try:
+            raw_model = getattr(model, "_model_impl", None)
+            if not raw_model and hasattr(model, "unwrap_python_model"):
+                raw_model = model.unwrap_python_model()
+            if hasattr(raw_model, "predict_proba"):
+                proba = raw_model.predict_proba(df_input)
+                if hasattr(proba, "tolist"):
+                    proba = proba.tolist()
+                if isinstance(proba, list) and len(proba) > 0:
+                    confidence = round(max(proba[0]) * 100, 2)
+        except Exception:
+            pass
+
+        print(f"Prediction: {single_result}")
+        print(f"Confidence: {confidence}%" if confidence else "Confidence: Not available")
+
         paas_predictions_counter.labels(tenant_id=tenant_id, model_id=resolved_model_id, status="success").inc()
         background_tasks.add_task(send_to_redpanda, tenant_id, resolved_model_id, features_dict, single_result)
 
@@ -382,6 +443,7 @@ async def predict(
             content={
                 "success": True,
                 "prediction": single_result,
+                "confidence": confidence,
                 "tenant_id": tenant_id,
                 "model_id": resolved_model_id,
             },

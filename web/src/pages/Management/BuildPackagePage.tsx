@@ -195,6 +195,14 @@ function ArtifactStep({
         subtitle=".pkl, .joblib, or .xgb"
         onChange={(file) => setField('source_artifact', file)}
       />
+
+      <StepTitle title="Upload Label Mapping (Optional)" description="Choose a dictionary file to map numeric outputs to string labels." />
+      <FileDropzone
+        accept=".pkl,.json"
+        title={form.label_mapping_file ? form.label_mapping_file.name : 'Choose label mapping file'}
+        subtitle=".pkl or .json (Optional)"
+        onChange={(file) => setField('label_mapping_file', file)}
+      />
     </div>
   );
 }
@@ -298,7 +306,7 @@ function DeployStep({
     } catch (e) {
       setBuilding(false);
       setBuildStatus('error');
-      const msg = getApiErrorMessage(e, 'Failed to start build process.');
+      const msg = getApiErrorMessage(e, "Failed to start build process.");
       setErrorMsg(msg);
       toast.error(msg);
     }
@@ -309,7 +317,7 @@ function DeployStep({
       try {
         await cancelBuildAPI(modelIdRef.current);
       } catch (e) {
-        const msg = getApiErrorMessage(e, 'Failed to cancel build process.');
+        const msg = getApiErrorMessage(e, "Failed to cancel build process.");
         setErrorMsg(msg);
         toast.error(msg);
       }

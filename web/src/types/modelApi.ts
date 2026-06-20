@@ -43,6 +43,7 @@ export interface ModelBuildFormValues {
   model_info: string;
   access_mode: ModelAccessMode;
   source_artifact: File | null;
+  label_mapping_file?: File | null;
   flavor: ModelFlavor;
   requirements_text: string;
   requirements_file?: File | null;

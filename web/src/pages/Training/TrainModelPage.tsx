@@ -39,7 +39,7 @@ import type {
   TrainingJobFormValues,
   TrainingJobStatus,
 } from '../../types/modelApi';
-import { SummaryItem } from './UploadModelFormPage';
+import { SummaryItem } from '../Management/UploadModelFormPage';
 
 const initialForm: TrainingJobFormValues = {
   name: '',

@@ -15,7 +15,7 @@ import HomeLayout from './pages/Home/HomeLayout';
 import ModelApiPage from './pages/Home/ModelApiPage';
 import ModelTestingPage from './pages/Home/ModelTestingPage';
 import APIManagementPage from './pages/Management/APIManagementPage';
-import TrainModelPage from './pages/Management/TrainModelPage';
+import TrainModelPage from './pages/Training/TrainModelPage';
 import TrainingJobDetailPage from './pages/Management/TrainingJobDetailPage';
 import ModelAPIFormPage from './pages/Management/UploadModelFormPage';
 import DeveloperSettingPage from './pages/Settings/DeveloperSettingPage';

@@ -16,6 +16,7 @@ from django.core.cache import cache
 
 from .models import ModelAPI
 from .build_adapter import get_build_adapter
+from .deploy_adapter import DockerDeployAdapter
 
 MAX_MODEL_ARTIFACT_SIZE_BYTES = 512 * 1024 * 1024
 SUPPORTED_BUILD_FLAVORS = {"sklearn", "xgboost"}
@@ -27,7 +28,7 @@ def get_model_server_public_url():
 
 
 def get_model_packager_url():
-    return getattr(settings, "MODEL_PACKAGER_URL", "http://model_packager:7000").rstrip("/")
+    return getattr(settings, "MODEL_PACKAGER_URL", "http://model-packager:7000").rstrip("/")
 
 
 def serialize_model_api(model_api):
@@ -127,7 +128,8 @@ def combine_requirements_text(request):
 
 
 def build_endpoint_url(model_api):
-    return f"{get_model_server_public_url()}/models/{model_api.id}/predict"
+    safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+    return f"{get_model_server_public_url()}/{model_api.tenant.tenant_id}/models/{safe_model_name}/v1/predict"
 
 
 class ModelAPIListCreateView(APIView):
@@ -172,6 +174,13 @@ class ModelAPIListCreateView(APIView):
         model_api.model_uri = model_api.artifact.url
         model_api.endpoint_url = build_endpoint_url(model_api)
         model_api.save(update_fields=["model_uri", "endpoint_url", "updated_at"])
+
+        DockerDeployAdapter().deploy_model(
+            model_id=model_api.id,
+            tenant_id=model_api.tenant.tenant_id,
+            model_name=model_api.name,
+            version="v1"
+        )
 
         return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
 
@@ -221,25 +230,31 @@ class ModelAPIBuildView(APIView):
             build_status="building",
         )
         model_api.source_artifact = source_artifact
+        label_mapping_file = request.FILES.get("label_mapping_file")
+        if label_mapping_file:
+            model_api.label_mapping_file = label_mapping_file
+
         model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["source_artifact", "endpoint_url", "updated_at"])
+        model_api.save(update_fields=["source_artifact", "label_mapping_file", "endpoint_url", "updated_at"])
 
         # Gọi adapter chạy ngầm
         safe_name = slugify(name) or "model"
         package_filename = f"{safe_name}-mlflow-package.zip"
-        
+
         # Đường dẫn dự kiến lưu file artifact sau khi build xong
         from .models import model_artifact_path
         output_key = model_artifact_path(model_api, package_filename)
-        
+
         try:
             adapter = get_build_adapter()
+            label_mapping_key = model_api.label_mapping_file.name if model_api.label_mapping_file else None
             adapter.trigger_build(
                 model_id=str(model_api.id),
                 flavor=flavor,
                 requirements_text=requirements_text,
                 source_key=model_api.source_artifact.name,
-                output_key=output_key
+                output_key=output_key,
+                label_mapping_key=label_mapping_key
             )
         except Exception as exc:
             model_api.status = "error"
@@ -321,6 +336,14 @@ class ModelAPIDetailView(APIView):
         model_api.endpoint_url = build_endpoint_url(model_api)
         model_api.save(update_fields=["model_uri", "endpoint_url", "updated_at"])
 
+        if model_api.artifact:
+            DockerDeployAdapter().deploy_model(
+                model_id=model_api.id,
+                tenant_id=model_api.tenant.tenant_id,
+                model_name=model_api.name,
+                version="v1"
+            )
+
         return Response(serialize_model_api(model_api), status=status.HTTP_200_OK)
 
     def delete(self, request, model_id):
@@ -333,6 +356,8 @@ class ModelAPIDetailView(APIView):
             from .build_adapter import DockerBuildAdapter
             # Kill build process if running
             DockerBuildAdapter().cancel_build(model_id)
+            # Kill endpoint container
+            DockerDeployAdapter().remove_model(model_api.id)
             # Delete file from S3 if exists
             if model_api.artifact:
                 model_api.artifact.delete(save=False)
@@ -340,6 +365,7 @@ class ModelAPIDetailView(APIView):
             model_api.delete()
             return Response({"message": "Model API has been completely destroyed."}, status=status.HTTP_200_OK)
 
+        DockerDeployAdapter().remove_model(model_api.id)
         model_api.status = "disabled"
         model_api.save(update_fields=["status", "updated_at"])
         return Response({"message": "Model API has been disabled."}, status=status.HTTP_200_OK)
@@ -357,13 +383,13 @@ class ModelAPIBuildLogsView(APIView):
         limit = int(request.query_params.get("limit", 100))
 
         log_key = f"build_logs:{model_id}"
-        
+
         try:
             # Lấy logs từ Redis (lrange là O(N))
             logs = cache.client.get_client().lrange(log_key, offset, offset + limit - 1)
             # logs là list of bytes
             logs_str = [log.decode('utf-8') for log in logs]
-            
+
             return Response({
                 "logs": logs_str,
                 "next_offset": offset + len(logs),
@@ -385,13 +411,13 @@ class ModelAPIBuildWebhookView(APIView):
 
         data = request.data
         status_val = data.get("status")
-        
+
         if status_val == "success":
             model_api.status = "ready"
             model_api.build_status = "ready"
             model_api.package_manifest = data.get("package_manifest", {})
             model_api.package_preview_tree = data.get("package_preview_tree", [])
-            
+
             # Giả định packager đã upload file lên output_key (model_api.artifact.name)
             # Chúng ta cần đảm bảo model_uri / url map đúng với S3 bucket.
             # Ở bước trước adapter đã tính output_key.
@@ -407,9 +433,28 @@ class ModelAPIBuildWebhookView(APIView):
             model_api.build_status = "error"
             model_api.error_message = "Model build failed."
             model_api.build_error = data.get("error_message", "Unknown error")
-            
+
         model_api.save()
         return Response({"message": "Webhook received successfully"}, status=status.HTTP_200_OK)
+
+class ModelAPIDeployView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, model_id):
+        try:
+            model_api = ModelAPI.objects.get(pk=model_id, tenant=request.user)
+            if model_api.build_status and model_api.build_status != "ready":
+                return Response({"error": "Model build is not ready yet."}, status=status.HTTP_400_BAD_REQUEST)
+
+            DockerDeployAdapter().deploy_model(
+                model_id=model_api.id,
+                tenant_id=model_api.tenant.tenant_id,
+                model_name=model_api.name,
+                version="v1"
+            )
+            return Response({"message": "Deployment started successfully."}, status=status.HTTP_200_OK)
+        except ModelAPI.DoesNotExist:
+            return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
 
 class ModelAPICancelBuildView(APIView):
     permission_classes = [IsAuthenticated]
@@ -419,7 +464,7 @@ class ModelAPICancelBuildView(APIView):
             model_api = ModelAPI.objects.get(pk=model_id, tenant=request.user)
             adapter = get_build_adapter()
             adapter.cancel_build(str(model_api.id))
-            
+
             # Delete the model so it doesn't clutter the UI since it was cancelled
             model_api.delete()
             return Response({"status": "cancelled and deleted"}, status=status.HTTP_200_OK)

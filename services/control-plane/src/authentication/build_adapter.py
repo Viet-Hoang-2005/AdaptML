@@ -9,29 +9,24 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 class BuildAdapter:
-    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str):
+    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str, label_mapping_key: str = None):
         raise NotImplementedError()
 
     def cancel_build(self, model_id: str):
         raise NotImplementedError()
 
 class DockerBuildAdapter(BuildAdapter):
-    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str):
+    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str, label_mapping_key: str = None):
         def _run_container():
             try:
                 client = docker.from_env()
                 # Use the same image as the packager
-                # Assuming the image is named mlops-nids-system-model_packager locally
-                # We will find the image name based on running containers or hardcode.
-                # Actually docker-compose builds it as mlops-nids-system-model_packager
-                image_name = "mlops-nids-system-model_packager" 
-                
-                # Check if image exists
+                # Assuming the image is named mlops-paas-model-packager locally
+                image_name = "mlops-paas-model-packager"
                 try:
                     client.images.get(image_name)
                 except docker.errors.ImageNotFound:
-                    # try alternative names like mlops-nids-system_model_packager
-                    image_name = "mlops-nids-system_model_packager"
+                    logger.error(f"Image {image_name} not found.")
                 
                 webhook_url = f"http://control-plane:8000/api/auth/models/{model_id}/build-webhook"
                 
@@ -41,6 +36,7 @@ class DockerBuildAdapter(BuildAdapter):
                     "REQUIREMENTS_TEXT": requirements_text,
                     "SOURCE_KEY": source_key,
                     "OUTPUT_KEY": output_key,
+                    "LABEL_MAPPING_KEY": label_mapping_key or "",
                     "REDIS_URL": "redis://redis:6379/1",
                     "AWS_ACCESS_KEY_ID": os.environ.get("AWS_ACCESS_KEY_ID", ""),
                     "AWS_SECRET_ACCESS_KEY": os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
@@ -52,10 +48,13 @@ class DockerBuildAdapter(BuildAdapter):
                 logger.info(f"Starting Docker container for build {model_id} using image {image_name}")
                 client.containers.run(
                     image=image_name,
-                    name=f"mlops_build_{model_id}",
+                    name=f"model_build_{model_id}",
                     command=["python", "src/cli.py"],
                     environment=environment,
                     network="mlops-nids-system_mlops_paas_network",
+                    volumes={
+                        '/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'rw'}
+                    },
                     remove=True,
                     detach=True
                 )
@@ -75,7 +74,7 @@ class DockerBuildAdapter(BuildAdapter):
     def cancel_build(self, model_id: str):
         try:
             client = docker.from_env()
-            container_name = f"mlops_build_{model_id}"
+            container_name = f"model_build_{model_id}"
             try:
                 container = client.containers.get(container_name)
                 container.kill()

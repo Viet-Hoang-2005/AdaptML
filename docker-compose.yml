@@ -62,6 +62,7 @@ services:
     build:
       context: ./services/control-plane
       dockerfile: Dockerfile
+    image: mlops-paas-django
     container_name: mlops_paas_django
     restart: always
     ports:
@@ -127,15 +128,32 @@ services:
     networks:
       - mlops_paas_network
 
-  # 3. FastAPI Inference Server (Data Plane)
+  # Traefik API Gateway cho Model Server
+  traefik:
+    image: traefik:latest
+    container_name: mlops_paas_traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:5000"
+    ports:
+      - "5000:5000"
+      - "8080:8080" # Dashboard Traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - mlops_paas_network
+
+  # 3. FastAPI Inference Server Image Blueprint (Data Plane)
   model-server:
     build:
       context: ./services/model-server
       dockerfile: Dockerfile
-    container_name: mlops_paas_model_server
-    restart: always
-    ports:
-      - "5000:5000"
+    image: mlops-paas-model-server
+    restart: "no"
+    command: ["echo", "Model Server Image Built Successfully. Waiting for dynamic execution..."]
     environment:
       PYTHONUNBUFFERED: 1
       MODEL_VERSION: ${MODEL_VERSION:-v1}
@@ -150,7 +168,7 @@ services:
       REDPANDA_BROKERS: redpanda:9092
       KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_logs}
       JWKS_URL: http://control-plane:8000/api/auth/.well-known/jwks.json
-      control-plane_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      CONTROL_PLANE_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
       CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control-plane}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
@@ -161,7 +179,7 @@ services:
     volumes:
       - ./models:/models # Mount thư mục models local vào container
       - ./services/model-server:/app
-    command: uvicorn src.index:app --host 0.0.0.0 --port 5000 --reload
+
     depends_on:
       postgres:
         condition: service_healthy # Đợi postgres healthy mới start API
@@ -175,6 +193,7 @@ services:
     build:
       context: ./services/model-packager
       dockerfile: Dockerfile
+    image: mlops-paas-model-packager
     container_name: mlops_paas_model_packager
     restart: "no"
     command: ["echo", "Model Packager Image Built Successfully. Waiting for dynamic execution..."]
@@ -188,6 +207,7 @@ services:
     build:
       context: ./services/evidently
       dockerfile: Dockerfile
+    image: mlops-paas-evidently
     container_name: mlops_paas_evidently
     # Không restart tự động - đây là job chạy 1 lần như CronJob trong K3s
     restart: "no"
@@ -254,6 +274,7 @@ services:
     build:
       context: ./services/model-server
       dockerfile: Dockerfile
+    image: mlops-paas-consumer
     container_name: mlops_paas_consumer
     restart: always
     environment:
@@ -308,7 +329,7 @@ services:
     image: docker.redpanda.com/redpandadata/console:latest
     container_name: mlops_paas_redpanda_console
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
       KAFKA_BROKERS: redpanda:9092
     depends_on:

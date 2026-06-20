@@ -4,11 +4,14 @@ import { Link, useNavigate, useParams, useBlocker } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useModelAPIMutations, useModelAPIs } from '../../hooks/useModelAPIs';
-import { deleteModelAPI as deleteModelAPICore } from '../../lib/api';
+import { deleteModelAPI as deleteModelAPICore, deployModelAPI, getApiErrorMessage } from '../../lib/api';
 import type { ModelAccessMode, ModelAPI, ModelAPIFormValues, ModelBuildFormValues } from '../../types/modelApi';
 import BuildPackagePage from './BuildPackagePage';
 import MLflowZipPage from './MLflowZipPage';
 import { useRef, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../lib/queryKeys';
+import { toast } from '../../lib/toast';
 
 const emptyAdvancedForm: ModelAPIFormValues = {
   name: '',
@@ -55,6 +58,7 @@ function ModelAPIFormContent({
   model: ModelAPI | null;
   modelId: number | null;
 }) {
+  const queryClient = useQueryClient();
   const {
     createModelAPI,
     updateModelAPI,
@@ -153,10 +157,17 @@ function ModelAPIFormContent({
     createModelAPI(advancedForm);
   };
 
-  const submitBuild = () => {
+  const submitBuild = async () => {
     if (createdModelId) {
       isSubmittingRef.current = true;
-      navigate(`/dashboard/api-management/${createdModelId}`);
+      try {
+        await deployModelAPI(createdModelId);
+      } catch (e) {
+        const msg = getApiErrorMessage(e, "Deployment failed or model is already deploying.");
+        toast.error(msg);
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      navigate(`/dashboard/api-management`);
     }
   };
 

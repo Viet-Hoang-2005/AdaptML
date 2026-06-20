@@ -24,6 +24,7 @@ from authentication.model_api_views import (
     ModelAPIBuildLogsView,
     ModelAPIBuildWebhookView,
     ModelAPICancelBuildView,
+    ModelAPIDeployView,
 )
 from authentication.training_job_views import (
     TrainingJobDetailView,
@@ -47,6 +48,7 @@ urlpatterns = [
     path('api/models/<int:model_id>/package-preview/', ModelAPIPackagePreviewView.as_view(), name='model_api_package_preview'),
     path('api/models/<int:model_id>/build-logs/', ModelAPIBuildLogsView.as_view(), name='model_api_build_logs'),
     path('api/models/<int:model_id>/cancel-build/', ModelAPICancelBuildView.as_view(), name='model_api_cancel_build'),
+    path('api/models/<int:model_id>/deploy/', ModelAPIDeployView.as_view(), name='model_api_deploy'),
     path('api/auth/models/<int:model_id>/build-webhook', ModelAPIBuildWebhookView.as_view(), name='model_api_build_webhook'),
     path('api/models/<int:model_id>/', ModelAPIDetailView.as_view(), name='model_api_detail'),
     path('api/training-jobs/', TrainingJobListCreateView.as_view(), name='training_job_list_create'),
