@@ -251,6 +251,34 @@ def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Unable to load model artifact: {exc}")
 
+    try:
+        raw_model = None
+        if hasattr(pyfunc_model, "unwrap_python_model"):
+            try:
+                raw_model = pyfunc_model.unwrap_python_model()
+            except Exception:
+                pass
+        if not raw_model and hasattr(pyfunc_model, "_model_impl"):
+            raw_model = getattr(pyfunc_model._model_impl, "xgb_model", None)
+            
+        if raw_model and type(raw_model).__name__ == "XGBClassifier":
+            if not hasattr(raw_model, "n_classes_"):
+                if label_mapping:
+                    raw_model.n_classes_ = len(label_mapping)
+                else:
+                    raw_model.n_classes_ = len(getattr(raw_model, "classes_", [0, 1]))
+                
+        # If signature is missing, try to extract expected features from raw model
+        if not expected_features and raw_model:
+            if hasattr(raw_model, "feature_names_in_") and getattr(raw_model, "feature_names_in_", None) is not None:
+                expected_features = list(raw_model.feature_names_in_)
+            elif hasattr(raw_model, "get_booster"):
+                expected_features = raw_model.get_booster().feature_names
+            elif hasattr(raw_model, "feature_names"):
+                expected_features = raw_model.feature_names
+    except Exception as e:
+        print(f"Failed to apply XGBClassifier workaround or extract feature names: {e}")
+
     MODEL_CACHE[model_id] = {
         "model": pyfunc_model,
         "expected_features": expected_features,
@@ -402,6 +430,11 @@ async def predict(
             result = prediction if isinstance(prediction, list) else [prediction]
 
         single_result = result[0] if len(result) > 0 else result
+        
+        # Unwrap nested list if it exists
+        while isinstance(single_result, list) and len(single_result) > 0:
+            single_result = single_result[0]
+            
         tenant_id = model_record["tenant_id"]
         resolved_model_id = str(model_record["id"])
 

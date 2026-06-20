@@ -526,7 +526,7 @@ export default function TrainingJobDetailPage() {
       </div>
 
       {/* Tab Content */}
-      <div className="min-h-[400px]">
+      <div className="min-h-100">
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {job.status === 'failed' && (
@@ -540,7 +540,7 @@ export default function TrainingJobDetailPage() {
                 </p>
                 {job.error_message && (
                   <div className="rounded-lg border border-red-100 bg-white p-4 shadow-sm overflow-x-auto">
-                    <code className="whitespace-pre-wrap break-words text-xs text-red-900 font-mono">
+                    <code className="whitespace-pre-wrap wrap-break-words text-xs text-red-900 font-mono">
                       {job.error_message}
                     </code>
                   </div>
@@ -786,7 +786,7 @@ function MilestoneTracker({
   }>;
 }) {
   return (
-    <div className="flex items-start justify-between min-w-[600px] w-full">
+    <div className="flex items-start justify-between min-w-150 w-full">
       {milestones.map((m, i) => {
         const Icon = m.icon;
         const isLast = i === milestones.length - 1;
@@ -857,7 +857,7 @@ function TrainingEventHistory({ events }: { events: TrainingJobEvent[] }) {
             </span>
             <div className="min-w-0">
               <p className="font-bold text-gray-900">{event.event_type.replace(/_/g, ' ')}</p>
-              <p className="break-words text-gray-600">{event.message}</p>
+              <p className="wrap-break-words text-gray-600">{event.message}</p>
             </div>
           </div>
         ))}
@@ -1081,7 +1081,7 @@ function LogTerminal({
         <pre
           ref={scrollRef}
           onScroll={handleScroll}
-          className="max-h-[600px] min-h-[400px] overflow-x-auto overflow-y-auto whitespace-pre p-6 font-mono text-[13px] leading-6 text-gray-300"
+          className="max-h-150 min-h-100 overflow-x-auto overflow-y-auto whitespace-pre p-6 font-mono text-[13px] leading-6 text-gray-300"
         >
           {text}
         </pre>
@@ -1117,7 +1117,7 @@ function UriLine({
           {icon}
           {label}
         </div>
-        <code className="mt-1 block truncate text-xs sm:text-sm font-semibold text-gray-700 max-w-[200px] sm:max-w-md lg:max-w-xl" title={value || '-'}>
+        <code className="mt-1 block truncate text-xs sm:text-sm font-semibold text-gray-700 max-w-50 sm:max-w-md lg:max-w-xl" title={value || '-'}>
           {value || '-'}
         </code>
       </div>

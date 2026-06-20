@@ -26,7 +26,7 @@ class DockerDeployAdapter(DeployAdapter):
                     image_name = "mlops-paas-model-server"
                     logger.info(f"Custom image not found. Falling back to {image_name} for model {model_id}.")
 
-                container_name = f"model_endpoint_{model_id}"
+                container_name = f"mlops_paas_model_endpoint_{model_id}"
 
                 try:
                     old_container = client.containers.get(container_name)
@@ -84,7 +84,7 @@ class DockerDeployAdapter(DeployAdapter):
     def remove_model(self, model_id: int):
         try:
             client = docker.from_env()
-            container_name = f"model_endpoint_{model_id}"
+            container_name = f"mlops_paas_model_endpoint_{model_id}"
             try:
                 container = client.containers.get(container_name)
                 container.remove(force=True)

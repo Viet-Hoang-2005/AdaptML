@@ -152,6 +152,7 @@ services:
       context: ./services/model-server
       dockerfile: Dockerfile
     image: mlops-paas-model-server
+    container_name: mlops_paas_model_server
     restart: "no"
     command: ["echo", "Model Server Image Built Successfully. Waiting for dynamic execution..."]
     environment:

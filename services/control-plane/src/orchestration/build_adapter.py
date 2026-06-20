@@ -48,7 +48,7 @@ class DockerBuildAdapter(BuildAdapter):
                 logger.info(f"Starting Docker container for build {model_id} using image {image_name}")
                 client.containers.run(
                     image=image_name,
-                    name=f"model_build_{model_id}",
+                    name=f"mlops_paas_model_build_{model_id}",
                     command=["python", "src/cli.py"],
                     environment=environment,
                     network="mlops_paas_network",
@@ -74,7 +74,7 @@ class DockerBuildAdapter(BuildAdapter):
     def cancel_build(self, model_id: str):
         try:
             client = docker.from_env()
-            container_name = f"model_build_{model_id}"
+            container_name = f"mlops_paas_model_build_{model_id}"
             try:
                 container = client.containers.get(container_name)
                 container.kill()
