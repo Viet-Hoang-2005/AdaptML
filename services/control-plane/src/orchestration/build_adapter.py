@@ -65,13 +65,14 @@ class DockerBuildAdapter(BuildAdapter):
                     "CONTROL_PLANE_WEBHOOK_URL": webhook_url,
                 }
                 
-                logger.info(f"Starting Docker container for build {model_id} using image {image_name}")
+                network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
+                logger.info(f"Starting Docker container for build {model_id} using image {image_name} on network {network_name}")
                 client.containers.run(
                     image=image_name,
                     name=f"mlops_paas_model_build_{model_id}",
                     command=["python", "src/cli.py"],
                     environment=environment,
-                    network="mlops_paas_network",
+                    network=network_name,
                     volumes={
                         '/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'rw'}
                     },

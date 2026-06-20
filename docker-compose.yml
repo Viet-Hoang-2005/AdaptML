@@ -32,8 +32,9 @@ services:
     environment:
       PGPASSWORD: ${DB_PASSWORD}
     command: >
-      sh -c "psql -h postgres -U ${DB_USER} -d ${DB_NAME} -v ON_ERROR_STOP=1
-      -c 'CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA:-control-plane};'
+      sh -c "until pg_isready -h postgres -U ${DB_USER} -d ${DB_NAME}; do sleep 2; done;
+      psql -h postgres -U ${DB_USER} -d ${DB_NAME} -v ON_ERROR_STOP=1
+      -c 'CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA:-control_plane};'
       -c 'CREATE SCHEMA IF NOT EXISTS ${MLFLOW_DB_SCHEMA:-mlflow};'"
     depends_on:
       postgres:
@@ -78,7 +79,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
-      DB_SCHEMA: ${DB_SCHEMA:-control-plane}
+      DB_SCHEMA: ${DB_SCHEMA:-control_plane}
       REDIS_URL: redis://redis:6379/1
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
@@ -111,7 +112,8 @@ services:
       AWS_BATCH_GPU_JOB_DEFINITION: ${AWS_BATCH_GPU_JOB_DEFINITION}
       TRAINING_MAX_ACTIVE_JOBS_PER_TENANT: ${TRAINING_MAX_ACTIVE_JOBS_PER_TENANT:-1}
       MODEL_SERVER_PUBLIC_URL: ${MODEL_SERVER_PUBLIC_URL:-http://localhost:5000}
-      MODEL_PACKAGER_URL: http://model-packager:7000
+      MODEL_PACKAGER_URL: ${MODEL_PACKAGER_URL:-http://model-packager:7000}
+      DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME:-mlops_paas_network}
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock
@@ -170,7 +172,7 @@ services:
       KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_logs}
       JWKS_URL: http://control-plane:8000/api/auth/.well-known/jwks.json
       CONTROL_PLANE_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control-plane}
+      CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control_plane}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
@@ -351,7 +353,7 @@ services:
 # Mạng nội bộ cho các container
 networks:
   mlops_paas_network:
-    name: mlops_paas_network
+    name: ${DOCKER_NETWORK_NAME:-mlops_paas_network}
     driver: bridge
 
 # Volume để lưu trữ dữ liệu của PostgreSQL và Redpanda

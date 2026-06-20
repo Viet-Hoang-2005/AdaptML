@@ -2,6 +2,7 @@ import logging
 import os
 import threading
 import docker
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class DockerDeployAdapter(DeployAdapter):
                     f"traefik.http.routers.model_{model_id}.middlewares": f"rewrite_{model_id}",
                     f"traefik.http.services.model_{model_id}.loadbalancer.server.port": "5000",
                 }
-                network_name = "mlops_paas_network"
+                network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
                 db_user = os.environ.get("DB_USER", "postgres")
                 db_password = os.environ.get("DB_PASSWORD", "postgres")
                 db_name = os.environ.get("DB_NAME", "mlops_paas")
@@ -64,7 +65,7 @@ class DockerDeployAdapter(DeployAdapter):
                     "REDIS_URL": "redis://redis:6379/1",
                 }
 
-                logger.info(f"Starting Model Endpoint Container {container_name} for model {model_id}")
+                logger.info(f"Starting Model Endpoint Container {container_name} for model {model_id} on network {network_name}")
                 client.containers.run(
                     image=image_name,
                     name=container_name,

@@ -235,6 +235,7 @@ GITHUB_OAUTH_REDIRECT_URI = os.environ.get(
 
 MODEL_SERVER_PUBLIC_URL = os.environ.get('MODEL_SERVER_PUBLIC_URL', 'http://localhost:5000')
 MODEL_PACKAGER_URL = os.environ.get('MODEL_PACKAGER_URL', 'http://model-packager:7000')
+DOCKER_NETWORK_NAME = os.environ.get('DOCKER_NETWORK_NAME', 'mlops_paas_network').strip() or 'mlops_paas_network'
 
 # SageMaker Training PaaS configuration.
 TRAINING_BACKEND = os.environ.get('TRAINING_BACKEND', 'sagemaker').strip().lower()
