@@ -8,6 +8,7 @@ from .training_job_views import (
     TrainingJobLogsView,
     TrainingJobMetricsView,
     TrainingJobRefreshStatusView,
+    TrainingJobRegisterModelView,
     TrainingJobRetryView,
     TrainingJobRestoreView,
     TrainingUsageView,
@@ -22,6 +23,7 @@ from .model_api_views import (
     ModelAPIBuildWebhookView,
     ModelAPICancelBuildView,
     ModelAPIDeployView,
+    ModelAPITriggerBuildView,
 )
 
 urlpatterns = [
@@ -29,6 +31,7 @@ urlpatterns = [
     path('models/build/', ModelAPIBuildView.as_view(), name='model_api_build'),
     path('models/<int:model_id>/package-preview/', ModelAPIPackagePreviewView.as_view(), name='model_api_package_preview'),
     path('models/<int:model_id>/build-logs/', ModelAPIBuildLogsView.as_view(), name='model_api_build_logs'),
+    path('models/<int:model_id>/build/', ModelAPITriggerBuildView.as_view(), name='model_api_trigger_build'),
     path('models/<int:model_id>/cancel-build/', ModelAPICancelBuildView.as_view(), name='model_api_cancel_build'),
     path('models/<int:model_id>/deploy/', ModelAPIDeployView.as_view(), name='model_api_deploy'),
     path('models/<int:model_id>/build-webhook', ModelAPIBuildWebhookView.as_view(), name='model_api_build_webhook'),
@@ -37,6 +40,7 @@ urlpatterns = [
     path('training-jobs/<int:training_job_id>/', TrainingJobDetailView.as_view(), name='training_job_detail'),
     path('training-jobs/<int:training_job_id>/refresh-status/', TrainingJobRefreshStatusView.as_view(), name='training_job_refresh_status'),
     path('training-jobs/<int:training_job_id>/download-url/', TrainingJobDownloadURLView.as_view(), name='training_job_download_url'),
+    path('training-jobs/<int:training_job_id>/register-model/', TrainingJobRegisterModelView.as_view(), name='training_job_register_model'),
     path('training-jobs/<int:training_job_id>/cancel/', TrainingJobCancelView.as_view(), name='training_job_cancel'),
     path('training-jobs/<int:training_job_id>/retry/', TrainingJobRetryView.as_view(), name='training_job_retry'),
     path('training-jobs/<int:training_job_id>/events/', TrainingJobEventsView.as_view(), name='training_job_events'),
