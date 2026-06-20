@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import zipfile
 
 from django.conf import settings
@@ -17,6 +18,8 @@ from django.core.cache import cache
 from authentication.models import ModelAPI
 from .build_adapter import get_build_adapter, DockerBuildAdapter
 from .deploy_adapter import DockerDeployAdapter
+
+logger = logging.getLogger(__name__)
 
 MAX_MODEL_ARTIFACT_SIZE_BYTES = 512 * 1024 * 1024
 SUPPORTED_BUILD_FLAVORS = {"sklearn", "xgboost"}
@@ -497,10 +500,13 @@ class ModelAPIBuildWebhookView(APIView):
 
         data = request.data
         status_val = data.get("status")
+        logger.info("Received build webhook for model %s with status=%s", model_id, status_val)
 
         if status_val == "success":
             model_api.status = "ready"
             model_api.build_status = "ready"
+            model_api.build_error = ""
+            model_api.error_message = ""
             model_api.package_manifest = data.get("package_manifest", {})
             model_api.package_preview_tree = data.get("package_preview_tree", [])
 
@@ -514,11 +520,13 @@ class ModelAPIBuildWebhookView(APIView):
             model_api.artifact.name = model_artifact_path(model_api, package_filename)
             model_api.model_uri = model_api.artifact.url
             model_api.endpoint_url = build_endpoint_url(model_api)
+            logger.info("Model %s build marked ready. Artifact key=%s", model_id, model_api.artifact.name)
         else:
             model_api.status = "error"
             model_api.build_status = "error"
             model_api.error_message = "Model build failed."
             model_api.build_error = data.get("error_message", "Unknown error")
+            logger.warning("Model %s build marked error: %s", model_id, model_api.build_error)
 
         model_api.save()
         return Response({"message": "Webhook received successfully"}, status=status.HTTP_200_OK)
