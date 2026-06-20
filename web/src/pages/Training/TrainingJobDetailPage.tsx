@@ -35,13 +35,24 @@ import {
   deleteTrainingJob,
   restoreTrainingJob,
   refreshTrainingJobStatus,
+  registerTrainingJobModel,
+  triggerModelAPIBuild,
+  deployModelAPI,
 } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { formatDuration, computeElapsed } from '../../lib/formatDuration';
 import { useTrainingJobRealtime } from '../../hooks/useTrainingJobRealtime';
-import type { TrainingJob, TrainingJobEvent, TrainingJobMetricsResponse, TrainingJobStatus } from '../../types/modelApi';
+import type {
+  ModelAPI,
+  ModelAccessMode,
+  ModelFlavor,
+  TrainingJob,
+  TrainingJobEvent,
+  TrainingJobMetricsResponse,
+  TrainingJobStatus,
+} from '../../types/modelApi';
 
 // -- Shared formatting helpers --
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
@@ -69,6 +80,14 @@ export default function TrainingJobDetailPage() {
   const queryClient = useQueryClient();
   const [refreshingSection, setRefreshingSection] = useState<'header' | 'logs' | 'metrics' | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'logs' | 'metrics' | 'artifacts' | 'config'>('overview');
+  const [registerModalOpen, setRegisterModalOpen] = useState(false);
+  const [registerForm, setRegisterForm] = useState({
+    model_name: '',
+    model_version: '',
+    flavor: 'sklearn' as ModelFlavor,
+    access_mode: 'public' as ModelAccessMode,
+    description: '',
+  });
 
   const parsedJobId = Number(jobId);
   const [liveElapsed, setLiveElapsed] = useState<number | null>(null);
@@ -239,6 +258,57 @@ export default function TrainingJobDetailPage() {
     }
   });
 
+  const registerModelMutation = useMutation({
+    mutationFn: () =>
+      registerTrainingJobModel(parsedJobId, {
+        model_name: registerForm.model_name.trim(),
+        model_version: registerForm.model_version.trim(),
+        flavor: registerForm.flavor,
+        access_mode: registerForm.access_mode,
+        description: registerForm.description.trim(),
+      }),
+    onSuccess: async (model) => {
+      toast.success(`Registered ${model.name} ${model.version || 'v1'} as a model.`);
+      setRegisterModalOpen(false);
+      queryClient.setQueryData([...queryKeys.trainingJobs, 'detail', parsedJobId], (current: TrainingJob | undefined) =>
+        current ? { ...current, registered_model: model, registered_model_id: model.id } : current,
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.trainingJobs });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await refetchEvents();
+    },
+    onError: (err) => {
+      toast.error(getApiErrorMessage(err, 'Unable to register training job as model.'));
+    },
+  });
+
+  const buildRegisteredModelMutation = useMutation({
+    mutationFn: (modelId: number) => triggerModelAPIBuild(modelId),
+    onSuccess: async (model) => {
+      toast.success(`Build started for ${model.name} ${model.version || 'v1'}.`);
+      queryClient.setQueryData([...queryKeys.trainingJobs, 'detail', parsedJobId], (current: TrainingJob | undefined) =>
+        current ? { ...current, registered_model: model, registered_model_id: model.id } : current,
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await refetchJob();
+    },
+    onError: (err) => {
+      toast.error(getApiErrorMessage(err, 'Unable to start package build.'));
+    },
+  });
+
+  const deployRegisteredModelMutation = useMutation({
+    mutationFn: (modelId: number) => deployModelAPI(modelId),
+    onSuccess: async () => {
+      toast.success('Deployment started.');
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await refetchJob();
+    },
+    onError: (err) => {
+      toast.error(getApiErrorMessage(err, 'Unable to deploy endpoint.'));
+    },
+  });
+
   const restoreMutation = useMutation({
     mutationFn: () => restoreTrainingJob(parsedJobId),
     onSuccess: () => {
@@ -255,6 +325,17 @@ export default function TrainingJobDetailPage() {
     navigator.clipboard.writeText(value);
     toast.success('Copied to clipboard');
   }, []);
+
+  const openRegisterModal = () => {
+    setRegisterForm({
+      model_name: job?.name || '',
+      model_version: job?.model_version || 'v1',
+      flavor: 'sklearn',
+      access_mode: 'public',
+      description: job ? `Registered from training job #${job.id}` : '',
+    });
+    setRegisterModalOpen(true);
+  };
 
   if (isNaN(parsedJobId)) {
     return (
@@ -642,6 +723,18 @@ export default function TrainingJobDetailPage() {
 
         {activeTab === 'artifacts' && (
           <div className="space-y-6 animate-in fade-in duration-300">
+            <DeploymentPanel
+              job={job}
+              onRegister={openRegisterModal}
+              onBuild={(model) => buildRegisteredModelMutation.mutate(model.id)}
+              onDeploy={(model) => deployRegisteredModelMutation.mutate(model.id)}
+              onOpenApiManagement={(model) => navigate(`/dashboard/api-management/${model.id}`)}
+              onTestPrediction={() => navigate('/dashboard/home/model-testing')}
+              buildingModelId={buildRegisteredModelMutation.isPending ? buildRegisteredModelMutation.variables ?? null : null}
+              deployingModelId={deployRegisteredModelMutation.isPending ? deployRegisteredModelMutation.variables ?? null : null}
+              registering={registerModelMutation.isPending}
+            />
+
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex flex-wrap gap-4 justify-between items-center">
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Output Artifacts</h3>
@@ -729,6 +822,79 @@ export default function TrainingJobDetailPage() {
           </div>
         )}
       </div>
+
+      {registerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold text-gray-900">Register training artifact as model</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                This creates a Model API record first. You can build and deploy it after registration.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <label className="block text-sm font-semibold text-gray-700">
+                Model name
+                <input
+                  value={registerForm.model_name}
+                  onChange={(event) => setRegisterForm((current) => ({ ...current, model_name: event.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                />
+              </label>
+              <label className="block text-sm font-semibold text-gray-700">
+                Version
+                <input
+                  value={registerForm.model_version}
+                  onChange={(event) => setRegisterForm((current) => ({ ...current, model_version: event.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                />
+              </label>
+              <label className="block text-sm font-semibold text-gray-700">
+                Flavor
+                <select
+                  value={registerForm.flavor}
+                  onChange={(event) => setRegisterForm((current) => ({ ...current, flavor: event.target.value as ModelFlavor }))}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                >
+                  <option value="sklearn">Scikit-learn</option>
+                  <option value="xgboost">XGBoost</option>
+                </select>
+              </label>
+              <label className="block text-sm font-semibold text-gray-700">
+                Access mode
+                <select
+                  value={registerForm.access_mode}
+                  onChange={(event) => setRegisterForm((current) => ({ ...current, access_mode: event.target.value as ModelAccessMode }))}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                >
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+              </label>
+              <label className="block text-sm font-semibold text-gray-700">
+                Description
+                <textarea
+                  value={registerForm.description}
+                  onChange={(event) => setRegisterForm((current) => ({ ...current, description: event.target.value }))}
+                  className="mt-1 min-h-20 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                />
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setRegisterModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={!registerForm.model_name.trim() || !registerForm.model_version.trim()}
+                loading={registerModelMutation.isPending}
+                onClick={() => registerModelMutation.mutate()}
+              >
+                Register model
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -738,6 +904,117 @@ function MetadataRow({ label, value, monospace = false }: { label: string; value
     <div className="flex flex-col gap-1.5 py-1">
       <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{label}</span>
       <span className={`text-sm font-medium ${monospace ? 'font-mono text-[13px] bg-gray-50 text-gray-800 px-2 py-1 rounded border border-gray-200 w-fit' : 'text-gray-900'}`}>{value}</span>
+    </div>
+  );
+}
+
+function DeploymentPanel({
+  job,
+  onRegister,
+  onBuild,
+  onDeploy,
+  onOpenApiManagement,
+  onTestPrediction,
+  buildingModelId,
+  deployingModelId,
+  registering,
+}: {
+  job: TrainingJob;
+  onRegister: () => void;
+  onBuild: (model: ModelAPI) => void;
+  onDeploy: (model: ModelAPI) => void;
+  onOpenApiManagement: (model: ModelAPI) => void;
+  onTestPrediction: () => void;
+  buildingModelId: number | null;
+  deployingModelId: number | null;
+  registering: boolean;
+}) {
+  const model = job.registered_model;
+  const isCompleted = job.status === 'completed';
+
+  if (!isCompleted) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <p className="text-sm font-bold text-gray-900">Deployment</p>
+        <p className="mt-1 text-sm text-gray-500">Register and deploy actions become available after training completes.</p>
+      </div>
+    );
+  }
+
+  if (!model) {
+    return (
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-blue-950">Deploy this training artifact</p>
+            <p className="mt-1 text-sm text-blue-800">
+              Register the completed model artifact as a Model API before building and deploying an endpoint.
+            </p>
+          </div>
+          <Button icon={<Rocket className="h-4 w-4" />} loading={registering} onClick={onRegister}>
+            Register as Model
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const readyToDeploy = model.build_status === 'ready';
+  const deployed = Boolean(model.endpoint_url) && model.status === 'ready' && model.build_status === 'ready';
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-gray-900">Registered Model</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+              #{model.id}
+            </span>
+            <span className="font-semibold text-gray-900">{model.name}</span>
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+              {model.version || 'v1'}
+            </span>
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+              {model.source_type === 'training_job' ? `Training job #${model.source_training_job ?? '-'}` : 'Manual upload'}
+            </span>
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+              build: {model.build_status}
+            </span>
+          </div>
+          {model.endpoint_url && (
+            <code className="mt-3 block max-w-full truncate rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" title={model.endpoint_url}>
+              {model.endpoint_url}
+            </code>
+          )}
+          {model.build_error && <p className="mt-2 text-sm font-medium text-red-600">{model.build_error}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => onOpenApiManagement(model)}>
+            Open API Management
+          </Button>
+          {model.build_status !== 'ready' && (
+            <Button
+              icon={<FileArchive className="h-4 w-4" />}
+              loading={buildingModelId === model.id}
+              disabled={model.build_status === 'building'}
+              onClick={() => onBuild(model)}
+            >
+              {model.build_status === 'building' ? 'Building...' : 'Build Package'}
+            </Button>
+          )}
+          {readyToDeploy && (
+            <Button icon={<Rocket className="h-4 w-4" />} loading={deployingModelId === model.id} onClick={() => onDeploy(model)}>
+              Deploy Endpoint
+            </Button>
+          )}
+          {deployed && (
+            <Button variant="secondary" onClick={onTestPrediction}>
+              Test Prediction
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
