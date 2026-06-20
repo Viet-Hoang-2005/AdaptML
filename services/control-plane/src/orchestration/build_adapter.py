@@ -3,10 +3,27 @@ import os
 import threading
 
 import docker
-import requests
 from django.conf import settings
 
+from authentication.models import ModelAPI
+
 logger = logging.getLogger(__name__)
+
+
+def build_webhook_url(model_id: str) -> str:
+    internal_base_url = getattr(settings, "CONTROL_PLANE_INTERNAL_URL", "http://control-plane:8000").rstrip("/")
+    return f"{internal_base_url}/api/models/{model_id}/build-webhook"
+
+
+def mark_build_start_failed(model_id: str, message: str) -> None:
+    updated = ModelAPI.objects.filter(id=model_id).update(
+        status="error",
+        build_status="error",
+        error_message="Unable to start build process.",
+        build_error=message,
+    )
+    if updated:
+        logger.info("Marked model %s build as error after build container start failure.", model_id)
 
 class BuildAdapter:
     def trigger_build(
@@ -46,7 +63,7 @@ class DockerBuildAdapter(BuildAdapter):
                 except docker.errors.ImageNotFound:
                     logger.error(f"Image {image_name} not found.")
                 
-                webhook_url = f"http://control-plane:8000/api/models/{model_id}/build-webhook"
+                webhook_url = build_webhook_url(model_id)
                 
                 environment = {
                     "MODEL_ID": str(model_id),
@@ -67,6 +84,7 @@ class DockerBuildAdapter(BuildAdapter):
                 
                 network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
                 logger.info(f"Starting Docker container for build {model_id} using image {image_name} on network {network_name}")
+                logger.info("Build callback URL for model %s: %s", model_id, webhook_url)
                 client.containers.run(
                     image=image_name,
                     name=f"mlops_paas_model_build_{model_id}",
@@ -81,12 +99,7 @@ class DockerBuildAdapter(BuildAdapter):
                 )
             except Exception as e:
                 logger.error(f"Error starting Docker build for {model_id}: {e}")
-                # Update DB via webhook to mark error since container failed to start
-                webhook_url = f"http://control-plane:8000/api/models/{model_id}/build-webhook"
-                try:
-                    requests.post(webhook_url, json={"status": "error", "error_message": f"Failed to start container: {str(e)}"}, timeout=5)
-                except:
-                    pass
+                mark_build_start_failed(str(model_id), f"Failed to start container: {str(e)}")
 
         # Chạy trong background thread để không block API
         t = threading.Thread(target=_run_container)
