@@ -124,7 +124,7 @@ export function TerminalLogViewer({
       </div>
       <div 
         ref={terminalRef}
-        className="h-72 w-full overflow-y-auto bg-gray-900 p-4 font-mono text-sm text-gray-300 antialiased"
+        className="h-72 w-full custom-scrollbar overflow-y-auto bg-gray-900 p-4 font-mono text-sm text-gray-300 antialiased"
         style={{ scrollBehavior: 'smooth' }}
       >
         {logs.length === 0 ? (

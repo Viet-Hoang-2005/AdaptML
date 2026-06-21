@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bot, Edit3, Trash2, Search, Plus } from 'lucide-react';
+import { Bot, Edit3, Trash2, Search, Plus, Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Space, Button as AntButton, Popconfirm } from 'antd';
 import type { TableProps } from 'antd';
@@ -89,6 +89,16 @@ export default function APIManagementPage() {
       key: 'action',
       render: (_: unknown, record: ModelAPI) => (
         <Space size="middle">
+          <AntButton 
+            type="text" 
+            icon={<Download className="h-4 w-4" />} 
+            onClick={() => {
+              if (record.model_uri) {
+                window.open(record.model_uri, '_blank');
+              }
+            }} 
+            disabled={!record.model_uri}
+          />
           <AntButton 
             type="text" 
             icon={<Edit3 className="h-4 w-4" />} 

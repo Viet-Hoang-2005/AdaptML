@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Copy } from 'lucide-react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useMemo } from 'react';
 import { Button } from '../../components/ui/Button';
@@ -129,6 +129,39 @@ export default function ApiKeyPage() {
                 rowSelection={rowSelection}
                 pagination={{ pageSize: 5 }} 
               />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 pt-4">
+            <span className="text-sm font-medium text-gray-700">How to use (Python)</span>
+            <div className="relative rounded-xl border border-gray-200 bg-gray-950 overflow-hidden">
+              <pre className="p-4 text-xs font-mono text-[#d4d4d4] overflow-x-auto custom-scrollbar">
+                <span className="text-[#c586c0]">import</span> <span className="text-[#4ec9b0]">requests</span>{'\n\n'}
+                <span className="text-[#4fc1ff]">API_URL</span> = <span className="text-[#ce9178]">"your_api_endpoint_url"</span>{'\n'}
+                <span className="text-[#4fc1ff]">API_KEY</span> = <span className="text-[#ce9178]">"your_api_key_here"</span>{'\n\n'}
+                <span className="text-[#9cdcfe]">headers</span> = {'{\n'}
+                {'    '}<span className="text-[#ce9178]">"X-API-Key"</span>: <span className="text-[#4fc1ff]">API_KEY</span>,{'\n'}
+                {'    '}<span className="text-[#ce9178]">"Content-Type"</span>: <span className="text-[#ce9178]">"application/json"</span>{'\n'}
+                {'}\n\n'}
+                <span className="text-[#9cdcfe]">payload</span> = {'{\n'}
+                {'    '}<span className="text-[#ce9178]">"features"</span>: {'{\n'}
+                {'        '}<span className="text-[#ce9178]">"Src Port"</span>: <span className="text-[#b5cea8]">443</span>,{'\n'}
+                {'        '}<span className="text-[#6a9955]"># Add other features...</span>{'\n'}
+                {'    }\n'}
+                {'}\n\n'}
+                <span className="text-[#9cdcfe]">response</span> = <span className="text-[#9cdcfe]">requests</span>.<span className="text-[#dcdcaa]">post</span>(<span className="text-[#4fc1ff]">API_URL</span>, <span className="text-[#9cdcfe]">json</span>=<span className="text-[#9cdcfe]">payload</span>, <span className="text-[#9cdcfe]">headers</span>=<span className="text-[#9cdcfe]">headers</span>){'\n'}
+                <span className="text-[#dcdcaa]">print</span>(<span className="text-[#9cdcfe]">response</span>.<span className="text-[#dcdcaa]">json</span>())
+              </pre>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`import requests\n\nAPI_URL = "http://localhost:5000/predict"\nAPI_KEY = "your_api_key_here"\n\nheaders = {\n    "X-API-Key": API_KEY,\n    "Content-Type": "application/json"\n}\n\npayload = {\n    "features": {\n        "Src Port": 443,\n        # Add other features...\n    }\n}\n\nresponse = requests.post(API_URL, json=payload, headers=headers)\nprint(response.json())`);
+                  toast.success('Code copied to clipboard.');
+                }}
+                className="absolute right-3 top-3 rounded-md bg-gray-800 p-2 text-gray-400 shadow-sm ring-1 ring-gray-700 hover:text-white hover:bg-gray-700 transition-colors"
+                title="Copy code"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
             </div>
           </div>
 

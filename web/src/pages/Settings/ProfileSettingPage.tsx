@@ -329,7 +329,7 @@ export default function ProfileSettingPage() {
               </div>
             </label>
 
-            <div className="grid gap-3 pt-1 sm:grid-cols-2">
+            <div className="flex justify-end space-x-3 pt-1">
               <Button
                 id="btn-change-password"
                 variant="primary"

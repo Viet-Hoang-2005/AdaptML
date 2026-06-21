@@ -1,10 +1,10 @@
-import { KeyRound, UserRound } from 'lucide-react';
+import { Code, UserRound } from 'lucide-react';
 import { Outlet } from 'react-router-dom';
 import { PageTabs } from '../../components/layout/PageTabs';
 
 const settingsTabs = [
   { label: 'Profile', to: '/dashboard/settings/profile', icon: UserRound },
-  { label: 'Developer', to: '/dashboard/settings/developer', icon: KeyRound },
+  { label: 'Developer', to: '/dashboard/settings/developer', icon: Code },
 ];
 
 export default function SettingsLayout() {
