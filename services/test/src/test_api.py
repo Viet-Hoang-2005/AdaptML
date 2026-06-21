@@ -14,6 +14,7 @@ load_dotenv(os.path.join(ROOT_DIR, '.env'))
 
 # Đọc API_URL và đảm bảo nó trỏ đúng vào endpoint /predict
 API_URL = os.environ.get("API_URL", "http://localhost:5000").rstrip('/')
+API_KEY = os.environ.get("API_KEY")
 
 def api_test_continuous(samples_per_class=1):
     print(f"STARTING CONTINUOUS API INFERENCE TEST...")
@@ -53,7 +54,12 @@ def api_test_continuous(samples_per_class=1):
                 try:
                     # Đo thời gian từ lúc gửi request đến khi nhận được phản hồi để tính độ trễ (latency)
                     start_time = time.time()
-                    response = requests.post(API_URL, json=payload)
+                    
+                    headers = {}
+                    if API_KEY:
+                        headers["X-API-Key"] = API_KEY
+                        
+                    response = requests.post(API_URL, json=payload, headers=headers)
                     end_time = time.time()
                     
                     latency = round((end_time - start_time) * 1000, 2)
