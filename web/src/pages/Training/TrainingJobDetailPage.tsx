@@ -48,6 +48,8 @@ import { toast } from '../../lib/toast';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { formatDuration, computeElapsed } from '../../lib/formatDuration';
 import { useTrainingJobRealtime } from '../../hooks/useTrainingJobRealtime';
+import { useModelRealtime } from '../../hooks/useModelRealtime';
+import { Radio, Wifi, WifiOff } from 'lucide-react';
 import type {
   ModelAPI,
   ModelAccessMode,
@@ -1016,6 +1018,14 @@ function DeploymentPanel({
   const model = job.registered_model;
   const isCompleted = job.status === 'completed';
 
+  // Enable realtime sync while model is in active transition
+  const isActiveModel =
+    !!model &&
+    (model.build_status === 'building' ||
+      model.endpoint_status === 'deploying' ||
+      model.endpoint_status === 'unhealthy');
+  const { wsStatus: modelWsStatus } = useModelRealtime(isActiveModel ? model?.id : null);
+
   if (!isCompleted) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -1051,7 +1061,24 @@ function DeploymentPanel({
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-bold text-gray-900">Registered Model</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold text-gray-900">Registered Model</p>
+            {isActiveModel && (
+              modelWsStatus === 'connected' ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                  <Radio className="h-3 w-3" />Live
+                </span>
+              ) : modelWsStatus === 'fallback' ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+                  <WifiOff className="h-3 w-3" />Polling
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                  <Wifi className="h-3 w-3 animate-pulse" />Reconnecting
+                </span>
+              )
+            )}
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
               #{model.id}
@@ -1063,7 +1090,15 @@ function DeploymentPanel({
             <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
               {model.source_type === 'training_job' ? `Training job #${model.source_training_job ?? '-'}` : 'Manual upload'}
             </span>
-            <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
+              model.build_status === 'building'
+                ? 'animate-pulse border-blue-200 bg-blue-50 text-blue-700'
+                : model.build_status === 'ready'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : model.build_status === 'error'
+                    ? 'border-red-200 bg-red-50 text-red-700'
+                    : 'border-gray-200 bg-gray-50 text-gray-700'
+            }`}>
               build: {model.build_status}
             </span>
             <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
