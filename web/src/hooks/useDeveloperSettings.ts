@@ -54,16 +54,10 @@ export function useDeveloperSettings() {
 
 
   const handleDeleteAPIKey = async (apiKey: APIKeyRecord) => {
-    const confirmed = window.confirm(`Delete API key "${apiKey.name}"?`);
-    if (!confirmed) return;
-
     deleteAPIKeyMutation.mutate(apiKey.id);
   };
 
   const handleRegenerateAPIKey = async (apiKey: APIKeyRecord) => {
-    const confirmed = window.confirm(`Regenerate API key "${apiKey.name}"? The old key value will no longer be shown.`);
-    if (!confirmed) return;
-
     regenerateAPIKeyMutation.mutate(apiKey.id);
   };
 

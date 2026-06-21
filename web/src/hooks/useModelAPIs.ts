@@ -27,10 +27,9 @@ export function useModelAPIMutations() {
 
   const createMutation = useMutation({
     mutationFn: createModelAPI,
-    onSuccess: async (model) => {
+    onSuccess: async () => {
       await invalidateModels();
       toast.success('Model API uploaded successfully.');
-      navigate(`/dashboard/api-management/${model.id}`);
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Unable to upload model API.'));
@@ -52,10 +51,9 @@ export function useModelAPIMutations() {
   const updateMutation = useMutation({
     mutationFn: ({ modelId, payload }: { modelId: number; payload: ModelAPIFormValues }) =>
       updateModelAPI(modelId, payload),
-    onSuccess: async (model) => {
+    onSuccess: async () => {
       await invalidateModels();
       toast.success('Model API updated successfully.');
-      navigate(`/dashboard/api-management/${model.id}`);
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Unable to update model API.'));
@@ -75,10 +73,10 @@ export function useModelAPIMutations() {
   });
 
   return {
-    createModelAPI: createMutation.mutate,
-    buildModelAPI: buildMutation.mutate,
-    updateModelAPI: updateMutation.mutate,
-    deleteModelAPI: deleteMutation.mutate,
+    createModelAPI: createMutation.mutateAsync,
+    buildModelAPI: buildMutation.mutateAsync,
+    updateModelAPI: updateMutation.mutateAsync,
+    deleteModelAPI: deleteMutation.mutateAsync,
     creating: createMutation.isPending,
     building: buildMutation.isPending,
     updating: updateMutation.isPending,

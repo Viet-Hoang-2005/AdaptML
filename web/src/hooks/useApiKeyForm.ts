@@ -64,6 +64,12 @@ export function useApiKeyForm(initialData?: APIKeyRecord | null) {
       return;
     }
 
+    if (apiKeyModels.length === 0) {
+      toast.warning('Please select at least 1 model for this API key.');
+      return;
+    }
+
+
     if (initialData) {
       updateAPIKeyMutation.mutate({
         id: initialData.id,
