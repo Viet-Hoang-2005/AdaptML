@@ -10,10 +10,10 @@ import type { APIKeyRecord, CreatedAPIKeyResponse } from '../types/auth';
 export function useApiKeyForm(initialData?: APIKeyRecord | null) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [apiKeyName, setApiKeyName] = useState('');
-  const [apiKeyDescription, setApiKeyDescription] = useState('');
-  const [apiKeyScope, setApiKeyScope] = useState('all');
-  const [apiKeyModels, setApiKeyModels] = useState<number[]>([]);
+  const [apiKeyName, setApiKeyName] = useState(initialData?.name || '');
+  const [apiKeyDescription, setApiKeyDescription] = useState(initialData?.description || '');
+  const [apiKeyScope, setApiKeyScope] = useState(initialData?.scope || 'all');
+  const [apiKeyModels, setApiKeyModels] = useState<number[]>(initialData?.allowed_models || []);
   const [createdApiKey, setCreatedApiKey] = useState<CreatedAPIKeyResponse | null>(null);
 
   const [prevInitialData, setPrevInitialData] = useState(initialData);

@@ -10,7 +10,7 @@ import { OTPInput } from '../../components/ui/OTPInput';
 import { useProfileSettings } from '../../hooks/useProfileSettings';
 import { toast } from '../../lib/toast';
 import type { UserProfile } from '../../types/auth';
-import SettingsModal from './SettingsModal';
+import BaseModal from '../../components/ui/BaseModal';
 
 const formatDate = (value?: string) => {
   if (!value) return 'Unknown';
@@ -369,7 +369,7 @@ export default function ProfileSettingPage() {
       />
 
       {passwordModalStep === 'otp' && (
-        <SettingsModal title="Verify OTP" onClose={() => setPasswordModalStep('closed')}>
+        <BaseModal title="Verify OTP" onClose={() => setPasswordModalStep('closed')}>
           <p className="mb-4 text-sm text-gray-500">
             Enter the 6-digit OTP sent to <span className="font-semibold text-gray-700">{profile?.email}</span>.
           </p>
@@ -383,11 +383,11 @@ export default function ProfileSettingPage() {
             <Button variant="secondary" onClick={() => setPasswordModalStep('closed')}>Cancel</Button>
             <Button loading={passwordActionLoading} onClick={handleVerifyPasswordOTP}>Verify OTP</Button>
           </div>
-        </SettingsModal>
+        </BaseModal>
       )}
 
       {passwordModalStep === 'password' && (
-        <SettingsModal title="Set New Password" onClose={() => setPasswordModalStep('closed')}>
+        <BaseModal title="Set New Password" onClose={() => setPasswordModalStep('closed')}>
           <div className="space-y-4">
             <InputPassword
               id="input-change-new-password"
@@ -409,7 +409,7 @@ export default function ProfileSettingPage() {
             <Button variant="secondary" onClick={() => setPasswordModalStep('closed')}>Cancel</Button>
             <Button loading={passwordActionLoading} onClick={handleCompletePasswordChange}>Change Password</Button>
           </div>
-        </SettingsModal>
+        </BaseModal>
       )}
 
       <ConfirmModal

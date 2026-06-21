@@ -8,15 +8,17 @@ export function TerminalLogViewer({
   onBuildSuccess,
   onRebuild,
   buildDisabled,
+  placeholder = 'Click "Build" button to start building your model...',
 }: {
   modelId: number | null;
   onBuildSuccess: (modelId: number, previewTree: string[]) => void;
   onRebuild?: () => void;
   buildDisabled?: boolean;
+  placeholder?: string;
 }) {
   const [building, setBuilding] = useState(!!modelId);
   const [logs, setLogs] = useState<string[]>(
-    modelId ? ['[SYSTEM] Initiating build process...'] : ['[SYSTEM] Waiting for model deployment...']
+    modelId ? ['[SYSTEM] Initiating build process...'] : [placeholder]
   );
   const [buildStatus, setBuildStatus] = useState<string>(modelId ? 'building' : 'idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -127,6 +129,10 @@ export function TerminalLogViewer({
       >
         {logs.length === 0 ? (
           <span className="text-gray-500">Waiting for logs...</span>
+        ) : !modelId ? (
+          <div className="mb-1 leading-tight break-all text-gray-500 italic">
+            {placeholder}
+          </div>
         ) : (
           logs.map((log, i) => (
             <div key={i} className="mb-1 leading-tight break-all">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileCode2, UploadCloud, FlaskConical, FileArchive, Rocket, ArrowLeft, ArrowRight, Play, Terminal } from 'lucide-react';
+import { FileCode2, UploadCloud, FlaskConical, FileArchive, Rocket, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
@@ -369,38 +369,16 @@ function DeployStep({
         <SummaryItem label="Artifact" value={form.source_artifact?.name || 'Missing artifact'} />
       </div>
 
-      {!modelId ? (
-        <div className="overflow-hidden rounded-xl bg-gray-900 shadow-lg border border-gray-800">
-          <div className="flex items-center px-4 py-2 bg-gray-800/80 border-b border-gray-700">
-            <Terminal className="h-4 w-4 text-gray-400 mr-2" />
-            <span className="text-xs font-mono text-gray-400">Build Console</span>
-            <div className="ml-auto flex items-center">
-              <button
-                type="button"
-                onClick={startBuild}
-                disabled={!form.source_artifact || building}
-                className="flex items-center gap-1.5 rounded-md bg-gray-700 px-3 py-1 text-xs font-medium text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Play className="h-3 w-3" />
-                Build
-              </button>
-            </div>
-          </div>
-          <div className="p-4 h-64 overflow-y-auto font-mono text-sm text-green-400 whitespace-pre-wrap break-all custom-scrollbar">
-            <div className="text-gray-500 italic">Click "Build" to start the model packager...</div>
-          </div>
-        </div>
-      ) : (
-        <TerminalLogViewer
-          key={modelId || 'idle'}
-          modelId={modelId}
-          onBuildSuccess={(id, previewTree) => {
-            setBuilding(false);
-            onBuildSuccess(id, previewTree);
-          }}
-          onRebuild={rebuild}
-        />
-      )}
+      <TerminalLogViewer
+        key={modelId || 'idle'}
+        modelId={modelId}
+        onBuildSuccess={(id, previewTree) => {
+          setBuilding(false);
+          onBuildSuccess(id, previewTree);
+        }}
+        onRebuild={rebuild}
+        buildDisabled={!form.source_artifact || building}
+      />
     </div>
   );
 }
