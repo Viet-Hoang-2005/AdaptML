@@ -9,14 +9,14 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 class BuildAdapter:
-    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str, label_mapping_key: str = None):
+    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str, label_mapping_key: str = None, task_type: str = "BUILD"):
         raise NotImplementedError()
 
     def cancel_build(self, model_id: str):
         raise NotImplementedError()
 
 class DockerBuildAdapter(BuildAdapter):
-    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str, label_mapping_key: str = None):
+    def trigger_build(self, model_id: str, flavor: str, requirements_text: str, source_key: str, output_key: str, label_mapping_key: str = None, task_type: str = "BUILD"):
         def _run_container():
             try:
                 client = docker.from_env()
@@ -31,6 +31,7 @@ class DockerBuildAdapter(BuildAdapter):
                 webhook_url = f"http://control-plane:8000/api/models/{model_id}/build-webhook"
                 
                 environment = {
+                    "TASK_TYPE": task_type,
                     "MODEL_ID": str(model_id),
                     "FLAVOR": flavor,
                     "REQUIREMENTS_TEXT": requirements_text,

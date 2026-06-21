@@ -38,7 +38,7 @@ def serialize_model_api(model_api):
         "description": model_api.description,
         "model_info": model_api.model_info,
         "access_mode": model_api.access_mode,
-        "model_uri": model_api.model_uri,
+        "model_uri": model_api.artifact.url if model_api.artifact and model_api.artifact.name else model_api.model_uri,
         "endpoint_url": model_api.endpoint_url,
         "health_url": f"{get_model_server_public_url()}/models/{model_api.id}/health",
         "status": model_api.status,
@@ -166,20 +166,24 @@ class ModelAPIListCreateView(APIView):
             description=description,
             model_info=model_info,
             access_mode=access_mode,
-            status="ready",
+            status="uploading",
+            build_status="testing",
         )
         model_api.artifact = artifact_file
         model_api.save(update_fields=["artifact", "updated_at"])
 
-        model_api.model_uri = model_api.artifact.url
-        model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["model_uri", "endpoint_url", "updated_at"])
-
-        DockerDeployAdapter().deploy_model(
-            model_id=model_api.id,
-            tenant_id=model_api.tenant.tenant_id,
-            model_name=model_api.name,
-            version="v1"
+        # We don't build the endpoint url or model_uri here yet.
+        # It will be built after testing succeeds in the webhook.
+        
+        from .build_adapter import get_build_adapter
+        adapter = get_build_adapter()
+        adapter.trigger_build(
+            model_id=str(model_api.id),
+            flavor="advanced_zip",  # Special flavor for advanced ZIP
+            requirements_text="",
+            source_key=model_api.artifact.name,
+            output_key="",
+            task_type="TEST_ZIP"
         )
 
         return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
@@ -417,14 +421,17 @@ class ModelAPIBuildWebhookView(APIView):
             model_api.package_manifest = data.get("package_manifest", {})
             model_api.package_preview_tree = data.get("package_preview_tree", [])
 
-            # Giả định packager đã upload file lên output_key (model_api.artifact.name)
-            # Chúng ta cần đảm bảo model_uri / url map đúng với S3 bucket.
-            # Ở bước trước adapter đã tính output_key.
-            from authentication.models import model_artifact_path
-            from django.utils.text import slugify
-            safe_name = slugify(model_api.name) or "model"
-            package_filename = f"{safe_name}-mlflow-package.zip"
-            model_api.artifact.name = model_artifact_path(model_api, package_filename)
+            task_type = data.get("task_type", "BUILD")
+            
+            if task_type == "BUILD":
+                # Giả định packager đã upload file lên output_key (model_api.artifact.name)
+                # Chúng ta cần đảm bảo model_uri / url map đúng với S3 bucket.
+                from authentication.models import model_artifact_path
+                from django.utils.text import slugify
+                safe_name = slugify(model_api.name) or "model"
+                package_filename = f"{safe_name}-mlflow-package.zip"
+                model_api.artifact.name = model_artifact_path(model_api, package_filename)
+                
             model_api.model_uri = model_api.artifact.url
             model_api.endpoint_url = build_endpoint_url(model_api)
         else:
