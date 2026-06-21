@@ -1,17 +1,127 @@
 import { Edit3, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Table, Space, Button as AntButton, Popconfirm, Tag } from 'antd';
+import type { TableProps } from 'antd';
 import { Button } from '../../components/ui/Button';
+import { ApiModal } from '../../components/ui/ApiModal';
 import { useDeveloperSettings } from '../../hooks/useDeveloperSettings';
+import { useModelAPIs } from '../../hooks/useModelAPIs';
+import type { APIKeyRecord } from '../../types/auth';
 
 export default function DeveloperSettingPage() {
   const navigate = useNavigate();
+  const { data: modelsData } = useModelAPIs();
+  const models = modelsData?.models ?? [];
+  const modelIdToName = Object.fromEntries(models.map(m => [m.id, m.name]));
+
   const {
     apiKeys,
     loading,
+    createdApiKey,
+    setCreatedApiKey,
     handleDeleteAPIKey,
     handleRegenerateAPIKey,
+    handleCopyCreatedKey,
   } = useDeveloperSettings();
+
+  const handleDone = () => setCreatedApiKey(null);
+
+  const columns: TableProps<APIKeyRecord>['columns'] = [
+    {
+      title: '#',
+      dataIndex: 'index',
+      align: 'center',
+      width: 60,
+      render: (_text, _record, index) => index + 1,
+    },
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
+      render: (text: string) => (
+        <span className="font-bold text-gray-900">{text}</span>
+      ),
+    },
+    {
+      title: 'Description',
+      dataIndex: 'description',
+      key: 'description',
+      render: (text: string) => (
+        <span className="line-clamp-2 max-w-sm text-sm text-gray-500">
+          {text || 'No description provided.'}
+        </span>
+      ),
+    },
+    {
+      title: 'Specific Models',
+      dataIndex: 'scope',
+      key: 'models',
+      render: (scope: string, record: APIKeyRecord) => {
+        if (scope === 'all') {
+          return <Tag color="blue">All Models</Tag>;
+        }
+        if (!record.allowed_models || record.allowed_models.length === 0) {
+          return <Tag color="red">None</Tag>;
+        }
+        return (
+          <div className="flex flex-wrap gap-1 max-w-xs">
+            {record.allowed_models.map(id => (
+              <Tag key={id}>{modelIdToName[id] || `Unknown (${id})`}</Tag>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Updated',
+      dataIndex: 'created_at',
+      key: 'updated',
+      render: (text: string) => new Date(text).toLocaleString(),
+    },
+    {
+      title: 'Action',
+      align: 'center',
+      key: 'action',
+      render: (_: unknown, record: APIKeyRecord) => (
+        <Space size="middle">
+          <AntButton 
+            type="text" 
+            icon={<Edit3 className="h-4 w-4" />} 
+            onClick={() => navigate(`/dashboard/settings/developer/api-keys/${record.id}`)}
+          />
+          <Popconfirm
+            title="Regenerate API key"
+            description="Are you sure you want to regenerate this API key?"
+            onConfirm={() => handleRegenerateAPIKey(record)}
+            okText="Yes"
+            cancelText="No"
+            okButtonProps={{ className: 'bg-blue-500! hover:bg-blue-600! border-none! text-white!' }}
+            cancelButtonProps={{ className: 'bg-white! hover:bg-gray-100! border! border-gray-300! text-black!' }}
+          >
+            <AntButton 
+              type="text"
+              icon={<RefreshCw className="h-4 w-4" />} 
+            />
+          </Popconfirm>
+          <Popconfirm
+            title="Delete API key"
+            description="Are you sure you want to delete this API key?"
+            onConfirm={() => handleDeleteAPIKey(record)}
+            okText="Yes"
+            cancelText="No"
+            okButtonProps={{ className: 'bg-red-500! hover:bg-red-600! border-none! text-white!' }}
+            cancelButtonProps={{ className: 'bg-white! hover:bg-gray-100! border! border-gray-300! text-black!' }}
+          >
+            <AntButton 
+              type="text"
+              className="text-red-500! hover:text-red-600!"
+              icon={<Trash2 className="h-4 w-4" />} 
+            />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
@@ -27,97 +137,32 @@ export default function DeveloperSettingPage() {
             id="btn-create-api-key"
             size='md'
             icon={<KeyRound className="h-4 w-4" />}
-            onClick={() => navigate('/dashboard/settings/api-keys/create')}
+            onClick={() => navigate('/dashboard/settings/developer/api-keys/create')}
           >
             Create API Key
           </Button>
         </div>
 
         <div className="px-6 py-6">
-          {loading ? (
-            <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center text-sm text-gray-500">
-              Loading API keys...
-            </div>
-          ) : apiKeys.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
-              <KeyRound className="mx-auto mb-3 h-8 w-8 text-gray-400" />
-              <h3 className="text-sm font-bold text-gray-900">No API keys yet</h3>
-              <p className="mt-1 text-sm text-gray-500">Create your first API key to call private model endpoints.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {apiKeys.map((apiKey) => (
-                <div
-                  key={apiKey.id}
-                  className="flex flex-col gap-4 rounded-lg border border-gray-300 px-4 py-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="truncate text-sm font-bold text-gray-900">{apiKey.name}</h3>
-                      <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
-                        {apiKey.key_prefix}...
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {apiKey.description || 'No description provided.'}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                        {apiKey.scope === 'all' ? 'All Models' : 'Specific Models'}
-                      </span>
-                      {apiKey.scope === 'specific' && (
-                        <span className="text-xs text-gray-500">
-                          {apiKey.allowed_models.length} model(s) allowed
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-2">
-                    <IconButton label="Edit API key" onClick={() => navigate(`/dashboard/settings/api-keys/${apiKey.id}`)}>
-                      <Edit3 className="h-4 w-4" />
-                    </IconButton>
-                    <IconButton label="Regenerate API key" onClick={() => handleRegenerateAPIKey(apiKey)}>
-                      <RefreshCw className="h-4 w-4" />
-                    </IconButton>
-                    <IconButton label="Delete API key" danger onClick={() => handleDeleteAPIKey(apiKey)}>
-                      <Trash2 className="h-4 w-4" />
-                    </IconButton>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <Table 
+            columns={columns} 
+            dataSource={apiKeys} 
+            rowKey="id" 
+            loading={loading}
+            pagination={{ pageSize: 10 }} 
+          />
         </div>
       </section>
-    </div>
-  );
-}
 
-function IconButton({
-  children,
-  label,
-  danger = false,
-  onClick,
-}: {
-  children: ReactNode;
-  label: string;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${
-        danger
-          ? 'border-red-100 text-red-500 hover:bg-red-50'
-          : 'border-gray-300 text-gray-500 hover:border-gray-300 hover:text-black'
-      }`}
-    >
-      {children}
-    </button>
+      {createdApiKey && (
+        <ApiModal
+          title="API Key Regenerated"
+          description="This new key is shown once. Store it now before closing this modal. The old key will no longer work."
+          apiKey={createdApiKey.api_key}
+          onClose={handleDone}
+          onCopy={handleCopyCreatedKey}
+        />
+      )}
+    </div>
   );
 }

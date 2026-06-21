@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Building2, CalendarDays, Camera, ChevronDown, FileText, Fingerprint, Globe2, LockKeyhole, Mail, ShieldCheck, Tags, Trash2, UserRound } from 'lucide-react';
+import { BriefcaseBusiness, Building2, CalendarDays, Camera, ChevronDown, FileText, Fingerprint, Globe2, LockKeyhole, Mail, ShieldCheck, Tags, Trash2, UserRound, Edit3 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AvatarCropModal } from '../../components/ui/AvatarCropModal';
@@ -215,6 +215,7 @@ export default function ProfileSettingPage() {
                   onClick={() => setEditingProfile(true)}
                   disabled={loading}
                 >
+                  <Edit3 className="h-4 w-4" />
                   Edit Profile
                 </Button>
               )}

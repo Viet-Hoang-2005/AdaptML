@@ -1,13 +1,16 @@
-import { Clipboard, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useMemo } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { ApiModal } from '../../components/ui/ApiModal';
 import { useApiKeyForm } from '../../hooks/useApiKeyForm';
 import { useDeveloperSettings } from '../../hooks/useDeveloperSettings';
 import { useModelAPIs } from '../../hooks/useModelAPIs';
-import SettingsModal from './SettingsModal';
 import { toast } from '../../lib/toast';
+import { Table } from 'antd';
+import type { TableProps } from 'antd';
+import type { ModelAPI } from '../../types/modelApi';
 
 export default function ApiKeyPage() {
   const { keyId } = useParams<{ keyId?: string }>();
@@ -24,7 +27,6 @@ export default function ApiKeyPage() {
     setApiKeyName,
     apiKeyDescription,
     setApiKeyDescription,
-    apiKeyScope,
     setApiKeyScope,
     apiKeyModels,
     setApiKeyModels,
@@ -35,7 +37,6 @@ export default function ApiKeyPage() {
   } = useApiKeyForm(editingKey);
 
   const { data: modelsData } = useModelAPIs();
-  const availableModels = modelsData?.models || [];
 
   const handleCopyCreatedKey = async () => {
     if (!createdApiKey?.api_key) return;
@@ -52,18 +53,48 @@ export default function ApiKeyPage() {
     navigate('/dashboard/settings/developer');
   };
 
+  const privateModels = useMemo(() => {
+    const models = modelsData?.models || [];
+    return models.filter(m => m.access_mode === 'private');
+  }, [modelsData?.models]);
+
+  const columns: TableProps<ModelAPI>['columns'] = [
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
+      width: '40%',
+      render: (text: string) => <span className="font-medium text-gray-800">{text}</span>,
+    },
+    {
+      title: 'Description',
+      dataIndex: 'description',
+      key: 'description',
+      render: (text: string) => <span className="text-gray-500">{text || '-'}</span>,
+    },
+  ];
+
+  const rowSelection: TableProps<ModelAPI>['rowSelection'] = {
+    selectedRowKeys: apiKeyModels,
+    columnWidth: 100,
+    onChange: (selectedRowKeys) => {
+      setApiKeyModels(selectedRowKeys as number[]);
+      setApiKeyScope('specific');
+    },
+  };
+
   return (
-    <div className="flex w-full flex-col">
-      <div className="flex flex-col gap-2 border-b border-gray-200 mb-4">
-        <Link
-          to="/dashboard/settings/developer"
-          className="flex w-max items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Developer Settings
-        </Link>
-        <div>
-          <h1 className="mb-2 text-xl font-bold text-gray-900">
+    <div className="flex w-full flex-col space-y-6">
+      <div className="flex flex-col gap-4 border-b border-gray-200 md:flex-row md:items-end md:justify-between">
+        <div className="mb-2">
+          <Link
+            to="/dashboard/settings/developer"
+            className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 transition-colors hover:text-black"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Developer Settings
+          </Link>
+          <h1 className="text-xl font-bold text-gray-900">
             {keyId ? 'Edit API Key' : 'Create API Key'}
           </h1>
         </div>
@@ -90,43 +121,17 @@ export default function ApiKeyPage() {
           </label>
           <div className="flex flex-col gap-2 pt-2">
             <span className="text-sm font-medium text-gray-700">API Key Scope</span>
-            <div className="flex flex-col gap-2">
-              <label className="flex cursor-pointer items-center gap-2">
-                <input type="radio" className="h-4 w-4 text-blue-600 focus:ring-blue-500" value="all" checked={apiKeyScope === 'all'} onChange={(e) => setApiKeyScope(e.target.value)} />
-                <span className="text-sm text-gray-800">All Model Endpoints</span>
-              </label>
-              <label className="flex cursor-pointer items-center gap-2">
-                <input type="radio" className="h-4 w-4 text-blue-600 focus:ring-blue-500" value="specific" checked={apiKeyScope === 'specific'} onChange={(e) => setApiKeyScope(e.target.value)} />
-                <span className="text-sm text-gray-800">Specific Model Endpoints</span>
-              </label>
+            <div className="rounded-xl border border-gray-300 bg-white overflow-hidden mt-1">
+              <Table 
+                columns={columns} 
+                dataSource={privateModels} 
+                rowKey="id" 
+                rowSelection={rowSelection}
+                pagination={{ pageSize: 5 }} 
+              />
             </div>
           </div>
 
-          {apiKeyScope === 'specific' && (
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-gray-700">Allowed Models</span>
-              <div className="max-h-60 overflow-y-auto rounded-xl border border-gray-300 p-2">
-                {availableModels.length === 0 ? (
-                  <p className="p-2 text-sm text-gray-500">No models available.</p>
-                ) : (
-                  availableModels.map((model) => (
-                    <label key={model.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-gray-50">
-                      <input 
-                        type="checkbox" 
-                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        checked={apiKeyModels.includes(model.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) setApiKeyModels([...apiKeyModels, model.id]);
-                          else setApiKeyModels(apiKeyModels.filter(id => id !== model.id));
-                        }}
-                      />
-                      <span className="text-sm text-gray-800">{model.name}</span>
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-6">
@@ -140,30 +145,13 @@ export default function ApiKeyPage() {
       </div>
 
       {createdApiKey && (
-        <SettingsModal title="API Key Created" onClose={handleDone}>
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            This key is shown once. Store it now before closing this modal.
-          </div>
-          <div className="mt-4 rounded-lg border border-gray-300 bg-gray-50 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">API Key</p>
-            <div className="flex items-center gap-2">
-              <code className="min-w-0 flex-1 break-all rounded-md bg-white px-3 py-2 text-xs font-semibold text-gray-800">
-                {createdApiKey.api_key}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyCreatedKey}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 hover:text-black"
-                aria-label="Copy API key"
-              >
-                <Clipboard className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-          <div className="mt-6 flex justify-end">
-            <Button onClick={handleDone}>Done</Button>
-          </div>
-        </SettingsModal>
+        <ApiModal
+          title="API Key Created"
+          description="This key is shown once. Store it now before closing this modal."
+          apiKey={createdApiKey.api_key}
+          onClose={handleDone}
+          onCopy={handleCopyCreatedKey}
+        />
       )}
     </div>
   );
