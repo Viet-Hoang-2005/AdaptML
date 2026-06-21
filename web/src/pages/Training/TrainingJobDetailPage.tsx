@@ -6,6 +6,7 @@ import {
   Archive,
   AlertTriangle,
   Clipboard,
+  Cloud,
   Cpu,
   Download,
   FileArchive,
@@ -48,10 +49,7 @@ import { toast } from '../../lib/toast';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { formatDuration, computeElapsed } from '../../lib/formatDuration';
 import { useTrainingJobRealtime } from '../../hooks/useTrainingJobRealtime';
-import { useModelRealtime } from '../../hooks/useModelRealtime';
-import { Radio, Wifi, WifiOff } from 'lucide-react';
 import type {
-  ModelAPI,
   ModelAccessMode,
   ModelFlavor,
   TrainingJob,
@@ -59,6 +57,8 @@ import type {
   TrainingJobMetricsResponse,
   TrainingJobStatus,
 } from '../../types/modelApi';
+
+import { ModelDeploymentCard } from '../../components/model/ModelDeploymentCard';
 
 // -- Shared formatting helpers --
 const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
@@ -534,34 +534,65 @@ export default function TrainingJobDetailPage() {
       </button>
 
       {/* Header Card */}
-      <div className={`rounded-xl border border-gray-200 bg-white shadow-md overflow-hidden ${getAccentBorderClass()} ${job.is_deleted ? 'opacity-80 grayscale-[0.2]' : ''}`}>
-        <div className="flex flex-col gap-4 border-b border-gray-100 p-6 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="truncate text-2xl font-extrabold tracking-tight text-gray-900">{job.name}</h1>
-              <span className="rounded bg-gray-100 px-2.5 py-0.5 text-sm font-bold tracking-wide text-gray-600 border border-gray-200">
-                {job.model_version}
-              </span>
+      <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden border-t-4 ${getAccentBorderClass()} ${job.is_deleted ? 'opacity-80 grayscale-[0.2]' : ''}`}>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between p-6 lg:p-8 gap-6 border-b border-gray-100">
+          <div className="flex items-start gap-4 min-w-0">
+            {/* Model/Job Icon */}
+            <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gray-50 border border-gray-100 text-gray-500 shadow-inner">
+              <Activity className="h-6 w-6" />
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-medium text-gray-500">
-              <span className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold tracking-wider uppercase text-gray-600">
-                <Cpu className="h-3.5 w-3.5" />
-                {backendLabel(job.training_backend)}
-              </span>
-              <span className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold tracking-wider uppercase text-gray-600">
-                {job.vcpu} vCPU / {job.memory / 1024} GB
-              </span>
-              {job.accelerator_type !== 'none' && (
-                <span className="flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-bold tracking-wider uppercase text-purple-700">
-                  <Rocket className="h-3.5 w-3.5" />
-                  {job.accelerator_type.toUpperCase()} x{job.accelerator_count}
+            
+            <div className="flex flex-col min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 truncate">{job.name}</h1>
+                <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-bold tracking-wide text-gray-600 border border-gray-200">
+                  {job.model_version}
                 </span>
-              )}
+                <span className={`w-fit rounded-full px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider ring-1 ${
+                  job.is_deleted ? 'bg-gray-100 text-gray-600 ring-gray-200' : 
+                  job.status === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' :
+                  job.status === 'failed' ? 'bg-red-50 text-red-700 ring-red-200' :
+                  job.status === 'cancelled' ? 'bg-amber-50 text-amber-700 ring-amber-200' :
+                  job.status === 'running' ? 'bg-blue-50 text-blue-700 ring-blue-300 animate-pulse' :
+                  'bg-blue-50 text-blue-700 ring-blue-200'
+                }`}>
+                  {job.is_deleted ? 'Archived' : statusLabels[job.status]}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-gray-500 font-medium">
+                Training job #{job.id}
+              </p>
+              
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-bold text-gray-600">
+                <span className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 uppercase tracking-wider">
+                  <Cloud className="h-3.5 w-3.5 text-gray-400" />
+                  {backendLabel(job.training_backend)}
+                </span>
+                <span className="text-gray-300">•</span>
+                <span className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 uppercase tracking-wider">
+                  <Cpu className="h-3.5 w-3.5 text-gray-400" />
+                  {job.vcpu} vCPU / {job.memory / 1024} GB
+                </span>
+                {job.accelerator_type !== 'none' && (
+                  <>
+                    <span className="text-gray-300">•</span>
+                    <span className="flex items-center gap-1.5 rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-purple-700 uppercase tracking-wider">
+                      <Rocket className="h-3.5 w-3.5 text-purple-500" />
+                      {job.accelerator_type.toUpperCase()} x{job.accelerator_count}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <WsStatusBadge status={wsStatus} />
+          
+          <div className="flex shrink-0 flex-col items-end gap-3 mt-2 sm:mt-0">
+            {ACTIVE_STATUSES.includes(job.status) && (
+              <div className="flex shrink-0 mb-1">
+                <WsStatusBadge status={wsStatus} />
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Button
                 variant="secondary"
                 size="sm"
@@ -573,7 +604,7 @@ export default function TrainingJobDetailPage() {
                 Refresh
               </Button>
               <Button
-                variant="primary"
+                variant={job.status === 'completed' ? 'primary' : 'secondary'}
                 size="sm"
                 icon={<Download className="h-4 w-4" />}
                 disabled={job.status !== 'completed'}
@@ -584,28 +615,29 @@ export default function TrainingJobDetailPage() {
               </Button>
             </div>
             {job.is_deleted ? (
-              <button onClick={() => restoreMutation.mutate()} disabled={restoreMutation.isPending} className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900 transition-colors">
+              <button onClick={() => restoreMutation.mutate()} disabled={restoreMutation.isPending} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900 transition-colors mt-1">
                 <RotateCcw className="h-3.5 w-3.5" /> Restore
               </button>
             ) : (
-              <button onClick={() => archiveMutation.mutate()} disabled={archiveMutation.isPending} className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-red-600 transition-colors">
+              <button onClick={() => archiveMutation.mutate()} disabled={archiveMutation.isPending} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-red-600 transition-colors mt-1">
                 <Archive className="h-3.5 w-3.5" /> Archive
               </button>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-gray-100 border-b border-gray-100 bg-gray-50">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-gray-100 bg-gray-50/50">
           <div className="p-5 flex flex-col justify-center">
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Status</p>
             <div className="flex items-center">
-               <span className={`w-fit rounded-full px-3 py-1 text-sm font-bold shadow-sm ring-1 ${
-                  job.is_deleted ? 'bg-gray-100 text-gray-600 ring-gray-200' : 
-                  job.status === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' :
-                  job.status === 'failed' ? 'bg-red-50 text-red-700 ring-red-200' :
-                  job.status === 'cancelled' ? 'bg-amber-50 text-amber-700 ring-amber-200' :
-                  job.status === 'running' ? 'bg-blue-50 text-blue-700 ring-blue-300' :
-                  'bg-white text-gray-700 ring-gray-200'
+               <span className={`w-fit rounded-md px-2.5 py-0.5 text-sm font-bold border ${
+                  job.is_deleted ? 'bg-gray-50 text-gray-600 border-gray-200' : 
+                  job.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                  job.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
+                  job.status === 'cancelled' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                  job.status === 'running' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                  'bg-white text-gray-700 border-gray-200'
                 }`}>
                   {job.is_deleted ? 'Archived' : statusLabels[job.status]}
                 </span>
@@ -627,8 +659,8 @@ export default function TrainingJobDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+      <div className="border-b border-gray-200 mt-2">
+        <nav className="-mb-px flex space-x-8 px-2 overflow-x-auto scrollbar-none" aria-label="Tabs">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -636,15 +668,15 @@ export default function TrainingJobDetailPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as 'overview' | 'logs' | 'metrics' | 'artifacts' | 'config')}
-                className={`group inline-flex items-center border-b-2 py-4 px-1 text-sm font-bold transition-colors ${
+                className={`group inline-flex items-center border-b-2 py-4 px-1 text-sm font-bold transition-colors whitespace-nowrap ${
                   isActive
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-gray-900 text-gray-900'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 }`}
               >
                 <Icon
                   className={`-ml-0.5 mr-2 h-4 w-4 transition-colors ${
-                    isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'
+                    isActive ? 'text-gray-900' : 'text-gray-400 group-hover:text-gray-500'
                   }`}
                   aria-hidden="true"
                 />
@@ -772,27 +804,50 @@ export default function TrainingJobDetailPage() {
 
         {activeTab === 'artifacts' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <DeploymentPanel
-              job={job}
-              onRegister={openRegisterModal}
-              onBuild={(model) => buildRegisteredModelMutation.mutate(model.id)}
-              onDeploy={(model) => deployRegisteredModelMutation.mutate(model.id)}
-              onRedeploy={(model) => redeployMutation.mutate(model.id)}
-              onStop={(model) => {
-                if (window.confirm('Stop this endpoint container?')) stopEndpointMutation.mutate(model.id);
-              }}
-              onCheckHealth={(model) => checkHealthMutation.mutate(model.id)}
-              onViewLogs={(model) => {
-                setEndpointLogs('Loading endpoint logs...');
-                setEndpointLogsOpen(true);
-                endpointLogsMutation.mutate(model.id);
-              }}
-              onOpenApiManagement={(model) => navigate(`/dashboard/api-management/${model.id}`)}
-              onTestPrediction={() => navigate('/dashboard/home/model-testing')}
-              buildingModelId={buildRegisteredModelMutation.isPending ? buildRegisteredModelMutation.variables ?? null : null}
-              deployingModelId={deployRegisteredModelMutation.isPending ? deployRegisteredModelMutation.variables ?? null : null}
-              registering={registerModelMutation.isPending}
-            />
+            {!job.registered_model ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 shadow-sm mb-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-blue-950">Deploy this training artifact</p>
+                    <p className="mt-1 text-sm text-blue-800">
+                      Register the completed model artifact as a Model API before building and deploying an endpoint.
+                    </p>
+                  </div>
+                  <Button
+                    icon={<Rocket className="h-4 w-4" />}
+                    loading={registerModelMutation.isPending}
+                    onClick={openRegisterModal}
+                    disabled={job.status !== 'completed'}
+                  >
+                    Register as Model
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mb-6">
+                <ModelDeploymentCard
+                  model={job.registered_model}
+                  variant="compact"
+                  onBuild={(model) => buildRegisteredModelMutation.mutate(model.id)}
+                  isBuilding={buildRegisteredModelMutation.isPending && buildRegisteredModelMutation.variables === job.registered_model.id}
+                  onDeploy={(model) => deployRegisteredModelMutation.mutate(model.id)}
+                  isDeploying={deployRegisteredModelMutation.isPending && deployRegisteredModelMutation.variables === job.registered_model.id}
+                  onRedeploy={(model) => redeployMutation.mutate(model.id)}
+                  isRedeploying={redeployMutation.isPending}
+                  onStop={(model) => stopEndpointMutation.mutate(model.id)}
+                  isStopping={stopEndpointMutation.isPending}
+                  onCheckHealth={(model) => checkHealthMutation.mutate(model.id)}
+                  isCheckingHealth={checkHealthMutation.isPending}
+                  onOpenLogs={(model) => {
+                    setEndpointLogs('Loading endpoint logs...');
+                    setEndpointLogsOpen(true);
+                    endpointLogsMutation.mutate(model.id);
+                  }}
+                  onOpenApiManagement={(model) => navigate(`/dashboard/api-management/${model.id}`)}
+                  onTestPrediction={() => navigate('/dashboard/home/model-testing')}
+                />
+              </div>
+            )}
 
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex flex-wrap gap-4 justify-between items-center">
@@ -986,196 +1041,7 @@ function MetadataRow({ label, value, monospace = false }: { label: string; value
   );
 }
 
-function DeploymentPanel({
-  job,
-  onRegister,
-  onBuild,
-  onDeploy,
-  onRedeploy,
-  onStop,
-  onCheckHealth,
-  onViewLogs,
-  onOpenApiManagement,
-  onTestPrediction,
-  buildingModelId,
-  deployingModelId,
-  registering,
-}: {
-  job: TrainingJob;
-  onRegister: () => void;
-  onBuild: (model: ModelAPI) => void;
-  onDeploy: (model: ModelAPI) => void;
-  onRedeploy: (model: ModelAPI) => void;
-  onStop: (model: ModelAPI) => void;
-  onCheckHealth: (model: ModelAPI) => void;
-  onViewLogs: (model: ModelAPI) => void;
-  onOpenApiManagement: (model: ModelAPI) => void;
-  onTestPrediction: () => void;
-  buildingModelId: number | null;
-  deployingModelId: number | null;
-  registering: boolean;
-}) {
-  const model = job.registered_model;
-  const isCompleted = job.status === 'completed';
 
-  // Enable realtime sync while model is in active transition
-  const isActiveModel =
-    !!model &&
-    (model.build_status === 'building' ||
-      model.endpoint_status === 'deploying' ||
-      model.endpoint_status === 'unhealthy');
-  const { wsStatus: modelWsStatus } = useModelRealtime(isActiveModel ? model?.id : null);
-
-  if (!isCompleted) {
-    return (
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <p className="text-sm font-bold text-gray-900">Deployment</p>
-        <p className="mt-1 text-sm text-gray-500">Register and deploy actions become available after training completes.</p>
-      </div>
-    );
-  }
-
-  if (!model) {
-    return (
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-bold text-blue-950">Deploy this training artifact</p>
-            <p className="mt-1 text-sm text-blue-800">
-              Register the completed model artifact as a Model API before building and deploying an endpoint.
-            </p>
-          </div>
-          <Button icon={<Rocket className="h-4 w-4" />} loading={registering} onClick={onRegister}>
-            Register as Model
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  const readyToDeploy = model.build_status === 'ready';
-  const deployed = Boolean(model.endpoint_url) && model.endpoint_status === 'healthy' && model.build_status === 'ready';
-  const endpointStatus = model.endpoint_status || 'not_deployed';
-
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-bold text-gray-900">Registered Model</p>
-            {isActiveModel && (
-              modelWsStatus === 'connected' ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                  <Radio className="h-3 w-3" />Live
-                </span>
-              ) : modelWsStatus === 'fallback' ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
-                  <WifiOff className="h-3 w-3" />Polling
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                  <Wifi className="h-3 w-3 animate-pulse" />Reconnecting
-                </span>
-              )
-            )}
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
-              #{model.id}
-            </span>
-            <span className="font-semibold text-gray-900">{model.name}</span>
-            <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
-              {model.version || 'v1'}
-            </span>
-            <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
-              {model.source_type === 'training_job' ? `Training job #${model.source_training_job ?? '-'}` : 'Manual upload'}
-            </span>
-            <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
-              model.build_status === 'building'
-                ? 'animate-pulse border-blue-200 bg-blue-50 text-blue-700'
-                : model.build_status === 'ready'
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                  : model.build_status === 'error'
-                    ? 'border-red-200 bg-red-50 text-red-700'
-                    : 'border-gray-200 bg-gray-50 text-gray-700'
-            }`}>
-              build: {model.build_status}
-            </span>
-            <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
-              endpointStatus === 'healthy'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : endpointStatus === 'unhealthy' || endpointStatus === 'deploy_failed'
-                  ? 'border-red-200 bg-red-50 text-red-700'
-                  : endpointStatus === 'deploying'
-                    ? 'border-blue-200 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 bg-gray-50 text-gray-700'
-            }`}>
-              endpoint: {endpointStatus.replace(/_/g, ' ')}
-            </span>
-          </div>
-          {model.endpoint_url && (
-            <code className="mt-3 block max-w-full truncate rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" title={model.endpoint_url}>
-              {model.endpoint_url}
-            </code>
-          )}
-          {model.build_error && <p className="mt-2 text-sm font-medium text-red-600">{model.build_error}</p>}
-          {model.endpoint_error && <p className="mt-2 text-sm font-medium text-red-600">{model.endpoint_error}</p>}
-          {(model.endpoint_container_name || model.endpoint_image_name) && (
-            <div className="mt-3 grid gap-1 text-xs text-gray-500 sm:grid-cols-2">
-              <span>Container: <span className="font-mono">{model.endpoint_container_name || '-'}</span></span>
-              <span>Image: <span className="font-mono">{model.endpoint_image_name || '-'}</span></span>
-            </div>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => onOpenApiManagement(model)}>
-            Open API Management
-          </Button>
-          {model.build_status !== 'ready' && (
-            <Button
-              icon={<FileArchive className="h-4 w-4" />}
-              loading={buildingModelId === model.id}
-              disabled={model.build_status === 'building'}
-              onClick={() => onBuild(model)}
-            >
-              {model.build_status === 'building' ? 'Building...' : 'Build Package'}
-            </Button>
-          )}
-          {readyToDeploy && (
-            <Button icon={<Rocket className="h-4 w-4" />} loading={deployingModelId === model.id} onClick={() => onDeploy(model)}>
-              Deploy Endpoint
-            </Button>
-          )}
-          {readyToDeploy && (
-            <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => onRedeploy(model)}>
-              Redeploy
-            </Button>
-          )}
-          {model.endpoint_url && (
-            <Button variant="secondary" icon={<Activity className="h-4 w-4" />} onClick={() => onCheckHealth(model)}>
-              Check Health
-            </Button>
-          )}
-          {model.endpoint_status !== 'not_deployed' && (
-            <Button variant="secondary" onClick={() => onStop(model)}>
-              Stop
-            </Button>
-          )}
-          {model.endpoint_container_name && (
-            <Button variant="secondary" onClick={() => onViewLogs(model)}>
-              Endpoint Logs
-            </Button>
-          )}
-          {deployed && (
-            <Button variant="secondary" onClick={onTestPrediction}>
-              Test Prediction
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 type MilestoneState = 'pending' | 'active' | 'completed' | 'failed' | 'cancelled' | 'skipped';
 
