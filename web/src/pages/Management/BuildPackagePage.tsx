@@ -1,11 +1,17 @@
-import { FileArchive, FileCode2, FlaskConical, Rocket, UploadCloud, Terminal, RefreshCw, ArrowLeft, ArrowRight, Play } from 'lucide-react';
-import React, { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
+import { FileCode2, UploadCloud, FlaskConical, FileArchive, Rocket, ArrowLeft, ArrowRight, Play, Terminal } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../lib/queryKeys';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import type { ModelBuildFormValues, ModelFlavor } from '../../types/modelApi';
-import { AccessModePicker, FileDropzone, StepTitle, SummaryItem, TextArea, } from './UploadModelFormPage';
-import { buildModelAPI, getBuildLogs, getModelAPI, cancelBuildAPI, getApiErrorMessage } from '../../lib/api';
+import { FileDropzone, StepTitle, SummaryItem, } from './UploadModelFormPage';
+import { TextArea } from '../../components/ui/TextArea';
+import { AccessModePicker } from '../../components/ui/Picker';
 import { toast } from '../../lib/toast';
+import { TerminalLogViewer } from '../../components/ui/TerminalLogViewer';
+import { buildModelAPI, cancelBuildAPI, getApiErrorMessage, deployModelAPI } from '../../lib/api';
 
 const wizardSteps = [
   { id: 1, label: 'Metadata', icon: FileCode2 },
@@ -16,28 +22,69 @@ const wizardSteps = [
 ];
 
 export default function BuildPackagePage({
-  step,
-  setStep,
   form,
   setField,
   readRequirementsFile,
-  preview,
-  submit,
-  loading,
-  canContinue,
-  onBuildSuccess,
+  onSubmitting,
+  onModelCreated,
 }: {
-  step: number;
-  setStep: React.Dispatch<React.SetStateAction<number>>;
   form: ModelBuildFormValues;
   setField: (field: keyof ModelBuildFormValues, value: string | File | null) => void;
   readRequirementsFile: (file: File | null) => void;
-  preview: string[];
-  submit: () => void;
-  loading: boolean;
-  canContinue: () => boolean;
-  onBuildSuccess: (modelId: number, previewTree: string[]) => void;
+  onSubmitting: (val: boolean) => void;
+  onModelCreated: (id: number) => void;
 }) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  
+  const [step, setStep] = useState(1);
+  const [createdModelId, setCreatedModelId] = useState<number | null>(null);
+  const [realPreview, setRealPreview] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const expectedPreview = [
+    'model/',
+    'model/MLmodel',
+    'model/requirements.txt',
+    'model/conda.yaml',
+    'model/python_env.yaml',
+    `model/${form.label_mapping_file?.name ?? 'label_encoder.json'}`,
+    `model/${form.source_artifact?.name ?? 'model.pkl'}`,
+  ];
+  
+  const preview = realPreview.length > 0 ? realPreview : expectedPreview;
+
+  const canContinue = () => {
+    if (step === 1) return Boolean(form.name.trim());
+    if (step === 2) return Boolean(form.source_artifact);
+    if (step === 3) return Boolean(form.flavor);
+    if (step === 5) return Boolean(createdModelId);
+    return true;
+  };
+
+  const submitBuild = async () => {
+    if (createdModelId) {
+      setLoading(true);
+      onSubmitting(true);
+      try {
+        await deployModelAPI(createdModelId);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+        navigate(`/dashboard/api-management`);
+      } catch (e) {
+        onSubmitting(false);
+        setLoading(false);
+        const msg = getApiErrorMessage(e, "Deployment failed or model is already deploying.");
+        toast.error(msg);
+      }
+    }
+  };
+
+  const handleBuildSuccess = (modelId: number, previewTree: string[]) => {
+    setCreatedModelId(modelId);
+    onModelCreated(modelId);
+    setRealPreview(previewTree);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="hidden sm:block rounded-lg border border-gray-300 bg-white px-8 pb-10 pt-6">
@@ -105,7 +152,7 @@ export default function BuildPackagePage({
           <RequirementsStep form={form} setField={setField} readRequirementsFile={readRequirementsFile} />
         )}
         {step === 5 && (
-          <DeployStep form={form} preview={preview} onBuildSuccess={onBuildSuccess} canContinue={canContinue()} />
+          <DeployStep form={form} preview={preview} onBuildSuccess={handleBuildSuccess} canContinue={canContinue()} />
         )}
 
         <div className="mt-8 grid gap-3 pt-5 border-t border-gray-200 sm:grid-cols-2">
@@ -133,7 +180,7 @@ export default function BuildPackagePage({
               icon={<Rocket className="h-4 w-4" />}
               disabled={!canContinue() || !form.name.trim()}
               loading={loading}
-              onClick={submit}
+              onClick={submitBuild}
             >
               Deploy model
             </Button>
@@ -285,104 +332,31 @@ function DeployStep({
   canContinue: boolean;
 }) {
   const [building, setBuilding] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [buildStatus, setBuildStatus] = useState<string>('not_started');
-  const [errorMsg, setErrorMsg] = useState<string>('');
-  
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const offsetRef = useRef(0);
-  const modelIdRef = useRef<number | null>(null);
+  const [modelId, setModelId] = useState<number | null>(null);
 
   const startBuild = async () => {
     try {
       setBuilding(true);
-      setLogs(['[SYSTEM] Initiating build process...']);
-      setErrorMsg('');
-      setBuildStatus('building');
-      offsetRef.current = 0;
-      
       const model = await buildModelAPI(form);
-      modelIdRef.current = model.id;
+      setModelId(model.id);
     } catch (e) {
       setBuilding(false);
-      setBuildStatus('error');
       const msg = getApiErrorMessage(e, "Failed to start build process.");
-      setErrorMsg(msg);
       toast.error(msg);
     }
   };
 
   const rebuild = async () => {
-    if (modelIdRef.current) {
+    if (modelId) {
       try {
-        await cancelBuildAPI(modelIdRef.current);
+        await cancelBuildAPI(modelId);
       } catch (e) {
         const msg = getApiErrorMessage(e, "Failed to cancel build process.");
-        setErrorMsg(msg);
         toast.error(msg);
       }
     }
     startBuild();
   };
-
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    
-    const fetchLogs = async () => {
-      if (!modelIdRef.current || buildStatus !== 'building') return;
-      try {
-        const data = await getBuildLogs(modelIdRef.current, offsetRef.current);
-        if (data.logs.length > 0) {
-          setLogs(prev => {
-            const newLogs = [...prev];
-            data.logs.forEach(log => {
-              if (log === 'BUILD_EOF_SUCCESS' || log === 'BUILD_EOF_ERROR') return;
-              newLogs.push(log);
-            });
-            return newLogs;
-          });
-          offsetRef.current = data.next_offset;
-        }
-        
-        if (data.build_status === 'ready' || data.build_status === 'error') {
-          setBuildStatus(data.build_status);
-          setBuilding(false);
-          if (data.build_status === 'ready') {
-             toast.success('Build completed successfully!');
-             const finalModel = await getModelAPI(modelIdRef.current);
-             onBuildSuccess(finalModel.id, finalModel.package_preview_tree || []);
-          } else {
-             setErrorMsg(data.build_error || 'Build failed.');
-             toast.error('Build failed.');
-          }
-        } else if (data.logs.includes('BUILD_EOF_ERROR')) {
-          setBuildStatus('error');
-          setBuilding(false);
-          setErrorMsg('Build process exited with an error.');
-        } else if (data.logs.includes('BUILD_EOF_SUCCESS')) {
-          setBuildStatus('ready');
-          setBuilding(false);
-          toast.success('Build completed successfully!');
-          const finalModel = await getModelAPI(modelIdRef.current);
-          onBuildSuccess(finalModel.id, finalModel.package_preview_tree || []);
-        }
-      } catch {
-        // silently ignore network errors during polling
-      }
-    };
-
-    if (building) {
-      interval = setInterval(fetchLogs, 1000);
-    }
-    
-    return () => clearInterval(interval);
-  }, [building, buildStatus, onBuildSuccess]);
-
-  useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  }, [logs]);
 
   return (
     <div className="space-y-5">
@@ -395,58 +369,37 @@ function DeployStep({
         <SummaryItem label="Artifact" value={form.source_artifact?.name || 'Missing artifact'} />
       </div>
 
-      {/* Terminal UI */}
-      <div className="overflow-hidden rounded-xl bg-gray-900 shadow-lg border border-gray-800">
-        <div className="flex items-center px-4 py-2 bg-gray-800/80 border-b border-gray-700">
-          <Terminal className="h-4 w-4 text-gray-400 mr-2" />
-          <span className="text-xs font-mono text-gray-400">Build Console</span>
-          {building && <span className="ml-auto flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>}
-          <div className="ml-auto flex items-center">
-            {buildStatus === 'not_started' ? (
+      {!modelId ? (
+        <div className="overflow-hidden rounded-xl bg-gray-900 shadow-lg border border-gray-800">
+          <div className="flex items-center px-4 py-2 bg-gray-800/80 border-b border-gray-700">
+            <Terminal className="h-4 w-4 text-gray-400 mr-2" />
+            <span className="text-xs font-mono text-gray-400">Build Console</span>
+            <div className="ml-auto flex items-center">
               <button
                 type="button"
                 onClick={startBuild}
-                disabled={!form.source_artifact}
+                disabled={!form.source_artifact || building}
                 className="flex items-center gap-1.5 rounded-md bg-gray-700 px-3 py-1 text-xs font-medium text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Start build process"
               >
                 <Play className="h-3 w-3" />
                 Build
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={rebuild}
-                className="flex items-center gap-1.5 rounded-md bg-gray-700 px-3 py-1 text-xs font-medium text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                title="Force destroy current process and Rebuild"
-              >
-                <RefreshCw className={`h-3 w-3 ${building ? 'animate-spin' : ''}`} />
-                Rebuild
-              </button>
-            )}
+            </div>
+          </div>
+          <div className="p-4 h-64 overflow-y-auto font-mono text-sm text-green-400 whitespace-pre-wrap break-all custom-scrollbar">
+            <div className="text-gray-500 italic">Click "Build" to start the model packager...</div>
           </div>
         </div>
-        <div 
-          ref={terminalRef}
-          className="p-4 h-64 overflow-y-auto font-mono text-sm text-green-400 whitespace-pre-wrap break-all custom-scrollbar"
-          style={{ scrollBehavior: 'smooth' }}
-        >
-          {logs.length === 0 && !building && buildStatus === 'not_started' && (
-            <div className="text-gray-500 italic">Click "Build" to start the model packager...</div>
-          )}
-          {logs.map((log, i) => (
-            <div key={i} className="mb-1 leading-relaxed opacity-90">{log}</div>
-          ))}
-          {building && <div className="animate-pulse">_</div>}
-          {errorMsg && <div className="text-red-400 mt-4">[ERROR] {errorMsg}</div>}
-        </div>
-      </div>
-
-      {buildStatus === 'ready' && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 flex items-center">
-          <div className="font-semibold">Build Successful!</div>
-          <div className="ml-auto">Click Deploy model below to continue.</div>
-        </div>
+      ) : (
+        <TerminalLogViewer
+          key={modelId || 'idle'}
+          modelId={modelId}
+          onBuildSuccess={(id, previewTree) => {
+            setBuilding(false);
+            onBuildSuccess(id, previewTree);
+          }}
+          onRebuild={rebuild}
+        />
       )}
     </div>
   );

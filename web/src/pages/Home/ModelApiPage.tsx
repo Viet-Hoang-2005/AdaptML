@@ -31,7 +31,7 @@ export default function ModelApiPage() {
   }
 
   return (
-    <section className="rounded-lg border border-gray-300 bg-white">
+    <section className="flex flex-col flex-1 rounded-lg border border-gray-300 bg-white">
       <div className="border-b border-gray-200 p-6">
         <p className="text-xs font-semibold uppercase text-gray-400">{selectedModel.status}</p>
         <h2 className="mt-2 text-2xl font-bold text-gray-900">{selectedModel.name}</h2>
@@ -46,8 +46,8 @@ export default function ModelApiPage() {
           <p className="mt-2 text-sm font-bold capitalize text-gray-900">{selectedModel.access_mode}</p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <p className="text-xs font-semibold uppercase text-gray-400">Model ID</p>
-          <p className="mt-2 text-sm font-bold text-gray-900">{selectedModel.id}</p>
+          <p className="text-xs font-semibold uppercase text-gray-400">Flavor</p>
+          <p className="mt-2 text-sm font-bold text-gray-900 capitalize">{selectedModel.flavor || '-'}</p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
           <p className="text-xs font-semibold uppercase text-gray-400">Updated</p>

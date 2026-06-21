@@ -18,6 +18,7 @@ import APIManagementPage from './pages/Management/APIManagementPage';
 import TrainModelPage from './pages/Training/TrainModelPage';
 import TrainingJobDetailPage from './pages/Training/TrainingJobDetailPage';
 import ModelAPIFormPage from './pages/Management/UploadModelFormPage';
+import ModelDetailPage from './pages/Management/ModelDetailPage';
 import DeveloperSettingPage from './pages/Settings/DeveloperSettingPage';
 import ProfileSettingPage from './pages/Settings/ProfileSettingPage';
 import ApiKeyPage from './pages/Settings/ApiKeyPage';
@@ -59,8 +60,10 @@ const router = createBrowserRouter(
           <Route path="model-management" element={<Navigate to="/dashboard/api-management" replace />} />
         </Route>
         <Route path="api-management" element={<APIManagementPage />} />
-        <Route path="api-management/upload" element={<ModelAPIFormPage />} />
-        <Route path="api-management/:modelId" element={<ModelAPIFormPage />} />
+        <Route path="api-management/upload" element={<Navigate to="build-package" replace />} />
+        <Route path="api-management/upload/build-package" element={<ModelAPIFormPage />} />
+        <Route path="api-management/upload/mlflow-zip" element={<ModelAPIFormPage />} />
+        <Route path="api-management/:modelId" element={<ModelDetailPage />} />
         <Route path="drift-monitoring" element={dashboardPlaceholders.driftMonitoring} />
         <Route path="model-training" element={<TrainModelPage />} />
         <Route path="model-training/:jobId" element={<TrainingJobDetailPage />} />
@@ -71,8 +74,8 @@ const router = createBrowserRouter(
           <Route path="profile" element={<ProfileSettingPage />} />
           <Route path="developer" element={<DeveloperSettingPage />} />
         </Route>
-        <Route path="settings/api-keys/create" element={<ApiKeyPage />} />
-        <Route path="settings/api-keys/:keyId" element={<ApiKeyPage />} />
+        <Route path="settings/developer/api-keys/create" element={<ApiKeyPage />} />
+        <Route path="settings/developer/api-keys/:keyId" element={<ApiKeyPage />} />
         <Route path="*" element={<Navigate to="/dashboard/home/model-api" replace />} />
       </Route>
 

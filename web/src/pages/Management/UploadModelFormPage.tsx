@@ -1,17 +1,12 @@
-import { ArrowLeft, Bot, Boxes, FileArchive, FileCode2, Trash2, UploadCloud } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams, useBlocker } from 'react-router-dom';
-import { Button } from '../../components/ui/Button';
+import { ArrowLeft, Bot, FileArchive, UploadCloud } from 'lucide-react';
+import { useMemo, useState, useRef, useEffect } from 'react';
+import { Link, useNavigate, useLocation, useBlocker } from 'react-router-dom';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
-import { useModelAPIMutations, useModelAPIs } from '../../hooks/useModelAPIs';
-import { deleteModelAPI as deleteModelAPICore, deployModelAPI, getApiErrorMessage } from '../../lib/api';
-import type { ModelAccessMode, ModelAPI, ModelAPIFormValues, ModelBuildFormValues } from '../../types/modelApi';
+import { deleteModelAPI as deleteModelAPICore } from '../../lib/api';
+import type { ModelAPIFormValues, ModelBuildFormValues } from '../../types/modelApi';
 import BuildPackagePage from './BuildPackagePage';
 import MLflowZipPage from './MLflowZipPage';
-import { useRef, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '../../lib/queryKeys';
-import { toast } from '../../lib/toast';
+import { PageTabs } from '../../components/layout/PageTabs';
 
 const emptyAdvancedForm: ModelAPIFormValues = {
   name: '',
@@ -32,71 +27,14 @@ const emptyBuildForm: ModelBuildFormValues = {
   requirements_file: null,
 };
 
-export default function ModelAPIFormPage() {
-  const params = useParams();
-  const modelId = params.modelId ? Number(params.modelId) : null;
-  const editing = Boolean(modelId);
-  const { data } = useModelAPIs();
-  const model = useMemo(() => data?.models.find((item) => item.id === modelId) ?? null, [data?.models, modelId]);
-
-  return (
-    <ModelAPIFormContent
-      key={model?.id ?? 'new-model-api'}
-      editing={editing}
-      model={model}
-      modelId={modelId}
-    />
-  );
-}
-
-function ModelAPIFormContent({
-  editing,
-  model,
-  modelId,
-}: {
-  editing: boolean;
-  model: ModelAPI | null;
-  modelId: number | null;
-}) {
-  const queryClient = useQueryClient();
-  const {
-    createModelAPI,
-    updateModelAPI,
-    deleteModelAPI,
-    creating,
-    updating,
-    deleting,
-  } = useModelAPIMutations();
-  const [mode, setMode] = useState<'builder' | 'advanced'>('builder');
-  const [step, setStep] = useState(1);
-  const [createdModelId, setCreatedModelId] = useState<number | null>(null);
-  const [realPreview, setRealPreview] = useState<string[]>([]);
+export default function UploadModelFormPage() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const [advancedForm, setAdvancedForm] = useState<ModelAPIFormValues>(() =>
-    model
-      ? {
-        name: model.name,
-        description: model.description,
-        model_info: model.model_info,
-        access_mode: model.access_mode,
-        artifact: null,
-      }
-      : emptyAdvancedForm,
-  );
-  const [buildForm, setBuildForm] = useState<ModelBuildFormValues>(() =>
-    model
-      ? {
-        name: model.name,
-        description: model.description,
-        model_info: model.model_info,
-        access_mode: model.access_mode,
-        source_artifact: null,
-        flavor: model.flavor || 'sklearn',
-        requirements_text: model.requirements_text || '',
-        requirements_file: null,
-      }
-      : emptyBuildForm,
-  );
+  const mode = location.pathname.includes('mlflow-zip') ? 'advanced' : 'builder';
+  
+  const [createdModelId, setCreatedModelId] = useState<number | null>(null);
+  const [advancedForm, setAdvancedForm] = useState<ModelAPIFormValues>(emptyAdvancedForm);
+  const [buildForm, setBuildForm] = useState<ModelBuildFormValues>(emptyBuildForm);
 
   const setAdvancedField = (field: keyof ModelAPIFormValues, value: string | File | null) => {
     setAdvancedForm((current) => ({ ...current, [field]: value }));
@@ -106,32 +44,15 @@ function ModelAPIFormContent({
     setBuildForm((current) => ({ ...current, [field]: value }));
   };
 
-  const expectedPreview = [
-    'model/',
-    'model/MLmodel',
-    'model/requirements.txt',
-    'model/python_env.yaml',
-    `model/artifacts/${buildForm.source_artifact?.name ?? '<raw-model-artifact>'}`,
-  ];
-
-  const canContinue = () => {
-    if (step === 1) return Boolean(buildForm.name.trim());
-    if (step === 2) return Boolean(buildForm.source_artifact);
-    if (step === 3) return Boolean(buildForm.flavor);
-    if (step === 5) return Boolean(createdModelId);
-    return true;
-  };
-
   const isSubmittingRef = useRef(false);
 
   const isDirty = useMemo(() => {
-    if (editing) return false;
     if (mode === 'advanced') {
        return Boolean(advancedForm.name || advancedForm.artifact);
     } else {
        return Boolean(buildForm.name || buildForm.source_artifact || createdModelId);
     }
-  }, [mode, advancedForm, buildForm, createdModelId, editing]);
+  }, [mode, advancedForm, buildForm, createdModelId]);
 
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
     if (isSubmittingRef.current) return false;
@@ -147,34 +68,6 @@ function ModelAPIFormContent({
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
-
-  const submitAdvanced = () => {
-    isSubmittingRef.current = true;
-    if (editing && modelId) {
-      updateModelAPI({ modelId, payload: advancedForm });
-      return;
-    }
-    createModelAPI(advancedForm);
-  };
-
-  const submitBuild = async () => {
-    if (createdModelId) {
-      isSubmittingRef.current = true;
-      try {
-        await deployModelAPI(createdModelId);
-      } catch (e) {
-        const msg = getApiErrorMessage(e, "Deployment failed or model is already deploying.");
-        toast.error(msg);
-      }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
-      navigate(`/dashboard/api-management`);
-    }
-  };
-
-  const handleBuildSuccess = (modelId: number, previewTree: string[]) => {
-    setCreatedModelId(modelId);
-    setRealPreview(previewTree);
-  };
 
   const readRequirementsFile = async (file: File | null) => {
     setBuildField('requirements_file', file);
@@ -195,6 +88,9 @@ function ModelAPIFormContent({
           if (createdModelId) {
             await deleteModelAPICore(createdModelId, true).catch(() => {});
           }
+          setAdvancedForm(emptyAdvancedForm);
+          setBuildForm(emptyBuildForm);
+          setCreatedModelId(null);
           blocker.proceed?.();
         }}
         onCancel={() => {
@@ -207,71 +103,45 @@ function ModelAPIFormContent({
             <ArrowLeft className="h-4 w-4" />
             Back to API Management
           </Link>
-          <h1 className="text-xl font-bold text-gray-900">{editing ? 'Edit model API' : 'Upload model'}</h1>
+          <h1 className="text-xl font-bold text-gray-900">Upload model</h1>
         </div>
         
-        {editing && modelId ? (
-          <Button
-            variant="danger"
-            size="md"
-            className="mb-2"
-            icon={<Trash2 className="h-4 w-4" />}
-            loading={deleting}
-            onClick={() => deleteModelAPI(modelId)}
-          >
-            Disable API
-          </Button>
-        ) : (
-          <nav className="-mb-px flex items-center gap-2" aria-label="Mode Tabs">
-            <button
-              type="button"
-              onClick={() => setMode('builder')}
-              className={`inline-flex h-10 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors ${
-                mode === 'builder'
-                  ? 'border-black text-gray-950'
-                  : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-950'
-              }`}
-            >
-              <Bot className="h-4 w-4 shrink-0" />
-              <span className="whitespace-nowrap">Auto build package</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('advanced')}
-              className={`inline-flex h-10 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors ${
-                mode === 'advanced'
-                  ? 'border-black text-gray-950'
-                  : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-950'
-              }`}
-            >
-              <FileArchive className="h-4 w-4 shrink-0" />
-              <span className="whitespace-nowrap">Advanced MLflow ZIP</span>
-            </button>
-          </nav>
-        )}
+        <PageTabs
+          tabs={[
+            {
+              label: 'Auto build package',
+              icon: Bot,
+              isActive: mode === 'builder',
+              onClick: () => navigate('/dashboard/api-management/upload/build-package'),
+            },
+            {
+              label: 'Advanced MLflow ZIP',
+              icon: FileArchive,
+              isActive: mode === 'advanced',
+              onClick: () => navigate('/dashboard/api-management/upload/mlflow-zip'),
+            },
+          ]}
+        />
       </div>
 
-      {editing || mode === 'advanced' ? (
+      {mode === 'advanced' ? (
         <MLflowZipPage
-          model={model}
           form={advancedForm}
           setField={setAdvancedField}
-          submit={submitAdvanced}
-          loading={creating || updating}
-          editing={editing}
+          onSubmitting={(val) => {
+            isSubmittingRef.current = val;
+          }}
+          onModelCreated={(id) => setCreatedModelId(id)}
         />
       ) : (
         <BuildPackagePage
-          step={step}
-          setStep={setStep}
           form={buildForm}
           setField={setBuildField}
           readRequirementsFile={readRequirementsFile}
-          preview={realPreview.length > 0 ? realPreview : expectedPreview}
-          submit={submitBuild}
-          loading={false}
-          canContinue={canContinue}
-          onBuildSuccess={handleBuildSuccess}
+          onSubmitting={(val) => {
+            isSubmittingRef.current = val;
+          }}
+          onModelCreated={(id) => setCreatedModelId(id)}
         />
       )}
     </section>
@@ -283,65 +153,6 @@ export function StepTitle({ title, description }: { title: string; description: 
     <div>
       <h2 className="text-lg font-bold text-gray-900">{title}</h2>
       <p className="mt-1 text-sm leading-6 text-gray-500">{description}</p>
-    </div>
-  );
-}
-
-export function TextArea({
-  id,
-  label,
-  value,
-  onChange,
-  placeholder,
-  minHeight = 'min-h-24',
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  minHeight?: string;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-sm font-medium text-gray-700">{label}</label>
-      <textarea
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={`${minHeight} w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition-colors hover:border-black focus:border-black`}
-        placeholder={placeholder}
-      />
-    </div>
-  );
-}
-
-export function AccessModePicker({
-  value,
-  onChange,
-}: {
-  value: ModelAccessMode;
-  onChange: (value: ModelAccessMode) => void;
-}) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {(['private', 'public'] as ModelAccessMode[]).map((mode) => (
-        <button
-          key={mode}
-          type="button"
-          onClick={() => onChange(mode)}
-          className={`rounded-2xl border px-4 py-4 text-left transition-colors ${
-            value === mode
-              ? 'border-black bg-black text-white'
-              : 'border-gray-300 bg-white text-gray-700 hover:border-black'
-          }`}
-        >
-          <span className="text-sm font-bold capitalize">{mode} API</span>
-          <p className={`mt-1 text-xs ${value === mode ? 'text-gray-300' : 'text-gray-500'}`}>
-            {mode === 'private' ? 'Requires JWT or API key.' : 'Allows public prediction requests.'}
-          </p>
-        </button>
-      ))}
     </div>
   );
 }
@@ -369,19 +180,6 @@ export function FileDropzone({
         onChange={(event) => onChange(event.target.files?.[0] ?? null)}
       />
     </label>
-  );
-}
-
-export function PackagePreview({ preview, compact = false }: { preview: string[]; compact?: boolean }) {
-  return (
-    <div className={`rounded-lg border border-gray-200 bg-gray-950 p-4 font-mono text-xs text-gray-100 ${compact ? 'max-h-48 overflow-auto' : ''}`}>
-      {preview.map((item) => (
-        <div key={item} className="flex items-center gap-2 py-1">
-          {item.endsWith('/') ? <Boxes className="h-3.5 w-3.5 text-blue-300" /> : <FileCode2 className="h-3.5 w-3.5 text-gray-400" />}
-          <span>{item}</span>
-        </div>
-      ))}
-    </div>
   );
 }
 
