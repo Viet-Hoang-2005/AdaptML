@@ -1,6 +1,5 @@
 import axiosInstance from './axios';
 import { AxiosError } from 'axios';
-import type { ApiErrorResponse } from '../types/api';
 import type {
   LoginCredentials,
   SignUpRequest,
@@ -38,6 +37,10 @@ import type {
   TrainingJobMetricsResponse,
   TrainingJobRegisterModelValues,
   TrainingUsageResponse,
+  RegistryFamily,
+  RegistryVersion,
+  RegistryHistory,
+  RegistryMetric,
 } from '../types/modelApi';
 
 const authApiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/auth';
@@ -464,9 +467,57 @@ export const restoreTrainingJob = async (jobId: number): Promise<TrainingJob> =>
 };
 
 export function getApiErrorMessage(e: unknown, defaultMessage = 'An unexpected error occurred'): string {
-  const axiosError = e as AxiosError<ApiErrorResponse>;
-  return axiosError.response?.data?.error 
-      || axiosError.response?.data?.message 
-      || axiosError.message 
-      || defaultMessage;
+  const axiosError = e as AxiosError<unknown>;
+  if (axiosError.response?.data) {
+    const data = axiosError.response.data as Record<string, unknown> | string;
+    if (typeof data === 'string' && data.trim().startsWith('<')) {
+      return `${defaultMessage} (API returned HTML: ${axiosError.response.status} ${axiosError.response.statusText})`;
+    }
+    const errObj = data as Record<string, unknown>;
+    return (errObj.error as string)
+        || (errObj.message as string)
+        || axiosError.message 
+        || defaultMessage;
+  }
+  return (e as Error).message || defaultMessage;
 }
+
+// ----------------------------------------------------------------------
+// Registry API
+// ----------------------------------------------------------------------
+
+export const getRegistryFamilies = async (): Promise<RegistryFamily[]> => {
+  const response = await axiosInstance.get(controlPlaneURL('/registry/families/'));
+  return response.data;
+};
+
+export const getRegistryFamilyDetails = async (familyId: number): Promise<RegistryFamily> => {
+  const response = await axiosInstance.get(controlPlaneURL(`/registry/families/${familyId}/`));
+  return response.data;
+};
+
+export const getRegistryVersions = async (familyId: number): Promise<RegistryVersion[]> => {
+  const response = await axiosInstance.get(controlPlaneURL(`/registry/families/${familyId}/versions/`));
+  return response.data;
+};
+
+export const getRegistryHistory = async (familyId: number): Promise<RegistryHistory[]> => {
+  const response = await axiosInstance.get(controlPlaneURL(`/registry/families/${familyId}/history/`));
+  return response.data;
+};
+
+export const getRegistryMetrics = async (familyId: number, versionId: number): Promise<Record<string, RegistryMetric[]>> => {
+  const response = await axiosInstance.get(controlPlaneURL(`/registry/families/${familyId}/versions/${versionId}/metrics/`));
+  return response.data;
+};
+
+export const promoteRegistryVersion = async (familyId: number, versionId: number): Promise<RegistryVersion> => {
+  const response = await axiosInstance.post(controlPlaneURL(`/registry/families/${familyId}/versions/${versionId}/promote/`));
+  return response.data;
+};
+
+export const rollbackRegistryFamily = async (familyId: number, versionId: number): Promise<RegistryVersion> => {
+  const response = await axiosInstance.post(controlPlaneURL(`/registry/families/${familyId}/versions/${versionId}/rollback/`));
+  return response.data;
+};
+

@@ -234,3 +234,46 @@ export interface TrainingUsageResponse {
   current_month_start: string;
   current_month_end: string;
 }
+
+export interface RegistryVersion {
+  id: number;
+  version: string;
+  source_type: ModelSourceType | 'imported';
+  source_training_job_id: number | null;
+  artifact_uri: string;
+  image_name: string;
+  endpoint_url: string;
+  stage: 'none' | 'candidate' | 'staging' | 'production' | 'archived';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RegistryFamily {
+  id: number;
+  name: string;
+  display_name: string;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  current_production_version: RegistryVersion | null;
+}
+
+export interface RegistryHistory {
+  id: number;
+  action: string;
+  status: string;
+  version: string;
+  from_stage: string;
+  to_stage: string;
+  message: string;
+  actor: string;
+  created_at: string;
+}
+
+export interface RegistryMetric {
+  value: number;
+  step: number;
+  source: string;
+}
+
