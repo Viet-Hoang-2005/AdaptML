@@ -44,6 +44,8 @@ def serialize_model_api(model_api):
         "status": model_api.status,
         "error_message": model_api.error_message,
         "source_artifact": model_api.source_artifact.url if model_api.source_artifact else "",
+        "source_code_file": model_api.source_code_file.url if model_api.source_code_file else "",
+        "reference_data_file": model_api.reference_data_file.url if model_api.reference_data_file else "",
         "flavor": model_api.flavor,
         "requirements_text": model_api.requirements_text,
         "package_manifest": model_api.package_manifest,
@@ -146,6 +148,8 @@ class ModelAPIListCreateView(APIView):
         model_info = (request.data.get("model_info") or "").strip()
         access_mode = (request.data.get("access_mode") or "private").strip().lower()
         artifact_file = request.FILES.get("artifact")
+        source_code_file = request.FILES.get("source_code_file")
+        reference_data_file = request.FILES.get("reference_data_file")
 
         if not name:
             return Response({"error": "Model name is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -170,7 +174,12 @@ class ModelAPIListCreateView(APIView):
             build_status="testing",
         )
         model_api.artifact = artifact_file
-        model_api.save(update_fields=["artifact", "updated_at"])
+        if source_code_file:
+            model_api.source_code_file = source_code_file
+        if reference_data_file:
+            model_api.reference_data_file = reference_data_file
+
+        model_api.save(update_fields=["artifact", "source_code_file", "reference_data_file", "updated_at"])
 
         # We don't build the endpoint url or model_uri here yet.
         # It will be built after testing succeeds in the webhook.
@@ -200,6 +209,8 @@ class ModelAPIBuildView(APIView):
         access_mode = (request.data.get("access_mode") or "private").strip().lower()
         flavor = (request.data.get("flavor") or "").strip().lower()
         source_artifact = request.FILES.get("source_artifact")
+        source_code_file = request.FILES.get("source_code_file")
+        reference_data_file = request.FILES.get("reference_data_file")
 
         if not name:
             return Response({"error": "Model name is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -234,12 +245,17 @@ class ModelAPIBuildView(APIView):
             build_status="building",
         )
         model_api.source_artifact = source_artifact
+        if source_code_file:
+            model_api.source_code_file = source_code_file
+        if reference_data_file:
+            model_api.reference_data_file = reference_data_file
+
         label_mapping_file = request.FILES.get("label_mapping_file")
         if label_mapping_file:
             model_api.label_mapping_file = label_mapping_file
 
         model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["source_artifact", "label_mapping_file", "endpoint_url", "updated_at"])
+        model_api.save(update_fields=["source_artifact", "source_code_file", "reference_data_file", "label_mapping_file", "endpoint_url", "updated_at"])
 
         # Gọi adapter chạy ngầm
         safe_name = slugify(name) or "model"
@@ -314,6 +330,8 @@ class ModelAPIDetailView(APIView):
         model_info = (request.data.get("model_info") or "").strip()
         access_mode = (request.data.get("access_mode") or model_api.access_mode).strip().lower()
         artifact_file = request.FILES.get("artifact")
+        source_code_file = request.FILES.get("source_code_file")
+        reference_data_file = request.FILES.get("reference_data_file")
 
         if not name:
             return Response({"error": "Model name is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -326,6 +344,10 @@ class ModelAPIDetailView(APIView):
             if artifact_error:
                 return Response({"error": artifact_error}, status=status.HTTP_400_BAD_REQUEST)
             model_api.artifact = artifact_file
+        if source_code_file:
+            model_api.source_code_file = source_code_file
+        if reference_data_file:
+            model_api.reference_data_file = reference_data_file
 
         model_api.name = name
         model_api.description = description
@@ -338,7 +360,7 @@ class ModelAPIDetailView(APIView):
         if model_api.artifact:
             model_api.model_uri = model_api.artifact.url
         model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["model_uri", "endpoint_url", "updated_at"])
+        model_api.save(update_fields=["model_uri", "endpoint_url", "source_code_file", "reference_data_file", "updated_at"])
 
         if model_api.artifact:
             DockerDeployAdapter().deploy_model(

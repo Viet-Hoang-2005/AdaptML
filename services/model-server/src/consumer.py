@@ -6,7 +6,7 @@ import requests
 import signal
 import pandas as pd
 from confluent_kafka import Consumer, KafkaError
-from db_manager import save_dataframe_to_db, get_production_data_count
+from database import save_dataframe_to_db, get_production_data_count
 
 # Lấy biến môi trường
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')

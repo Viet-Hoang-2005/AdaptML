@@ -9,7 +9,6 @@ import mlflow.sklearn
 import mlflow.xgboost
 import xgboost as xgb
 
-
 def parse_requirements(requirements_text: str) -> list[str] | None:
     requirements = [
         line.strip()
@@ -17,7 +16,6 @@ def parse_requirements(requirements_text: str) -> list[str] | None:
         if line.strip() and not line.strip().startswith("#")
     ]
     return requirements or None
-
 
 def load_pickle_model(path: Path) -> Any:
     loaders = (
@@ -30,11 +28,10 @@ def load_pickle_model(path: Path) -> Any:
     for loader in loaders:
         try:
             return loader(path)
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             last_error = exc
 
     raise ValueError(f"Unable to load model artifact: {last_error}")
-
 
 def load_model(path: Path, flavor: str) -> Any:
     extension = path.suffix.lower()
@@ -55,7 +52,6 @@ def load_model(path: Path, flavor: str) -> Any:
 
     raise ValueError("Unsupported model flavor.")
 
-
 def save_mlflow_model(model: Any, flavor: str, output_dir: Path, requirements: list[str] | None) -> None:
     if flavor == "sklearn":
         mlflow.sklearn.save_model(
@@ -75,14 +71,12 @@ def save_mlflow_model(model: Any, flavor: str, output_dir: Path, requirements: l
 
     raise ValueError("Unsupported model flavor.")
 
-
 def build_preview_tree(root: Path) -> list[str]:
     paths: list[str] = []
     for item in sorted(root.rglob("*")):
         relative = item.relative_to(root.parent).as_posix()
         paths.append(f"{relative}/" if item.is_dir() else relative)
     return paths
-
 
 def make_zip(source_dir: Path, zip_path: Path) -> None:
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:

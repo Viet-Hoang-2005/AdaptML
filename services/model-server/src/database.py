@@ -1,6 +1,8 @@
-# db_manager.py: Quản lý kết nối đến CloudNativePG
+# database.py: Quản lý kết nối đến CloudNativePG
 import os
 import uuid
+import re
+from typing import Dict, Any
 from datetime import datetime
 import pandas as pd
 from dotenv import load_dotenv
@@ -19,7 +21,7 @@ DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "mlops_paas_db")
 
 # CloudNativePG tạo ra 2 Service endpoint riêng biệt:
-# - DB_HOST_RW (Read-Write): Trỏ đến Pod PRIMARY — dùng cho INSERT/UPDATE/DELETE.
+# - DB_HOST_RW (Read-Write): Trỏ đến Pod PRIMARY - dùng cho INSERT/UPDATE/DELETE.
 # - DB_HOST_RO (Read-Only):  Trỏ đến CẢ Primary lẫn Standby, load-balanced.
 
 # Khi chạy local (docker-compose), cả 2 biến đều trỏ về cùng 1 host.
@@ -43,11 +45,8 @@ def _create_engine_safe(host: str, label: str):
     except Exception as e:
         print(f"[{label}] Database connection failed: {e}")
         return None
-
-# Engine cho API ghi log production data (-> Primary)
+        
 engine_rw = _create_engine_safe(DB_HOST_RW, "Read Write")
-
-# Engine cho các tác vụ đọc nếu cần trong tương lai (-> Standby)
 engine_ro = _create_engine_safe(DB_HOST_RO, "Read Only")
 
 # 3. HÀM GHI DỮ LIỆU (dùng engine_rw -> PRIMARY)
@@ -103,7 +102,57 @@ def get_production_data_count() -> int:
         print(f"Error counting records: {e}")
         return 0
 
-# 5. TEST CHẠY THỬ ĐỘC LẬP
+# 5. KẾT NỐI ĐẾN CONTROL PLANE MODEL REGISTRY
+CONTROL_PLANE_DATABASE_URL = os.environ.get("CONTROL_PLANE_DATABASE_URL")
+CONTROL_PLANE_DB_SCHEMA = os.environ.get("CONTROL_PLANE_DB_SCHEMA", "control_plane")
+
+if CONTROL_PLANE_DB_SCHEMA and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", CONTROL_PLANE_DB_SCHEMA):
+    raise RuntimeError("CONTROL_PLANE_DB_SCHEMA must be a simple PostgreSQL identifier.")
+
+try:
+    model_registry_engine = (
+        create_engine(
+            CONTROL_PLANE_DATABASE_URL,
+            pool_pre_ping=True,
+            connect_args={"options": f"-c search_path={CONTROL_PLANE_DB_SCHEMA},public"},
+        )
+        if CONTROL_PLANE_DATABASE_URL
+        else None
+    )
+    print("Connected to Control Plane model registry." if model_registry_engine else "CONTROL_PLANE_DATABASE_URL is not set.")
+except Exception as exc:
+    print(f"Failed to connect to Control Plane model registry: {exc}")
+    model_registry_engine = None
+
+def get_model_api_record(model_id: int) -> Dict[str, Any]:
+    if model_registry_engine is None:
+        raise Exception("Model registry database is unavailable.")
+
+    query = text('''
+        SELECT
+            model.id,
+            model.name,
+            model.access_mode,
+            model.model_uri,
+            model.endpoint_url,
+            model.status,
+            model.updated_at,
+            users.tenant_id
+        FROM authentication_modelapi AS model
+        INNER JOIN authentication_customuser AS users ON users.id = model.tenant_id
+        WHERE model.id = :model_id AND model.status != 'disabled'
+        LIMIT 1
+    ''')
+
+    with model_registry_engine.connect() as conn:
+        row = conn.execute(query, {"model_id": model_id}).mappings().first()
+
+    if not row:
+        return None
+
+    return dict(row)
+
+# 6. TEST CHẠY THỬ ĐỘC LẬP
 if __name__ == "__main__":
     CSV_PATH = os.path.join(ROOT_DIR, 'data', 'test_data.csv')
 

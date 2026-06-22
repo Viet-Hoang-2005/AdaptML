@@ -1,17 +1,9 @@
 import base64
 import json
-import pickle
 import shutil
 import tempfile
-import zipfile
 from pathlib import Path
-from typing import Any
 
-import cloudpickle
-import joblib
-import mlflow.sklearn
-import mlflow.xgboost
-import xgboost as xgb
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask

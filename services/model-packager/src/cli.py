@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import shutil
@@ -19,7 +18,6 @@ class RedisLogHandler(logging.Handler):
         super().__init__()
         self.redis_client = redis.from_url(redis_url)
         self.log_key = f"build_logs:{model_id}"
-        # Xóa log cũ nếu có
         self.redis_client.delete(self.log_key)
 
     def emit(self, record):
