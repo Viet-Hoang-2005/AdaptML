@@ -31,6 +31,16 @@ from .model_api_views import (
     ModelAPITriggerBuildView,
 )
 
+from .registry_views import (
+    RegistryFamilyListView,
+    RegistryFamilyDetailView,
+    RegistryVersionListView,
+    RegistryHistoryListView,
+    RegistryPromoteView,
+    RegistryRollbackView,
+    RegistryMetricListView,
+)
+
 urlpatterns = [
     path('models/', ModelAPIListCreateView.as_view(), name='model_api_list_create'),
     path('models/build/', ModelAPIBuildView.as_view(), name='model_api_build'),
@@ -58,4 +68,13 @@ urlpatterns = [
     path('training-jobs/<int:training_job_id>/metrics/', TrainingJobMetricsView.as_view(), name='training_job_metrics'),
     path('training-jobs/<int:training_job_id>/restore/', TrainingJobRestoreView.as_view(), name='training_job_restore'),
     path('training-usage/', TrainingUsageView.as_view(), name='training_usage'),
+    
+    # Registry APIs
+    path('registry/families/', RegistryFamilyListView.as_view(), name='registry_family_list'),
+    path('registry/families/<int:family_id>/', RegistryFamilyDetailView.as_view(), name='registry_family_detail'),
+    path('registry/families/<int:family_id>/versions/', RegistryVersionListView.as_view(), name='registry_version_list'),
+    path('registry/families/<int:family_id>/history/', RegistryHistoryListView.as_view(), name='registry_history_list'),
+    path('registry/families/<int:family_id>/versions/<int:version_id>/promote/', RegistryPromoteView.as_view(), name='registry_promote'),
+    path('registry/families/<int:family_id>/versions/<int:version_id>/rollback/', RegistryRollbackView.as_view(), name='registry_rollback'),
+    path('registry/families/<int:family_id>/versions/<int:version_id>/metrics/', RegistryMetricListView.as_view(), name='registry_metric_list'),
 ]

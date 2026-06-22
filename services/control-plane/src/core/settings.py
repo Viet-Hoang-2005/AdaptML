@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'storages',
     'channels',
     'authentication',
+    'orchestration',
 ]
 
 MIDDLEWARE = [
