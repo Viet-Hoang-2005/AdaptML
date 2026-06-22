@@ -1,4 +1,4 @@
-import { ArrowLeft, Bot, FileArchive, UploadCloud } from 'lucide-react';
+import { ArrowLeft, Bot, FileArchive } from 'lucide-react';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation, useBlocker } from 'react-router-dom';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
@@ -154,32 +154,6 @@ export function StepTitle({ title, description }: { title: string; description: 
       <h2 className="text-lg font-bold text-gray-900">{title}</h2>
       <p className="mt-1 text-sm leading-6 text-gray-500">{description}</p>
     </div>
-  );
-}
-
-export function FileDropzone({
-  accept,
-  title,
-  subtitle,
-  onChange,
-}: {
-  accept: string;
-  title: string;
-  subtitle: string;
-  onChange: (file: File | null) => void;
-}) {
-  return (
-    <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 text-center hover:border-black">
-      <UploadCloud className="mb-3 h-6 w-6 text-gray-500" />
-      <span className="max-w-full truncate text-sm font-semibold text-gray-900">{title}</span>
-      <span className="mt-1 text-xs text-gray-500">{subtitle}</span>
-      <input
-        type="file"
-        accept={accept}
-        className="hidden"
-        onChange={(event) => onChange(event.target.files?.[0] ?? null)}
-      />
-    </label>
   );
 }
 

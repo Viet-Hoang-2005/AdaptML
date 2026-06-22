@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { FileCode2, UploadCloud, FlaskConical, FileArchive, Rocket, ArrowLeft, ArrowRight } from 'lucide-react';
+import { FileCode2, UploadCloud, FlaskConical, FileArchive, Rocket, ArrowLeft, ArrowRight, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import type { ModelBuildFormValues, ModelFlavor } from '../../types/modelApi';
-import { FileDropzone, StepTitle, SummaryItem, } from './UploadModelFormPage';
+import { StepTitle, SummaryItem, } from './UploadModelFormPage';
+import { FileDropzone } from '../../components/ui/FileDropzone';
 import { TextArea } from '../../components/ui/TextArea';
 import { AccessModePicker } from '../../components/ui/Picker';
 import { toast } from '../../lib/toast';
@@ -15,10 +16,11 @@ import { buildModelAPI, cancelBuildAPI, getApiErrorMessage, deployModelAPI } fro
 
 const wizardSteps = [
   { id: 1, label: 'Metadata', icon: FileCode2 },
-  { id: 2, label: 'Artifact', icon: UploadCloud },
-  { id: 3, label: 'Flavor', icon: FlaskConical },
-  { id: 4, label: 'Requirements', icon: FileArchive },
-  { id: 5, label: 'Deploy', icon: Rocket },
+  { id: 2, label: 'Flavor', icon: FlaskConical },
+  { id: 3, label: 'Artifact', icon: UploadCloud },
+  { id: 4, label: 'Source', icon: Database },
+  { id: 5, label: 'Requirements', icon: FileArchive },
+  { id: 6, label: 'Deploy', icon: Rocket },
 ];
 
 export default function BuildPackagePage({
@@ -56,9 +58,10 @@ export default function BuildPackagePage({
 
   const canContinue = () => {
     if (step === 1) return Boolean(form.name.trim());
-    if (step === 2) return Boolean(form.source_artifact);
-    if (step === 3) return Boolean(form.flavor);
-    if (step === 5) return Boolean(createdModelId);
+    if (step === 2) return Boolean(form.flavor);
+    if (step === 3) return Boolean(form.source_artifact);
+    if (step === 4) return true; // Optional step
+    if (step === 6) return Boolean(createdModelId);
     return true;
   };
 
@@ -143,15 +146,18 @@ export default function BuildPackagePage({
           <MetadataStep form={form} setField={setField} />
         )}
         {step === 2 && (
-          <ArtifactStep form={form} setField={setField} />
-        )}
-        {step === 3 && (
           <FlavorStep form={form} setField={setField} />
         )}
+        {step === 3 && (
+          <ArtifactStep form={form} setField={setField} />
+        )}
         {step === 4 && (
-          <RequirementsStep form={form} setField={setField} readRequirementsFile={readRequirementsFile} />
+          <SourceStep form={form} setField={setField} />
         )}
         {step === 5 && (
+          <RequirementsStep form={form} setField={setField} readRequirementsFile={readRequirementsFile} />
+        )}
+        {step === 6 && (
           <DeployStep form={form} preview={preview} onBuildSuccess={handleBuildSuccess} canContinue={canContinue()} />
         )}
 
@@ -165,11 +171,11 @@ export default function BuildPackagePage({
           >
             Back
           </Button>
-          {step < 5 ? (
+          {step < 6 ? (
             <Button
               size="md"
               disabled={!canContinue() || loading}
-              onClick={() => setStep((current) => Math.min(5, current + 1))}
+              onClick={() => setStep((current) => Math.min(6, current + 1))}
             >
               Continue
               <ArrowRight className="h-4 w-4" />
@@ -292,6 +298,34 @@ function FlavorStep({
   );
 }
 
+function SourceStep({
+  form,
+  setField,
+}: {
+  form: ModelBuildFormValues;
+  setField: (field: keyof ModelBuildFormValues, value: string | File | null) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <StepTitle title="Upload Source Code (Optional)" description="Upload the training source code (.zip or .py) for record-keeping or retraining." />
+      <FileDropzone
+        accept=".zip,.py"
+        title={form.source_code_file ? form.source_code_file.name : 'Choose source code file'}
+        subtitle=".zip or .py (Optional)"
+        onChange={(file) => setField('source_code_file', file)}
+      />
+
+      <StepTitle title="Upload Reference Data (Optional)" description="Upload the dataset (.csv or .zip) used to train the model, for data drift monitoring (Evidently AI)." />
+      <FileDropzone
+        accept=".zip,.csv"
+        title={form.reference_data_file ? form.reference_data_file.name : 'Choose reference data file'}
+        subtitle=".zip or .csv (Optional)"
+        onChange={(file) => setField('reference_data_file', file)}
+      />
+    </div>
+  );
+}
+
 function RequirementsStep({
   form,
   setField,
@@ -331,18 +365,26 @@ function DeployStep({
   onBuildSuccess: (modelId: number, previewTree: string[]) => void;
   canContinue: boolean;
 }) {
-  const [building, setBuilding] = useState(false);
   const [modelId, setModelId] = useState<number | null>(null);
 
   const startBuild = async () => {
     try {
-      setBuilding(true);
       const model = await buildModelAPI(form);
       setModelId(model.id);
     } catch (e) {
-      setBuilding(false);
       const msg = getApiErrorMessage(e, "Failed to start build process.");
       toast.error(msg);
+    }
+  };
+
+  const cancelBuild = async () => {
+    if (modelId) {
+      try {
+        await cancelBuildAPI(modelId);
+      } catch (e) {
+        const msg = getApiErrorMessage(e, "Failed to cancel build process.");
+        toast.error(msg);
+      }
     }
   };
 
@@ -373,11 +415,11 @@ function DeployStep({
         key={modelId || 'idle'}
         modelId={modelId}
         onBuildSuccess={(id, previewTree) => {
-          setBuilding(false);
           onBuildSuccess(id, previewTree);
         }}
         onRebuild={rebuild}
-        buildDisabled={!form.source_artifact || building}
+        onCancel={cancelBuild}
+        buildDisabled={!form.source_artifact}
       />
     </div>
   );

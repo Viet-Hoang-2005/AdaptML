@@ -615,7 +615,9 @@ export default function TrainModelPage() {
       void invalidateUsage();
       setConfirmAction(null);
       toast.success(`Retry job created for ${jobLabel(newJob)}.`);
-      navigate(`/dashboard/model-training/${newJob.id}`);
+      if (selectedModel) {
+        navigate(`/dashboard/model-training/${selectedModel.id}/job/${newJob.id}`);
+      }
     },
     onError: (error, job) => {
       toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to retry training job.')}`);
@@ -806,7 +808,7 @@ export default function TrainModelPage() {
           <div id="start-training-section" className="w-full max-w-6xl rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-gray-800 to-black text-white shadow-md">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-gray-800 to-black text-white shadow-md">
               <Rocket className="h-6 w-6" />
             </div>
             <div>
@@ -1402,7 +1404,7 @@ function TrainingFilePicker({
             </div>
           </div>
         ) : (
-          <label htmlFor={inputId} className="mt-4 flex min-h-[100px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-5 text-center hover:bg-blue-50 hover:border-blue-300 transition-colors group">
+          <label htmlFor={inputId} className="mt-4 flex min-h-25 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-5 text-center hover:bg-blue-50 hover:border-blue-300 transition-colors group">
             <div className="rounded-full bg-blue-100 p-2 text-blue-600 group-hover:bg-blue-200 group-hover:scale-110 transition-transform">
               <UploadCloud className="h-5 w-5" />
             </div>
@@ -1575,10 +1577,6 @@ function TrainingJobsSkeleton() {
   );
 }
 
-
-
-
-
 function TrainingJobRow({
   job,
   onRefresh,
@@ -1600,6 +1598,7 @@ function TrainingJobRow({
   onRetry: () => void;
   retrying: boolean;
 }) {
+  const { selectedModel } = useModelSelection();
   const isArchived = job.is_deleted;
   const backendLabel = job.training_backend || 'sagemaker';
   const isActive = ACTIVE_STATUSES.includes(job.status);
@@ -1638,7 +1637,7 @@ function TrainingJobRow({
     <div className={`rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:shadow-md ${getAccentBorder()}`}>
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div className="flex items-center gap-2.5">
-          <Link to={`/dashboard/model-training/${job.id}`} className="text-lg font-bold text-gray-900 hover:text-blue-600 hover:underline truncate">
+          <Link to={selectedModel ? `/dashboard/model-training/${selectedModel.id}/job/${job.id}` : '#'} className="text-lg font-bold text-gray-900 hover:text-blue-600 hover:underline truncate">
             {job.name}
           </Link>
           <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 border border-gray-200 shrink-0">
@@ -1709,7 +1708,7 @@ function TrainingJobRow({
              Retry
            </Button>
          )}
-         <Link to={`/dashboard/model-training/${job.id}`}>
+         <Link to={selectedModel ? `/dashboard/model-training/${selectedModel.id}/job/${job.id}` : '#'}>
            <Button
              variant="primary"
              size="sm"

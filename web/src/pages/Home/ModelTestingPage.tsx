@@ -1,13 +1,13 @@
-import { FileSpreadsheet, Play, Pause, Download, Terminal } from 'lucide-react';
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { FileSpreadsheet, Play, Pause, Download, Trash2 } from 'lucide-react';
+import { useState, useRef } from 'react';
 import { Button } from '../../components/ui/Button';
 import { predictWithModelAPI } from '../../lib/api';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
 import { useModelSelection } from '../../hooks/useModelSelection';
-import { FileDropzone } from '../Management/UploadModelFormPage';
-
-
+import { FileDropzone } from '../../components/ui/FileDropzone';
+import { TerminalLogViewer } from '../../components/ui/TerminalLogViewer';
+import { CSVEditor } from '../../components/ui/CSVEditor';
 
 const parseCSV = (text: string) => {
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
@@ -26,28 +26,33 @@ const parseCSV = (text: string) => {
 export default function ModelTestingPage() {
   const { selectedModel } = useModelSelection();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [csvText, setCsvText] = useState('');
   const [fileName, setFileName] = useState('');
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [predictions, setPredictions] = useState<string[]>([]);
   const [testFinished, setTestFinished] = useState(false);
   const [running, setRunning] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const terminalRef = useRef<HTMLDivElement>(null);
   const isRunningRef = useRef(false);
-  const previewColumns = useMemo(() => Object.keys(rows[0] ?? {}).slice(0, 8), [rows]);
-
-  useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  }, [terminalLogs]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (file?: File) => {
     if (!file) return;
     const text = await file.text();
     const parsedRows = parseCSV(text);
+    setCsvText(text);
     setRows(parsedRows);
     setFileName(file.name);
+    setTerminalLogs([]);
+    setPredictions([]);
+    setTestFinished(false);
+    setCurrentIndex(0);
+  };
+
+  const handleRemoveFile = () => {
+    setRows([]);
+    setFileName('');
+    setCsvText('');
     setTerminalLogs([]);
     setPredictions([]);
     setTestFinished(false);
@@ -161,16 +166,34 @@ export default function ModelTestingPage() {
           </div>
           <div className="flex gap-3">
             {rows.length > 0 && (
-              <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-black hover:bg-gray-100 transition-colors">
-                <FileSpreadsheet className="h-4 w-4" />
-                Upload CSV
+              <>
+                <Button 
+                  size="md" 
+                  variant="danger" 
+                  icon={<Trash2 className="h-4 w-4" />} 
+                  onClick={handleRemoveFile}
+                >
+                  Remove
+                </Button>
+                <Button 
+                  size="md" 
+                  icon={<FileSpreadsheet className="h-4 w-4" />} 
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Upload CSV
+                </Button>
                 <input
                   type="file"
                   accept=".csv,text/csv"
                   className="hidden"
-                  onChange={(event) => void handleFileChange(event.target.files?.[0])}
+                  ref={fileInputRef}
+                  onChange={(event) => {
+                    void handleFileChange(event.target.files?.[0]);
+                    // Reset input value so the same file can be selected again
+                    event.target.value = '';
+                  }}
                 />
-              </label>
+              </>
             )}
           </div>
         </div>
@@ -188,27 +211,10 @@ export default function ModelTestingPage() {
           <div className="flex flex-col space-y-6">
             <div>
               <p className="mb-4 text-sm font-semibold text-gray-900">
-                {fileName} · {rows.length} rows loaded · testing first 50 rows
+                {fileName} · {rows.length} rows loaded
               </p>
-              <div className="overflow-x-auto rounded-xl border border-gray-200">
-                <table className="w-full min-w-160 text-left text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-400">
-                    <tr>
-                      {previewColumns.map((column) => (
-                        <th key={column} className="px-4 py-3">{column}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.slice(0, 5).map((row, index) => (
-                      <tr key={index} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
-                        {previewColumns.map((column) => (
-                          <td key={column} className="px-4 py-3 text-gray-700">{String(row[column] ?? '')}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="overflow-hidden rounded-xl border border-gray-200 h-125">
+                <CSVEditor initialCsvText={csvText} readOnly={true} />
               </div>
             </div>
 
@@ -242,25 +248,12 @@ export default function ModelTestingPage() {
                 </div>
               </div>
               
-              <div className="overflow-hidden rounded-xl bg-gray-950 shadow-inner border border-gray-800">
-                <div className="flex items-center px-4 py-3 bg-gray-900 border-b border-gray-800">
-                  <Terminal className="h-4 w-4 text-gray-400 mr-2" />
-                  <span className="text-xs font-mono text-gray-400">Testing Console</span>
-                  {running && <span className="ml-auto flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>}
-                </div>
-                <div 
-                  ref={terminalRef}
-                  className="h-72 w-full overflow-y-auto bg-gray-950 p-4 font-mono text-sm text-gray-300 custom-scrollbar"
-                >
-                  {terminalLogs.length === 0 ? (
-                    <div className="text-gray-500 italic">Click "Run" to start processing the CSV file...</div>
-                  ) : (
-                    terminalLogs.map((log, i) => (
-                      <div key={i} className="whitespace-pre-wrap py-0.5">{log}</div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <TerminalLogViewer 
+                title="Testing Console"
+                logsOverride={terminalLogs}
+                isRunningOverride={running}
+                placeholder='Click "Run" to start processing the CSV file...'
+              />
             </div>
           </div>
         )}

@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import type { ModelAPIFormValues } from '../../types/modelApi';
-import { FileDropzone, StepTitle } from './UploadModelFormPage';
+import { StepTitle } from './UploadModelFormPage';
+import { FileDropzone } from '../../components/ui/FileDropzone';
 import { PackagePreview } from '../../components/ui/PackagePreview';
 import { TextArea } from '../../components/ui/TextArea';
 import { AccessModePicker } from '../../components/ui/Picker';
 import { useModelAPIMutations } from '../../hooks/useModelAPIs';
 import { TerminalLogViewer } from '../../components/ui/TerminalLogViewer';
-import { deployModelAPI, deleteModelAPI, getApiErrorMessage } from '../../lib/api';
+import { deployModelAPI, deleteModelAPI, cancelBuildAPI, getApiErrorMessage } from '../../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
@@ -45,6 +46,18 @@ export default function MLflowZipPage({
       onSubmitting(false);
     }
   };
+
+  const cancelBuild = async () => {
+    if (createdModelId) {
+      try {
+        await cancelBuildAPI(createdModelId);
+      } catch (e) {
+        const msg = getApiErrorMessage(e, "Failed to cancel build process.");
+        toast.error(msg);
+      }
+    }
+  };
+
   const handleClear = async () => {
     if (createdModelId) {
       onSubmitting(true);
@@ -118,6 +131,23 @@ export default function MLflowZipPage({
       </div>
 
       <div className="space-y-4 border-t border-gray-200 pt-6">
+        <StepTitle title="Upload Source Code & Data (Optional)" description="Upload the training source code and reference data." />
+        <FileDropzone
+          accept=".zip,.py"
+          title={form.source_code_file ? form.source_code_file.name : 'Choose source code file'}
+          subtitle=".zip or .py (Optional)"
+          onChange={(file) => setField('source_code_file', file)}
+        />
+
+        <FileDropzone
+          accept=".zip,.csv"
+          title={form.reference_data_file ? form.reference_data_file.name : 'Choose reference data file'}
+          subtitle=".zip or .csv (Optional)"
+          onChange={(file) => setField('reference_data_file', file)}
+        />
+      </div>
+
+      <div className="space-y-4 border-t border-gray-200 pt-6">
         <StepTitle
           title="MLflow Package"
           description="Upload a .zip package that already contains an MLmodel file."
@@ -137,7 +167,8 @@ export default function MLflowZipPage({
           key={createdModelId || 'idle'}
           modelId={createdModelId}
           onRebuild={submitAdvanced}
-          buildDisabled={!form.artifact || !form.name.trim() || creating}
+          onCancel={cancelBuild}
+          buildDisabled={!form.artifact || !form.name.trim()}
           onBuildSuccess={async (modelId) => {
             onSubmitting(true);
             try {
