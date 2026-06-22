@@ -21,6 +21,8 @@ export interface ModelAPI {
   package_preview_tree: string[];
   build_status: ModelBuildStatus;
   build_error: string;
+  source_code_file?: string | null;
+  reference_data_file?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +37,8 @@ export interface ModelAPIFormValues {
   model_info: string;
   access_mode: ModelAccessMode;
   artifact?: File | null;
+  source_code_file?: File | null;
+  reference_data_file?: File | null;
 }
 
 export interface ModelBuildFormValues {
@@ -44,6 +48,8 @@ export interface ModelBuildFormValues {
   access_mode: ModelAccessMode;
   source_artifact: File | null;
   label_mapping_file?: File | null;
+  source_code_file?: File | null;
+  reference_data_file?: File | null;
   flavor: ModelFlavor;
   requirements_text: string;
   requirements_file?: File | null;

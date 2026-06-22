@@ -223,6 +223,12 @@ const modelFormData = (payload: ModelAPIFormValues) => {
   if (payload.artifact) {
     formData.append('artifact', payload.artifact);
   }
+  if (payload.source_code_file) {
+    formData.append('source_code_file', payload.source_code_file);
+  }
+  if (payload.reference_data_file) {
+    formData.append('reference_data_file', payload.reference_data_file);
+  }
   return formData;
 };
 
@@ -236,6 +242,12 @@ const modelBuildFormData = (payload: ModelBuildFormValues) => {
   formData.append('requirements_text', payload.requirements_text);
   if (payload.source_artifact) {
     formData.append('source_artifact', payload.source_artifact);
+  }
+  if (payload.source_code_file) {
+    formData.append('source_code_file', payload.source_code_file);
+  }
+  if (payload.reference_data_file) {
+    formData.append('reference_data_file', payload.reference_data_file);
   }
   if (payload.label_mapping_file) {
     formData.append('label_mapping_file', payload.label_mapping_file);

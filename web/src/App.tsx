@@ -52,23 +52,50 @@ const router = createBrowserRouter(
         }
       >
         <Route index element={<Navigate to="home/model-api" replace />} />
+        
+        {/* Home Routes */}
         <Route path="home" element={<HomeLayout />}>
           <Route index element={<Navigate to="model-api" replace />} />
-          <Route path="model-api" element={<ModelApiPage />} />
-          <Route path="model-testing" element={<ModelTestingPage />} />
-          <Route path="benchmark" element={<Navigate to="/dashboard/home/model-testing" replace />} />
-          <Route path="model-management" element={<Navigate to="/dashboard/api-management" replace />} />
+          <Route path="model-api">
+            <Route index element={<ModelApiPage />} />
+            <Route path=":modelId" element={<ModelApiPage />} />
+          </Route>
+          <Route path="model-testing">
+            <Route index element={<ModelTestingPage />} />
+            <Route path=":modelId" element={<ModelTestingPage />} />
+          </Route>
         </Route>
+
+        {/* Drift Monitoring Routes */}
+        <Route path="drift-monitoring">
+          <Route index element={dashboardPlaceholders.driftMonitoring} />
+          <Route path=":modelId" element={dashboardPlaceholders.driftMonitoring} />
+        </Route>
+
+        {/* Model Training Routes */}
+        <Route path="model-training">
+          <Route index element={<TrainModelPage />} />
+          <Route path=":modelId" element={<TrainModelPage />} />
+        </Route>
+        <Route path="model-training/:modelId/job/:jobId" element={<TrainingJobDetailPage />} />
+
+        {/* Model Evolution Routes */}
+        <Route path="model-evolution">
+          <Route index element={dashboardPlaceholders.modelEvolution} />
+          <Route path=":modelId" element={dashboardPlaceholders.modelEvolution} />
+        </Route>
+        
+        {/* API Management Routes */}
         <Route path="api-management" element={<APIManagementPage />} />
         <Route path="api-management/upload" element={<Navigate to="build-package" replace />} />
         <Route path="api-management/upload/build-package" element={<ModelAPIFormPage />} />
         <Route path="api-management/upload/mlflow-zip" element={<ModelAPIFormPage />} />
-        <Route path="api-management/:modelId" element={<ModelDetailPage />} />
-        <Route path="drift-monitoring" element={dashboardPlaceholders.driftMonitoring} />
-        <Route path="model-training" element={<TrainModelPage />} />
-        <Route path="model-training/:jobId" element={<TrainingJobDetailPage />} />
-        <Route path="model-evolution" element={dashboardPlaceholders.modelEvolution} />
+        <Route path="api-management/:modelId" element={<Navigate to="information" replace />} />
+        <Route path="api-management/:modelId/:tab" element={<ModelDetailPage />} />
+        
         <Route path="notifications" element={dashboardPlaceholders.notifications} />
+        
+        {/* Settings Routes */}
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="profile" replace />} />
           <Route path="profile" element={<ProfileSettingPage />} />
