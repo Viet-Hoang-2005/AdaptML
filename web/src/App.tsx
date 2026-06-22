@@ -23,6 +23,7 @@ import DeveloperSettingPage from './pages/Settings/Developer/DeveloperSettingPag
 import ProfileSettingPage from './pages/Settings/Profile/ProfileSettingPage';
 import ApiKeyPage from './pages/Settings/Developer/ApiKeyPage';
 import SettingsLayout from './pages/Settings/SettingsLayout';
+import ModelEvolutionPage from './pages/Dashboard/ModelEvolutionPage';
 import { dashboardPlaceholders } from './pages/Dashboard/DashboardPage';
 
 const router = createBrowserRouter(
@@ -81,8 +82,8 @@ const router = createBrowserRouter(
 
         {/* Model Evolution Routes */}
         <Route path="model-evolution">
-          <Route index element={dashboardPlaceholders.modelEvolution} />
-          <Route path=":modelId" element={dashboardPlaceholders.modelEvolution} />
+          <Route index element={<ModelEvolutionPage />} />
+          <Route path=":familyId" element={<ModelEvolutionPage />} />
         </Route>
         
         {/* API Management Routes */}
