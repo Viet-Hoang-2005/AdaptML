@@ -10,10 +10,10 @@ import type { APIKeyRecord, CreatedAPIKeyResponse } from '../types/auth';
 export function useApiKeyForm(initialData?: APIKeyRecord | null) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [apiKeyName, setApiKeyName] = useState('');
-  const [apiKeyDescription, setApiKeyDescription] = useState('');
-  const [apiKeyScope, setApiKeyScope] = useState('all');
-  const [apiKeyModels, setApiKeyModels] = useState<number[]>([]);
+  const [apiKeyName, setApiKeyName] = useState(initialData?.name || '');
+  const [apiKeyDescription, setApiKeyDescription] = useState(initialData?.description || '');
+  const [apiKeyScope, setApiKeyScope] = useState(initialData?.scope || 'all');
+  const [apiKeyModels, setApiKeyModels] = useState<number[]>(initialData?.allowed_models || []);
   const [createdApiKey, setCreatedApiKey] = useState<CreatedAPIKeyResponse | null>(null);
 
   const [prevInitialData, setPrevInitialData] = useState(initialData);
@@ -63,6 +63,12 @@ export function useApiKeyForm(initialData?: APIKeyRecord | null) {
       toast.warning('Please enter an API key name.');
       return;
     }
+
+    if (apiKeyModels.length === 0) {
+      toast.warning('Please select at least 1 model for this API key.');
+      return;
+    }
+
 
     if (initialData) {
       updateAPIKeyMutation.mutate({

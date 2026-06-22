@@ -34,7 +34,7 @@ export function ConfirmModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
       <div className="w-full max-w-lg rounded-lg border border-gray-300 bg-white shadow-xl">
-        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
           <div className="flex items-center gap-3">
             <div
               className={`flex h-12 w-12 items-center justify-center rounded-lg ${
@@ -55,9 +55,9 @@ export function ConfirmModal({
           </button>
         </div>
 
-        <div className="px-6 py-6">
-          <div className="text-sm leading-6 text-gray-500">{description}</div>
-          <div className="mt-6 flex justify-end gap-3">
+        <div className="px-6 py-6 space-y-8">
+          <div className="text-base leading-6 text-gray-500">{description}</div>
+          <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={onCancel}>
               {cancelText}
             </Button>

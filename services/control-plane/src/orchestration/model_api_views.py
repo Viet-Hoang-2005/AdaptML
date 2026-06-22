@@ -200,21 +200,29 @@ class ModelAPIListCreateView(APIView):
             model_info=model_info,
             access_mode=access_mode,
             source_type="manual_upload",
-            status="ready",
+            status="uploading",
+            build_status="building",
         )
         model_api.artifact = artifact_file
-        model_api.save(update_fields=["artifact", "updated_at"])
-
-        model_api.model_uri = model_api.artifact.url
         model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["model_uri", "endpoint_url", "updated_at"])
+        model_api.save(update_fields=["artifact", "endpoint_url", "updated_at"])
 
-        DockerDeployAdapter().deploy_model(
-            model_id=model_api.id,
-            tenant_id=model_api.tenant.tenant_id,
-            model_name=model_api.name,
-            version=model_api.version or "v1"
-        )
+        try:
+            get_build_adapter().trigger_build(
+                model_id=str(model_api.id),
+                flavor="advanced_zip",
+                requirements_text="",
+                source_key=model_api.artifact.name,
+                output_key="",
+                task_type="TEST_ZIP",
+            )
+        except Exception as exc:
+            model_api.status = "error"
+            model_api.build_status = "error"
+            model_api.error_message = "Unable to start package validation."
+            model_api.build_error = str(exc)
+            model_api.save()
+            return Response(serialize_model_api(model_api), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
 
@@ -519,6 +527,7 @@ class ModelAPIBuildWebhookView(APIView):
         logger.info("Received build webhook for model %s with status=%s", model_id, status_val)
 
         if status_val == "success":
+            task_type = data.get("task_type", "BUILD")
             model_api.status = "ready"
             model_api.build_status = "ready"
             model_api.build_error = ""
@@ -533,13 +542,20 @@ class ModelAPIBuildWebhookView(APIView):
             from django.utils.text import slugify
             safe_name = slugify(model_api.name) or "model"
             package_filename = f"{safe_name}-mlflow-package.zip"
-            model_api.artifact.name = model_artifact_path(model_api, package_filename)
             bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "") or getattr(settings, "AWS_BUCKET_NAME", "")
-            model_api.model_uri = (
-                f"s3://{bucket_name}/{model_api.artifact.name}"
-                if bucket_name
-                else model_api.artifact.url
-            )
+            if task_type == "TEST_ZIP":
+                model_api.model_uri = (
+                    f"s3://{bucket_name}/{model_api.artifact.name}"
+                    if bucket_name and model_api.artifact
+                    else model_api.artifact.url
+                )
+            else:
+                model_api.artifact.name = model_artifact_path(model_api, package_filename)
+                model_api.model_uri = (
+                    f"s3://{bucket_name}/{model_api.artifact.name}"
+                    if bucket_name
+                    else model_api.artifact.url
+                )
             model_api.endpoint_url = build_endpoint_url(model_api)
             logger.info("Model %s build marked ready. Artifact key=%s", model_id, model_api.artifact.name)
         else:

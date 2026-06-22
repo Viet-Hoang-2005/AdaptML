@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-export default function SettingsModal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export default function BaseModal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
       <div className="w-full max-w-lg rounded-lg border border-gray-300 bg-white shadow-xl">

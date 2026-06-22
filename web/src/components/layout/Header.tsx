@@ -1,5 +1,5 @@
 import { Bell, ChevronDown, ChevronUp, Plus, Settings, LogOut, UserCircle, Moon, Sun } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
@@ -33,6 +33,24 @@ export default function Header() {
   });
   const initials = useMemo(() => getInitials(profile), [profile]);
 
+  const modelMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
+        setModelMenuOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   return (
     <header className="relative z-20 flex h-16 shrink-0 items-center justify-between border-b border-gray-300 bg-white px-5">
       <div className="flex min-w-48 items-center gap-3">
@@ -42,7 +60,7 @@ export default function Header() {
         </span>
       </div>
 
-      <div className="absolute left-1/2 top-1/2 w-[min(420px,42vw)] -translate-x-1/2 -translate-y-1/2">
+      <div ref={modelMenuRef} className="absolute left-1/2 top-1/2 w-[min(420px,42vw)] -translate-x-1/2 -translate-y-1/2">
         <button
           type="button"
           onClick={() => setModelMenuOpen((open) => !open)}
@@ -121,7 +139,7 @@ export default function Header() {
           <Bell className="h-5 w-5" />
         </button>
 
-        <div className="relative pl-4">
+        <div ref={userMenuRef} className="relative pl-4">
           <button
             type="button"
             onClick={() => setUserMenuOpen((open) => !open)}
