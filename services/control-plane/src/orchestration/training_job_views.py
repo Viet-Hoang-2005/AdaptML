@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from authentication.models import ModelAPI, TrainingJob
 from .model_api_views import serialize_model_api, validate_unique_model_version
+from .registry_service import sync_model_registry_for_model_api, record_history, sync_metrics_for_version
 from .aws_batch_training_service import (
     cancel_aws_batch_training_job,
     get_aws_batch_training_log_payload,
@@ -613,6 +614,9 @@ class TrainingJobRegisterModelView(TrainingJobDetailView):
             f"Registered model API #{model_api.id} ({model_api.name} {model_api.version}).",
             {"model_api_id": model_api.id, "model_name": model_api.name, "version": model_api.version},
         )
+        fam, ver = sync_model_registry_for_model_api(model_api)
+        record_history(ver, "registered", actor=request.user.email)
+        sync_metrics_for_version(ver)
         return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
 
 

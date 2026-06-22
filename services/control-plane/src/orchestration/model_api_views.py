@@ -6,7 +6,6 @@ import zipfile
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.utils.text import slugify
-from django.utils.text import slugify
 import requests
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -18,6 +17,7 @@ from django.core.cache import cache
 from authentication.models import ModelAPI
 from .build_adapter import get_build_adapter, DockerBuildAdapter
 from .deploy_adapter import DockerDeployAdapter
+from .registry_service import sync_model_registry_for_model_api, record_history
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +231,15 @@ class ModelAPIListCreateView(APIView):
             model_api.error_message = "Unable to start package validation."
             model_api.build_error = str(exc)
             model_api.save()
+            
+            fam, ver = sync_model_registry_for_model_api(model_api)
+            record_history(ver, "registered", actor=request.user.email)
+            record_history(ver, "failed", message="Unable to start package validation", extra={"error": str(exc)}, actor=request.user.email)
+            
             return Response(serialize_model_api(model_api), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        fam, ver = sync_model_registry_for_model_api(model_api)
+        record_history(ver, "registered", actor=request.user.email)
 
         return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
 
@@ -326,7 +334,15 @@ class ModelAPIBuildView(APIView):
             model_api.error_message = "Unable to start build process."
             model_api.build_error = str(exc)
             model_api.save()
+            
+            fam, ver = sync_model_registry_for_model_api(model_api)
+            record_history(ver, "registered", actor=request.user.email)
+            record_history(ver, "failed", message="Unable to start build process", extra={"error": str(exc)}, actor=request.user.email)
+            
             return Response(serialize_model_api(model_api), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        fam, ver = sync_model_registry_for_model_api(model_api)
+        record_history(ver, "registered", actor=request.user.email)
 
         return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
 
@@ -627,6 +643,9 @@ class ModelAPIDeployView(APIView):
                 version=model_api.version or "v1"
             )
             model_api.refresh_from_db()
+            fam, ver = sync_model_registry_for_model_api(model_api)
+            action = "redeployed" if request.method == "POST" and "redeploy" in request.path else "deployed"
+            record_history(ver, action, actor=request.user.email)
             return Response(serialize_model_api(model_api), status=status.HTTP_200_OK)
         except ModelAPI.DoesNotExist:
             return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -650,6 +669,8 @@ class ModelAPIStopEndpointView(APIView):
         from django.utils import timezone
         model_api.endpoint_last_checked_at = timezone.now()
         model_api.save(update_fields=["status", "endpoint_status", "endpoint_error", "endpoint_last_checked_at", "updated_at"])
+        fam, ver = sync_model_registry_for_model_api(model_api)
+        record_history(ver, "stopped", actor=request.user.email)
         return Response(serialize_model_api(model_api), status=status.HTTP_200_OK)
 
 
