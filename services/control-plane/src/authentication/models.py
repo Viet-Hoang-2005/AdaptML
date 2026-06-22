@@ -374,3 +374,168 @@ class TrainingJobEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} - {self.training_job_id}"
+
+
+# --- Model Evolution / Registry ---
+
+
+
+class ModelFamily(models.Model):
+    """Groups all versions of a logical model under a single named family."""
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_families")
+    name = models.CharField(max_length=160)
+    display_name = models.CharField(max_length=200, blank=True)
+    description = models.TextField(blank=True)
+    current_production_version = models.ForeignKey(
+        "ModelVersion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="production_for_families",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("tenant", "name")]
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["tenant", "is_active"], name="reg_family_tenant_active_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.tenant.tenant_id})"
+
+
+class ModelVersion(models.Model):
+    """A single version within a ModelFamily, linked to an existing ModelAPI row."""
+    STAGE_CHOICES = (
+        ("none", "None"),
+        ("candidate", "Candidate"),
+        ("staging", "Staging"),
+        ("production", "Production"),
+        ("archived", "Archived"),
+    )
+    SOURCE_TYPE_CHOICES = (
+        ("manual_upload", "Manual Upload"),
+        ("training_job", "Training Job"),
+        ("imported", "Imported"),
+    )
+
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_versions")
+    family = models.ForeignKey(ModelFamily, on_delete=models.CASCADE, related_name="versions")
+    version = models.CharField(max_length=80)
+    model_api = models.OneToOneField(
+        "ModelAPI",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="registry_version",
+    )
+    source_training_job = models.ForeignKey(
+        "TrainingJob",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="registry_versions",
+    )
+    source_type = models.CharField(max_length=30, choices=SOURCE_TYPE_CHOICES, default="manual_upload")
+    artifact_uri = models.CharField(max_length=1024, blank=True)
+    image_name = models.CharField(max_length=200, blank=True)
+    endpoint_url = models.CharField(max_length=1024, blank=True)
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default="none")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("family", "version")]
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["tenant", "stage"], name="reg_version_tenant_stage_idx"),
+            models.Index(fields=["family", "version"], name="reg_version_family_ver_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.family.name}@{self.version} [{self.stage}]"
+
+
+class ModelDeploymentHistory(models.Model):
+    """Immutable audit log of every lifecycle action taken on a ModelVersion."""
+    ACTION_CHOICES = (
+        ("registered", "Registered"),
+        ("built", "Built"),
+        ("deployed", "Deployed"),
+        ("health_checked", "Health Checked"),
+        ("stopped", "Stopped"),
+        ("redeployed", "Redeployed"),
+        ("promoted", "Promoted"),
+        ("rolled_back", "Rolled Back"),
+        ("archived", "Archived"),
+        ("failed", "Failed"),
+    )
+    STATUS_CHOICES = (
+        ("success", "Success"),
+        ("failed", "Failed"),
+        ("running", "Running"),
+    )
+
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="deployment_history")
+    family = models.ForeignKey(ModelFamily, on_delete=models.CASCADE, related_name="history")
+    model_version = models.ForeignKey(ModelVersion, on_delete=models.CASCADE, related_name="history")
+    model_api = models.ForeignKey(
+        "ModelAPI",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="history_events",
+    )
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="success")
+    from_stage = models.CharField(max_length=20, blank=True)
+    to_stage = models.CharField(max_length=20, blank=True)
+    message = models.TextField(blank=True)
+    extra = models.JSONField(default=dict, blank=True)
+    actor = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["family", "created_at"], name="reg_history_family_ts_idx"),
+            models.Index(fields=["model_version", "action"], name="reg_history_ver_action_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.action}/{self.status}"
+
+
+class ModelMetric(models.Model):
+    """Persisted scalar metrics for a ModelVersion."""
+    SOURCE_CHOICES = (
+        ("training_log", "Training Log"),
+        ("mlflow", "MLflow"),
+        ("production", "Production"),
+        ("drift", "Drift"),
+    )
+
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_metrics")
+    family = models.ForeignKey(ModelFamily, on_delete=models.CASCADE, related_name="metrics")
+    model_version = models.ForeignKey(ModelVersion, on_delete=models.CASCADE, related_name="metrics")
+    metric_name = models.CharField(max_length=80)
+    metric_value = models.FloatField()
+    # Normalize None->0 in service layer so unique_together works reliably.
+    step = models.IntegerField(default=0)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="training_log")
+    extra = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("model_version", "metric_name", "step")]
+        ordering = ["step", "metric_name"]
+        indexes = [
+            models.Index(fields=["model_version", "metric_name"], name="reg_metric_ver_name_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.metric_name}={self.metric_value} step={self.step}"
