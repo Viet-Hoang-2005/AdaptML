@@ -124,7 +124,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         try:
             # Đẩy/Cập nhật API Key lên Redis
             if self.is_active and self.api_key:
-                cache.set(f"api_key:{self.api_key}", self.tenant_id, timeout=None)
+                import json
+                payload = json.dumps({"tenant_id": self.tenant_id, "scope": "all", "allowed_models": []})
+                cache.set(f"api_key:{self.api_key}", payload, timeout=None)
             elif not self.is_active and self.api_key:
                 # Thu hồi ngay lập tức nếu tài khoản bị khóa
                 cache.delete(f"api_key:{self.api_key}")
@@ -136,9 +138,15 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return f"{self.email} ({self.tenant_id})"
 
 class UserAPIKey(models.Model):
+    SCOPE_CHOICES = (
+        ("all", "All Models"),
+        ("specific", "Specific Models"),
+    )
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="api_keys")
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
+    scope = models.CharField(max_length=20, choices=SCOPE_CHOICES, default="all")
+    allowed_models = models.ManyToManyField('authentication.ModelAPI', related_name="api_keys", blank=True)
     key_prefix = models.CharField(max_length=24, db_index=True)
     key_hash = models.CharField(max_length=128)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -59,9 +59,12 @@ class CustomTokenRefreshSerializer(TokenRefreshSerializer):
     token_class = KIDRefreshToken
 
     def validate(self, attrs):
-        data = super().validate(attrs)
-        
         User = get_user_model()
+        
+        # NOTE: We must decode the token BEFORE calling super().validate(attrs).
+        # Because if ROTATE_REFRESH_TOKENS and BLACKLIST_AFTER_ROTATION are True,
+        # super().validate(attrs) will blacklist the token. If we decode it after,
+        # self.token_class() will check the blacklist and raise TokenError!
         refresh = self.token_class(attrs["refresh"])
         user_id = refresh.payload.get(api_settings.USER_ID_CLAIM)
         
@@ -75,4 +78,5 @@ class CustomTokenRefreshSerializer(TokenRefreshSerializer):
         except User.DoesNotExist:
             raise AuthenticationFailed("User not found or inactive", code="user_not_found")
             
+        data = super().validate(attrs)
         return data

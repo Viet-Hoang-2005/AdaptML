@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from PIL import Image, UnidentifiedImageError
 
-from .models import UserAPIKey, UserAvatar
+from .models import UserAPIKey, UserAvatar, ModelAPI
 from .otp_service import request_otp, verify_otp
 
 PASSWORD_CHANGE_TOKEN_TTL_SECONDS = 600
@@ -233,7 +233,7 @@ class APIKeyManagementView(APIView):
 
     def get(self, request):
         user = request.user
-        keys = user.api_keys.filter(revoked_at__isnull=True)
+        keys = user.api_keys.filter(revoked_at__isnull=True).prefetch_related('allowed_models')
         return Response({
             "tenant_id": user.tenant_id,
             "api_keys": [
@@ -241,6 +241,8 @@ class APIKeyManagementView(APIView):
                     "id": key.id,
                     "name": key.name,
                     "description": key.description,
+                    "scope": key.scope,
+                    "allowed_models": list(key.allowed_models.values_list('id', flat=True)),
                     "key_prefix": key.key_prefix,
                     "created_at": key.created_at,
                 }
@@ -252,6 +254,8 @@ class APIKeyManagementView(APIView):
         user = request.user
         name = (request.data.get("name") or "").strip()
         description = (request.data.get("description") or "").strip()
+        scope = request.data.get("scope", "all")
+        allowed_models_ids = request.data.get("allowed_models", [])
 
         if not name:
             return Response({"error": "API key name is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -263,11 +267,22 @@ class APIKeyManagementView(APIView):
             user=user,
             name=name,
             description=description,
+            scope=scope,
             key_prefix=key_prefix,
             key_hash=make_password(raw_key),
         )
+        
+        if scope == "specific" and allowed_models_ids:
+            models = ModelAPI.objects.filter(id__in=allowed_models_ids, tenant=user)
+            api_key.allowed_models.set(models)
 
-        cache.set(f"api_key:{raw_key}", user.tenant_id, timeout=None)
+        allowed_model_ids_list = list(api_key.allowed_models.values_list('id', flat=True))
+        payload = {
+            "tenant_id": user.tenant_id,
+            "scope": scope,
+            "allowed_models": allowed_model_ids_list
+        }
+        cache.set(f"api_key:{raw_key}", json.dumps(payload), timeout=None)
         cache.set(f"api_key_reverse:{api_key.id}", raw_key, timeout=None)
 
         return Response({
@@ -277,6 +292,8 @@ class APIKeyManagementView(APIView):
             "id": api_key.id,
             "name": api_key.name,
             "description": api_key.description,
+            "scope": api_key.scope,
+            "allowed_models": allowed_model_ids_list,
         }, status=status.HTTP_201_CREATED)
 
 class APIKeyDetailView(APIView):
@@ -289,19 +306,41 @@ class APIKeyDetailView(APIView):
 
         name = (request.data.get("name") or "").strip()
         description = (request.data.get("description") or "").strip()
+        scope = request.data.get("scope", api_key.scope)
+        allowed_models_ids = request.data.get("allowed_models", [])
 
         if not name:
             return Response({"error": "API key name is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         api_key.name = name
         api_key.description = description
-        api_key.save(update_fields=["name", "description"])
+        api_key.scope = scope
+        api_key.save(update_fields=["name", "description", "scope"])
+        
+        if scope == "specific":
+            models = ModelAPI.objects.filter(id__in=allowed_models_ids, tenant=request.user)
+            api_key.allowed_models.set(models)
+        else:
+            api_key.allowed_models.clear()
+            
+        allowed_model_ids_list = list(api_key.allowed_models.values_list('id', flat=True))
+        
+        raw_key = cache.get(f"api_key_reverse:{api_key.id}")
+        if raw_key:
+            payload = {
+                "tenant_id": request.user.tenant_id,
+                "scope": scope,
+                "allowed_models": allowed_model_ids_list
+            }
+            cache.set(f"api_key:{raw_key}", json.dumps(payload), timeout=None)
 
         return Response({
             "message": "API key updated successfully.",
             "id": api_key.id,
             "name": api_key.name,
             "description": api_key.description,
+            "scope": api_key.scope,
+            "allowed_models": allowed_model_ids_list,
             "key_prefix": api_key.key_prefix,
             "created_at": api_key.created_at,
         }, status=status.HTTP_200_OK)
@@ -338,7 +377,14 @@ class APIKeyRegenerateView(APIView):
         api_key.key_hash = make_password(raw_key)
         api_key.save(update_fields=["key_prefix", "key_hash"])
 
-        cache.set(f"api_key:{raw_key}", request.user.tenant_id, timeout=None)
+        allowed_model_ids_list = list(api_key.allowed_models.values_list('id', flat=True))
+        payload = {
+            "tenant_id": request.user.tenant_id,
+            "scope": api_key.scope,
+            "allowed_models": allowed_model_ids_list
+        }
+
+        cache.set(f"api_key:{raw_key}", json.dumps(payload), timeout=None)
         cache.set(f"api_key_reverse:{api_key.id}", raw_key, timeout=None)
 
         return Response({
@@ -347,5 +393,7 @@ class APIKeyRegenerateView(APIView):
             "id": api_key.id,
             "name": api_key.name,
             "description": api_key.description,
+            "scope": api_key.scope,
+            "allowed_models": allowed_model_ids_list,
             "key_prefix": api_key.key_prefix,
         }, status=status.HTTP_200_OK)

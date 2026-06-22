@@ -83,6 +83,8 @@ export interface PasswordChangeVerifyResponse {
 export interface CreateAPIKeyRequest {
   name: string;
   description: string;
+  scope: string;
+  allowed_models: number[];
 }
 
 export interface CreatedAPIKeyResponse {
@@ -92,6 +94,8 @@ export interface CreatedAPIKeyResponse {
   id: number;
   name: string;
   description: string;
+  scope: string;
+  allowed_models: number[];
   created_at?: string;
 }
 
@@ -99,6 +103,8 @@ export interface APIKeyRecord {
   id: number;
   name: string;
   description: string;
+  scope: string;
+  allowed_models: number[];
   key_prefix: string;
   created_at: string;
 }

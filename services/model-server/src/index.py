@@ -308,14 +308,29 @@ async def verify_model_access(
         if not redis_client:
             raise HTTPException(status_code=500, detail="Internal Server Error: Redis cache unavailable")
 
-        cached_tenant_id = redis_client.get(f"api_key:{api_key}")
-        if not cached_tenant_id:
+        cached_data_str = redis_client.get(f"api_key:{api_key}")
+        if not cached_data_str:
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid or revoked API Key")
+            
+        try:
+            cached_data = json.loads(cached_data_str)
+            cached_tenant_id = cached_data.get("tenant_id")
+            scope = cached_data.get("scope", "all")
+            allowed_models = cached_data.get("allowed_models", [])
+        except json.JSONDecodeError:
+            # Fallback for old plain string API Keys
+            cached_tenant_id = cached_data_str
+            scope = "all"
+            allowed_models = []
 
         if cached_tenant_id != model_tenant_id:
             raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to access this model.")
+            
+        allowed_model_ids = {str(allowed_model_id) for allowed_model_id in allowed_models}
+        if scope == "specific" and str(model_id) not in allowed_model_ids:
+            raise HTTPException(status_code=403, detail="Forbidden: This API Key is not authorized for this specific endpoint.")
 
-        return {"tenant_id": cached_tenant_id, "auth_type": "api_key", "model_api": model_record}
+        return {"tenant_id": cached_tenant_id, "auth_type": "api_key", "model_api": model_record, "scope": scope}
 
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized: Missing API Key or Bearer Token")
