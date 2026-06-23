@@ -181,15 +181,34 @@ class UserAvatar(models.Model):
         return f"{self.user.email} avatar {self.id}"
 
 class ModelAPI(models.Model):
+    SOURCE_TYPE_CHOICES = (
+        ("manual_upload", "Manual Upload"),
+        ("training_job", "Training Job"),
+    )
     ACCESS_MODE_CHOICES = (
         ("private", "Private"),
         ("public", "Public"),
     )
     STATUS_CHOICES = (
+        ("registered", "Registered"),
         ("ready", "Ready"),
         ("uploading", "Uploading"),
+        ("deploying", "Deploying"),
+        ("deployed", "Deployed"),
+        ("unhealthy", "Unhealthy"),
+        ("deploy_failed", "Deploy Failed"),
+        ("stopped", "Stopped"),
+        ("archived", "Archived"),
         ("error", "Error"),
         ("disabled", "Disabled"),
+    )
+    ENDPOINT_STATUS_CHOICES = (
+        ("not_deployed", "Not Deployed"),
+        ("deploying", "Deploying"),
+        ("healthy", "Healthy"),
+        ("unhealthy", "Unhealthy"),
+        ("deploy_failed", "Deploy Failed"),
+        ("stopped", "Stopped"),
     )
     BUILD_STATUS_CHOICES = (
         ("not_started", "Not Started"),
@@ -200,9 +219,19 @@ class ModelAPI(models.Model):
 
     tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_apis")
     name = models.CharField(max_length=160)
+    version = models.CharField(max_length=80, default="v1")
     description = models.TextField(blank=True)
     model_info = models.TextField(blank=True)
     access_mode = models.CharField(max_length=20, choices=ACCESS_MODE_CHOICES, default="private")
+    source_type = models.CharField(max_length=30, choices=SOURCE_TYPE_CHOICES, default="manual_upload")
+    source_training_job = models.ForeignKey(
+        "TrainingJob",
+        on_delete=models.SET_NULL,
+        related_name="registered_model_apis",
+        blank=True,
+        null=True,
+    )
+    source_artifact_uri = models.CharField(max_length=1024, blank=True)
     source_artifact = models.FileField(upload_to=model_source_artifact_path, blank=True, null=True)
     source_code_file = models.FileField(upload_to=model_source_code_path, blank=True, null=True)
     reference_data_file = models.FileField(upload_to=model_reference_data_path, blank=True, null=True)
@@ -216,6 +245,17 @@ class ModelAPI(models.Model):
     artifact = models.FileField(upload_to=model_artifact_path, blank=True, null=True)
     model_uri = models.CharField(max_length=1024, blank=True)
     endpoint_url = models.CharField(max_length=1024, blank=True)
+    endpoint_status = models.CharField(
+        max_length=30,
+        choices=ENDPOINT_STATUS_CHOICES,
+        default="not_deployed",
+    )
+    endpoint_error = models.TextField(blank=True)
+    endpoint_last_checked_at = models.DateTimeField(blank=True, null=True)
+    endpoint_container_name = models.CharField(max_length=160, blank=True)
+    endpoint_image_name = models.CharField(max_length=200, blank=True)
+    endpoint_public_path = models.CharField(max_length=512, blank=True)
+    endpoint_internal_path = models.CharField(max_length=160, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ready")
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -226,6 +266,7 @@ class ModelAPI(models.Model):
         indexes = [
             models.Index(fields=["tenant", "status"], name="authenticat_tenant__dcb6f3_idx"),
             models.Index(fields=["tenant", "access_mode"], name="authenticat_tenant__e54007_idx"),
+            models.Index(fields=["tenant", "name", "version"], name="authenticat_model_v_lookup_idx"),
         ]
 
     def __str__(self):

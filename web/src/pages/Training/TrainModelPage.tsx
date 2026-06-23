@@ -183,6 +183,7 @@ const transitionToast = (previousJob: TrainingJob, updatedJob: TrainingJob) => {
 
 type JobVisibilityFilter = 'active' | 'archived' | 'all';
 type JobSortMode = 'newest' | 'oldest' | 'status' | 'name';
+type TrainingMode = 'new' | 'retrain';
 
 interface SourceZipState {
   inspecting: boolean;
@@ -278,6 +279,8 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
     retry_of: null,
     deleted_at: null,
     is_deleted: false,
+    registered_model: null,
+    registered_model_id: null,
     created_at: now,
     updated_at: now,
   };
@@ -294,6 +297,7 @@ export default function TrainModelPage() {
   const [preparingSubmit, setPreparingSubmit] = useState(false);
   const [refreshingJobId, setRefreshingJobId] = useState<number | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [trainingMode, setTrainingMode] = useState<TrainingMode>('new');
   const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'retry'; job: TrainingJob } | null>(null);
   const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
   const [sortMode, setSortMode] = useState<JobSortMode>('newest');
@@ -653,7 +657,9 @@ export default function TrainModelPage() {
 
 
   const validateBeforeSubmit = () => {
-    if (!selectedModel) return 'Select a model from the header before starting training.';
+    if (trainingMode === 'retrain' && !selectedModel) return 'Select a model from the header before retraining.';
+    if (trainingMode === 'new' && !form.name.trim()) return 'Model name is required.';
+    if (trainingMode === 'new' && !form.model_version.trim()) return 'Model version is required.';
     if (!form.source_zip) return 'Source code zip is required.';
     if (!form.training_data) return 'Training data CSV is required.';
     if (!form.source_zip.name.toLowerCase().endsWith('.zip')) return 'source_zip must be a .zip file.';
@@ -692,16 +698,22 @@ export default function TrainModelPage() {
       }
     }
 
+    const targetName = trainingMode === 'retrain' && selectedModel ? selectedModel.name : form.name;
+    const targetVersion =
+      trainingMode === 'retrain' && selectedModel ? trainingTargetVersion(selectedModel.id) : form.model_version;
+
     createMutation.mutate({
       ...form,
-      name: selectedModel?.name || '',
-      model_version: selectedModel ? trainingTargetVersion(selectedModel.id) : '',
+      name: targetName,
+      model_version: targetVersion,
       source_zip: sourceZip,
     });
   };
 
   const canSubmit =
-    Boolean(selectedModel) &&
+    (trainingMode === 'new'
+      ? Boolean(form.name.trim()) && Boolean(form.model_version.trim())
+      : Boolean(selectedModel)) &&
     Boolean(form.entry_point.trim()) &&
     Boolean(form.source_zip) &&
     !sourceZipState.inspecting &&
@@ -720,22 +732,16 @@ export default function TrainModelPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Model Training</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Train, monitor, and manage model training runs.
+            Train new model artifacts or retrain the model selected in the header.
           </p>
         </div>
         <Button
           icon={<Rocket className="h-4 w-4" />}
-          disabled={!selectedModel}
           onClick={() => setIsCreateOpen(true)}
         >
           New Training Job
         </Button>
       </div>
-      {!selectedModel && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-          Select a model from the header before starting a training job.
-        </div>
-      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -813,7 +819,7 @@ export default function TrainModelPage() {
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight text-gray-900">Configure Training Job</h2>
-              <p className="text-sm text-gray-500">Retrain the selected model with new code and data.</p>
+              <p className="text-sm text-gray-500">Upload code and data to train a new model artifact or retrain an existing one.</p>
             </div>
           </div>
           <span className="w-fit rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
@@ -829,25 +835,65 @@ export default function TrainModelPage() {
           </Button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <div className={`rounded-lg border px-4 py-3 ${
-            selectedModel ? 'border-gray-200 bg-gray-50' : 'border-amber-200 bg-amber-50'
-          }`}>
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Target model</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-bold text-gray-900">
-                {loadingSelectedModel ? 'Loading selected model...' : targetModelLabel}
-              </span>
-              {selectedModel && (
-                <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs font-semibold text-gray-500">
-                  {selectedModel.status}
+        <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            className={`rounded-lg border px-4 py-3 text-left transition ${
+              trainingMode === 'new' ? 'border-black bg-white shadow-sm' : 'border-gray-200 bg-gray-50 hover:bg-white'
+            }`}
+            onClick={() => setTrainingMode('new')}
+          >
+            <p className="text-sm font-bold text-gray-900">Train new model</p>
+            <p className="mt-1 text-xs text-gray-500">Create a new model artifact from source code and dataset.</p>
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg border px-4 py-3 text-left transition ${
+              trainingMode === 'retrain' ? 'border-black bg-white shadow-sm' : 'border-gray-200 bg-gray-50 hover:bg-white'
+            }`}
+            onClick={() => setTrainingMode('retrain')}
+          >
+            <p className="text-sm font-bold text-gray-900">Retrain selected model</p>
+            <p className="mt-1 text-xs text-gray-500">Use the model selected in the header as the update target.</p>
+          </button>
+        </div>
+
+        <div className={`grid gap-3 ${trainingMode === 'new' ? 'md:grid-cols-3' : 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
+          {trainingMode === 'new' ? (
+            <>
+              <Input
+                label="Model name"
+                value={form.name}
+                onChange={(event) => setField('name', event.target.value)}
+                placeholder="CICIDS Classifier"
+              />
+              <Input
+                label="Model version"
+                value={form.model_version}
+                onChange={(event) => setField('model_version', event.target.value)}
+                placeholder="v1"
+              />
+            </>
+          ) : (
+            <div className={`rounded-lg border px-4 py-3 ${
+              selectedModel ? 'border-gray-200 bg-gray-50' : 'border-amber-200 bg-amber-50'
+            }`}>
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Target model</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-sm font-bold text-gray-900">
+                  {loadingSelectedModel ? 'Loading selected model...' : targetModelLabel}
                 </span>
-              )}
+                {selectedModel && (
+                  <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs font-semibold text-gray-500">
+                    {selectedModel.status}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Change this from the model selector in the header. Training will update this model target.
+              </p>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
-              Change this from the model selector in the header. Training will update this model target.
-            </p>
-          </div>
+          )}
           <Input
             label="Entry point"
             value={form.entry_point}

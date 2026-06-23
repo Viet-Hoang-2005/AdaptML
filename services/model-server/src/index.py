@@ -98,6 +98,7 @@ async def get_public_key(kid: str):
     return JWKS_CACHE.get(kid)
 
 
+
 async def verify_model_access(
     model_id: int,
     api_key: str = Security(api_key_header),
@@ -138,7 +139,8 @@ async def verify_model_access(
         if cached_tenant_id != model_tenant_id:
             raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to access this model.")
             
-        if scope == "specific" and model_id not in allowed_models:
+        allowed_model_ids = {str(allowed_model_id) for allowed_model_id in allowed_models}
+        if scope == "specific" and str(model_id) not in allowed_model_ids:
             raise HTTPException(status_code=403, detail="Forbidden: This API Key is not authorized for this specific endpoint.")
 
         return {"tenant_id": cached_tenant_id, "auth_type": "api_key", "model_api": model_record, "scope": scope}
@@ -318,6 +320,29 @@ async def predict(
             tenant_id=model_record["tenant_id"], model_id=str(model_record["id"]), status="error_400"
         ).inc()
         raise
+    except ValueError as exc:
+        exc_str = str(exc)
+        paas_predictions_counter.labels(
+            tenant_id=model_record["tenant_id"], model_id=str(model_record["id"]), status="error_400"
+        ).inc()
+        # Sklearn raises ValueError for feature name mismatches; return 400 with a helpful message.
+        if "feature names" in exc_str.lower() or "feature_names" in exc_str.lower():
+            received = list(payload.model_dump().get("features", {}).keys())
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "success": False,
+                    "error": "Invalid feature columns",
+                    "message": exc_str,
+                    "received_features": received,
+                    "hint": (
+                        "The input columns do not match the model's training features. "
+                        "Remove label/target columns (e.g. 'label', 'target', 'y', 'class') "
+                        "from your prediction input."
+                    ),
+                },
+            )
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         paas_predictions_counter.labels(
             tenant_id=model_record["tenant_id"], model_id=str(model_record["id"]), status="error_500"

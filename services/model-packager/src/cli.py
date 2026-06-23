@@ -1,17 +1,25 @@
 import logging
 import os
 import shutil
+import subprocess
 import sys
+import tarfile
 import tempfile
 import traceback
+import zipfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 import boto3
+import docker
 import redis
 import requests
-import docker
 
 from core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
+
+SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
+PREFERRED_MODEL_FILENAMES = ("model.pkl", "model.joblib", "model.xgb")
+
 
 class RedisLogHandler(logging.Handler):
     def __init__(self, redis_url: str, model_id: str):
@@ -24,30 +32,321 @@ class RedisLogHandler(logging.Handler):
         try:
             msg = self.format(record)
             self.redis_client.rpush(self.log_key, msg)
-            # Expire log sau 1 giờ
             self.redis_client.expire(self.log_key, 3600)
         except Exception:
             self.handleError(record)
 
-def main():
-    model_id = os.environ.get("MODEL_ID")
-    if not model_id:
-        print("Missing MODEL_ID")
-        sys.exit(1)
 
+def parse_s3_uri(uri: str) -> tuple[str, str]:
+    parsed = urlparse(uri)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        raise ValueError(f"Invalid S3 URI: {uri}")
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def download_s3_uri(s3, uri: str, destination: Path) -> None:
+    bucket, key = parse_s3_uri(uri)
+    print(f"Downloading training artifact from s3://{bucket}/{key}...")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    s3.download_file(bucket, key, str(destination))
+    print("Download completed.")
+
+
+def safe_extract_tar(archive_path: Path, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    destination_root = destination.resolve()
+    with tarfile.open(archive_path, "r:gz") as archive:
+        for member in archive.getmembers():
+            resolved = (destination / member.name).resolve()
+            if not str(resolved).startswith(str(destination_root)):
+                raise ValueError("Training artifact contains an unsafe path.")
+            if member.islnk() or member.issym():
+                raise ValueError("Training artifact contains links, which are not supported.")
+        archive.extractall(destination)
+
+
+def safe_extract_zip(archive_path: Path, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    destination_root = destination.resolve()
+    with zipfile.ZipFile(archive_path, "r") as archive:
+        for member in archive.infolist():
+            resolved = (destination / member.filename).resolve()
+            if not str(resolved).startswith(str(destination_root)):
+                raise ValueError("Model package contains an unsafe path.")
+        archive.extractall(destination)
+
+
+def find_supported_model_file(root: Path) -> Path:
+    files = [item for item in root.rglob("*") if item.is_file() and item.suffix.lower() in SUPPORTED_MODEL_EXTENSIONS]
+    if not files:
+        raise ValueError("Training artifact is not deployable because no .pkl, .joblib, or .xgb file was found.")
+
+    by_name = {item.name: item for item in sorted(files)}
+    for preferred in PREFERRED_MODEL_FILENAMES:
+        if preferred in by_name:
+            if len(files) > 1:
+                print(f"Warning: multiple model files found; using {preferred}.")
+            return by_name[preferred]
+
+    selected = sorted(files, key=lambda item: item.as_posix())[0]
+    if len(files) > 1:
+        print(f"Warning: multiple model files found; using {selected.relative_to(root).as_posix()}.")
+    return selected
+
+
+def find_label_mapping_file(root: Path) -> Path | None:
+    candidates = []
+    for item in root.rglob("*"):
+        if not item.is_file() or item.suffix.lower() not in {".json", ".pkl"}:
+            continue
+        lowered = item.name.lower()
+        if "mapping" in lowered or "label" in lowered or "dictionary" in lowered:
+            candidates.append(item)
+    return sorted(candidates, key=lambda item: item.as_posix())[0] if candidates else None
+
+
+def webhook_headers() -> dict[str, str]:
+    secret = os.environ.get("MODEL_BUILD_WEBHOOK_SECRET", "").strip()
+    return {"X-Build-Webhook-Secret": secret} if secret else {}
+
+
+def post_webhook(webhook_url: str, payload: dict) -> None:
+    if not webhook_url:
+        return
+    print(f"Calling build webhook: {webhook_url}")
+    response = requests.post(webhook_url, json=payload, headers=webhook_headers(), timeout=10)
+    if response.status_code >= 400:
+        raise RuntimeError(f"Build webhook failed with HTTP {response.status_code}: {response.text[:500]}")
+
+
+def build_custom_image(workspace: Path, model_id: str, requirements_text: str) -> None:
+    dockerfile_content = """FROM mlops-paas-model-server:latest
+USER root
+COPY requirements.txt /tmp/custom_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+"""
+    (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
+    (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
+
+    docker_client = docker.from_env()
+    image_tag = f"mlops-paas-model-{model_id}:latest"
+    print(f"Building Docker image {image_tag} from workspace {workspace}...")
+    for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
+        if "stream" in line:
+            print(line["stream"].strip())
+        elif "errorDetail" in line:
+            raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
+    print(f"Docker image {image_tag} built successfully!")
+
+
+def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
+    try:
+        import yaml
+    except ImportError:
+        print("PyYAML is not installed; skipping conda.yaml pip extraction.")
+        return []
+
+    with conda_file.open("r", encoding="utf-8") as handle:
+        conda_env = yaml.safe_load(handle) or {}
+
+    pip_requirements = []
+    for dep in conda_env.get("dependencies", []):
+        if isinstance(dep, dict) and "pip" in dep:
+            pip_requirements.extend(dep["pip"])
+    return pip_requirements
+
+
+def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> None:
+    flavor = os.environ.get("FLAVOR", "").lower()
+    requirements_text = os.environ.get("REQUIREMENTS_TEXT", "")
+    source_key = os.environ.get("SOURCE_KEY")
+    source_type = os.environ.get("SOURCE_TYPE", "manual_upload")
+    training_artifact_uri = os.environ.get("TRAINING_ARTIFACT_URI", "")
+    output_key = os.environ.get("OUTPUT_KEY")
+
+    if source_type == "training_job":
+        if not all([flavor, training_artifact_uri, output_key, bucket_name]):
+            raise ValueError("Missing required environment variables for training artifact build.")
+    elif not all([flavor, source_key, output_key, bucket_name]):
+        raise ValueError("Missing required environment variables for build.")
+
+    workspace = Path(tempfile.mkdtemp(prefix=f"build-{model_id}-"))
+    try:
+        artifact_name = ""
+        extracted_label_mapping_path = None
+
+        if source_type == "training_job":
+            training_archive_path = workspace / "training-model.tar.gz"
+            extracted_dir = workspace / "training-artifact"
+            download_s3_uri(s3, training_artifact_uri, training_archive_path)
+            print("Extracting training artifact safely...")
+            safe_extract_tar(training_archive_path, extracted_dir)
+            artifact_path = find_supported_model_file(extracted_dir)
+            artifact_name = artifact_path.name
+
+            if not requirements_text.strip():
+                requirements_file = next(iter(sorted(extracted_dir.rglob("requirements.txt"))), None)
+                if requirements_file:
+                    requirements_text = requirements_file.read_text(encoding="utf-8").strip()
+                    print("Using requirements.txt from training artifact.")
+
+            extracted_label_mapping_path = find_label_mapping_file(extracted_dir)
+            if extracted_label_mapping_path:
+                print(f"Using label mapping from training artifact: {extracted_label_mapping_path.name}")
+        else:
+            artifact_name = Path(source_key).name
+            artifact_path = workspace / artifact_name
+            print(f"Downloading source artifact from s3://{bucket_name}/{source_key}...")
+            s3.download_file(bucket_name, source_key, str(artifact_path))
+            print("Download completed.")
+
+        print(f"Loading {flavor} model...")
+        model = load_model(artifact_path, flavor)
+        package_name = "model"
+        package_dir = workspace / package_name
+        requirements = parse_requirements(requirements_text)
+
+        print("Saving MLflow model format...")
+        save_mlflow_model(model, flavor, package_dir, requirements)
+
+        if requirements_text.strip():
+            (package_dir / "requirements.txt").write_text(requirements_text.strip() + "\n", encoding="utf-8")
+
+        label_mapping_key = os.environ.get("LABEL_MAPPING_KEY")
+        if label_mapping_key:
+            print(f"Downloading label mapping file from s3://{bucket_name}/{label_mapping_key}...")
+            mapping_path = package_dir / Path(label_mapping_key).name
+            s3.download_file(bucket_name, label_mapping_key, str(mapping_path))
+            print("Label mapping download completed.")
+        elif extracted_label_mapping_path:
+            shutil.copy2(extracted_label_mapping_path, package_dir / extracted_label_mapping_path.name)
+
+        preview_tree = build_preview_tree(package_dir)
+        manifest = {
+            "flavor": flavor,
+            "source_type": source_type,
+            "source_artifact": artifact_name,
+            "package_root": package_name,
+            "requirements_count": len(requirements or []),
+        }
+
+        zip_path = workspace / "model-package.zip"
+        print("Compressing package to zip...")
+        make_zip(package_dir, zip_path)
+
+        print(f"Uploading output to s3://{bucket_name}/{output_key}...")
+        s3.upload_file(str(zip_path), bucket_name, output_key)
+        print("Upload completed.")
+
+        print("Building custom Docker image...")
+        build_custom_image(workspace, model_id, requirements_text)
+        print("Build completed successfully!")
+
+        post_webhook(
+            webhook_url,
+            {
+                "model_id": model_id,
+                "status": "success",
+                "package_manifest": manifest,
+                "package_preview_tree": preview_tree,
+                "task_type": "BUILD",
+            },
+        )
+        print("BUILD_EOF_SUCCESS")
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+
+
+def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> None:
+    source_key = os.environ.get("SOURCE_KEY")
+    if not all([source_key, bucket_name]):
+        raise ValueError("Missing required environment variables for test.")
+
+    workspace = Path(tempfile.mkdtemp(prefix=f"test-{model_id}-"))
+    try:
+        artifact_name = Path(source_key).name
+        zip_path = workspace / artifact_name
+
+        print(f"Downloading ZIP from s3://{bucket_name}/{source_key}...")
+        s3.download_file(bucket_name, source_key, str(zip_path))
+        print("Download completed.")
+
+        extract_dir = workspace / "extracted"
+        print("Extracting ZIP archive safely...")
+        safe_extract_zip(zip_path, extract_dir)
+
+        mlmodel_paths = list(extract_dir.rglob("MLmodel"))
+        if not mlmodel_paths:
+            raise ValueError("No MLmodel file found in the ZIP archive.")
+
+        package_dir = mlmodel_paths[0].parent
+        print(f"Found MLmodel at {package_dir.relative_to(extract_dir)}")
+
+        requirements_text = ""
+        req_file = package_dir / "requirements.txt"
+        conda_file = package_dir / "conda.yaml"
+        if req_file.exists():
+            requirements_text = req_file.read_text(encoding="utf-8").strip()
+            print("Found requirements.txt.")
+        elif conda_file.exists():
+            pip_requirements = parse_conda_pip_requirements(conda_file)
+            if pip_requirements:
+                requirements_text = "\n".join(pip_requirements)
+                print("Extracted pip requirements from conda.yaml.")
+        else:
+            print("No requirements.txt or conda.yaml found. Proceeding with default environment.")
+
+        if requirements_text.strip():
+            print("Installing package requirements for validation...")
+            temp_req = workspace / "validation-requirements.txt"
+            temp_req.write_text(requirements_text + "\n", encoding="utf-8")
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(temp_req)], check=True)
+
+        print("Validating model load via mlflow.pyfunc...")
+        import mlflow.pyfunc
+
+        mlflow.pyfunc.load_model(str(package_dir))
+        print("Model loaded successfully!")
+
+        preview_tree = build_preview_tree(extract_dir)
+        manifest = {
+            "flavor": "advanced_zip",
+            "source_type": "manual_upload",
+            "source_artifact": artifact_name,
+            "package_root": package_dir.name,
+        }
+
+        print("Building custom Docker image...")
+        build_custom_image(workspace, model_id, requirements_text)
+        print("Test and build completed successfully!")
+
+        post_webhook(
+            webhook_url,
+            {
+                "model_id": model_id,
+                "status": "success",
+                "package_manifest": manifest,
+                "package_preview_tree": preview_tree,
+                "task_type": "TEST_ZIP",
+            },
+        )
+        print("BUILD_EOF_SUCCESS")
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+
+
+def setup_logger(model_id: str):
     redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/1")
     logger = logging.getLogger(f"build-{model_id}")
     logger.setLevel(logging.INFO)
 
-    # Thêm stdout handler
-    original_stdout = sys.stdout
-    stdout_handler = logging.StreamHandler(original_stdout)
-    stdout_handler.setFormatter(logging.Formatter('%(message)s'))
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(stdout_handler)
 
-    class StreamToLogger(object):
-        def __init__(self, logger, level):
-            self.logger = logger
+    class StreamToLogger:
+        def __init__(self, log, level):
+            self.logger = log
             self.level = level
 
         def write(self, buf):
@@ -62,272 +361,59 @@ def main():
     sys.stdout = StreamToLogger(logger, logging.INFO)
     sys.stderr = StreamToLogger(logger, logging.ERROR)
 
-    # Thêm Redis handler
     try:
         redis_handler = RedisLogHandler(redis_url, model_id)
-        redis_handler.setFormatter(logging.Formatter('%(message)s'))
+        redis_handler.setFormatter(logging.Formatter("%(message)s"))
         logger.addHandler(redis_handler)
-    except Exception as e:
-        logger.warning(f"Could not connect to Redis for log streaming: {e}")
+    except Exception as exc:
+        logger.warning("Could not connect to Redis for log streaming: %s", exc)
+
+    return logger
+
+
+def main():
+    model_id = os.environ.get("MODEL_ID")
+    if not model_id:
+        print("Missing MODEL_ID")
+        sys.exit(1)
+
+    logger = setup_logger(model_id)
+    webhook_url = os.environ.get("CONTROL_PLANE_WEBHOOK_URL")
 
     try:
-        logger.info(f"Starting build process for model {model_id}...")
         task_type = os.environ.get("TASK_TYPE", "BUILD")
         bucket_name = os.environ.get("AWS_BUCKET_NAME")
-        webhook_url = os.environ.get("CONTROL_PLANE_WEBHOOK_URL")
+        print(f"Starting {task_type} process for model {model_id}...")
 
         s3 = boto3.client(
             "s3",
             aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
             aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-            region_name=os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1")
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1"),
         )
 
-        if task_type == "BUILD":
-            flavor = os.environ.get("FLAVOR", "").lower()
-            requirements_text = os.environ.get("REQUIREMENTS_TEXT", "")
-            source_key = os.environ.get("SOURCE_KEY")
-            output_key = os.environ.get("OUTPUT_KEY")
-
-            if not all([flavor, source_key, output_key, bucket_name]):
-                raise ValueError("Missing required environment variables for build.")
-
-            workspace = Path(tempfile.mkdtemp(prefix=f"build-{model_id}-"))
-            try:
-                artifact_name = Path(source_key).name
-                artifact_path = workspace / artifact_name
-
-                print(f"Downloading source artifact from s3://{bucket_name}/{source_key}...")
-                s3.download_file(bucket_name, source_key, str(artifact_path))
-                print("Download completed.")
-
-                print(f"Loading {flavor} model...")
-                model = load_model(artifact_path, flavor)
-
-                package_name = "model"
-                package_dir = workspace / package_name
-                requirements = parse_requirements(requirements_text)
-
-                print("Saving MLflow model format...")
-                save_mlflow_model(model, flavor, package_dir, requirements)
-
-                if requirements_text.strip():
-                    (package_dir / "requirements.txt").write_text(requirements_text.strip() + "\n", encoding="utf-8")
-
-                label_mapping_key = os.environ.get("LABEL_MAPPING_KEY")
-                if label_mapping_key:
-                    print(f"Downloading label mapping file from s3://{bucket_name}/{label_mapping_key}...")
-                    mapping_artifact_name = Path(label_mapping_key).name
-                    mapping_path = package_dir / mapping_artifact_name
-                    s3.download_file(bucket_name, label_mapping_key, str(mapping_path))
-                    print("Label mapping download completed.")
-
-                print("Generating package manifest...")
-                preview_tree = build_preview_tree(package_dir)
-                manifest = {
-                    "flavor": flavor,
-                    "source_artifact": artifact_name,
-                    "package_root": package_name,
-                    "requirements_count": len(requirements or []),
-                }
-
-                zip_path = workspace / "model-package.zip"
-                print("Compressing package to zip...")
-                make_zip(package_dir, zip_path)
-
-                print(f"Uploading output to s3://{bucket_name}/{output_key}...")
-                s3.upload_file(str(zip_path), bucket_name, output_key)
-                print("Upload completed.")
-
-                print("Building custom Docker image...")
-                try:
-                    dockerfile_content = """FROM mlops-paas-model-server:latest
-USER root
-COPY requirements.txt /tmp/custom_requirements.txt
-RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
-"""
-                    (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
-
-                    # Requirements are in package_dir/requirements.txt or requirements_text
-                    if requirements_text.strip():
-                        (workspace / "requirements.txt").write_text(requirements_text.strip() + "\n", encoding="utf-8")
-                    else:
-                        (workspace / "requirements.txt").write_text("\n", encoding="utf-8")
-
-                    docker_client = docker.from_env()
-                    image_tag = f"mlops-paas-model-{model_id}:latest"
-                    print(f"Building Docker image {image_tag} from workspace {workspace}...")
-
-                    # Build image directly, stream logs to stdout
-                    for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
-                        if 'stream' in line:
-                            print(line['stream'].strip())
-                        elif 'errorDetail' in line:
-                            raise RuntimeError(line['errorDetail'].get('message', 'Unknown Docker build error'))
-
-                    print(f"Docker image {image_tag} built successfully!")
-                except Exception as docker_err:
-                    logger.error(f"Failed to build Docker image: {docker_err}")
-                    logger.error(traceback.format_exc())
-                    raise RuntimeError(f"Docker build failed: {docker_err}")
-
-                print("Build completed successfully!")
-
-                # Notify Control Plane
-                if webhook_url:
-                    payload = {
-                        "model_id": model_id,
-                        "status": "success",
-                        "package_manifest": manifest,
-                        "package_preview_tree": preview_tree,
-                    }
-                    requests.post(webhook_url, json=payload, timeout=10)
-
-                # Đánh dấu EOF cho frontend biết tiến trình đã xong
-                logger.info("BUILD_EOF_SUCCESS")
-
-            finally:
-                shutil.rmtree(workspace, ignore_errors=True)
-
-        elif task_type == "TEST_ZIP":
-            source_key = os.environ.get("SOURCE_KEY")
-
-            if not all([source_key, bucket_name]):
-                raise ValueError("Missing required environment variables for test.")
-
-            workspace = Path(tempfile.mkdtemp(prefix=f"test-{model_id}-"))
-            try:
-                artifact_name = Path(source_key).name
-                zip_path = workspace / artifact_name
-
-                print(f"Downloading ZIP from s3://{bucket_name}/{source_key}...")
-                s3.download_file(bucket_name, source_key, str(zip_path))
-                print("Download completed.")
-
-                extract_dir = workspace / "extracted"
-                extract_dir.mkdir()
-
-                print("Extracting ZIP archive...")
-                import zipfile
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(extract_dir)
-
-                # Find MLmodel
-                mlmodel_paths = list(extract_dir.rglob("MLmodel"))
-                if not mlmodel_paths:
-                    raise ValueError("No MLmodel file found in the ZIP archive.")
-
-                package_dir = mlmodel_paths[0].parent
-                print(f"Found MLmodel at {package_dir.relative_to(extract_dir)}")
-
-                # Check for requirements
-                import subprocess
-                req_file = package_dir / "requirements.txt"
-                conda_file = package_dir / "conda.yaml"
-
-                docker_req_path = workspace / "requirements.txt"
-                docker_req_path.write_text("\n", encoding="utf-8")
-
-                if req_file.exists():
-                    print("Found requirements.txt, installing dynamically...")
-                    subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(req_file)], check=True)
-                    shutil.copy(req_file, docker_req_path)
-                elif conda_file.exists():
-                    print("Found conda.yaml. Parsing pip requirements...")
-                    import yaml
-                    with open(conda_file, 'r') as f:
-                        conda_env = yaml.safe_load(f)
-                    pip_reqs = []
-                    if isinstance(conda_env.get('dependencies'), list):
-                        for dep in conda_env['dependencies']:
-                            if isinstance(dep, dict) and 'pip' in dep:
-                                pip_reqs.extend(dep['pip'])
-                    if pip_reqs:
-                        with open(docker_req_path, 'w', encoding="utf-8") as f:
-                            for req in pip_reqs:
-                                f.write(req + '\n')
-                        print("Installing pip requirements extracted from conda.yaml...")
-                        subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(docker_req_path)], check=True)
-                else:
-                    print("No requirements.txt or conda.yaml found. Proceeding with default environment.")
-
-                print("Validating model load via mlflow.pyfunc...")
-                import mlflow.pyfunc
-                model = mlflow.pyfunc.load_model(str(package_dir))
-                print("Model loaded successfully!")
-
-                print("Generating package manifest...")
-                preview_tree = build_preview_tree(extract_dir)
-                manifest = {
-                    "flavor": "advanced_zip",
-                    "source_artifact": artifact_name,
-                    "package_root": package_dir.name,
-                }
-
-                print("Building custom Docker image...")
-                try:
-                    dockerfile_content = """FROM mlops-paas-model-server:latest
-USER root
-COPY requirements.txt /tmp/custom_requirements.txt
-RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
-"""
-                    (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
-
-                    docker_client = docker.from_env()
-                    image_tag = f"mlops-paas-model-{model_id}:latest"
-                    print(f"Building Docker image {image_tag} from workspace {workspace}...")
-
-                    # Build image directly, stream logs to stdout
-                    for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
-                        if 'stream' in line:
-                            print(line['stream'].strip())
-                        elif 'errorDetail' in line:
-                            raise RuntimeError(line['errorDetail'].get('message', 'Unknown Docker build error'))
-
-                    print(f"Docker image {image_tag} built successfully!")
-                except Exception as docker_err:
-                    logger.error(f"Failed to build Docker image: {docker_err}")
-                    logger.error(traceback.format_exc())
-                    raise RuntimeError(f"Docker build failed: {docker_err}")
-
-                print("Test and Build completed successfully!")
-
-                # Notify Control Plane
-                if webhook_url:
-                    payload = {
-                        "model_id": model_id,
-                        "status": "success",
-                        "package_manifest": manifest,
-                        "package_preview_tree": preview_tree,
-                        "task_type": "TEST_ZIP"
-                    }
-                    requests.post(webhook_url, json=payload, timeout=10)
-
-                logger.info("BUILD_EOF_SUCCESS")
-
-            finally:
-                shutil.rmtree(workspace, ignore_errors=True)
-
+        if task_type == "TEST_ZIP":
+            run_test_zip_task(s3, model_id, bucket_name, webhook_url)
+        else:
+            run_build_task(s3, model_id, bucket_name, webhook_url)
     except Exception as exc:
-        logger.error(f"Build failed with error: {str(exc)}")
-
+        logger.error("Build failed with error: %s", exc)
         logger.error(traceback.format_exc())
-
-        # Notify Control Plane of failure
-        webhook_url = os.environ.get("CONTROL_PLANE_WEBHOOK_URL")
-        if webhook_url:
-            payload = {
-                "model_id": model_id,
-                "status": "error",
-                "error_message": str(exc)
-            }
-            try:
-                requests.post(webhook_url, json=payload, timeout=10)
-            except:
-                pass
+        try:
+            post_webhook(
+                webhook_url,
+                {
+                    "model_id": model_id,
+                    "status": "error",
+                    "error_message": str(exc),
+                },
+            )
+        except Exception as webhook_exc:
+            logger.error("Failed to notify Control Plane failure webhook: %s", webhook_exc)
 
         logger.info("BUILD_EOF_ERROR")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

@@ -44,6 +44,11 @@ def download_model_artifact(model_id: int, model_uri: str) -> Path:
         shutil.copyfile(local_path, artifact_path)
 
     with zipfile.ZipFile(artifact_path) as archive:
+        destination_root = source_dir.resolve()
+        for member in archive.infolist():
+            member_path = source_dir / member.filename
+            if not str(member_path.resolve()).startswith(str(destination_root)):
+                raise ValueError("Model artifact contains an unsafe path.")
         archive.extractall(source_dir)
 
     return source_dir

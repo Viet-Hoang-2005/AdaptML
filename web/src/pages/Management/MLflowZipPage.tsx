@@ -1,117 +1,60 @@
-import { Rocket, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Save, Trash2 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import type { ModelAPIFormValues } from '../../types/modelApi';
-import { StepTitle } from './UploadModelFormPage';
-import { FileDropzone } from '../../components/ui/FileDropzone';
-import { PackagePreview } from '../../components/ui/PackagePreview';
-import { TextArea } from '../../components/ui/TextArea';
-import { AccessModePicker } from '../../components/ui/Picker';
-import { useModelAPIMutations } from '../../hooks/useModelAPIs';
-import { TerminalLogViewer } from '../../components/ui/TerminalLogViewer';
-import { deployModelAPI, deleteModelAPI, cancelBuildAPI, getApiErrorMessage } from '../../lib/api';
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '../../lib/queryKeys';
-import { toast } from '../../lib/toast';
-import { useNavigate } from 'react-router-dom';
-import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import type { ModelAPI, ModelAPIFormValues } from '../../types/modelApi';
+import { AccessModePicker, FileDropzone, PackagePreview, TextArea, StepTitle } from './UploadModelFormPage';
 
 export default function MLflowZipPage({
+  model,
   form,
   setField,
-  onSubmitting,
-  onModelCreated,
+  submit,
+  loading,
+  editing,
 }: {
+  model: ModelAPI | null;
   form: ModelAPIFormValues;
   setField: (field: keyof ModelAPIFormValues, value: string | File | null) => void;
-  onSubmitting: (val: boolean) => void;
-  onModelCreated: (id: number | null) => void;
+  submit: () => void;
+  loading: boolean;
+  editing: boolean;
 }) {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const { createModelAPI, creating } = useModelAPIMutations();
-  const [createdModelId, setCreatedModelId] = useState<number | null>(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
- 
-  const submitAdvanced = async () => {
-    onSubmitting(true);
-    try {
-      const model = await createModelAPI(form);
-      setCreatedModelId(model.id);
-      onModelCreated(model.id);
-    } catch (e) {
-      const msg = getApiErrorMessage(e, "Failed to create model");
-      toast.error(msg);
-      onSubmitting(false);
-    }
-  };
-
-  const cancelBuild = async () => {
-    if (createdModelId) {
-      try {
-        await cancelBuildAPI(createdModelId);
-      } catch (e) {
-        const msg = getApiErrorMessage(e, "Failed to cancel build process.");
-        toast.error(msg);
-      }
-    }
-  };
-
-  const handleClear = async () => {
-    if (createdModelId) {
-      onSubmitting(true);
-      try {
-        await deleteModelAPI(createdModelId, true);
-      } catch (e) {
-        const msg = getApiErrorMessage(e, "Failed to delete model");
-        toast.error(msg);
-      } finally {
-        onSubmitting(false);
-      }
-      setCreatedModelId(null);
-      onModelCreated(null);
-    }
+  const handleClear = () => {
     setField('name', '');
     setField('description', '');
     setField('model_info', '');
     setField('access_mode', 'public');
+    setField('version', 'v1');
     setField('artifact', null);
-    setShowClearConfirm(false);
   };
 
-  const samplePreviewTree = [
-    'model/',
-    'model/MLmodel',
-    'model/requirements.txt',
-    'model/conda.yaml',
-    'model/python_env.yaml',
-    'model/label_encoder.json',
-    'model/model.pkl'
-  ];
-
   return (
-    <>
-    <ConfirmModal
-      open={showClearConfirm}
-      title="Clear Form Data?"
-      description="Are you sure you want to clear all data and cancel any running build? This action cannot be undone."
-      tone="danger"
-      confirmText="Confirm"
-      onConfirm={handleClear}
-      onCancel={() => setShowClearConfirm(false)}
-    />
     <div className="space-y-6 rounded-lg border border-gray-300 bg-white p-6 lg:p-8">
-      <div className='space-y-4'>
-        <StepTitle
-          title="Model Metadata"
-          description="Describe the model and decide whether the prediction API is public or private."
+      <div>
+        <h2 className="text-lg font-bold text-gray-900">Advanced MLflow Artifact</h2>
+        <p className="mb-4 mt-1 text-sm leading-6 text-gray-500">
+          Upload a `.zip` package that already contains an `MLmodel` file.
+        </p>
+        <FileDropzone
+          accept=".zip,application/zip"
+          title={form.artifact ? form.artifact.name : editing ? 'Replace model artifact' : 'Choose MLflow package'}
+          subtitle="ZIP only"
+          onChange={(file) => setField('artifact', file)}
         />
+      </div>
+
+      <div className="space-y-5 border-t border-gray-200 pt-6">
         <Input
           label="Model Name"
           value={form.name}
           onChange={(event) => setField('name', event.target.value)}
           placeholder="e.g. CICIDS Classifier"
+        />
+        <Input
+          label="Version"
+          value={form.version || 'v1'}
+          onChange={(event) => setField('version', event.target.value)}
+          placeholder="v1"
         />
         <TextArea
           id="advanced-description"
@@ -147,41 +90,19 @@ export default function MLflowZipPage({
         />
       </div>
 
-      <div className="space-y-4 border-t border-gray-200 pt-6">
-        <StepTitle
-          title="MLflow Package"
-          description="Upload a .zip package that already contains an MLmodel file."
-        />
-        <FileDropzone
-          accept=".zip,application/zip"
-          title={form.artifact ? form.artifact.name : 'Choose MLflow package'}
-          subtitle="ZIP only"
-          onChange={(file) => setField('artifact', file)}
-        />
+      {model?.package_preview_tree?.length ? (
+        <div className="border-t border-gray-200 pt-6">
+          <p className="mb-2 text-sm font-semibold text-gray-900">Package Preview</p>
+          <PackagePreview preview={model.package_preview_tree} compact />
+        </div>
+      ) : null}
 
-        <p className="mt-6 text-sm font-semibold text-gray-900">Required Package Structure</p>
-        <PackagePreview preview={samplePreviewTree} compact />
-
-        <p className="mt-6 text-sm font-semibold text-gray-900">MLflow Package Build</p>
-        <TerminalLogViewer 
-          key={createdModelId || 'idle'}
-          modelId={createdModelId}
-          onRebuild={submitAdvanced}
-          onCancel={cancelBuild}
-          buildDisabled={!form.artifact || !form.name.trim()}
-          onBuildSuccess={async (modelId) => {
-            onSubmitting(true);
-            try {
-              await deployModelAPI(modelId);
-              await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
-              navigate(`/dashboard/api-management`);
-            } catch (e) {
-              const msg = getApiErrorMessage(e, "Deployment failed.");
-              toast.error(msg);
-            }
-          }}
-        />
-      </div>
+      {model?.endpoint_url && (
+        <div className="border-t border-gray-200 pt-6">
+          <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Current Endpoint</p>
+          <code className="block break-all rounded-lg bg-gray-50 p-3 text-xs text-gray-600">{model.endpoint_url}</code>
+        </div>
+      )}
 
       <div className="flex items-center gap-4 border-t border-gray-200 pt-6">
         <Button
@@ -189,23 +110,21 @@ export default function MLflowZipPage({
           variant="danger"
           size="md"
           icon={<Trash2 className="h-4 w-4" />}
-          disabled={creating}
-          onClick={() => setShowClearConfirm(true)}
+          disabled={loading}
+          onClick={handleClear}
         >
-          Clear
+          Delete
         </Button>
         <Button
           className="flex-1"
           size="md"
-          icon={<Rocket className="h-4 w-4" />}
-          loading={creating}
-          disabled={!!createdModelId || !form.artifact || !form.name.trim()}
-          onClick={submitAdvanced}
+          icon={<Save className="h-4 w-4" />}
+          loading={loading}
+          onClick={submit}
         >
-          Deploy model
+          {editing ? 'Save changes' : 'Create Model API'}
         </Button>
       </div>
     </div>
-    </>
   );
 }

@@ -1,19 +1,43 @@
 export type ModelAccessMode = 'private' | 'public';
-export type ModelAPIStatus = 'ready' | 'uploading' | 'error' | 'disabled';
+export type ModelAPIStatus =
+  | 'registered'
+  | 'ready'
+  | 'uploading'
+  | 'deploying'
+  | 'deployed'
+  | 'unhealthy'
+  | 'deploy_failed'
+  | 'stopped'
+  | 'archived'
+  | 'error'
+  | 'disabled';
 export type ModelBuildStatus = 'not_started' | 'building' | 'ready' | 'error';
+export type ModelEndpointStatus = 'not_deployed' | 'deploying' | 'healthy' | 'unhealthy' | 'deploy_failed' | 'stopped';
 export type ModelFlavor = 'sklearn' | 'xgboost';
+export type ModelSourceType = 'manual_upload' | 'training_job';
 
 export interface ModelAPI {
   id: number;
   name: string;
+  version: string;
   description: string;
   model_info: string;
   access_mode: ModelAccessMode;
+  source_type: ModelSourceType;
+  source_training_job: number | null;
+  source_artifact_uri: string;
   model_uri: string;
   endpoint_url: string;
   health_url: string;
   status: ModelAPIStatus;
   error_message: string;
+  endpoint_status: ModelEndpointStatus;
+  endpoint_error: string;
+  endpoint_last_checked_at: string | null;
+  endpoint_container_name: string;
+  endpoint_image_name: string;
+  endpoint_public_path: string;
+  endpoint_internal_path: string;
   source_artifact: string;
   flavor: ModelFlavor | '';
   requirements_text: string;
@@ -36,6 +60,7 @@ export interface ModelAPIFormValues {
   description: string;
   model_info: string;
   access_mode: ModelAccessMode;
+  version?: string;
   artifact?: File | null;
   source_code_file?: File | null;
   reference_data_file?: File | null;
@@ -46,6 +71,7 @@ export interface ModelBuildFormValues {
   description: string;
   model_info: string;
   access_mode: ModelAccessMode;
+  version?: string;
   source_artifact: File | null;
   label_mapping_file?: File | null;
   source_code_file?: File | null;
@@ -63,9 +89,16 @@ export interface PackagePreviewResponse {
   build_error: string;
 }
 
+export interface ModelEndpointLogsResponse {
+  model_id: number;
+  container_name: string;
+  logs: string;
+}
+
 export interface ModelPredictionResponse {
   success: boolean;
   prediction: unknown;
+  confidence: number | null;
   tenant_id: string;
   model_id: string;
 }
@@ -103,8 +136,18 @@ export interface TrainingJob {
   retry_of: number | null;
   deleted_at: string | null;
   is_deleted: boolean;
+  registered_model: ModelAPI | null;
+  registered_model_id: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TrainingJobRegisterModelValues {
+  model_name: string;
+  model_version?: string;
+  flavor?: ModelFlavor | '';
+  access_mode?: ModelAccessMode;
+  description?: string;
 }
 
 export interface TrainingJobListResponse {
