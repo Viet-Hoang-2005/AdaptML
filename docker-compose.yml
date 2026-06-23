@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. PostgreSQL Database (mô phỏng CloudNativePG local)
   postgres:
@@ -277,7 +275,7 @@ services:
   # 7. PaaS Log Consumer (đứng giữa Redpanda và PostgreSQL)
   consumer:
     build:
-      context: ./services/model-server
+      context: ./services/consumer
       dockerfile: Dockerfile
     image: mlops-paas-consumer
     container_name: mlops_paas_consumer
@@ -296,8 +294,8 @@ services:
       GITHUB_REPO: ${GITHUB_REPO}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
-      - ./services/model-server:/app
-    command: python src/consumer.py
+      - ./services/consumer:/app
+    command: python -m src.main
     depends_on:
       postgres:
         condition: service_healthy
