@@ -141,7 +141,7 @@ function LogTerminal({ logs }: { logs: TestLogEntry[] }) {
         </Button>
       </div>
 
-      <div ref={terminalRef} className="max-h-[460px] overflow-auto rounded-lg bg-gray-950 p-4 font-mono text-xs leading-6 text-gray-100">
+      <div ref={terminalRef} className="max-h-115 overflow-auto rounded-lg bg-gray-950 p-4 font-mono text-xs leading-6 text-gray-100">
         {logs.length === 0 ? (
           <p className="text-gray-500">Click "Run" to start processing the CSV file...</p>
         ) : (
@@ -162,7 +162,7 @@ function LogTerminal({ logs }: { logs: TestLogEntry[] }) {
                 {log.level.toUpperCase()}
               </span>{' '}
               <span>{log.message}</span>
-              {log.detail && <pre className="mt-1 whitespace-pre-wrap break-words text-gray-400">{log.detail}</pre>}
+              {log.detail && <pre className="mt-1 whitespace-pre-wrap wrap-break-words text-gray-400">{log.detail}</pre>}
             </div>
           ))
         )}

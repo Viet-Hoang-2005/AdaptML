@@ -1,10 +1,4 @@
-import {
-  Activity,
-  Bot,
-  Box,
-  CheckCircle,
-  XCircle,
-} from 'lucide-react';
+import { Activity, Bot, Box, CheckCircle, XCircle, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -127,7 +121,7 @@ export default function APIManagementPage() {
           </p>
         </div>
         <Button size="md" onClick={() => navigate('/dashboard/api-management/upload')} className="px-5 shadow-sm">
-          Upload Model
+          <Plus className="h-4 w-4" /> Upload Model
         </Button>
       </div>
 
@@ -163,7 +157,7 @@ export default function APIManagementPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex-1 rounded-xl border border-gray-200 bg-gray-50/50 min-h-[400px] flex items-center justify-center animate-pulse">
+        <div className="flex-1 rounded-xl border border-gray-200 bg-gray-50/50 min-h-100 flex items-center justify-center animate-pulse">
           <Activity className="h-8 w-8 text-gray-300 animate-spin" />
         </div>
       ) : models.length === 0 ? (

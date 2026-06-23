@@ -17,7 +17,7 @@ export function TerminalLogViewer({
 }: {
   modelId?: number | null;
   onBuildSuccess?: (modelId: number, previewTree: string[]) => void;
-  onRebuild?: () => void;
+  onRebuild?: () => Promise<void> | void;
   onCancel?: () => void;
   buildDisabled?: boolean;
   placeholder?: string;
@@ -32,9 +32,22 @@ export function TerminalLogViewer({
   );
   const [buildStatus, setBuildStatus] = useState<string>(modelId ? 'building' : 'idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [isStartingBuild, setIsStartingBuild] = useState(false);
 
   const terminalRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef(0);
+
+  const [prevModelId, setPrevModelId] = useState(modelId);
+  if (modelId !== prevModelId) {
+    setPrevModelId(modelId);
+    setBuilding(!!modelId);
+    setBuildStatus(modelId ? 'building' : 'idle');
+    setLogs(modelId ? ['[SYSTEM] Initiating build process...'] : [placeholder || '']);
+  }
+
+  useEffect(() => {
+    offsetRef.current = 0;
+  }, [modelId]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -116,14 +129,21 @@ export function TerminalLogViewer({
               {buildStatus === 'idle' && onRebuild ? (
                 <button
                   type="button"
-                  disabled={buildDisabled}
-                  onClick={onRebuild}
+                  disabled={buildDisabled || isStartingBuild}
+                  onClick={async () => {
+                    setIsStartingBuild(true);
+                    try {
+                      await onRebuild();
+                    } finally {
+                      setIsStartingBuild(false);
+                    }
+                  }}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium text-white ${
-                    buildDisabled ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
+                    buildDisabled || isStartingBuild ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
                   }`}
                 >
                   <Play className="h-3 w-3" />
-                  Build
+                  {isStartingBuild ? 'Starting...' : 'Build'}
                 </button>
               ) : building && onCancel ? (
                 <button
@@ -142,14 +162,21 @@ export function TerminalLogViewer({
               ) : buildStatus !== 'idle' && !building && onRebuild ? (
                 <button
                   type="button"
-                  disabled={buildDisabled}
-                  onClick={onRebuild}
+                  disabled={buildDisabled || isStartingBuild}
+                  onClick={async () => {
+                    setIsStartingBuild(true);
+                    try {
+                      await onRebuild();
+                    } finally {
+                      setIsStartingBuild(false);
+                    }
+                  }}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium text-white ${
-                    buildDisabled ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
+                    buildDisabled || isStartingBuild ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
                   }`}
                 >
                   <Play className="h-3 w-3" />
-                  Re-Build
+                  {isStartingBuild ? 'Starting...' : 'Re-Build'}
                 </button>
               ) : null}
             </>

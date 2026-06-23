@@ -397,7 +397,7 @@ function DeployStep({
         toast.error(msg);
       }
     }
-    startBuild();
+    await startBuild();
   };
 
   return (
