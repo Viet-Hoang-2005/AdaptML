@@ -23,6 +23,7 @@ from .aws_batch_training_service import (
     strip_training_metric_lines,
 )
 from .local_training_service import run_local_training_job
+from .mlflow_utils import build_mlflow_run_url
 from .sagemaker_service import (
     create_model_artifact_presigned_url,
     refresh_sagemaker_training_job,
@@ -54,6 +55,14 @@ def serialize_training_job_event(event):
         "metadata": event.metadata,
         "created_at": event.created_at,
     }
+
+
+def _build_mlflow_run_url_for_job(training_job):
+    """Build the browser-facing MLflow run URL from a TrainingJob instance."""
+    return build_mlflow_run_url(
+        run_id=getattr(training_job, "mlflow_run_id", None),
+        experiment_id=getattr(training_job, "mlflow_experiment_id", None),
+    )
 
 
 def _current_month_window():
@@ -110,6 +119,7 @@ def serialize_training_job(training_job: TrainingJob):
         .order_by("-updated_at")
         .first()
     )
+    mlflow_run_url = _build_mlflow_run_url_for_job(training_job)
     return {
         "id": training_job.id,
         "name": training_job.name,
@@ -142,9 +152,16 @@ def serialize_training_job(training_job: TrainingJob):
         "is_deleted": bool(training_job.deleted_at),
         "registered_model": serialize_model_api(registered_model) if registered_model else None,
         "registered_model_id": registered_model.id if registered_model else None,
+        # Phase 10E.1: MLflow lineage fields
+        "mlflow_run_id": training_job.mlflow_run_id or "",
+        "mlflow_experiment_id": training_job.mlflow_experiment_id or "",
+        "mlflow_run_url": mlflow_run_url or "",
+        "mlflow_model_uri": training_job.mlflow_model_uri or "",
+        "mlflow_artifact_uri": training_job.mlflow_artifact_uri or "",
         "created_at": training_job.created_at,
         "updated_at": training_job.updated_at,
     }
+
 
 
 def _validate_upload_size(upload, label):

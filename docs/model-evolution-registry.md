@@ -1,0 +1,208 @@
+# Model Evolution Backend Registry (Phase 10A)
+
+## Overview
+
+The Model Evolution Backend Registry is a native model registry implemented within the Control Plane. It allows tracking, versions, history, and metrics associated with models deployed within the MLOps platform, laying the foundation for advanced model governance without requiring external dependencies like a standalone MLflow server for metadata tracking.
+
+The implementation preserves the existing Django Control Plane logic where the `ModelAPI` model acts as the core deployment configuration and primary source of truth, while layering a hierarchical (`ModelFamily` / `ModelVersion`) tracking system on top.
+
+## Architecture
+
+1.  **Data Models (PostgreSQL + Django ORM)**
+    *   **`ModelFamily`**: Represents a unique group of model versions for a tenant (identified by the `name` field from the original `ModelAPI` upload). It tracks the `current_production_version`.
+    *   **`ModelVersion`**: Represents an iteration of a `ModelFamily` (e.g., `v1`, `v2`). It has a one-to-one mapping with the `ModelAPI` table to link artifact references, deployment status, and source jobs. Stages include `none`, `candidate`, `staging`, `production`, and `archived`.
+    *   **`ModelDeploymentHistory`**: An append-only log capturing lifecycle events (registration, build, deployment, promotion, rollback) along with who performed them and when.
+    *   **`ModelMetric`**: A unified time-series table tracking individual data points for models (such as `cpu_percent`, `memory_used_mb`, `loss`, `accuracy`) ingested from associated TrainingJob logs.
+
+2.  **Core Services**
+    *   `orchestration.registry_service.py`: Contains pure Python functions for:
+        *   `sync_model_registry_for_model_api(model_api)`: An idempotent sync function that transforms a `ModelAPI` event into the appropriate `ModelFamily` and `ModelVersion` structures.
+        *   `record_history(version, action, ...)`: Records events in `ModelDeploymentHistory`.
+        *   `promote_version(family, version, actor)` / `rollback_family(family, version, actor)`: Handles the logic of changing a version's stage to/from `production`.
+        *   `sync_metrics_for_version(version)`: Reads the source `TrainingJob` logs (if available) to parse out any `METRIC_JSON` entries and populate `ModelMetric`.
+
+3.  **API Integration**
+    *   The `registry_service` methods are injected seamlessly into existing views like `ModelAPIBuildView`, `ModelAPIDeployView`, `ModelAPIBuildWebhookView`, and `TrainingJobRegisterModelView`.
+    *   New RESTful read endpoints for the registry (list families, list versions, fetch history, promote, rollback, metrics) are exposed via `registry_views.py` and mapped under `/api/orchestration/registry/`.
+
+## Key Design Principles
+
+*   **Idempotency & Resilience**: `get_or_create` ensures we never crash on duplicate syncs. If multiple `ModelAPI` creations fire for the same name, they are grouped under one `ModelFamily`.
+*   **Dual-Write Strategy**: `ModelAPI` dictates action. `ModelRegistry` models react and log. The core `build -> deploy -> predict` flow remains undisturbed.
+*   **Auditability**: Every stage change or deployment interaction is recorded in `ModelDeploymentHistory`.
+
+## Management Commands
+
+To handle the transition from a flat `ModelAPI` table to the registry structure, two management commands have been created:
+
+1.  **`backfill_model_registry`**: 
+    ```bash
+    python manage.py backfill_model_registry
+    ```
+    Scans existing `ModelAPI` records, creates families and versions, and records initial history events (registered, built, deployed) based on their current state.
+
+2.  **`sync_model_metrics`**:
+    ```bash
+    python manage.py sync_model_metrics
+    ```
+    Scans `TrainingJob` logs connected to existing `ModelVersions` and parses `METRIC_JSON` outputs to backfill historical `ModelMetric` data points.
+
+## Frontend UI (Phase 10B)
+
+The Model Evolution UI is implemented in `web/src/pages/Dashboard/ModelEvolutionPage.tsx` and related components in `web/src/components/model-evolution/`.
+
+### Architecture
+
+The frontend follows a localized state management approach, avoiding giant global fetching loops:
+1. **ModelEvolutionPage**: Acts as the controller, fetching the list of `ModelFamily`s and orchestrating selections.
+2. **ModelFamilyList**: Renders the left sidebar list of families, highlighting the currently selected one and displaying a "Prod Active" badge if a production version exists.
+3. **ModelFamilyDetail**: Shows family metadata and a table of all associated `RegistryVersion`s.
+4. **ModelVersionDetail**: The main workspace for a specific version, utilizing tabbed navigation to switch between Details, Metrics, and History.
+
+### Metrics Visualization
+
+Metrics are visualized using a **dependency-free lightweight implementation**. Instead of relying on a heavy charting library like `recharts` or `chart.js`, the metrics panel renders responsive, CSS-driven HTML mini-bar charts. This ensures lightning-fast performance and reduces the frontend bundle size.
+
+### Lifecycle Actions
+
+The UI exposes two primary actions, both protected by confirmation modals:
+* **Promote to Production**: Calls `/api/orchestration/registry/families/:id/versions/:id/promote/`.
+* **Rollback to Version**: Calls `/api/orchestration/registry/families/:id/versions/:id/rollback/`.
+
+> **Note on Traffic Routing:** In Phase 10, promotion and rollback act exclusively as registry markers. They do **not** instantly switch the live prediction endpoints on Traefik/Kubernetes. This ensures a safe environment to build up the registry history before automating the traffic shift in Phase 11.
+
+## UI Polish & Version Comparison (Phase 10C)
+
+Phase 10C introduces significant enhancements to the Model Evolution UI to make it more professional, robust, and demo-ready without relying on heavy external charting libraries.
+
+### Version Comparison MVP
+A lightweight version comparison modal (`VersionComparisonModal.tsx`) allows users to select two versions from the same family and compare their attributes side-by-side. 
+- It fetches the metrics independently for the selected versions and displays the latest point for each.
+- It compares stage, source, created time, and endpoint availability.
+
+### Metric Parser Enhancements
+The `orchestration.registry_service._parse_metrics_from_logs` regex was hardened to support two `METRIC_JSON` string variants natively:
+```txt
+# Without colon (Old Format)
+METRIC_JSON {"accuracy": 0.95}
+
+# With colon (New Standard Format)
+METRIC_JSON: {"accuracy": 0.95}
+```
+This ensures backwards compatibility while encouraging the more standard log structure.
+
+### Empty State & Code Snippets
+To solve the issue of `ModelMetric` records returning `0` points because users did not know how to emit metrics, a new empty state is introduced in `ModelMetricsPanel.tsx` that provides a clear, copy-pasteable Python code snippet:
+```python
+import json
+
+# Emit metrics for each epoch/step
+print("METRIC_JSON:", json.dumps({
+    "step": 1,
+    "accuracy": 0.95,
+    "loss": 0.12,
+    "f1": 0.93
+}))
+```
+
+### SVG Sparklines & Trend Tables
+The div-based mini-bars were replaced by smooth, elegant, gradient-filled SVG sparklines. 
+A "Recent Trend" table was also added beneath the charts to clearly show the raw values of the last 5 steps without cluttering the main chart area.
+
+---
+
+## Phase 10E.1: MLflow Run Linking MVP
+
+### Responsibility Split
+
+| Concern | Native Registry | MLflow |
+|---|---|---|
+| Tenant ownership | ✅ | ❌ |
+| Model Family / Version | ✅ | ❌ |
+| Deploy state / endpoint URL | ✅ | ❌ |
+| Promote / Rollback history | ✅ | ❌ |
+| Production marker | ✅ | ❌ |
+| Future production alias routing | ✅ | ❌ |
+| Training run lineage | optional | ✅ |
+| Training params / metrics log | optional | ✅ |
+| Artifact deep-dive | optional | ✅ |
+| MLflow UI deep link | ❌ | ✅ |
+
+**The Native Registry remains the platform Source of Truth.**
+MLflow is used as an optional experiment lineage tool only.
+
+### How to Emit MLflow Run ID
+
+In your `train.py`, inside the `mlflow.start_run()` context:
+
+```python
+with mlflow.start_run() as run:
+    # Emit markers for Control Plane lineage capture
+    print(f"MLFLOW_RUN_ID:{run.info.run_id}")
+    print(f"MLFLOW_EXPERIMENT_ID:{run.info.experiment_id}")
+    # Optional: emit model URI after logging model
+    print(f"MLFLOW_MODEL_URI:runs:/{run.info.run_id}/model")
+    print(f"MLFLOW_ARTIFACT_URI:{mlflow.get_artifact_uri()}")
+```
+
+Supported formats (all parsed automatically):
+```
+MLFLOW_RUN_ID:<run_id>
+MLFLOW_RUN_ID: <run_id>
+MLFLOW_RUN_ID=<run_id>
+mlflow_run_id=<run_id>
+```
+
+### METRIC_JSON Fallback
+
+Always keep `METRIC_JSON` output as primary metrics — it works with zero dependencies:
+
+```python
+import json
+print("METRIC_JSON:", json.dumps({
+    "step": 1,
+    "accuracy": 0.95,
+    "loss": 0.12,
+    "f1": 0.93
+}))
+```
+
+`mlflow.log_metric()` sync is planned for Phase 10E.2.
+
+### URL Convention
+
+| Purpose | URL | Where used |
+|---|---|---|
+| Container training runtime | `MLFLOW_TRACKING_URI=http://mlflow:5000` | Inside docker containers / training jobs |
+| Browser / deep links | `MLFLOW_UI_URL=http://localhost:5001` | Frontend "Open in MLflow" button |
+
+> **NEVER** put `http://localhost:5001` inside a training container.  
+> **NEVER** put `http://mlflow:5000` in a browser link.
+
+### AWS Batch Warning
+
+Do NOT set `MLFLOW_TRACKING_URI=http://mlflow:5000` for AWS Batch jobs.
+AWS Batch containers usually cannot resolve the local docker-compose hostname `mlflow`.
+
+Use `AWS_BATCH_MLFLOW_TRACKING_URI` instead — if this env var is empty, MLflow env is not injected into Batch:
+
+```env
+AWS_BATCH_MLFLOW_TRACKING_URI=https://your-mlflow-server.example.com
+```
+
+Training will not fail if this is unset.
+
+### Multi-Tenant Warning
+
+The MLflow UI (`http://localhost:5001`) is **not tenant-safe**. All tenants' runs are visible to anyone with access.  
+Use it for local development and admin use only. **Do not expose the MLflow UI to end users.**
+
+### Phase 10E Roadmap
+
+| Phase | Status | Description |
+|---|---|---|
+| 10E-Audit | ✅ Done | Existing MLflow flow discovery & integration design |
+| 10E.1 | ✅ Done | MLflow run ID linking MVP |
+| 10E.2 | 🔲 Planned | Sync mlflow.log_metric into ModelMetric |
+| 10E.3 | 🔲 Planned | MLflow artifacts/checkpoints UI |
+| 10E.4 | 🔲 Planned | Mirror Native production marker to MLflow alias |

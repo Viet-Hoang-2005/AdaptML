@@ -70,17 +70,64 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
 
   if (metricEntries.length === 0) {
     return (
-      <div className="text-center py-16 flex flex-col items-center">
-        <div className="rounded-full bg-gray-50 p-4 mb-4">
+      <div className="text-center py-12 flex flex-col items-center border border-dashed border-gray-200 rounded-2xl bg-gray-50/50 px-6 max-w-3xl mx-auto">
+        <div className="rounded-full bg-white border border-gray-200 p-4 mb-4 shadow-sm">
           <BarChart2 className="h-8 w-8 text-gray-400" />
         </div>
-        <h3 className="text-sm font-bold text-gray-900">No Structured Metrics Found</h3>
-        <p className="mt-1 text-sm text-gray-500 max-w-sm">
-          Metrics parsed from training logs or evaluations will appear here. Ensure your training job outputs METRIC_JSON format.
+        <h3 className="text-lg font-bold text-gray-900 mb-2">No Structured Metrics Found</h3>
+        <p className="text-sm text-gray-600 max-w-lg mb-6">
+          Metrics are parsed from stdout during training. Emit <code className="bg-white border border-gray-200 text-gray-800 px-1.5 py-0.5 rounded font-mono text-xs">METRIC_JSON</code> lines from your training script, or log metrics using <code className="bg-white border border-gray-200 text-gray-800 px-1.5 py-0.5 rounded font-mono text-xs">mlflow.log_metric()</code>.
+        </p>
+        
+        <div className="text-left bg-[#1e1e1e] rounded-lg overflow-hidden w-full shadow-sm border border-gray-800 mb-4">
+          <div className="bg-[#2d2d2d] px-3 py-1.5 border-b border-gray-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
+              </div>
+              <span className="text-xs font-mono text-gray-400">train.py — two supported methods</span>
+            </div>
+            <button 
+              className="text-xs text-gray-400 hover:text-white transition-colors"
+              onClick={() => {
+                navigator.clipboard.writeText('import json\n\n# Option A: METRIC_JSON stdout (always works, no extra dependency)\nprint("METRIC_JSON:", json.dumps({\n    "step": 1,\n    "accuracy": 0.95,\n    "loss": 0.12,\n    "f1": 0.93\n}))\n\n# Option B: mlflow.log_metric (requires MLflow + MLFLOW_TRACKING_URI)\nimport mlflow\nwith mlflow.start_run() as run:\n    mlflow.log_metric("accuracy", 0.95)\n    print(f"MLFLOW_RUN_ID:{run.info.run_id}")\n    print(f"MLFLOW_EXPERIMENT_ID:{run.info.experiment_id}")');
+                toast.success('Snippet copied to clipboard');
+              }}
+            >
+              Copy
+            </button>
+          </div>
+          <div className="p-4">
+            <pre className="text-xs font-mono text-emerald-400 overflow-x-auto leading-relaxed">
+              <code>{`import json
+
+# Option A: METRIC_JSON stdout (always works, no extra dependency)
+print("METRIC_JSON:", json.dumps({
+    "step": 1,
+    "accuracy": 0.95,
+    "loss": 0.12,
+    "f1": 0.93
+}))
+
+# Option B: mlflow.log_metric (requires MLflow + MLFLOW_TRACKING_URI)
+import mlflow
+with mlflow.start_run() as run:
+    mlflow.log_metric("accuracy", 0.95)
+    print(f"MLFLOW_RUN_ID:{run.info.run_id}")
+    print(f"MLFLOW_EXPERIMENT_ID:{run.info.experiment_id}")`}</code>
+            </pre>
+          </div>
+        </div>
+
+        <p className="text-xs font-medium text-gray-500">
+          Metrics appear here after the training job completes and data is synced. MLflow metrics sync is coming in Phase 10E.2.
         </p>
       </div>
     );
   }
+
 
   return (
     <div className="space-y-6">
@@ -106,33 +153,79 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
         })}
       </div>
 
-      {/* Lightweight Bar Charts */}
+      {/* Lightweight SVG Charts & Trend Table */}
       <div className="grid lg:grid-cols-2 gap-6">
         {metricEntries.map((m) => {
           if (!m) return null;
+          
+          // Generate SVG polyline points
+          const width = 300;
+          const height = 100;
+          const points = m.chartPoints.map((point, idx) => {
+            const x = (idx / Math.max(1, m.chartPoints.length - 1)) * width;
+            const y = height - (point.heightPct / 100) * height;
+            return `${x},${y}`;
+          }).join(' ');
+
+          const last5 = [...m.chartPoints].reverse().slice(0, 5);
+
           return (
-            <div key={`chart-${m.name}`} className="border border-gray-200 rounded-xl p-5">
+            <div key={`chart-${m.name}`} className="border border-gray-200 bg-white shadow-sm rounded-2xl p-5">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-sm font-bold text-gray-900 capitalize">{m.name.replace(/_/g, ' ')} Progression</h4>
-                <span className="text-xs text-gray-500 font-mono">Min: {m.min.toFixed(2)} | Max: {m.max.toFixed(2)}</span>
+                <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">Min: {m.min.toFixed(2)} | Max: {m.max.toFixed(2)}</span>
               </div>
               
-              <div className="h-32 flex items-end gap-1 w-full bg-gray-50/50 rounded p-2 border border-gray-100">
-                {m.chartPoints.map((point, idx) => (
-                  <div 
-                    key={idx} 
-                    className="flex-1 bg-blue-400 hover:bg-blue-600 rounded-t transition-colors relative group"
-                    style={{ height: `${point.heightPct}%` }}
-                  >
-                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
-                      Step {point.step}: {point.value.toFixed(4)}
-                    </div>
-                  </div>
-                ))}
+              <div className="w-full bg-gray-50 rounded-xl p-4 border border-gray-100 flex flex-col gap-2">
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-32 overflow-visible stroke-blue-500 fill-none" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id={`grad-${m.name}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2" />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  {/* Fill Area */}
+                  <polygon points={`0,${height} ${points} ${width},${height}`} fill={`url(#grad-${m.name})`} className="stroke-none" />
+                  {/* Line */}
+                  <polyline points={points} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Points */}
+                  {m.chartPoints.map((point, idx) => {
+                    const x = (idx / Math.max(1, m.chartPoints.length - 1)) * width;
+                    const y = height - (point.heightPct / 100) * height;
+                    return (
+                      <circle key={idx} cx={x} cy={y} r="3" className="fill-white stroke-blue-600 stroke-2" />
+                    );
+                  })}
+                </svg>
+                <div className="flex justify-between text-xs text-gray-400 font-mono px-1">
+                  <span>Step {m.chartPoints[0].step}</span>
+                  <span>Step {m.latest.step}</span>
+                </div>
               </div>
-              <div className="flex justify-between text-xs text-gray-400 mt-2 font-mono">
-                <span>Step {m.chartPoints[0].step}</span>
-                <span>Step {m.latest.step}</span>
+
+              {/* Trend Table */}
+              <div className="mt-6">
+                <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Recent Trend (Last 5)</h5>
+                <div className="border border-gray-100 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
+                      <tr>
+                        <th className="px-3 py-2">Step</th>
+                        <th className="px-3 py-2 text-right">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {last5.map((point) => (
+                        <tr key={point.step} className="bg-white">
+                          <td className="px-3 py-2 font-mono text-gray-500">{point.step}</td>
+                          <td className="px-3 py-2 text-right font-mono text-gray-900">
+                            {Number.isInteger(point.value) ? point.value : point.value.toFixed(4)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           );

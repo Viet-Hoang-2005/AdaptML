@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from authentication.models import TrainingJob
+from .mlflow_utils import parse_mlflow_metadata_from_logs
 from .sagemaker_service import (
     _copy_django_file_to_s3,
     _s3_uri,
@@ -118,6 +119,15 @@ def start_aws_batch_training_job(training_job: TrainingJob) -> tuple[str, str]:
     ]
     if requirements_uri:
         environment.append({"name": "S3_REQUIREMENTS_URI", "value": requirements_uri})
+
+    # Phase 10E.1: Inject MLflow env into AWS Batch ONLY if AWS_BATCH_MLFLOW_TRACKING_URI
+    # is configured. Do NOT inject local http://mlflow:5000 — Batch cannot resolve it.
+    _batch_mlflow_uri = getattr(settings, "AWS_BATCH_MLFLOW_TRACKING_URI", "").strip()
+    _batch_mlflow_exp = getattr(settings, "MLFLOW_EXPERIMENT_NAME", "").strip()
+    if _batch_mlflow_uri:
+        environment.append({"name": "MLFLOW_TRACKING_URI", "value": _batch_mlflow_uri})
+        if _batch_mlflow_exp:
+            environment.append({"name": "MLFLOW_EXPERIMENT_NAME", "value": _batch_mlflow_exp})
 
     job_queue, job_definition = _batch_submit_config(training_job)
     resource_requirements = [
@@ -353,6 +363,13 @@ def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:
         if stopped_at and not training_job.completed_at:
             training_job.completed_at = stopped_at
         training_job.mark_finished(save=False)
+        # Phase 10E.1: Parse MLflow metadata from CloudWatch logs.
+        _mlflow_meta = parse_mlflow_metadata_from_logs(training_job.training_logs)
+        _mlflow_extra_fields = []
+        for _field, _value in _mlflow_meta.items():
+            if _value and not getattr(training_job, _field, None):
+                setattr(training_job, _field, _value)
+                _mlflow_extra_fields.append(_field)
     elif batch_status == "FAILED":
         failure_message = _failure_message(job)
         if "user cancelled" in failure_message.lower() or "terminated" in failure_message.lower():
@@ -386,6 +403,6 @@ def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:
             "runtime_seconds",
             "stop_reason",
             "updated_at",
-        ]
+        ] + (locals().get("_mlflow_extra_fields") or [])
     )
     return training_job

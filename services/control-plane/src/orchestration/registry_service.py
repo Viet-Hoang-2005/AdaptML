@@ -30,7 +30,7 @@ from authentication.models import (
 )
 
 # ─── Regex used by training_job_views.py to parse METRIC_JSON lines ──────────
-_METRIC_JSON_RE = re.compile(r"METRIC_JSON:\s*(\{.+\})")
+_METRIC_JSON_RE = re.compile(r"METRIC_JSON:?\s*(\{.+\})")
 
 
 # ─── Core sync helpers ────────────────────────────────────────────────────────
@@ -110,6 +110,20 @@ def sync_model_registry_for_model_api(
     if source_type == "training_job" and model_api.source_training_job_id and not version_obj.source_training_job_id:
         version_obj.source_training_job_id = model_api.source_training_job_id
         version_obj.save(update_fields=["source_training_job", "updated_at"])
+
+    # Phase 10E.1: Copy MLflow lineage fields from TrainingJob to ModelVersion.
+    # Idempotent: only copies when source has a value and destination is empty.
+    _job = version_obj.source_training_job
+    if _job is not None:
+        _mlflow_copy_fields = []
+        for _field in ("mlflow_run_id", "mlflow_experiment_id", "mlflow_model_uri", "mlflow_artifact_uri"):
+            _src_val = getattr(_job, _field, None)
+            if _src_val and not getattr(version_obj, _field, None):
+                setattr(version_obj, _field, _src_val)
+                _mlflow_copy_fields.append(_field)
+        if _mlflow_copy_fields:
+            _mlflow_copy_fields.append("updated_at")
+            version_obj.save(update_fields=_mlflow_copy_fields)
 
     return family, version_obj
 

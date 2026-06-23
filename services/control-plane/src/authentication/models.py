@@ -322,6 +322,14 @@ class TrainingJob(models.Model):
     runtime_seconds = models.PositiveIntegerField(default=0)
     stop_reason = models.TextField(blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    # --- Phase 10E.1: MLflow lineage linking ---
+    mlflow_tracking_uri = models.CharField(max_length=512, blank=True, null=True)
+    mlflow_experiment_id = models.CharField(max_length=255, blank=True, null=True)
+    mlflow_experiment_name = models.CharField(max_length=255, blank=True, null=True)
+    mlflow_run_id = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    mlflow_run_name = models.CharField(max_length=255, blank=True, null=True)
+    mlflow_model_uri = models.CharField(max_length=1024, blank=True, null=True)
+    mlflow_artifact_uri = models.CharField(max_length=1024, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -445,6 +453,11 @@ class ModelVersion(models.Model):
     image_name = models.CharField(max_length=200, blank=True)
     endpoint_url = models.CharField(max_length=1024, blank=True)
     stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default="none")
+    # --- Phase 10E.1: MLflow lineage linking ---
+    mlflow_run_id = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    mlflow_experiment_id = models.CharField(max_length=255, blank=True, null=True)
+    mlflow_model_uri = models.CharField(max_length=1024, blank=True, null=True)
+    mlflow_artifact_uri = models.CharField(max_length=1024, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

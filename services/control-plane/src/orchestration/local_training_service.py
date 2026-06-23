@@ -11,6 +11,7 @@ from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
 from authentication.models import TrainingJob
+from .mlflow_utils import build_mlflow_run_url, parse_mlflow_metadata_from_logs
 from .sagemaker_service import (
     _safe_extract_zip,
     _s3_client,
@@ -143,8 +144,18 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
                 "SM_OUTPUT_DIR": str(output_dir),
                 "MODEL_VERSION": training_job.model_version,
                 "AWS_BUCKET_NAME": settings.AWS_STORAGE_BUCKET_NAME,
+                "TRAINING_JOB_ID": str(training_job.id),
             }
         )
+        # Phase 10E.1: Inject MLflow env into local training if configured.
+        # Uses the container-facing MLFLOW_TRACKING_URI (http://mlflow:5000),
+        # NOT the browser-facing MLFLOW_UI_URL. Never fails if MLflow is absent.
+        _local_mlflow_uri = getattr(settings, "MLFLOW_TRACKING_URI", "").strip()
+        _local_mlflow_exp = getattr(settings, "MLFLOW_EXPERIMENT_NAME", "").strip()
+        if _local_mlflow_uri:
+            env["MLFLOW_TRACKING_URI"] = _local_mlflow_uri
+        if _local_mlflow_exp:
+            env.setdefault("MLFLOW_EXPERIMENT_NAME", _local_mlflow_exp)
 
         result = subprocess.run(
             [python_path, str(entry_point_path)],
@@ -171,6 +182,19 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
         training_job.model_artifact_uri = artifact_uri
         training_job.stop_reason = ""
         training_job.mark_finished(save=False)
+
+        # Phase 10E.1: Parse MLflow metadata from stdout and persist to TrainingJob.
+        _mlflow_meta = parse_mlflow_metadata_from_logs(training_logs)
+        _mlflow_fields_to_save = []
+        for _field, _value in _mlflow_meta.items():
+            if _value and not getattr(training_job, _field, None):
+                setattr(training_job, _field, _value)
+                _mlflow_fields_to_save.append(_field)
+        # Store the tracking URI we used, for audit.
+        if _local_mlflow_uri and not training_job.mlflow_tracking_uri:
+            training_job.mlflow_tracking_uri = _local_mlflow_uri
+            _mlflow_fields_to_save.append("mlflow_tracking_uri")
+
         training_job.save(
             update_fields=[
                 "status",
@@ -181,7 +205,7 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
                 "runtime_seconds",
                 "stop_reason",
                 "updated_at",
-            ]
+            ] + _mlflow_fields_to_save
         )
 
         return {

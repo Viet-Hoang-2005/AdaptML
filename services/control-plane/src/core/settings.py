@@ -278,6 +278,17 @@ TRAINING_MAX_RUNTIME_SECONDS = int(os.environ.get('TRAINING_MAX_RUNTIME_SECONDS'
 TRAINING_MONTHLY_QUOTA_SECONDS = int(os.environ.get('TRAINING_MONTHLY_QUOTA_SECONDS', '43200'))
 TRAINING_MAX_ACTIVE_JOBS_PER_TENANT = int(os.environ.get('TRAINING_MAX_ACTIVE_JOBS_PER_TENANT', '1'))
 
+# Phase 10E.1: MLflow integration settings
+# Container/internal URI used when training runs inside docker-compose or local.
+MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow:5000').strip()
+# Browser-facing URL used to build "Open in MLflow" deep links.
+MLFLOW_UI_URL = os.environ.get('MLFLOW_UI_URL', 'http://localhost:5001').rstrip('/')
+# Default experiment name; training scripts may override via their own env.
+MLFLOW_EXPERIMENT_NAME = os.environ.get('MLFLOW_EXPERIMENT_NAME', 'mlops-paas-training').strip()
+# AWS Batch-specific MLflow URI (optional). If empty, MLflow is NOT injected into Batch.
+AWS_BATCH_MLFLOW_TRACKING_URI = os.environ.get('AWS_BATCH_MLFLOW_TRACKING_URI', '').strip()
+
+
 # Cấu hình lưu trữ AWS S3 (cho Avatar & File)
 # Lưu ý: Không khai báo AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY
 # boto3 sẽ tự động sử dụng IAM Role được gán cho EC2 instance (cấu hình trong main.tf)

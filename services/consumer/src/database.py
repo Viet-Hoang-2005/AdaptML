@@ -39,6 +39,54 @@ def _create_engine_safe(host: str, label: str):
 engine_rw = _create_engine_safe(DB_HOST_RW, "Read Write")
 engine_ro = _create_engine_safe(DB_HOST_RO, "Read Only")
 
+def init_db():
+    if engine_rw is None:
+        return
+        
+    def execute_safe(sql: str, ignore_error: bool = False):
+        try:
+            with engine_rw.begin() as conn:
+                conn.execute(text(sql))
+        except Exception as e:
+            if not ignore_error:
+                print(f"[RW] SQL execution failed: {e}")
+            else:
+                pass
+
+    # 1. Create table if missing
+    execute_safe("""
+        CREATE TABLE IF NOT EXISTS paas_production_logs (
+            id VARCHAR(255) PRIMARY KEY,
+            tenant_id VARCHAR(255),
+            model_id VARCHAR(255),
+            model_version VARCHAR(255),
+            endpoint_url TEXT,
+            request_id VARCHAR(255),
+            timestamp TIMESTAMPTZ,
+            features JSONB,
+            prediction TEXT,
+            confidence DOUBLE PRECISION,
+            latency_ms DOUBLE PRECISION,
+            status_code INTEGER,
+            raw_payload JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+
+    # 2. Add created_at column if the table was previously created by pandas to_sql
+    execute_safe("ALTER TABLE paas_production_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();", ignore_error=True)
+
+    # 3. Migrate text columns to JSONB safely
+    execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN features TYPE JSONB USING features::JSONB;", ignore_error=True)
+    execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN raw_payload TYPE JSONB USING raw_payload::JSONB;", ignore_error=True)
+
+    # 4. Create Indexes
+    execute_safe("CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_tenant_model ON paas_production_logs(tenant_id, model_id);")
+    execute_safe("CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_timestamp ON paas_production_logs(timestamp);")
+    
+    print("[RW] Initialized 'paas_production_logs' schema.")
+
+
 def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
     if engine_rw is None:
         print("[RW Engine] No database engine available for writing.")

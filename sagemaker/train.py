@@ -246,7 +246,13 @@ def main() -> None:
     # Bước 3: Bắt đầu MLflow run để log toàn bộ quá trình huấn luyện, đánh giá và đăng ký model
     with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}") as run:
         run_id = run.info.run_id
+        experiment_id = run.info.experiment_id
+        # Phase 10E.1: Emit structured markers so the Control Plane can capture
+        # MLflow lineage without an API call. Format must match mlflow_utils.py patterns.
+        print(f"MLFLOW_RUN_ID:{run_id}")
+        print(f"MLFLOW_EXPERIMENT_ID:{experiment_id}")
         mlflow.log_param("model_version", MODEL_VERSION)
+
         mlflow.log_param("target_csv", TARGET_CSV)
         mlflow.log_param("num_classes", num_classes)
         mlflow.log_param("mlflow_model_name", MLFLOW_MODEL_NAME)
@@ -334,7 +340,11 @@ def main() -> None:
         artifact_paths = [model_path, classes_path, metrics_path]
         register_model_to_mlflow(run_id, artifact_uri)
 
+        # Phase 10E.1: Emit model and artifact URI markers for Control Plane lineage capture.
+        print(f"MLFLOW_MODEL_URI:runs:/{run_id}/model")
+        print(f"MLFLOW_ARTIFACT_URI:{artifact_uri}")
         print(f"Training completed successfully for {MODEL_VERSION}.")
+
 
 if __name__ == "__main__":
     main()

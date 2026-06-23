@@ -171,7 +171,7 @@ services:
       REDPANDA_BROKERS: redpanda:9092
       KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_logs}
       JWKS_URL: http://control-plane:8000/api/auth/.well-known/jwks.json
-      CONTROL_PLANE_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL}
       CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control_plane}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
@@ -262,7 +262,7 @@ services:
       mlflow server 
       --host 0.0.0.0 
       --port 5000 
-      --backend-store-uri postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?options=-csearch_path%3D${MLFLOW_DB_SCHEMA:-mlflow}%2Cpublic
+      --backend-store-uri ${MLFLOW_BACKEND_STORE_URI}
       --default-artifact-root s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/
     depends_on:
       postgres:

@@ -5,10 +5,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from authentication.models import ModelDeploymentHistory, ModelFamily, ModelMetric, ModelVersion
+from .mlflow_utils import build_mlflow_run_url
 from .registry_service import promote_version, rollback_family
 
 
 def serialize_model_version(version: ModelVersion):
+    mlflow_run_url = build_mlflow_run_url(
+        run_id=version.mlflow_run_id,
+        experiment_id=version.mlflow_experiment_id,
+    )
     return {
         "id": version.id,
         "version": version.version,
@@ -18,9 +23,15 @@ def serialize_model_version(version: ModelVersion):
         "image_name": version.image_name,
         "endpoint_url": version.endpoint_url,
         "stage": version.stage,
+        "mlflow_run_id": version.mlflow_run_id or "",
+        "mlflow_experiment_id": version.mlflow_experiment_id or "",
+        "mlflow_run_url": mlflow_run_url or "",
+        "mlflow_model_uri": version.mlflow_model_uri or "",
+        "mlflow_artifact_uri": version.mlflow_artifact_uri or "",
         "created_at": version.created_at,
         "updated_at": version.updated_at,
     }
+
 
 
 def serialize_model_family(family: ModelFamily):
@@ -34,6 +45,7 @@ def serialize_model_family(family: ModelFamily):
         "updated_at": family.updated_at,
         "current_production_version": serialize_model_version(family.current_production_version)
         if family.current_production_version else None,
+        "version_count": family.versions.count(),
     }
 
 

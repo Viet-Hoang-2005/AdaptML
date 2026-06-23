@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, useCallback } from 'react';
 import { getRegistryHistory } from '../../lib/api';
+import { formatVersion } from '../../lib/formatters';
 import type { RegistryHistory } from '../../types/modelApi';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
@@ -42,8 +43,14 @@ export function ModelHistoryTimeline({ familyId }: Props) {
 
   if (history.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        No history events found for this model family.
+      <div className="text-center py-16 flex flex-col items-center border border-dashed border-gray-200 rounded-2xl bg-gray-50/50 px-4">
+        <div className="rounded-full bg-white border border-gray-200 p-4 mb-4 shadow-sm">
+          <GitCommit className="h-8 w-8 text-gray-400" />
+        </div>
+        <h3 className="text-lg font-bold text-gray-900">No registry events yet</h3>
+        <p className="mt-2 text-sm text-gray-500 max-w-md">
+          Events will appear here when versions are registered, deployed, promoted, or rolled back.
+        </p>
       </div>
     );
   }
@@ -84,34 +91,72 @@ export function ModelHistoryTimeline({ familyId }: Props) {
           iconBg = 'bg-emerald-100 text-emerald-600 border-emerald-200';
         }
 
+        let actionText = event.action.replace('_', ' ');
+        if (event.action === 'registered') actionText = 'Registered version';
+        else if (event.action === 'built') actionText = 'Build completed';
+        else if (event.action === 'deployed') actionText = 'Endpoint deployed';
+        else if (event.action === 'promoted') actionText = 'Promoted to production';
+        else if (event.action === 'rolled_back') actionText = `Rolled back to ${formatVersion(event.version)}`;
+        else if (event.action === 'stopped') actionText = 'Endpoint stopped';
+        
+        if (isFailed) actionText = 'Operation failed';
+
+        const renderTransition = () => {
+          if (!event.from_stage && !event.to_stage) return null;
+
+          if (event.action === 'promoted' || event.action === 'rolled_back') {
+            const from = !event.from_stage || event.from_stage === 'none' ? 'No production' : formatVersion(event.from_stage);
+            const to = event.to_stage && event.to_stage !== 'production' ? formatVersion(event.to_stage) : formatVersion(event.version);
+            
+            if (from === 'No production') {
+              return (
+                <span className="text-xs text-gray-500 font-medium">
+                  Previous: <span className="font-semibold text-gray-600">No production</span> &rarr; Current: <span className="font-mono font-semibold text-gray-800">{to}</span>
+                </span>
+              );
+            }
+            return (
+              <span className="text-xs text-gray-500 font-medium">
+                <span className="font-mono font-semibold text-gray-600">{from}</span> &rarr; <span className="font-mono font-semibold text-gray-800">{to}</span>
+              </span>
+            );
+          }
+
+          return (
+            <span className="text-xs text-gray-500 font-medium">
+              {event.from_stage} &rarr; {event.to_stage}
+            </span>
+          );
+        };
+
         return (
           <div key={event.id || idx} className="relative pl-8">
             <span 
               className={classNames(
-                "absolute -left-4 top-1 flex h-8 w-8 items-center justify-center rounded-full border ring-4 ring-white",
+                "absolute -left-4 top-1 flex h-8 w-8 items-center justify-center rounded-full border ring-4 ring-white shadow-sm",
                 iconBg
               )}
             >
               <Icon className="h-4 w-4" />
             </span>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold text-gray-900 capitalize">{event.action.replace('_', ' ')}</span>
-                <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-600">v{event.version}</span>
-                {event.from_stage && event.to_stage && (
-                  <span className="text-xs text-gray-500">
-                    {event.from_stage} &rarr; {event.to_stage}
-                  </span>
-                )}
-                <span className="text-xs text-gray-400 ml-auto">
+                <span className="text-sm font-bold text-gray-900">{actionText}</span>
+                <span className="text-xs font-mono font-semibold bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-gray-700">{formatVersion(event.version)}</span>
+                {renderTransition()}
+                <span className="text-xs font-medium text-gray-400 ml-auto">
                   {new Date(event.created_at).toLocaleString()}
                 </span>
               </div>
-              <p className="text-sm text-gray-600">
-                {event.message}
-              </p>
+              
+              {event.action === 'promoted' || event.action === 'rolled_back' ? (
+                <p className="text-sm text-gray-600">Registry production marker updated.</p>
+              ) : (
+                <p className="text-sm text-gray-600">{event.message}</p>
+              )}
+              
               {event.actor && (
-                <p className="text-xs text-gray-400">
+                <p className="text-xs font-medium text-gray-400">
                   By: {event.actor}
                 </p>
               )}

@@ -281,6 +281,12 @@ const createOptimisticTrainingJob = (payload: TrainingJobFormValues, id: number)
     is_deleted: false,
     registered_model: null,
     registered_model_id: null,
+    // Phase 10E.1: MLflow fields default to empty for optimistic job
+    mlflow_run_id: '',
+    mlflow_experiment_id: '',
+    mlflow_run_url: '',
+    mlflow_model_uri: '',
+    mlflow_artifact_uri: '',
     created_at: now,
     updated_at: now,
   };

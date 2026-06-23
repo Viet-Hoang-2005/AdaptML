@@ -138,6 +138,12 @@ export interface TrainingJob {
   is_deleted: boolean;
   registered_model: ModelAPI | null;
   registered_model_id: number | null;
+  // Phase 10E.1: MLflow lineage fields
+  mlflow_run_id: string;
+  mlflow_experiment_id: string;
+  mlflow_run_url: string;
+  mlflow_model_uri: string;
+  mlflow_artifact_uri: string;
   created_at: string;
   updated_at: string;
 }
@@ -244,6 +250,12 @@ export interface RegistryVersion {
   image_name: string;
   endpoint_url: string;
   stage: 'none' | 'candidate' | 'staging' | 'production' | 'archived';
+  // Phase 10E.1: MLflow lineage fields
+  mlflow_run_id: string;
+  mlflow_experiment_id: string;
+  mlflow_run_url: string;
+  mlflow_model_uri: string;
+  mlflow_artifact_uri: string;
   created_at: string;
   updated_at: string;
 }
@@ -257,6 +269,7 @@ export interface RegistryFamily {
   created_at: string;
   updated_at: string;
   current_production_version: RegistryVersion | null;
+  version_count?: number;
 }
 
 export interface RegistryHistory {

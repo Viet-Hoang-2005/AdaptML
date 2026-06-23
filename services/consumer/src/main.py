@@ -6,7 +6,8 @@ import requests
 import signal
 import pandas as pd
 from confluent_kafka import Consumer, KafkaError
-from src.database import save_dataframe_to_db, get_production_data_count
+from src.database import save_dataframe_to_db, get_production_data_count, init_db
+
 
 # Lấy biến môi trường
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
@@ -63,10 +64,19 @@ def build_batch_dataframe(records: list[dict]) -> pd.DataFrame:
     for column in ("timestamp", "created_at"):
         if column in df.columns:
             df[column] = pd.to_datetime(df[column], utc=True, errors="coerce")
+            
+    # Serialize dictionaries/lists to JSON strings for Postgres JSONB columns
+    for col in ["features", "prediction", "raw_payload"]:
+        if col in df.columns:
+            df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x)
+            
     return df
 
 # Hàm main để chạy Consumer liên tục lắng nghe Redpanda và xử lý dữ liệu
 def main():
+    # Khởi tạo Database schema nếu chưa có
+    init_db()
+
     # Đăng ký handler cho SIGTERM và SIGINT
     signal.signal(signal.SIGTERM, handle_sigterm)
     signal.signal(signal.SIGINT, handle_sigterm)
