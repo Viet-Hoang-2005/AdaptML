@@ -18,18 +18,26 @@ from jwt.algorithms import RSAAlgorithm
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
-from database import get_model_api_record, model_registry_engine
-from loading import load_model_for_record, MODEL_CACHE
+from src.database import get_model_api_record, model_registry_engine
+from src.loading import load_model_for_record, MODEL_CACHE
+from contextlib import asynccontextmanager
 
 JWKS_URL = os.environ.get("JWKS_URL", "http://django-service/.well-known/jwks.json")
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "localhost:19092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_logs")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    if kafka_producer:
+        kafka_producer.flush(timeout=5.0)
+
 app = FastAPI(
     title="AI PaaS Dynamic Inference API",
     description="Generic multi-tenant inference server backed by Django model registry.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -196,13 +204,6 @@ def send_to_redpanda(tenant_id: str, model_id: str, features_dict: dict, predict
         kafka_producer.poll(0)
     except Exception as exc:
         print(f"Error sending log to Redpanda: {exc}")
-
-
-@app.on_event("shutdown")
-def shutdown_event():
-    if kafka_producer:
-        kafka_producer.flush(timeout=5.0)
-
 
 @app.get("/")
 async def health_check():
