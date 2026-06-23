@@ -21,11 +21,20 @@ from pydantic import BaseModel
 from src.database import get_model_api_record, model_registry_engine
 from src.loading import load_model_for_record, MODEL_CACHE
 from contextlib import asynccontextmanager
+from hashids import Hashids
 
 JWKS_URL = os.environ.get("JWKS_URL", "http://django-service/.well-known/jwks.json")
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "localhost:19092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_logs")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
+HASHIDS_SALT = os.environ.get("HASHIDS_SALT", "mlops_paas_secret_salt")
+hashids = Hashids(salt=HASHIDS_SALT, min_length=6)
+
+def decode_model_id(hash_str: str) -> int:
+    res = hashids.decode(hash_str)
+    if res:
+        return res[0]
+    raise ValueError(f"Invalid model_id hash: {hash_str}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -108,11 +117,12 @@ async def get_public_key(kid: str):
 
 
 async def verify_model_access(
-    model_id: int,
+    model_id_str: str,
     api_key: str = Security(api_key_header),
     authorization: str = Header(None),
 ):
     try:
+        model_id = decode_model_id(model_id_str)
         model_record = get_model_api_record(model_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -215,8 +225,8 @@ async def health_check():
     }
 
 
-@app.get("/models/{model_id}/health")
-async def model_health(model_id: int, token_payload: dict = Depends(verify_model_access)):
+@app.get("/models/{model_id_str}/health")
+async def model_health(model_id_str: str, token_payload: dict = Depends(verify_model_access)):
     model_record = token_payload["model_api"]
     loaded = load_model_for_record(model_record)
     return {
@@ -228,9 +238,9 @@ async def model_health(model_id: int, token_payload: dict = Depends(verify_model
     }
 
 
-@app.post("/models/{model_id}/predict")
+@app.post("/models/{model_id_str}/predict")
 async def predict(
-    model_id: int,
+    model_id_str: str,
     request: Request,
     payload: InferenceRequest,
     background_tasks: BackgroundTasks,

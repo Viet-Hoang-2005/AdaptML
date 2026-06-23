@@ -2,27 +2,22 @@ import logging
 import os
 import threading
 import time
-from urllib.parse import quote_plus
-
 import docker
 import requests
+
 from django.conf import settings
 from django.utils import timezone
+from authentication.models import ModelAPI
+from urllib.parse import quote_plus
+from .hashid_utils import encode_model_id
 
 logger = logging.getLogger(__name__)
 
+def endpoint_container_name(tenant_id: str, model_id: int) -> str:
+    return f"endpoint_{tenant_id.lower()}_model_{encode_model_id(model_id).lower()}"
 
-def endpoint_container_name(model_id: int) -> str:
-    return f"mlops_paas_model_endpoint_{model_id}"
-
-
-def endpoint_image_name(model_id: int) -> str:
-    return f"mlops-paas-model-{model_id}:latest"
-
-
-def endpoint_health_url(model_id: int) -> str:
-    return f"http://{endpoint_container_name(model_id)}:5000/models/{model_id}/health"
-
+def endpoint_image_name(tenant_id: str, model_id: int) -> str:
+    return f"{tenant_id.lower()}-model-{encode_model_id(model_id).lower()}:latest"
 
 class DeployAdapter:
     def deploy_model(self, model_id: int, tenant_id: str, model_name: str, version: str):
@@ -31,19 +26,16 @@ class DeployAdapter:
     def remove_model(self, model_id: int):
         raise NotImplementedError()
 
-
 class DockerDeployAdapter(DeployAdapter):
     def deploy_model(self, model_id: int, tenant_id: str, model_name: str, version: str):
         def _run_container():
-            from authentication.models import ModelAPI
-
             model_api = ModelAPI.objects.filter(id=model_id).first()
             if not model_api:
                 logger.error("Cannot deploy missing model %s", model_id)
                 return
             try:
                 client = docker.from_env()
-                custom_image_name = f"mlops-paas-model-{model_id}:latest"
+                custom_image_name = endpoint_image_name(tenant_id, model_id)
                 try:
                     client.images.get(custom_image_name)
                     image_name = custom_image_name
@@ -52,7 +44,7 @@ class DockerDeployAdapter(DeployAdapter):
                     image_name = "mlops-paas-model-server"
                     logger.info(f"Custom image not found. Falling back to {image_name} for model {model_id}.")
 
-                container_name = endpoint_container_name(model_id)
+                container_name = endpoint_container_name(tenant_id, model_id)
 
                 try:
                     old_container = client.containers.get(container_name)
@@ -61,12 +53,10 @@ class DockerDeployAdapter(DeployAdapter):
                 except docker.errors.NotFound:
                     pass
 
-                # Normalize model_name for URL (no spaces)
-                safe_model_name = model_name.replace(' ', '')
-
                 # Traefik labels — tenant_id must be the tenant code (e.g. T-24B1E790), NOT the DB PK integer.
-                public_path = f"/{tenant_id}/models/{safe_model_name}/{version}/predict"
-                internal_path = f"/models/{model_id}/predict"
+                hashid_str = encode_model_id(model_id)
+                public_path = f"/{tenant_id}/models/{hashid_str}/{version}/predict"
+                internal_path = f"/models/{encode_model_id(model_id)}/predict"
                 labels = {
                     "traefik.enable": "true",
                     f"traefik.http.routers.model_{model_id}.rule": f"PathPrefix(`{public_path}`)",
@@ -180,9 +170,12 @@ class DockerDeployAdapter(DeployAdapter):
         t.start()
 
     def wait_for_health(self, model_id: int, timeout_seconds: int = 45, interval_seconds: int = 3) -> tuple[bool, str]:
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
+        container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
+        url = f"http://{container_name}:5000/models/{encode_model_id(model_id)}/health"
         deadline = time.monotonic() + timeout_seconds
         last_error = "Endpoint health check did not run."
-        url = endpoint_health_url(model_id)
         while time.monotonic() < deadline:
             try:
                 response = requests.get(url, timeout=5)
@@ -199,7 +192,10 @@ class DockerDeployAdapter(DeployAdapter):
         return False, last_error
 
     def check_health(self, model_id: int) -> tuple[bool, dict | str]:
-        url = endpoint_health_url(model_id)
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
+        container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
+        url = f"http://{container_name}:5000/models/{encode_model_id(model_id)}/health"
         try:
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
@@ -210,9 +206,12 @@ class DockerDeployAdapter(DeployAdapter):
             return False, str(exc)
 
     def remove_model(self, model_id: int):
+        from authentication.models import ModelAPI
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         try:
             client = docker.from_env()
-            container_name = endpoint_container_name(model_id)
+            container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
             try:
                 container = client.containers.get(container_name)
                 container.remove(force=True)
@@ -223,15 +222,24 @@ class DockerDeployAdapter(DeployAdapter):
             logger.error(f"Error removing container for {model_id}: {e}")
 
     def endpoint_logs(self, model_id: int, tail: int = 300) -> str:
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         client = docker.from_env()
-        container = client.containers.get(endpoint_container_name(model_id))
+        container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
+        container = client.containers.get(container_name)
         logs = container.logs(tail=tail, stdout=True, stderr=True)
         return logs.decode("utf-8", errors="replace")[-20000:]
 
     def cleanup_model(self, model_id: int, remove_images: bool = False) -> dict:
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         client = docker.from_env()
         removed = {"containers": [], "images": []}
-        names = [endpoint_container_name(model_id), f"mlops_paas_model_build_{model_id}"]
+        
+        container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
+        build_container_name = f"build_{tenant_id}_model_{model_id}"
+        names = [container_name, build_container_name]
+        
         for name in names:
             try:
                 container = client.containers.get(name)
@@ -240,7 +248,7 @@ class DockerDeployAdapter(DeployAdapter):
             except docker.errors.NotFound:
                 pass
         if remove_images:
-            image = endpoint_image_name(model_id)
+            image = model_api.endpoint_image_name if model_api and model_api.endpoint_image_name else endpoint_image_name(tenant_id, model_id)
             try:
                 client.images.remove(image=image, force=True)
                 removed["images"].append(image)

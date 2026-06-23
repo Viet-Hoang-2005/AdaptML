@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
+from orchestration.hashid_utils import encode_model_id
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -51,7 +52,8 @@ def _get_build_logs(model_id: int) -> list:
         import os
         redis_url = os.environ.get("REDIS_URL", redis_url)
         r = redis_lib.from_url(redis_url, decode_responses=True)
-        log_key = f"build_logs:{model_id}"
+        hashid_str = encode_model_id(model_id)
+        log_key = f"build_logs:{hashid_str}"
         logs = r.lrange(log_key, 0, 499)  # max 500 lines
         return logs or []
     except Exception as exc:

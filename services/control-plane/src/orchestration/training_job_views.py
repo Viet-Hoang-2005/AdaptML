@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from authentication.models import ModelAPI, TrainingJob
 from .model_api_views import serialize_model_api, validate_unique_model_version
+from .hashid_utils import encode_model_id
 from .aws_batch_training_service import (
     cancel_aws_batch_training_job,
     get_aws_batch_training_log_payload,
@@ -140,7 +141,7 @@ def serialize_training_job(training_job: TrainingJob):
         "deleted_at": training_job.deleted_at,
         "is_deleted": bool(training_job.deleted_at),
         "registered_model": serialize_model_api(registered_model) if registered_model else None,
-        "registered_model_id": registered_model.id if registered_model else None,
+        "registered_model_id": encode_model_id(registered_model.id) if registered_model else None,
         "created_at": training_job.created_at,
         "updated_at": training_job.updated_at,
     }

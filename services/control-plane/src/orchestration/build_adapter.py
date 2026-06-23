@@ -7,13 +7,13 @@ import requests
 from django.conf import settings
 
 from authentication.models import ModelAPI
+from .hashid_utils import encode_model_id
 
 logger = logging.getLogger(__name__)
 
-
 def build_webhook_url(model_id: str) -> str:
     internal_base_url = getattr(settings, "CONTROL_PLANE_INTERNAL_URL", "http://control-plane:8000").rstrip("/")
-    return f"{internal_base_url}/api/models/{model_id}/build-webhook"
+    return f"{internal_base_url}/api/models/{encode_model_id(int(model_id))}/build-webhook"
 
 
 def mark_build_start_failed(model_id: str, message: str) -> None:
@@ -25,7 +25,6 @@ def mark_build_start_failed(model_id: str, message: str) -> None:
     )
     if updated:
         logger.info("Marked model %s build as error after build container start failure.", model_id)
-
 
 class BuildAdapter:
     def trigger_build(
@@ -44,7 +43,6 @@ class BuildAdapter:
     def cancel_build(self, model_id: str):
         raise NotImplementedError()
 
-
 class DockerBuildAdapter(BuildAdapter):
     def trigger_build(
         self,
@@ -59,6 +57,10 @@ class DockerBuildAdapter(BuildAdapter):
     ):
         def _run_container():
             try:
+                from authentication.models import ModelAPI
+                model_api = ModelAPI.objects.filter(id=model_id).first()
+                tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
+
                 client = docker.from_env()
                 image_name = "mlops-paas-model-packager"
                 try:
@@ -67,9 +69,12 @@ class DockerBuildAdapter(BuildAdapter):
                     logger.error("Image %s not found.", image_name)
 
                 webhook_url = build_webhook_url(model_id)
+                hashid_str = encode_model_id(int(model_id))
                 environment = {
                     "TASK_TYPE": task_type,
+                    "TENANT_ID": tenant_id,
                     "MODEL_ID": str(model_id),
+                    "MODEL_HASHID": hashid_str,
                     "FLAVOR": flavor,
                     "REQUIREMENTS_TEXT": requirements_text,
                     "SOURCE_KEY": source_key,
@@ -97,7 +102,7 @@ class DockerBuildAdapter(BuildAdapter):
                 logger.info("Build callback URL for model %s: %s", model_id, webhook_url)
                 client.containers.run(
                     image=image_name,
-                    name=f"mlops_paas_model_build_{model_id}",
+                    name=f"build_{tenant_id.lower()}_model_{hashid_str.lower()}",
                     command=["python", "src/cli.py"],
                     environment=environment,
                     network=network_name,
@@ -113,8 +118,12 @@ class DockerBuildAdapter(BuildAdapter):
 
     def cancel_build(self, model_id: str):
         try:
+            from authentication.models import ModelAPI
+            model_api = ModelAPI.objects.filter(id=model_id).first()
+            tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
+
             client = docker.from_env()
-            container_name = f"mlops_paas_model_build_{model_id}"
+            container_name = f"build_{tenant_id}_model_{model_id}"
             try:
                 container = client.containers.get(container_name)
                 container.kill()
@@ -123,7 +132,6 @@ class DockerBuildAdapter(BuildAdapter):
                 logger.info("Container %s not found, already finished or deleted", container_name)
         except Exception as exc:
             logger.error("Error cancelling build %s: %s", model_id, exc)
-
 
 class ArgoBuildAdapter(BuildAdapter):
     def trigger_build(
@@ -164,7 +172,6 @@ class ArgoBuildAdapter(BuildAdapter):
 
     def cancel_build(self, model_id: str):
         logger.info("Cancel build requested for Argo model %s", model_id)
-
 
 def get_build_adapter() -> BuildAdapter:
     strategy = os.environ.get("BUILD_STRATEGY", "docker").lower()

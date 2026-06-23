@@ -18,6 +18,7 @@ from django.core.cache import cache
 from authentication.models import ModelAPI
 from .build_adapter import get_build_adapter, DockerBuildAdapter
 from .deploy_adapter import DockerDeployAdapter
+from .hashid_utils import encode_model_id
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,9 @@ def get_model_packager_url():
 
 
 def serialize_model_api(model_api):
+    encoded_id = encode_model_id(model_api.id)
     return {
-        "id": model_api.id,
+        "id": encoded_id,
         "name": model_api.name,
         "version": model_api.version or "v1",
         "description": model_api.description,
@@ -47,7 +49,7 @@ def serialize_model_api(model_api):
         "source_artifact_uri": model_api.source_artifact_uri,
         "model_uri": model_api.model_uri,
         "endpoint_url": model_api.endpoint_url,
-        "health_url": f"{get_model_server_public_url()}/models/{model_api.id}/health",
+        "health_url": f"{get_model_server_public_url()}/models/{encoded_id}/health",
         "status": model_api.status,
         "error_message": model_api.error_message,
         "endpoint_status": model_api.endpoint_status,
@@ -144,9 +146,9 @@ def combine_requirements_text(request):
 
 
 def build_endpoint_url(model_api):
-    safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
     version = (model_api.version or "v1").strip().strip("/") or "v1"
-    return f"{get_model_server_public_url()}/{model_api.tenant.tenant_id}/models/{safe_model_name}/{version}/predict"
+    hashid_str = encode_model_id(model_api.id)
+    return f"{get_model_server_public_url()}/{model_api.tenant.tenant_id}/models/{hashid_str}/{version}/predict"
 
 
 def validate_unique_model_version(tenant, name, version, exclude_model_id=None):
@@ -477,7 +479,8 @@ class ModelAPIBuildLogsView(APIView):
         offset = int(request.query_params.get("offset", 0))
         limit = int(request.query_params.get("limit", 100))
 
-        log_key = f"build_logs:{model_id}"
+        hashid_str = encode_model_id(model_id)
+        log_key = f"build_logs:{hashid_str}"
 
         try:
             # Lấy logs từ Redis (lrange là O(N))

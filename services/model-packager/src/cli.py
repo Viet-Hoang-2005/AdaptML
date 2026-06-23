@@ -20,7 +20,6 @@ from core import build_preview_tree, load_model, make_zip, parse_requirements, s
 SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
 PREFERRED_MODEL_FILENAMES = ("model.pkl", "model.joblib", "model.xgb")
 
-
 class RedisLogHandler(logging.Handler):
     def __init__(self, redis_url: str, model_id: str):
         super().__init__()
@@ -36,13 +35,11 @@ class RedisLogHandler(logging.Handler):
         except Exception:
             self.handleError(record)
 
-
 def parse_s3_uri(uri: str) -> tuple[str, str]:
     parsed = urlparse(uri)
     if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
         raise ValueError(f"Invalid S3 URI: {uri}")
     return parsed.netloc, parsed.path.lstrip("/")
-
 
 def download_s3_uri(s3, uri: str, destination: Path) -> None:
     bucket, key = parse_s3_uri(uri)
@@ -50,7 +47,6 @@ def download_s3_uri(s3, uri: str, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     s3.download_file(bucket, key, str(destination))
     print("Download completed.")
-
 
 def safe_extract_tar(archive_path: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
@@ -64,7 +60,6 @@ def safe_extract_tar(archive_path: Path, destination: Path) -> None:
                 raise ValueError("Training artifact contains links, which are not supported.")
         archive.extractall(destination)
 
-
 def safe_extract_zip(archive_path: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     destination_root = destination.resolve()
@@ -74,7 +69,6 @@ def safe_extract_zip(archive_path: Path, destination: Path) -> None:
             if not str(resolved).startswith(str(destination_root)):
                 raise ValueError("Model package contains an unsafe path.")
         archive.extractall(destination)
-
 
 def find_supported_model_file(root: Path) -> Path:
     files = [item for item in root.rglob("*") if item.is_file() and item.suffix.lower() in SUPPORTED_MODEL_EXTENSIONS]
@@ -93,7 +87,6 @@ def find_supported_model_file(root: Path) -> Path:
         print(f"Warning: multiple model files found; using {selected.relative_to(root).as_posix()}.")
     return selected
 
-
 def find_label_mapping_file(root: Path) -> Path | None:
     candidates = []
     for item in root.rglob("*"):
@@ -104,11 +97,9 @@ def find_label_mapping_file(root: Path) -> Path | None:
             candidates.append(item)
     return sorted(candidates, key=lambda item: item.as_posix())[0] if candidates else None
 
-
 def webhook_headers() -> dict[str, str]:
     secret = os.environ.get("MODEL_BUILD_WEBHOOK_SECRET", "").strip()
     return {"X-Build-Webhook-Secret": secret} if secret else {}
-
 
 def post_webhook(webhook_url: str, payload: dict) -> None:
     if not webhook_url:
@@ -118,8 +109,7 @@ def post_webhook(webhook_url: str, payload: dict) -> None:
     if response.status_code >= 400:
         raise RuntimeError(f"Build webhook failed with HTTP {response.status_code}: {response.text[:500]}")
 
-
-def build_custom_image(workspace: Path, model_id: str, requirements_text: str) -> None:
+def build_custom_image(workspace: Path, model_id: str, tenant_id: str, requirements_text: str) -> None:
     dockerfile_content = """FROM mlops-paas-model-server:latest
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
@@ -129,7 +119,7 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
 
     docker_client = docker.from_env()
-    image_tag = f"mlops-paas-model-{model_id}:latest"
+    image_tag = f"{tenant_id.lower()}-model-{model_id.lower()}:latest"
     print(f"Building Docker image {image_tag} from workspace {workspace}...")
     for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
         if "stream" in line:
@@ -137,7 +127,6 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
         elif "errorDetail" in line:
             raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
     print(f"Docker image {image_tag} built successfully!")
-
 
 def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
     try:
@@ -155,7 +144,6 @@ def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
             pip_requirements.extend(dep["pip"])
     return pip_requirements
 
-
 def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> None:
     flavor = os.environ.get("FLAVOR", "").lower()
     requirements_text = os.environ.get("REQUIREMENTS_TEXT", "")
@@ -163,6 +151,7 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
     source_type = os.environ.get("SOURCE_TYPE", "manual_upload")
     training_artifact_uri = os.environ.get("TRAINING_ARTIFACT_URI", "")
     output_key = os.environ.get("OUTPUT_KEY")
+    tenant_id = os.environ.get("TENANT_ID", "unknown")
 
     if source_type == "training_job":
         if not all([flavor, training_artifact_uri, output_key, bucket_name]):
@@ -239,7 +228,7 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
         print("Upload completed.")
 
         print("Building custom Docker image...")
-        build_custom_image(workspace, model_id, requirements_text)
+        build_custom_image(workspace, model_id, tenant_id, requirements_text)
         print("Build completed successfully!")
 
         post_webhook(
@@ -256,9 +245,9 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
-
 def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> None:
     source_key = os.environ.get("SOURCE_KEY")
+    tenant_id = os.environ.get("TENANT_ID", "unknown")
     if not all([source_key, bucket_name]):
         raise ValueError("Missing required environment variables for test.")
 
@@ -317,7 +306,7 @@ def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> 
         }
 
         print("Building custom Docker image...")
-        build_custom_image(workspace, model_id, requirements_text)
+        build_custom_image(workspace, model_id, tenant_id, requirements_text)
         print("Test and build completed successfully!")
 
         post_webhook(
@@ -333,7 +322,6 @@ def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> 
         print("BUILD_EOF_SUCCESS")
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
-
 
 def setup_logger(model_id: str):
     redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/1")
@@ -370,11 +358,10 @@ def setup_logger(model_id: str):
 
     return logger
 
-
 def main():
-    model_id = os.environ.get("MODEL_ID")
+    model_id = os.environ.get("MODEL_HASHID") or os.environ.get("MODEL_ID")
     if not model_id:
-        print("Missing MODEL_ID")
+        print("Missing MODEL_HASHID or MODEL_ID")
         sys.exit(1)
 
     logger = setup_logger(model_id)
@@ -413,7 +400,6 @@ def main():
 
         logger.info("BUILD_EOF_ERROR")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

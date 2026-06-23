@@ -114,6 +114,7 @@ services:
       CONTROL_PLANE_INTERNAL_URL: ${CONTROL_PLANE_INTERNAL_URL:-http://control-plane:8000}
       DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME:-mlops_paas_network}
       MODEL_BUILD_WEBHOOK_SECRET: ${MODEL_BUILD_WEBHOOK_SECRET}
+      HASHIDS_SALT: ${HASHIDS_SALT:-mlops_paas_secret_salt}
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock
@@ -179,6 +180,7 @@ services:
       EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
       GITHUB_REPO: ${GITHUB_REPO}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
+      HASHIDS_SALT: ${HASHIDS_SALT:-mlops_paas_secret_salt}
     volumes:
       - ./models:/models # Mount thư mục models local vào container
       - ./services/model-server:/app
