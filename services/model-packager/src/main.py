@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
-from .core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
+from src.core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
 
 app = FastAPI(title="MLflow Model Packager", version="0.1.0")
 

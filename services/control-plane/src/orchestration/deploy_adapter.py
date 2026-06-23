@@ -145,8 +145,7 @@ class DockerDeployAdapter(DeployAdapter):
                     labels=labels,
                     network=network_name,
                     detach=True,
-                    restart_policy={"Name": "always"},
-                    command="uvicorn src.index:app --host 0.0.0.0 --port 5000"
+                    restart_policy={"Name": "always"}
                 )
                 healthy, payload_or_error = self.wait_for_health(model_id)
                 model_api.refresh_from_db()
