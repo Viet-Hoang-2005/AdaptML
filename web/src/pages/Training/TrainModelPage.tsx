@@ -101,7 +101,7 @@ const backendLabel = (backend?: TrainingJob['training_backend']) => backend || '
 
 const jobLabel = (job: Pick<TrainingJob, 'name' | 'model_version'>) => `${job.name} ${job.model_version}`.trim();
 
-const trainingTargetVersion = (modelId: number) => `model-${modelId}`;
+const trainingTargetVersion = (modelId: string) => `model-${modelId}`;
 
 const acceleratorSummary = (type?: TrainingAcceleratorType, count?: number) => {
   if (!type || type === 'none' || !count) return 'No accelerator';

@@ -32,7 +32,7 @@ export default function UploadModelFormPage() {
   const navigate = useNavigate();
   const mode = location.pathname.includes('mlflow-zip') ? 'advanced' : 'builder';
   
-  const [createdModelId, setCreatedModelId] = useState<number | null>(null);
+  const [createdModelId, setCreatedModelId] = useState<string | null>(null);
   const [advancedForm, setAdvancedForm] = useState<ModelAPIFormValues>(emptyAdvancedForm);
   const [buildForm, setBuildForm] = useState<ModelBuildFormValues>(emptyBuildForm);
 

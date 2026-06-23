@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Terminal, Play, Square, Loader2 } from 'lucide-react';
+import { Terminal, Play, Square, Loader2, Clipboard } from 'lucide-react';
 import { getBuildLogs, getModelAPI } from '../../lib/api';
 import { toast } from '../../lib/toast';
 
@@ -15,8 +15,8 @@ export function TerminalLogViewer({
   isRunningOverride,
   customButtons,
 }: {
-  modelId?: number | null;
-  onBuildSuccess?: (modelId: number, previewTree: string[]) => void;
+  modelId?: string | null;
+  onBuildSuccess?: (modelId: string, previewTree: string[]) => void;
   onRebuild?: () => Promise<void> | void;
   onCancel?: () => void;
   buildDisabled?: boolean;
@@ -139,7 +139,7 @@ export function TerminalLogViewer({
                     }
                   }}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium text-white ${
-                    buildDisabled || isStartingBuild ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
+                    buildDisabled || isStartingBuild ? 'bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
                   }`}
                 >
                   {isStartingBuild ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
@@ -172,7 +172,7 @@ export function TerminalLogViewer({
                     }
                   }}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium text-white ${
-                    buildDisabled || isStartingBuild ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
+                    buildDisabled || isStartingBuild ? 'bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
                   }`}
                 >
                   {isStartingBuild ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
@@ -181,6 +181,18 @@ export function TerminalLogViewer({
               ) : null}
             </>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(activeLogs.join('\n'));
+              toast.success('Logs copied.');
+            }}
+            className="ml-3 flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+            title="Copy log"
+          >
+            <Clipboard className="h-3 w-3" />
+            Copy
+          </button>
         </div>
       </div>
       <div 
@@ -195,13 +207,32 @@ export function TerminalLogViewer({
             {activePlaceholder}
           </div>
         ) : (
-          activeLogs.map((log, i) => (
-            <div key={i} className="mb-1 leading-tight break-all">
-              <span className={log.includes('error') || log.includes('Exception') || log.includes('failed') ? 'text-red-400' : 'text-gray-300'}>
-                {log}
-              </span>
-            </div>
-          ))
+          activeLogs.map((log, i) => {
+            const match = log.match(/^(\[\d{2}:\d{2}:\d{2}\])\s*(SUCCESS|INFO|WARNING|ERROR)(.*)/si);
+            if (match) {
+              const time = match[1];
+              const level = match[2];
+              const rest = match[3];
+              const levelUpper = level.toUpperCase();
+              const colorClass = levelUpper === 'SUCCESS' ? 'text-emerald-300' : levelUpper === 'WARNING' ? 'text-amber-300' : levelUpper === 'ERROR' ? 'text-red-400' : 'text-blue-300';
+              return (
+                <div key={i} className="mb-2 leading-relaxed break-all whitespace-pre-wrap">
+                  <span className="text-gray-500">{time}</span>{' '}
+                  <span className={colorClass}>{level}</span>
+                  <span className="text-gray-300">{rest}</span>
+                </div>
+              );
+            }
+            
+            const isError = log.includes('error') || log.includes('Exception') || log.includes('failed');
+            return (
+              <div key={i} className="mb-1 leading-tight break-all">
+                <span className={isError ? 'text-red-400' : 'text-gray-300'}>
+                  {log}
+                </span>
+              </div>
+            );
+          })
         )}
         {errorMsg && (
           <div className="mt-4 border-t border-red-500/30 pt-4 text-red-400">

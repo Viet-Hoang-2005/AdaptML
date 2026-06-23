@@ -17,7 +17,7 @@ export type ModelFlavor = 'sklearn' | 'xgboost';
 export type ModelSourceType = 'manual_upload' | 'training_job';
 
 export interface ModelAPI {
-  id: number;
+  id: string;
   name: string;
   version: string;
   description: string;
@@ -82,7 +82,7 @@ export interface ModelBuildFormValues {
 }
 
 export interface PackagePreviewResponse {
-  model_id: number;
+  model_id: string;
   package_manifest: Record<string, unknown>;
   package_preview_tree: string[];
   build_status: ModelBuildStatus;
@@ -90,7 +90,7 @@ export interface PackagePreviewResponse {
 }
 
 export interface ModelEndpointLogsResponse {
-  model_id: number;
+  model_id: string;
   container_name: string;
   logs: string;
 }
@@ -137,7 +137,7 @@ export interface TrainingJob {
   deleted_at: string | null;
   is_deleted: boolean;
   registered_model: ModelAPI | null;
-  registered_model_id: number | null;
+  registered_model_id: string | null;
   created_at: string;
   updated_at: string;
 }

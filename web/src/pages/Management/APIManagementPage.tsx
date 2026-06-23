@@ -35,10 +35,10 @@ export default function APIManagementPage() {
   const [logsModel, setLogsModel] = useState<ModelAPI | null>(null);
 
   // Loading states scoped by model ID
-  const [checkingHealthId, setCheckingHealthId] = useState<number | null>(null);
-  const [redeployingId, setRedeployingId] = useState<number | null>(null);
-  const [stoppingId, setStoppingId] = useState<number | null>(null);
-  const [cleaningUpId, setCleaningUpId] = useState<number | null>(null);
+  const [checkingHealthId, setCheckingHealthId] = useState<string | null>(null);
+  const [redeployingId, setRedeployingId] = useState<string | null>(null);
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const [cleaningUpId, setCleaningUpId] = useState<string | null>(null);
 
   // Aggregate wsStatus for page-level badge (only for active models)
   const activeModels = models.filter(isActiveModel);
@@ -83,7 +83,7 @@ export default function APIManagementPage() {
   });
 
   const cleanupMutation = useMutation({
-    mutationFn: (modelId: number) => cleanupModelResources(modelId, false),
+    mutationFn: (modelId: string) => cleanupModelResources(modelId, false),
     onMutate: (id) => setCleaningUpId(id),
     onSettled: () => setCleaningUpId(null),
     onSuccess: async () => {

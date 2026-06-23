@@ -24,12 +24,12 @@ export default function MLflowZipPage({
   form: ModelAPIFormValues;
   setField: (field: keyof ModelAPIFormValues, value: string | File | null) => void;
   onSubmitting: (val: boolean) => void;
-  onModelCreated: (id: number | null) => void;
+  onModelCreated: (id: string | null) => void;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { createModelAPI } = useModelAPIMutations();
-  const [createdModelId, setCreatedModelId] = useState<number | null>(null);
+  const [createdModelId, setCreatedModelId] = useState<string | null>(null);
 
   const submitAdvanced = async () => {
     onSubmitting(true);

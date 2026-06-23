@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
 
-export function BuildLogsPanel({ modelId }: { modelId: number }) {
+export function BuildLogsPanel({ modelId }: { modelId: string }) {
   const logsRef = useRef<HTMLPreElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [expanded, setExpanded] = useState(true);

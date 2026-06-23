@@ -34,13 +34,13 @@ export default function BuildPackagePage({
   setField: (field: keyof ModelBuildFormValues, value: string | File | null) => void;
   readRequirementsFile: (file: File | null) => void;
   onSubmitting: (val: boolean) => void;
-  onModelCreated: (id: number) => void;
+  onModelCreated: (id: string) => void;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   
   const [step, setStep] = useState(1);
-  const [createdModelId, setCreatedModelId] = useState<number | null>(null);
+  const [createdModelId, setCreatedModelId] = useState<string | null>(null);
   const [realPreview, setRealPreview] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -82,7 +82,7 @@ export default function BuildPackagePage({
     }
   };
 
-  const handleBuildSuccess = (modelId: number, previewTree: string[]) => {
+  const handleBuildSuccess = (modelId: string, previewTree: string[]) => {
     setCreatedModelId(modelId);
     onModelCreated(modelId);
     setRealPreview(previewTree);
@@ -362,10 +362,10 @@ function DeployStep({
 }: {
   form: ModelBuildFormValues;
   preview: string[];
-  onBuildSuccess: (modelId: number, previewTree: string[]) => void;
+  onBuildSuccess: (modelId: string, previewTree: string[]) => void;
   canContinue: boolean;
 }) {
-  const [modelId, setModelId] = useState<number | null>(null);
+  const [modelId, setModelId] = useState<string | null>(null);
 
   const startBuild = async () => {
     try {

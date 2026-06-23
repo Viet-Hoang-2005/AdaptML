@@ -3,9 +3,9 @@ export const queryKeys = {
   profileAvatars: ['profile-avatars'] as const,
   apiKeys: ['api-keys'] as const,
   modelApis: ['model-apis'] as const,
-  modelApi: (id: number) => ['model-apis', 'detail', id] as const,
-  modelBuildLogs: (id: number) => ['model-apis', 'build-logs', id] as const,
-  modelEndpointLogs: (id: number) => ['model-apis', 'endpoint-logs', id] as const,
+  modelApi: (id: string) => ['model-apis', 'detail', id] as const,
+  modelBuildLogs: (id: string) => ['model-apis', 'build-logs', id] as const,
+  modelEndpointLogs: (id: string) => ['model-apis', 'endpoint-logs', id] as const,
   // Keep trainingJobs as a plain array for backward compatibility with existing pages.
   // The hook uses trainingJob(id) for fine-grained per-job cache updates.
   trainingJobs: ['training-jobs'] as const,

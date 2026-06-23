@@ -6,7 +6,7 @@ export type DashboardModel = ModelAPI;
 export interface ModelSelectionContextValue {
   models: DashboardModel[];
   selectedModel: DashboardModel | null;
-  selectModel: (modelId: number) => void;
+  selectModel: (modelId: string) => void;
   loading: boolean;
 }
 

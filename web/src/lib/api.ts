@@ -267,7 +267,7 @@ export const listModelAPIs = async (): Promise<ModelAPIListResponse> => {
   return data;
 };
 
-export const getModelAPI = async (modelId: number): Promise<ModelAPI> => {
+export const getModelAPI = async (modelId: string): Promise<ModelAPI> => {
   const { data } = await axiosInstance.get<ModelAPI>(controlPlaneURL(`/models/${modelId}/`));
   return data;
 };
@@ -286,32 +286,32 @@ export const buildModelAPI = async (payload: ModelBuildFormValues): Promise<Mode
   return data;
 };
 
-export const deployModelAPI = async (modelId: number): Promise<ModelAPI> => {
+export const deployModelAPI = async (modelId: string): Promise<ModelAPI> => {
   const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/deploy/`));
   return data;
 };
 
-export const redeployModelAPI = async (modelId: number): Promise<ModelAPI> => {
+export const redeployModelAPI = async (modelId: string): Promise<ModelAPI> => {
   const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/redeploy/`));
   return data;
 };
 
-export const stopModelEndpoint = async (modelId: number): Promise<ModelAPI> => {
+export const stopModelEndpoint = async (modelId: string): Promise<ModelAPI> => {
   const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/stop-endpoint/`));
   return data;
 };
 
-export const checkModelEndpointHealth = async (modelId: number): Promise<ModelAPI> => {
+export const checkModelEndpointHealth = async (modelId: string): Promise<ModelAPI> => {
   const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/check-health/`));
   return data;
 };
 
-export const getModelEndpointLogs = async (modelId: number): Promise<ModelEndpointLogsResponse> => {
+export const getModelEndpointLogs = async (modelId: string): Promise<ModelEndpointLogsResponse> => {
   const { data } = await axiosInstance.get<ModelEndpointLogsResponse>(controlPlaneURL(`/models/${modelId}/endpoint-logs/`));
   return data;
 };
 
-export const cleanupModelResources = async (modelId: number, removeImages = false): Promise<{ removed: unknown; model: ModelAPI }> => {
+export const cleanupModelResources = async (modelId: string, removeImages = false): Promise<{ removed: unknown; model: ModelAPI }> => {
   const { data } = await axiosInstance.post<{ removed: unknown; model: ModelAPI }>(
     controlPlaneURL(`/models/${modelId}/cleanup/`),
     { remove_images: removeImages },
@@ -319,34 +319,34 @@ export const cleanupModelResources = async (modelId: number, removeImages = fals
   return data;
 };
 
-export const triggerModelAPIBuild = async (modelId: number): Promise<ModelAPI> => {
+export const triggerModelAPIBuild = async (modelId: string): Promise<ModelAPI> => {
   const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/build/`));
   return data;
 };
 
-export const updateModelAPI = async (modelId: number, payload: ModelAPIFormValues): Promise<ModelAPI> => {
+export const updateModelAPI = async (modelId: string, payload: ModelAPIFormValues): Promise<ModelAPI> => {
   const { data } = await axiosInstance.put<ModelAPI>(controlPlaneURL(`/models/${modelId}/`), modelFormData(payload), {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return data;
 };
 
-export const deleteModelAPI = async (modelId: number, force: boolean = false): Promise<MessageResponse> => {
+export const deleteModelAPI = async (modelId: string, force: boolean = false): Promise<MessageResponse> => {
   const { data } = await axiosInstance.delete<MessageResponse>(controlPlaneURL(`/models/${modelId}/` + (force ? '?force=true' : '')));
   return data;
 };
 
-export const getModelPackagePreview = async (modelId: number): Promise<PackagePreviewResponse> => {
+export const getModelPackagePreview = async (modelId: string): Promise<PackagePreviewResponse> => {
   const { data } = await axiosInstance.get<PackagePreviewResponse>(controlPlaneURL(`/models/${modelId}/package-preview/`));
   return data;
 };
 
-export const getBuildLogs = async (modelId: number, offset: number): Promise<{logs: string[], next_offset: number, build_status: string, build_error: string}> => {
+export const getBuildLogs = async (modelId: string, offset: number): Promise<{logs: string[], next_offset: number, build_status: string, build_error: string}> => {
   const { data } = await axiosInstance.get(controlPlaneURL(`/models/${modelId}/build-logs/?offset=${offset}`));
   return data;
 };
 
-export const cancelBuildAPI = async (modelId: number): Promise<void> => {
+export const cancelBuildAPI = async (modelId: string): Promise<void> => {
   await axiosInstance.post(controlPlaneURL(`/models/${modelId}/cancel-build/`));
 };
 

@@ -18,7 +18,7 @@ import { ModelSourcePage } from './ModelSourcePage';
 export default function ModelDetailPage() {
   const { modelId } = useParams();
   const { data } = useModelAPIs();
-  const model = useMemo(() => data?.models.find((item) => item.id === Number(modelId)) ?? null, [data?.models, modelId]);
+  const model = useMemo(() => data?.models.find((item) => item.id === modelId) ?? null, [data?.models, modelId]);
 
   if (!model) {
     return <div className="p-8 text-center text-gray-500">Model not found or loading...</div>;
