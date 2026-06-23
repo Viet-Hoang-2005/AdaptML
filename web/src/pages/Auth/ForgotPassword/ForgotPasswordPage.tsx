@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, ArrowLeft } from 'lucide-react';
-import { AuthCard } from '../../components/layout/AuthCard';
-import { Input } from '../../components/ui/Input';
-import { Button } from '../../components/ui/Button';
-import { toast } from '../../lib/toast';
-import { forgotPasswordOTP } from '../../lib/api';
-import { getApiErrorMessage } from '../../lib/apiError';
+import { AuthCard } from '../../../components/layout/AuthCard';
+import { Input } from '../../../components/ui/Input';
+import { Button } from '../../../components/ui/Button';
+import { toast } from '../../../lib/toast';
+import { forgotPasswordOTP } from '../../../lib/api';
+import { getApiErrorMessage } from '../../../lib/apiError';
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();

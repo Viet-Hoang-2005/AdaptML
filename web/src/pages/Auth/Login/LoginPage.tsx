@@ -1,17 +1,17 @@
 import { useGoogleLogin } from '@react-oauth/google';
 import { Mail, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { AuthCard } from '../../components/layout/AuthCard';
-import { Button } from '../../components/ui/Button';
-import { Divider } from '../../components/ui/Divider';
-import { Input, InputPassword } from '../../components/ui/Input';
-import { useAuth } from '../../hooks/useAuth';
-import { startGitHubOAuth } from '../../lib/oauth';
-import { toast } from '../../lib/toast';
-import { useForm } from '../../hooks/useForm';
-import GitHubIcon from '../../assets/icons/GitHub.png';
-import GoogleIcon from '../../assets/icons/Google.png';
-import MLdriftLogo from '../../assets/icons/MLdrift.png';
+import { AuthCard } from '../../../components/layout/AuthCard';
+import { Button } from '../../../components/ui/Button';
+import { Divider } from '../../../components/ui/Divider';
+import { Input, InputPassword } from '../../../components/ui/Input';
+import { useAuth } from '../../../hooks/useAuth';
+import { startGitHubOAuth } from '../../../lib/oauth';
+import { toast } from '../../../lib/toast';
+import { useForm } from '../../../hooks/useForm';
+import GitHubIcon from '../../../assets/icons/GitHub.png';
+import GoogleIcon from '../../../assets/icons/Google.png';
+import MLdriftLogo from '../../../assets/icons/MLdrift.png';
 
 function GoogleLoginButton({ onSuccess }: { onSuccess: (accessToken: string) => void }) {
   const openGoogleLogin = useGoogleLogin({

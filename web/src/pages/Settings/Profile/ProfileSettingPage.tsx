@@ -1,16 +1,16 @@
 import { BriefcaseBusiness, Building2, CalendarDays, Camera, ChevronDown, FileText, Fingerprint, Globe2, LockKeyhole, Mail, ShieldCheck, Tags, Trash2, UserRound, Edit3 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AvatarCropModal } from '../../components/ui/AvatarCropModal';
-import { AvatarModal } from '../../components/ui/AvatarModal';
-import { Button } from '../../components/ui/Button';
-import { ConfirmModal } from '../../components/ui/ConfirmModal';
-import { Input, InputPassword } from '../../components/ui/Input';
-import { OTPInput } from '../../components/ui/OTPInput';
-import { useProfileSettings } from '../../hooks/useProfileSettings';
-import { toast } from '../../lib/toast';
-import type { UserProfile } from '../../types/auth';
-import BaseModal from '../../components/ui/BaseModal';
+import { AvatarCropModal } from '../../../components/ui/AvatarCropModal';
+import { AvatarModal } from '../../../components/ui/AvatarModal';
+import { Button } from '../../../components/ui/Button';
+import { ConfirmModal } from '../../../components/ui/ConfirmModal';
+import { Input, InputPassword } from '../../../components/ui/Input';
+import { OTPInput } from '../../../components/ui/OTPInput';
+import { useProfileSettings } from '../../../hooks/useProfileSettings';
+import { toast } from '../../../lib/toast';
+import type { UserProfile } from '../../../types/auth';
+import BaseModal from '../../../components/ui/BaseModal';
 
 const formatDate = (value?: string) => {
   if (!value) return 'Unknown';

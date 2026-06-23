@@ -1,16 +1,16 @@
 import { ArrowLeft, Copy } from 'lucide-react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useMemo } from 'react';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { ApiModal } from '../../components/ui/ApiModal';
-import { useApiKeyForm } from '../../hooks/useApiKeyForm';
-import { useDeveloperSettings } from '../../hooks/useDeveloperSettings';
-import { useModelAPIs } from '../../hooks/useModelAPIs';
-import { toast } from '../../lib/toast';
+import { Button } from '../../../components/ui/Button';
+import { Input } from '../../../components/ui/Input';
+import { ApiModal } from '../../../components/ui/ApiModal';
+import { useApiKeyForm } from '../../../hooks/useApiKeyForm';
+import { useDeveloperSettings } from '../../../hooks/useDeveloperSettings';
+import { useModelAPIs } from '../../../hooks/useModelAPIs';
+import { toast } from '../../../lib/toast';
 import { Table } from 'antd';
 import type { TableProps } from 'antd';
-import type { ModelAPI } from '../../types/modelApi';
+import type { ModelAPI } from '../../../types/modelApi';
 
 export default function ApiKeyPage() {
   const { keyId } = useParams<{ keyId?: string }>();

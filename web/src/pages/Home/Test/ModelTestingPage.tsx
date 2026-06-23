@@ -1,12 +1,12 @@
 import { CheckCircle, Clipboard, FileSpreadsheet, Play, Pause, Terminal, XCircle, Download, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '../../components/ui/Button';
-import { useModelSelection } from '../../hooks/useModelSelection';
-import { predictWithModelAPI } from '../../lib/api';
-import { getApiErrorMessage } from '../../lib/apiError';
-import { toast } from '../../lib/toast';
-import { FileDropzone } from '../../components/ui/FileDropzone';
-import { CSVEditor } from '../../components/ui/CSVEditor';
+import { Button } from '../../../components/ui/Button';
+import { useModelSelection } from '../../../hooks/useModelSelection';
+import { predictWithModelAPI } from '../../../lib/api';
+import { getApiErrorMessage } from '../../../lib/apiError';
+import { toast } from '../../../lib/toast';
+import { FileDropzone } from '../../../components/ui/FileDropzone';
+import { CSVEditor } from '../../../components/ui/CSVEditor';
 
 const TARGET_COLUMN_NAMES = new Set([
   'label',

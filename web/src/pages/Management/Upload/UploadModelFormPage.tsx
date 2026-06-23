@@ -1,12 +1,12 @@
 import { ArrowLeft, Bot, FileArchive } from 'lucide-react';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation, useBlocker } from 'react-router-dom';
-import { ConfirmModal } from '../../components/ui/ConfirmModal';
-import { deleteModelAPI as deleteModelAPICore } from '../../lib/api';
-import type { ModelAPIFormValues, ModelBuildFormValues } from '../../types/modelApi';
+import { ConfirmModal } from '../../../components/ui/ConfirmModal';
+import { deleteModelAPI as deleteModelAPICore } from '../../../lib/api';
+import type { ModelAPIFormValues, ModelBuildFormValues } from '../../../types/modelApi';
 import BuildPackagePage from './BuildPackagePage';
 import MLflowZipPage from './MLflowZipPage';
-import { PageTabs } from '../../components/layout/PageTabs';
+import { PageTabs } from '../../../components/layout/PageTabs';
 
 const emptyAdvancedForm: ModelAPIFormValues = {
   name: '',

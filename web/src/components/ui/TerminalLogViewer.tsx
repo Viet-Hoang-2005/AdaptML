@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Terminal, Play, Square } from 'lucide-react';
+import { Terminal, Play, Square, Loader2 } from 'lucide-react';
 import { getBuildLogs, getModelAPI } from '../../lib/api';
 import { toast } from '../../lib/toast';
 
@@ -142,8 +142,8 @@ export function TerminalLogViewer({
                     buildDisabled || isStartingBuild ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
                   }`}
                 >
-                  <Play className="h-3 w-3" />
-                  {isStartingBuild ? 'Starting...' : 'Build'}
+                  {isStartingBuild ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                  Build
                 </button>
               ) : building && onCancel ? (
                 <button
@@ -175,8 +175,8 @@ export function TerminalLogViewer({
                     buildDisabled || isStartingBuild ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
                   }`}
                 >
-                  <Play className="h-3 w-3" />
-                  {isStartingBuild ? 'Starting...' : 'Re-Build'}
+                  {isStartingBuild ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                  Re-Build
                 </button>
               ) : null}
             </>

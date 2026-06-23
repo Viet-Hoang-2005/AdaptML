@@ -1,9 +1,9 @@
 import { Copy, ExternalLink, UploadCloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../../components/ui/Button';
-import Placeholder from '../../components/layout/Placeholder';
-import { toast } from '../../lib/toast';
-import { useModelSelection } from '../../hooks/useModelSelection';
+import { Button } from '../../../components/ui/Button';
+import Placeholder from '../../../components/layout/Placeholder';
+import { toast } from '../../../lib/toast';
+import { useModelSelection } from '../../../hooks/useModelSelection';
 
 export default function ModelApiPage() {
   const navigate = useNavigate();

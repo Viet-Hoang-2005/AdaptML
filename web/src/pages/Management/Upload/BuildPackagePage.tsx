@@ -2,17 +2,17 @@ import { useState } from 'react';
 import { FileCode2, UploadCloud, FlaskConical, FileArchive, Rocket, ArrowLeft, ArrowRight, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '../../lib/queryKeys';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import type { ModelBuildFormValues, ModelFlavor } from '../../types/modelApi';
+import { queryKeys } from '../../../lib/queryKeys';
+import { Button } from '../../../components/ui/Button';
+import { Input } from '../../../components/ui/Input';
+import type { ModelBuildFormValues, ModelFlavor } from '../../../types/modelApi';
 import { StepTitle, SummaryItem, } from './UploadModelFormPage';
-import { FileDropzone } from '../../components/ui/FileDropzone';
-import { TextArea } from '../../components/ui/TextArea';
-import { AccessModePicker } from '../../components/ui/Picker';
-import { toast } from '../../lib/toast';
-import { TerminalLogViewer } from '../../components/ui/TerminalLogViewer';
-import { buildModelAPI, cancelBuildAPI, getApiErrorMessage, deployModelAPI } from '../../lib/api';
+import { FileDropzone } from '../../../components/ui/FileDropzone';
+import { TextArea } from '../../../components/ui/TextArea';
+import { AccessModePicker } from '../../../components/ui/Picker';
+import { toast } from '../../../lib/toast';
+import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
+import { buildModelAPI, cancelBuildAPI, getApiErrorMessage, deployModelAPI } from '../../../lib/api';
 
 const wizardSteps = [
   { id: 1, label: 'Metadata', icon: FileCode2 },

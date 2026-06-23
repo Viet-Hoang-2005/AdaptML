@@ -1,27 +1,27 @@
 import { createBrowserRouter, RouterProvider, createRoutesFromElements, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from './components/ui/Toast';
 import AuthLayout from './pages/Auth/AuthLayout';
-import LoginPage from './pages/Auth/LoginPage';
-import SignUpPage from './pages/Auth/SignUpPage';
-import OTPPage from './pages/Auth/OTPPage';
-import CompleteProfilePage from './pages/Auth/CompleteProfilePage';
-import ForgotPasswordPage from './pages/Auth/ForgotPasswordPage';
-import ForgotPasswordOTPPage from './pages/Auth/ForgotPasswordOTPPage';
-import ForgotPasswordResetPage from './pages/Auth/ForgotPasswordResetPage';
-import GitHubCallbackPage from './pages/Auth/GitHubCallbackPage';
+import LoginPage from './pages/Auth/Login/LoginPage';
+import SignUpPage from './pages/Auth/SignUp/SignUpPage';
+import SignUpOTPPage from './pages/Auth/SignUp/SignUpOTPPage';
+import CompleteProfilePage from './pages/Auth/SignUp/CompleteProfilePage';
+import ForgotPasswordPage from './pages/Auth/ForgotPassword/ForgotPasswordPage';
+import ForgotPasswordOTPPage from './pages/Auth/ForgotPassword/ForgotPasswordOTPPage';
+import ForgotPasswordResetPage from './pages/Auth/ForgotPassword/ForgotPasswordResetPage';
+import GitHubCallbackPage from './pages/Auth/Login/GitHubCallbackPage';
 import { ProtectedRoute } from './pages/Dashboard/ProtectedRoute';
 import DashboardLayout from './pages/Dashboard/DashboardLayout';
 import HomeLayout from './pages/Home/HomeLayout';
-import ModelApiPage from './pages/Home/ModelApiPage';
-import ModelTestingPage from './pages/Home/ModelTestingPage';
+import ModelApiPage from './pages/Home/Api/ModelApiPage';
+import ModelTestingPage from './pages/Home/Test/ModelTestingPage';
 import APIManagementPage from './pages/Management/APIManagementPage';
 import TrainModelPage from './pages/Training/TrainModelPage';
 import TrainingJobDetailPage from './pages/Training/TrainingJobDetailPage';
-import ModelAPIFormPage from './pages/Management/UploadModelFormPage';
-import ModelDetailPage from './pages/Management/ModelDetailPage';
-import DeveloperSettingPage from './pages/Settings/DeveloperSettingPage';
-import ProfileSettingPage from './pages/Settings/ProfileSettingPage';
-import ApiKeyPage from './pages/Settings/ApiKeyPage';
+import ModelAPIFormPage from './pages/Management/Upload/UploadModelFormPage';
+import ModelDetailPage from './pages/Management/Detail/ModelDetailPage';
+import DeveloperSettingPage from './pages/Settings/Developer/DeveloperSettingPage';
+import ProfileSettingPage from './pages/Settings/Profile/ProfileSettingPage';
+import ApiKeyPage from './pages/Settings/Developer/ApiKeyPage';
 import SettingsLayout from './pages/Settings/SettingsLayout';
 import { dashboardPlaceholders } from './pages/Dashboard/DashboardPage';
 
@@ -32,7 +32,7 @@ const router = createBrowserRouter(
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignUpPage />} />
-        <Route path="/signup/verify-otp" element={<OTPPage />} />
+        <Route path="/signup/verify-otp" element={<SignUpOTPPage />} />
         <Route path="/signup/complete-profile" element={<CompleteProfilePage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/forgot-password/verify-otp" element={<ForgotPasswordOTPPage />} />

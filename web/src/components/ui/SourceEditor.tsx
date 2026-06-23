@@ -27,7 +27,9 @@ const loadZipFromUrl = async (url: string | null | undefined, defaultFilename: s
   if (!res.ok) throw new Error(`Failed to fetch ${url}`);
   const blob = await res.blob();
   
-  if (url.toLowerCase().endsWith('.zip')) {
+  const urlWithoutQuery = url.split('?')[0];
+  
+  if (urlWithoutQuery.toLowerCase().endsWith('.zip')) {
     const tempZip = await JSZip.loadAsync(blob);
     const promises: Promise<void>[] = [];
     tempZip.forEach((path, file) => {
@@ -37,7 +39,7 @@ const loadZipFromUrl = async (url: string | null | undefined, defaultFilename: s
     });
     await Promise.all(promises);
   } else {
-    const filename = url.split('/').pop() || defaultFilename;
+    const filename = urlWithoutQuery.split('/').pop() || defaultFilename;
     newZip.file(filename, blob);
   }
   return newZip;

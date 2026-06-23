@@ -1,9 +1,9 @@
 import { LoaderCircle } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import { getGitHubOAuthConfig } from '../../lib/oauth';
-import { toast } from '../../lib/toast';
+import { useAuth } from '../../../hooks/useAuth';
+import { getGitHubOAuthConfig } from '../../../lib/oauth';
+import { toast } from '../../../lib/toast';
 
 export default function GitHubCallbackPage() {
   const [searchParams] = useSearchParams();

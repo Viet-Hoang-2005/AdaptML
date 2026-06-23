@@ -1,16 +1,16 @@
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Briefcase, Camera, User, Lock, LockKeyhole } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { AuthCard } from '../../components/layout/AuthCard';
-import { Input, InputPassword } from '../../components/ui/Input';
-import { Button } from '../../components/ui/Button';
-import { AvatarCropModal } from '../../components/ui/AvatarCropModal';
-import { AvatarModal } from '../../components/ui/AvatarModal';
-import { toast } from '../../lib/toast';
-import { useAuth } from '../../hooks/useAuth';
-import { useForm } from '../../hooks/useForm';
-import { completeRegistration } from '../../lib/api';
-import { getApiErrorMessage } from '../../lib/apiError';
+import { AuthCard } from '../../../components/layout/AuthCard';
+import { Input, InputPassword } from '../../../components/ui/Input';
+import { Button } from '../../../components/ui/Button';
+import { AvatarCropModal } from '../../../components/ui/AvatarCropModal';
+import { AvatarModal } from '../../../components/ui/AvatarModal';
+import { toast } from '../../../lib/toast';
+import { useAuth } from '../../../hooks/useAuth';
+import { useForm } from '../../../hooks/useForm';
+import { completeRegistration } from '../../../lib/api';
+import { getApiErrorMessage } from '../../../lib/apiError';
 
 interface LocationState {
   registrationToken: string;

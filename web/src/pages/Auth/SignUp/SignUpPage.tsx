@@ -2,17 +2,17 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { Mail, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AuthCard } from '../../components/layout/AuthCard';
-import { Button } from '../../components/ui/Button';
-import { Divider } from '../../components/ui/Divider';
-import { Input } from '../../components/ui/Input';
-import { useAuth } from '../../hooks/useAuth';
-import { requestOTP } from '../../lib/api';
-import { getApiErrorMessage } from '../../lib/apiError';
-import { startGitHubOAuth } from '../../lib/oauth';
-import { toast } from '../../lib/toast';
-import GitHubIcon from '../../assets/icons/GitHub.png';
-import GoogleIcon from '../../assets/icons/Google.png';
+import { AuthCard } from '../../../components/layout/AuthCard';
+import { Button } from '../../../components/ui/Button';
+import { Divider } from '../../../components/ui/Divider';
+import { Input } from '../../../components/ui/Input';
+import { useAuth } from '../../../hooks/useAuth';
+import { requestOTP } from '../../../lib/api';
+import { getApiErrorMessage } from '../../../lib/apiError';
+import { startGitHubOAuth } from '../../../lib/oauth';
+import { toast } from '../../../lib/toast';
+import GitHubIcon from '../../../assets/icons/GitHub.png';
+import GoogleIcon from '../../../assets/icons/Google.png';
 
 function GoogleSignUpButton({ onSuccess }: { onSuccess: (accessToken: string) => void }) {
   const openGoogleLogin = useGoogleLogin({

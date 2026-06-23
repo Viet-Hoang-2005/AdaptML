@@ -2,11 +2,11 @@ import { Edit3, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Space, Button as AntButton, Popconfirm, Tag } from 'antd';
 import type { TableProps } from 'antd';
-import { Button } from '../../components/ui/Button';
-import { ApiModal } from '../../components/ui/ApiModal';
-import { useDeveloperSettings } from '../../hooks/useDeveloperSettings';
-import { useModelAPIs } from '../../hooks/useModelAPIs';
-import type { APIKeyRecord } from '../../types/auth';
+import { Button } from '../../../components/ui/Button';
+import { ApiModal } from '../../../components/ui/ApiModal';
+import { useDeveloperSettings } from '../../../hooks/useDeveloperSettings';
+import { useModelAPIs } from '../../../hooks/useModelAPIs';
+import type { APIKeyRecord } from '../../../types/auth';
 
 export default function DeveloperSettingPage() {
   const navigate = useNavigate();

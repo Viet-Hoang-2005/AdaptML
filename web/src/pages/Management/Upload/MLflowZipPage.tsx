@@ -1,19 +1,19 @@
 import { Trash2 } from 'lucide-react';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { Button } from '../../../components/ui/Button';
+import { Input } from '../../../components/ui/Input';
 import { useState } from 'react';
-import type { ModelAPIFormValues } from '../../types/modelApi';
-import { useModelAPIMutations } from '../../hooks/useModelAPIs';
-import { deployModelAPI, deleteModelAPI, cancelBuildAPI, getApiErrorMessage } from '../../lib/api';
+import type { ModelAPIFormValues } from '../../../types/modelApi';
+import { useModelAPIMutations } from '../../../hooks/useModelAPIs';
+import { deployModelAPI, deleteModelAPI, cancelBuildAPI, getApiErrorMessage } from '../../../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '../../lib/queryKeys';
-import { toast } from '../../lib/toast';
+import { queryKeys } from '../../../lib/queryKeys';
+import { toast } from '../../../lib/toast';
 import { useNavigate } from 'react-router-dom';
-import { TerminalLogViewer } from '../../components/ui/TerminalLogViewer';
+import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
 import { StepTitle } from './UploadModelFormPage';
-import { AccessModePicker } from '../../components/ui/Picker';
-import { FileDropzone } from '../../components/ui/FileDropzone';
-import { TextArea } from '../../components/ui/TextArea';
+import { AccessModePicker } from '../../../components/ui/Picker';
+import { FileDropzone } from '../../../components/ui/FileDropzone';
+import { TextArea } from '../../../components/ui/TextArea';
 
 export default function MLflowZipPage({
   form,
