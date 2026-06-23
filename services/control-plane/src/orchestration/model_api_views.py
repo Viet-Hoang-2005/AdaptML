@@ -432,9 +432,30 @@ class ModelAPIDetailView(APIView):
             DockerBuildAdapter().cancel_build(model_id)
             # Kill endpoint container
             DockerDeployAdapter().remove_model(model_api.id)
-            # Delete file from S3 if exists
-            if model_api.artifact:
-                model_api.artifact.delete(save=False)
+            
+            # Delete all files under the model's folder on S3
+            from django.core.files.storage import default_storage
+            email_prefix = model_api.tenant.email.split('@')[0]
+            safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+            model_prefix = f'{email_prefix}/models/{safe_model_name}/'
+
+            if hasattr(default_storage, 'bucket'):
+                # S3 Storage: Delete all objects with the prefix
+                bucket = default_storage.bucket
+                bucket.objects.filter(Prefix=model_prefix).delete()
+            else:
+                # Fallback for local storage
+                if model_api.artifact:
+                    model_api.artifact.delete(save=False)
+                if model_api.source_artifact:
+                    model_api.source_artifact.delete(save=False)
+                if model_api.source_code_file:
+                    model_api.source_code_file.delete(save=False)
+                if model_api.reference_data_file:
+                    model_api.reference_data_file.delete(save=False)
+                if model_api.label_mapping_file:
+                    model_api.label_mapping_file.delete(save=False)
+
             # Physically delete from database
             model_api.delete()
             return Response({"message": "Model API has been completely destroyed."}, status=status.HTTP_200_OK)

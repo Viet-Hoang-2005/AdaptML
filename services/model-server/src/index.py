@@ -129,7 +129,7 @@ async def verify_model_access(
         if not redis_client:
             raise HTTPException(status_code=500, detail="Internal Server Error: Redis cache unavailable")
 
-        cached_data_str = redis_client.get(f"api_key:{api_key}")
+        cached_data_str = redis_client.get(f":1:api_key:{api_key}")
         if not cached_data_str:
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid or revoked API Key")
             
