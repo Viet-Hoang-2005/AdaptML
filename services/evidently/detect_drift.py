@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import boto3
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 from evidently.report import Report
@@ -33,13 +32,19 @@ DB_HOST_RO = os.getenv("DB_HOST_RO", "localhost")
 # PAAS MULTI-TENANT CONFIG
 TENANT_ID = os.getenv("TENANT_ID")
 MODEL_ID = os.getenv("MODEL_ID")
-REFERENCE_DATA_S3_URI = os.getenv("REFERENCE_DATA_S3_URI")
+REFERENCE_DATA_URL = os.getenv("REFERENCE_DATA_URL")
 MODEL_URI = os.getenv("MODEL_URI", f"models:/{MODEL_ID}/Production")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/drift-webhook")
+HTML_S3_URI = os.getenv("HTML_S3_URI", "")
+REPORT_JSON_S3_URI = os.getenv("REPORT_JSON_S3_URI", "")
+SUMMARY_JSON_S3_URI = os.getenv("SUMMARY_JSON_S3_URI", "")
+HTML_PUBLIC_URL = os.getenv("HTML_PUBLIC_URL", "")
+
+HTML_UPLOAD_URL = os.getenv("HTML_UPLOAD_URL", "")
+REPORT_JSON_UPLOAD_URL = os.getenv("REPORT_JSON_UPLOAD_URL", "")
+SUMMARY_JSON_UPLOAD_URL = os.getenv("SUMMARY_JSON_UPLOAD_URL", "")
+
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "super-secret-key")
-AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "mlops-paas-artifacts")
-AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")
-REPORTS_S3_PREFIX = os.getenv("DRIFT_REPORTS_S3_PREFIX", "drift-reports")
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 
 DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD", "0.6"))
@@ -59,31 +64,26 @@ if not TENANT_ID or not MODEL_ID:
 
 # 2. TẢI DỮ LIỆU
 def load_reference_data():
-    print(f"[1/4] Loading reference data from {REFERENCE_DATA_S3_URI}...")
-    if not REFERENCE_DATA_S3_URI:
-        raise ValueError("REFERENCE_DATA_S3_URI is not provided")
-    
-    if not REFERENCE_DATA_S3_URI.startswith("s3://"):
-        raise ValueError("REFERENCE_DATA_S3_URI must be a valid S3 URI starting with s3://")
+    if not REFERENCE_DATA_URL:
+        raise ValueError("REFERENCE_DATA_URL is not provided")
 
-    # Phân tích S3 URI
-    parsed_uri = urlparse(REFERENCE_DATA_S3_URI)
-    bucket_name = parsed_uri.netloc
-    object_key = parsed_uri.path.lstrip('/')
-    
-    # Xác định đường dẫn file tạm trên môi trường cục bộ
-    reference_path = parsed_uri.path.lower()
+    # Xác định đường dẫn file tạm
+    reference_path = urlparse(REFERENCE_DATA_URL).path.lower()
     local_filename = f"/tmp/ref_data_{MODEL_ID}.csv"
     if reference_path.endswith('.parquet'):
         local_filename = f"/tmp/ref_data_{MODEL_ID}.parquet"
-    
-    # Dùng boto3 tải file từ S3 (Tự động nhận diện IAM Role trên EC2)
-    s3_client = boto3.client('s3')
-    try:
-        print(f"Downloading s3://{bucket_name}/{object_key} to {local_filename} using boto3 via IAM Role...")
-        s3_client.download_file(bucket_name, object_key, local_filename)
-    except Exception as e:
-        raise Exception(f"Failed to download reference data from S3: {e}")
+
+    if REFERENCE_DATA_URL.startswith("http"):
+        print(f"[1/4] Downloading from presigned URL to {local_filename}...")
+        try:
+            response = requests.get(REFERENCE_DATA_URL)
+            response.raise_for_status()
+            with open(local_filename, "wb") as f:
+                f.write(response.content)
+        except Exception as e:
+            raise Exception(f"Failed to download reference data from URL: {e}")
+    else:
+        raise ValueError("REFERENCE_DATA_URL must be a valid HTTP URL")
     
     # Đọc file bằng pandas
     if local_filename.endswith('.csv'):
@@ -191,11 +191,6 @@ def filter_column_mapping(column_mapping, common_cols):
 
     return filtered_mapping
 
-def get_public_s3_url(bucket_name, object_key):
-    if AWS_DEFAULT_REGION == "us-east-1":
-        return f"https://{bucket_name}.s3.amazonaws.com/{object_key}"
-    return f"https://{bucket_name}.s3.{AWS_DEFAULT_REGION}.amazonaws.com/{object_key}"
-
 def save_drift_report(report, result_dict, summary):
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     report_dir = f"/tmp/drift_reports/{TENANT_ID}/{MODEL_ID}/{run_id}"
@@ -217,50 +212,46 @@ def save_drift_report(report, result_dict, summary):
         "local_summary_json_path": summary_json_path,
     }
 
-    if not AWS_BUCKET_NAME:
+    if not HTML_UPLOAD_URL:
+        print("Warning: Upload URLs not provided. Skipping upload.")
         return artifacts
 
-    s3_client = boto3.client("s3")
-    base_key = f"{REPORTS_S3_PREFIX}/{TENANT_ID}/{MODEL_ID}/{run_id}"
     uploads = [
-        (html_path, f"{base_key}/report.html", "text/html"),
-        (result_json_path, f"{base_key}/report.json", "application/json"),
-        (summary_json_path, f"{base_key}/summary.json", "application/json"),
+        (html_path, HTML_UPLOAD_URL, "text/html"),
+        (result_json_path, REPORT_JSON_UPLOAD_URL, "application/json"),
+        (summary_json_path, SUMMARY_JSON_UPLOAD_URL, "application/json"),
     ]
 
-    try:
-        for local_path, object_key, content_type in uploads:
-            s3_client.upload_file(
-                local_path,
-                AWS_BUCKET_NAME,
-                object_key,
-                ExtraArgs={"ContentType": content_type},
-            )
+    for local_path, upload_url, content_type in uploads:
+        if upload_url:
+            try:
+                with open(local_path, "rb") as f:
+                    resp = requests.put(upload_url, data=f, headers={"Content-Type": content_type})
+                    resp.raise_for_status()
+            except Exception as e:
+                print(f"Failed to upload {local_path}: {e}")
 
-        artifacts.update({
-            "s3_report_prefix": f"s3://{AWS_BUCKET_NAME}/{base_key}/",
-            "html_s3_uri": f"s3://{AWS_BUCKET_NAME}/{base_key}/report.html",
-            "report_json_s3_uri": f"s3://{AWS_BUCKET_NAME}/{base_key}/report.json",
-            "summary_json_s3_uri": f"s3://{AWS_BUCKET_NAME}/{base_key}/summary.json",
-            "html_url": get_public_s3_url(AWS_BUCKET_NAME, f"{base_key}/report.html"),
-        })
-        print(f"Drift report uploaded to s3://{AWS_BUCKET_NAME}/{base_key}/")
-    except Exception as e:
-        print(f"Failed to upload drift report to S3: {e}")
+    artifacts.update({
+        "s3_report_prefix": "",
+        "html_s3_uri": HTML_S3_URI,
+        "report_json_s3_uri": REPORT_JSON_S3_URI,
+        "summary_json_s3_uri": SUMMARY_JSON_S3_URI,
+        "html_url": HTML_PUBLIC_URL,
+    })
+    print(f"Drift report uploaded.")
 
     summary_with_artifacts = {**summary, "report_artifacts": artifacts}
     with open(summary_json_path, "w", encoding="utf-8") as fp:
         json.dump(summary_with_artifacts, fp, ensure_ascii=False, indent=2, default=str)
-    if "summary_json_s3_uri" in artifacts:
+    
+    # Refresh summary.json on S3
+    if SUMMARY_JSON_UPLOAD_URL:
         try:
-            s3_client.upload_file(
-                summary_json_path,
-                AWS_BUCKET_NAME,
-                f"{base_key}/summary.json",
-                ExtraArgs={"ContentType": "application/json"},
-            )
+            with open(summary_json_path, "rb") as f:
+                resp = requests.put(SUMMARY_JSON_UPLOAD_URL, data=f, headers={"Content-Type": "application/json"})
+                resp.raise_for_status()
         except Exception as e:
-            print(f"Failed to refresh summary report on S3: {e}")
+            print(f"Failed to refresh summary report: {e}")
 
     return artifacts
 
@@ -364,7 +355,6 @@ def trigger_django_webhook(drift_summary):
         print(f"Failed to send webhook: {e}")
 
 
-# CHƯƠNG TRÌNH CHÍNH
 if __name__ == "__main__":
     try:
         reference_df = load_reference_data()

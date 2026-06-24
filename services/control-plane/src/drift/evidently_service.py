@@ -30,34 +30,75 @@ def run_evidently_job_async(job_id: int):
         
         ref_path = job.reference_data_s3_path
         ref_url = ""
-        if ref_path.startswith("s3://"):
-            ref_url = "" # Let container use S3 URI directly
-        else:
-            user_name = job.tenant.email.split('@')[0] if getattr(job.tenant, 'email', None) else job.tenant.tenant_id
-            model_name = job.model_api.name.replace(' ', '') if job.model_api.name else 'UnnamedModel'
-            version = job.model_api.version.replace(' ', '') if job.model_api.version else 'v1'
-            s3_key = f"{user_name}/models/{model_name}/{version}/references/{ref_path}"
-            try:
-                ref_url = s3_client.generate_presigned_url(
-                    'get_object',
-                    Params={'Bucket': bucket_name, 'Key': s3_key},
-                    ExpiresIn=3600
-                )
-            except Exception as e:
-                logger.error(f"Could not generate presigned URL for {s3_key}: {e}")
+        user_name = job.tenant.email.split('@')[0] if getattr(job.tenant, 'email', None) else job.tenant.tenant_id
+        model_name = job.model_api.name.replace(' ', '') if job.model_api.name else 'UnnamedModel'
+        version = job.model_api.version.replace(' ', '') if job.model_api.version else 'v1'
+        s3_key = f"{user_name}/models/{model_name}/{version}/references/{ref_path}"
+        try:
+            ref_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': bucket_name, 'Key': s3_key},
+                ExpiresIn=3600
+            )
+        except Exception as e:
+            logger.error(f"Could not generate presigned URL for {s3_key}: {e}")
+
+        from datetime import datetime, timezone
+        run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        reports_prefix = getattr(settings, 'DRIFT_REPORTS_S3_PREFIX', 'drift-reports')
+        tenant_id_str = getattr(job.tenant, "tenant_id", "T-LOCALDEV")
+        base_report_key = f"{reports_prefix}/{tenant_id_str}/{job.model_api.name}/{run_id}"
+
+        html_upload_url = ""
+        report_json_upload_url = ""
+        summary_json_upload_url = ""
+
+        try:
+            html_upload_url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': bucket_name, 'Key': f"{base_report_key}/report.html", 'ContentType': 'text/html'},
+                ExpiresIn=3600
+            )
+            report_json_upload_url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': bucket_name, 'Key': f"{base_report_key}/report.json", 'ContentType': 'application/json'},
+                ExpiresIn=3600
+            )
+            summary_json_upload_url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': bucket_name, 'Key': f"{base_report_key}/summary.json", 'ContentType': 'application/json'},
+                ExpiresIn=3600
+            )
+        except Exception as e:
+            logger.error(f"Could not generate presigned PUT URLs for reports: {e}")
+
+        # Construct public URLs and URIs for webhook payload
+        html_s3_uri = f"s3://{bucket_name}/{base_report_key}/report.html"
+        report_json_s3_uri = f"s3://{bucket_name}/{base_report_key}/report.json"
+        summary_json_s3_uri = f"s3://{bucket_name}/{base_report_key}/summary.json"
+        
+        domain = f"s3.{aws_region}.amazonaws.com" if aws_region != "us-east-1" else "s3.amazonaws.com"
+        html_public_url = f"https://{bucket_name}.{domain}/{base_report_key}/report.html"
 
         env = {
             "JOB_ID": str(job.id),
-            "TENANT_ID": getattr(job.tenant, "tenant_id", "T-LOCALDEV"),
+            "TENANT_ID": tenant_id_str,
             "MODEL_ID": job.model_api.name,
             "MODEL_URI": f"models:/{job.model_api.name}/Production",
-            "REFERENCE_DATA_S3_URI": ref_path if ref_path.startswith("s3://") else "",
             "REFERENCE_DATA_URL": ref_url,
             "DRIFT_THRESHOLD": str(job.trigger_threshold),
-            "AWS_ACCESS_KEY_ID": aws_access_key,
-            "AWS_SECRET_ACCESS_KEY": aws_secret_key,
-            "AWS_DEFAULT_REGION": aws_region,
-            "AWS_BUCKET_NAME": bucket_name,
+            
+            # Webhook Artifact URIs
+            "HTML_S3_URI": html_s3_uri,
+            "REPORT_JSON_S3_URI": report_json_s3_uri,
+            "SUMMARY_JSON_S3_URI": summary_json_s3_uri,
+            "HTML_PUBLIC_URL": html_public_url,
+            
+            # Presigned PUT URLs for Uploading
+            "HTML_UPLOAD_URL": html_upload_url,
+            "REPORT_JSON_UPLOAD_URL": report_json_upload_url,
+            "SUMMARY_JSON_UPLOAD_URL": summary_json_upload_url,
+            
             "DB_HOST_RO": db_host,
             "DB_HOST": db_host,
             "DB_USER": db_user,
