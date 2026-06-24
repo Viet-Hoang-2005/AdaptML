@@ -1022,7 +1022,7 @@ export default function TrainingJobDetailPage() {
                 Close
               </Button>
             </div>
-            <pre className="max-h-120 overflow-auto rounded-lg bg-black p-4 text-xs text-green-100">
+            <pre className="max-h-120t overflow-auto rounded-lg bg-black p-4 text-xs text-green-100">
               {endpointLogs}
             </pre>
           </div>
