@@ -165,7 +165,7 @@ USE_TZ = True
 
 # Cấu hình bảo mật JWT (RS256)
 from datetime import timedelta
-from authentication.utils import PRIVATE_KEY, PUBLIC_KEY
+from authentication.tokens.utils import PRIVATE_KEY, PUBLIC_KEY
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

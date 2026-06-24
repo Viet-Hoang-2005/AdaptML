@@ -14,8 +14,8 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 
 django_asgi_app = get_asgi_application()
 
-from authentication.ws_routing import websocket_urlpatterns
-from authentication.ws_middleware import TokenAuthMiddlewareStack
+from realtime.ws_routing import websocket_urlpatterns
+from realtime.ws_middleware import TokenAuthMiddlewareStack
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
