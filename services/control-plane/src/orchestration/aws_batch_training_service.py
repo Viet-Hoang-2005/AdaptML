@@ -123,8 +123,14 @@ def start_aws_batch_training_job(training_job: TrainingJob) -> tuple[str, str]:
     # Phase 10E.1: Inject MLflow env into AWS Batch ONLY if AWS_BATCH_MLFLOW_TRACKING_URI
     # is configured. Do NOT inject local http://mlflow:5000 — Batch cannot resolve it.
     _batch_mlflow_uri = getattr(settings, "AWS_BATCH_MLFLOW_TRACKING_URI", "").strip()
-    _batch_mlflow_exp = getattr(settings, "MLFLOW_EXPERIMENT_NAME", "").strip()
+    _batch_mlflow_exp = getattr(settings, "MLFLOW_EXPERIMENT_NAME", "mlops-paas-training").strip()
     if _batch_mlflow_uri:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "AWS Batch MLflow tracking enabled via AWS_BATCH_MLFLOW_TRACKING_URI "
+            "(experiment: %s)",
+            _batch_mlflow_exp or "default",
+        )
         environment.append({"name": "MLFLOW_TRACKING_URI", "value": _batch_mlflow_uri})
         if _batch_mlflow_exp:
             environment.append({"name": "MLFLOW_EXPERIMENT_NAME", "value": _batch_mlflow_exp})

@@ -300,3 +300,66 @@ Increase `LOCAL_TRAINING_TIMEOUT` if install takes too long:
 ```env
 LOCAL_TRAINING_TIMEOUT=3600
 ```
+
+---
+
+### 5. AWS Batch job completed but no `MLFLOW_RUN_ID`
+
+**Symptom:** AWS Batch job shows `status=completed` but `mlflow_run_id=None`, `run_id=None`.
+
+**Diagnosis checklist:**
+
+1. **Check `.env`** — `AWS_BATCH_MLFLOW_TRACKING_URI` must be set to a publicly reachable URL:
+   ```env
+   AWS_BATCH_MLFLOW_TRACKING_URI=https://your-tunnel.trycloudflare.com
+   ```
+
+2. **Check `docker compose config`** — `AWS_BATCH_MLFLOW_TRACKING_URI` must appear under `control-plane`:
+   ```powershell
+   docker compose config | Select-String "AWS_BATCH_MLFLOW_TRACKING_URI"
+   ```
+   If it's missing, the env var was not wired in `docker-compose.yml`.
+
+3. **Recreate control-plane after any `.env` change:**
+   ```powershell
+   docker compose up -d --force-recreate control-plane
+   ```
+
+4. **Verify inside container:**
+   ```powershell
+   docker compose exec -T control-plane printenv | Select-String "AWS_BATCH_MLFLOW"
+   ```
+
+5. **Verify Django settings:**
+   ```powershell
+   docker compose exec -T control-plane python src/manage.py shell -c \
+     "from django.conf import settings; print(settings.AWS_BATCH_MLFLOW_TRACKING_URI)"
+   ```
+
+6. **Verify Batch job received the env:**
+   ```powershell
+   aws batch describe-jobs --jobs <job_id> --region ap-southeast-1 \
+     --query "jobs[0].container.environment[?contains(name, 'MLFLOW')]" --output table
+   ```
+
+7. **Verify Cloudflare tunnel is running** during the Batch job. If the tunnel expired, training succeeded but MLflow call failed silently (the example script wraps MLflow calls in try/except and prints `MLFLOW_WARNING:`).
+
+> [!IMPORTANT]
+> Do NOT set `AWS_BATCH_MLFLOW_TRACKING_URI=http://mlflow:5000`.
+> That hostname is only resolvable inside Docker Compose, not from AWS Batch containers.
+> Always use a public URL (Cloudflare Tunnel, internal ALB, or VPN endpoint).
+
+**Root cause (docker-compose wiring):**
+
+`docker-compose.yml` must explicitly pass the variable to the `control-plane` service:
+
+```yaml
+# docker-compose.yml — control-plane service
+environment:
+  MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+  MLFLOW_UI_URL: ${MLFLOW_UI_URL:-http://localhost:5001}
+  MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-mlops-paas-training}
+  AWS_BATCH_MLFLOW_TRACKING_URI: ${AWS_BATCH_MLFLOW_TRACKING_URI:-}
+```
+
+Without this wiring, `.env` variables are read by Compose but not forwarded to the container's process environment, so `os.environ.get("AWS_BATCH_MLFLOW_TRACKING_URI")` always returns `""` inside Django.

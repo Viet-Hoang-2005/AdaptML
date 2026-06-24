@@ -114,6 +114,15 @@ services:
       CONTROL_PLANE_INTERNAL_URL: ${CONTROL_PLANE_INTERNAL_URL:-http://control-plane:8000}
       DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME:-mlops_paas_network}
       MODEL_BUILD_WEBHOOK_SECRET: ${MODEL_BUILD_WEBHOOK_SECRET}
+      # Phase 10E.1: MLflow wiring
+      # Container-facing URI (local Compose only — NOT for AWS Batch)
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      # Browser-facing URL for Model Evolution deep links
+      MLFLOW_UI_URL: ${MLFLOW_UI_URL:-http://localhost:5001}
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-mlops-paas-training}
+      # Public/private URL for AWS Batch to reach MLflow. Empty = no MLflow in Batch.
+      # Do NOT set this to http://mlflow:5000 — Batch cannot resolve Docker Compose hostnames.
+      AWS_BATCH_MLFLOW_TRACKING_URI: ${AWS_BATCH_MLFLOW_TRACKING_URI:-}
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock
