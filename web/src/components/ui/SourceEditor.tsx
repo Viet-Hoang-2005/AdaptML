@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
 import { Editor } from '@monaco-editor/react';
-import { Download, Save, FolderOpen, Upload, RotateCcw, Trash2, Database, FileCode2 } from 'lucide-react';
+import { Download, Save, FolderOpen, Upload, RotateCcw, Trash2, Database, FileCode2, Play } from 'lucide-react';
 import { Button } from './Button';
 import { CSVEditor } from './CSVEditor';
 import { toast } from '../../lib/toast';
@@ -17,6 +17,8 @@ export interface SourceEditorProps {
   defaultFilename: string;
   editorType: 'code' | 'csv';
   onDirtyChange?: (isDirty: boolean) => void;
+  onSetEntryPoint?: (filename: string) => void;
+  currentEntryPoint?: string;
 }
 
 const loadZipFromUrl = async (url: string | null | undefined, defaultFilename: string): Promise<JSZip> => {
@@ -53,7 +55,9 @@ export function SourceEditor({
   accept, 
   defaultFilename, 
   editorType,
-  onDirtyChange
+  onDirtyChange,
+  onSetEntryPoint,
+  currentEntryPoint
 }: SourceEditorProps) {
   const [zip, setZip] = useState<JSZip | null>(null);
   const [paths, setPaths] = useState<string[]>([]);
@@ -145,7 +149,7 @@ export function SourceEditor({
       setZip(z);
       setPaths(p.sort());
       setIsDirty(false);
-      toast.success(`${title} reset to original state from Server.`);
+      toast.success(`${title} reset to original state.`);
     } catch (err) {
       toast.error(`Failed to reset ${title}: ${err}`);
     }
@@ -242,7 +246,7 @@ export function SourceEditor({
       setZip(freshZip);
       setPaths(newPaths.sort());
       setIsDirty(true);
-      toast.success(`${file.name} uploaded. The old directory has been completely replaced. Remember to Save Changes.`);
+      toast.success(`${file.name} uploaded. Remember to Save Changes.`);
     } catch (err) {
       console.error(err);
       toast.error('Failed to upload file');
@@ -300,20 +304,47 @@ export function SourceEditor({
           <div className="text-sm font-semibold text-gray-700 flex items-center gap-2">
             {icon}
             {title}
+            {isDirty && (
+              <span className="ml-1 inline-block h-2 w-2 rounded-full bg-yellow-400" title="Unsaved changes" />
+            )}
           </div>
           <div className="flex items-center gap-1">
+            {onSetEntryPoint && selectedPath?.endsWith('.py') && (
+              <button 
+                className={`px-3 py-1 text-xs rounded font-medium mr-2 flex items-center gap-1 transition-colors ${
+                  currentEntryPoint === selectedPath 
+                    ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700' 
+                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                }`}
+                onClick={() => onSetEntryPoint(selectedPath)}
+                title="Set this file as the main entry point for the training job"
+              >
+                <Play className="w-3 h-3" />
+                {currentEntryPoint === selectedPath ? 'Main' : 'Set as Main'}
+              </button>
+            )}
             <input type="file" className="hidden" accept={accept} ref={fileInputRef} onChange={handleUpload} />
 
             <button className="p-2 rounded-full hover:bg-gray-200" onClick={clearZip} title="Clear entire directory">
               <Trash2 className="w-4 h-4 text-red-500 hover:text-red-600" />
             </button>
-            <button className="p-2 rounded-full hover:bg-gray-200" onClick={reloadZip} title="Reset to last saved">
+            <button 
+              className="p-2 rounded-full hover:bg-gray-200 transition-colors disabled:opacity-40" 
+              onClick={reloadZip} 
+              disabled={!isDirty}
+              title="Reset to last saved"
+            >
               <RotateCcw className="w-4 h-4" />
             </button>
             <button className="p-2 rounded-full hover:bg-gray-200" onClick={() => fileInputRef.current?.click()} title="Upload directory">
               <Upload className="w-4 h-4" />
             </button>
-            <button className="p-2 rounded-full hover:bg-gray-200 disabled:opacity-50" onClick={handleSave} disabled={saving} title="Save Changes">
+            <button 
+              className="p-2 rounded-full hover:bg-gray-200 transition-colors disabled:opacity-40" 
+              onClick={handleSave} 
+              disabled={saving || !isDirty} 
+              title="Save Changes"
+            >
               {saving ? <div className="w-4 h-4 rounded-full border-2 border-gray-600 border-t-transparent animate-spin" /> : <Save className="w-4 h-4" />}
             </button>
           </div>
@@ -388,10 +419,13 @@ export function SourceEditor({
                       ) : (
                         <FileCode2 className="w-4 h-4 text-blue-600 shrink-0" />
                       )}
-                      <span className="truncate">
+                      <span className="truncate flex-1">
                         <span className="text-gray-400 text-xs">{folderPath ? `${folderPath}/` : ''}</span>
                         {filename}
                       </span>
+                      {currentEntryPoint === path && (
+                        <Play className="w-3 h-3 text-blue-600 shrink-0" />
+                      )}
                     </button>
                   </li>
                 );

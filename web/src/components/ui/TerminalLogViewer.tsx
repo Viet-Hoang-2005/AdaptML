@@ -14,6 +14,9 @@ export function TerminalLogViewer({
   logsOverride,
   isRunningOverride,
   customButtons,
+  startLabel,
+  stopLabel,
+  restartLabel,
 }: {
   modelId?: string | null;
   onBuildSuccess?: (modelId: string, previewTree: string[]) => void;
@@ -25,6 +28,9 @@ export function TerminalLogViewer({
   logsOverride?: string[];
   isRunningOverride?: boolean;
   customButtons?: React.ReactNode;
+  startLabel?: string;
+  stopLabel?: string;
+  restartLabel?: string;
 }) {
   const [building, setBuilding] = useState(!!modelId);
   const [logs, setLogs] = useState<string[]>(
@@ -108,6 +114,9 @@ export function TerminalLogViewer({
   const isGeneric = logsOverride !== undefined;
   const activeLogs = isGeneric ? logsOverride : logs;
   const activeRunning = isGeneric ? (isRunningOverride || false) : building;
+  const activeStatus = isGeneric 
+    ? (activeRunning ? 'building' : (activeLogs.length > (placeholder ? 1 : 0) ? 'ready' : 'idle'))
+    : buildStatus;
   const activeTitle = title || "Build Console";
   const activePlaceholder = placeholder || "Click \"Build\" button to start building your model...";
 
@@ -126,10 +135,10 @@ export function TerminalLogViewer({
         <div className="ml-auto flex items-center">
           {customButtons !== undefined ? customButtons : (
             <>
-              {buildStatus === 'idle' && onRebuild ? (
+              {activeStatus === 'idle' && onRebuild ? (
                 <button
                   type="button"
-                  disabled={buildDisabled || isStartingBuild}
+                  disabled={buildDisabled || isStartingBuild || activeRunning}
                   onClick={async () => {
                     setIsStartingBuild(true);
                     try {
@@ -139,27 +148,29 @@ export function TerminalLogViewer({
                     }
                   }}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium text-white ${
-                    buildDisabled || isStartingBuild ? 'bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
+                    buildDisabled || isStartingBuild || activeRunning ? 'bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'
                   }`}
                 >
                   {isStartingBuild ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                  Build
+                  {startLabel || 'Build'}
                 </button>
-              ) : building && onCancel ? (
+              ) : activeRunning && onCancel ? (
                 <button
                   type="button"
                   onClick={() => {
-                    setLogs(prev => [...prev, '[SYSTEM] Build process cancelled by user.']);
-                    setBuilding(false);
-                    setBuildStatus('error');
+                    if (!isGeneric) {
+                      setLogs(prev => [...prev, '[SYSTEM] Build process cancelled by user.']);
+                      setBuilding(false);
+                      setBuildStatus('error');
+                    }
                     onCancel();
                   }}
                   className="flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium text-red-400 bg-red-900/30 hover:bg-red-800/50 border border-red-800/50"
                 >
                   <Square className="h-3 w-3" />
-                  Stop
+                  {stopLabel || 'Stop'}
                 </button>
-              ) : buildStatus !== 'idle' && !building && onRebuild ? (
+              ) : activeStatus !== 'idle' && !activeRunning && onRebuild ? (
                 <button
                   type="button"
                   disabled={buildDisabled || isStartingBuild}
@@ -176,7 +187,7 @@ export function TerminalLogViewer({
                   }`}
                 >
                   {isStartingBuild ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                  Re-Build
+                  {restartLabel || 'Re-Build'}
                 </button>
               ) : null}
             </>
