@@ -123,6 +123,10 @@ services:
       # Public/private URL for AWS Batch to reach MLflow. Empty = no MLflow in Batch.
       # Do NOT set this to http://mlflow:5000 — Batch cannot resolve Docker Compose hostnames.
       AWS_BATCH_MLFLOW_TRACKING_URI: ${AWS_BATCH_MLFLOW_TRACKING_URI:-}
+      # false = best-effort (training succeeds even if MLflow is down)
+      MLFLOW_TRACKING_REQUIRED: ${MLFLOW_TRACKING_REQUIRED:-false}
+      # Timeout in seconds for MLflow HTTP calls inside Batch containers
+      MLFLOW_HTTP_REQUEST_TIMEOUT: ${MLFLOW_HTTP_REQUEST_TIMEOUT:-10}
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock

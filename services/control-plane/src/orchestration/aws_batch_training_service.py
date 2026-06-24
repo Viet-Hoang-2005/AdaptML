@@ -120,10 +120,20 @@ def start_aws_batch_training_job(training_job: TrainingJob) -> tuple[str, str]:
     if requirements_uri:
         environment.append({"name": "S3_REQUIREMENTS_URI", "value": requirements_uri})
 
-    # Phase 10E.1: Inject MLflow env into AWS Batch ONLY if AWS_BATCH_MLFLOW_TRACKING_URI
-    # is configured. Do NOT inject local http://mlflow:5000 — Batch cannot resolve it.
+    # MLflow wiring for AWS Batch containers.
+    # MLFLOW_TRACKING_REQUIRED and MLFLOW_HTTP_REQUEST_TIMEOUT are always injected
+    # so training containers inherit the platform-level defaults.
+    # MLFLOW_TRACKING_URI and MLFLOW_EXPERIMENT_NAME are only injected when a
+    # public URI is configured (local http://mlflow:5000 cannot be reached from Batch).
     _batch_mlflow_uri = getattr(settings, "AWS_BATCH_MLFLOW_TRACKING_URI", "").strip()
     _batch_mlflow_exp = getattr(settings, "MLFLOW_EXPERIMENT_NAME", "mlops-paas-training").strip()
+    _batch_mlflow_required = str(getattr(settings, "MLFLOW_TRACKING_REQUIRED", False)).lower()
+    _batch_mlflow_timeout = str(getattr(settings, "MLFLOW_HTTP_REQUEST_TIMEOUT", 10))
+
+    # Always inject resilience-control vars so container train.py can read them.
+    environment.append({"name": "MLFLOW_TRACKING_REQUIRED", "value": _batch_mlflow_required})
+    environment.append({"name": "MLFLOW_HTTP_REQUEST_TIMEOUT", "value": _batch_mlflow_timeout})
+
     if _batch_mlflow_uri:
         import logging as _logging
         _logging.getLogger(__name__).info(

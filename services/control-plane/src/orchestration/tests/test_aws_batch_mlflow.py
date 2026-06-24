@@ -38,6 +38,8 @@ _fake_settings_base = dict(
     MLFLOW_EXPERIMENT_NAME="mlops-paas-training",
     AWS_BATCH_MLFLOW_TRACKING_URI="",           # default: empty
     MLFLOW_UI_URL="http://localhost:5001",
+    MLFLOW_TRACKING_REQUIRED=False,             # default: best-effort
+    MLFLOW_HTTP_REQUEST_TIMEOUT=10,             # default: 10 seconds
 )
 
 
@@ -70,6 +72,7 @@ def _build_environment(settings_obj, training_job) -> list[dict]:
     """
     Replicate the MLflow injection logic from start_aws_batch_training_job
     so tests stay decoupled from the full function (which calls boto3, S3, etc.).
+    Mirrors the actual service code exactly.
     """
     environment = [
         {"name": "AWS_BUCKET_NAME", "value": settings_obj.AWS_STORAGE_BUCKET_NAME},
@@ -83,6 +86,13 @@ def _build_environment(settings_obj, training_job) -> list[dict]:
 
     _batch_mlflow_uri = getattr(settings_obj, "AWS_BATCH_MLFLOW_TRACKING_URI", "").strip()
     _batch_mlflow_exp = getattr(settings_obj, "MLFLOW_EXPERIMENT_NAME", "mlops-paas-training").strip()
+    _batch_mlflow_required = str(getattr(settings_obj, "MLFLOW_TRACKING_REQUIRED", False)).lower()
+    _batch_mlflow_timeout = str(getattr(settings_obj, "MLFLOW_HTTP_REQUEST_TIMEOUT", 10))
+
+    # Always inject resilience-control vars.
+    environment.append({"name": "MLFLOW_TRACKING_REQUIRED", "value": _batch_mlflow_required})
+    environment.append({"name": "MLFLOW_HTTP_REQUEST_TIMEOUT", "value": _batch_mlflow_timeout})
+
     if _batch_mlflow_uri:
         environment.append({"name": "MLFLOW_TRACKING_URI", "value": _batch_mlflow_uri})
         if _batch_mlflow_exp:
@@ -161,6 +171,32 @@ class TestBatchMlflowInjection:
         env = _build_environment(settings, self._job())
         assert _env_value(env, "MLFLOW_TRACKING_URI") == tunnel_url
         assert "MLFLOW_EXPERIMENT_NAME" not in _env_names(env)
+
+    def test_mlflow_tracking_required_always_injected_with_default(self):
+        """MLFLOW_TRACKING_REQUIRED must always be injected, default is 'false'."""
+        settings = _make_settings(AWS_BATCH_MLFLOW_TRACKING_URI="")
+        env = _build_environment(settings, self._job())
+        assert "MLFLOW_TRACKING_REQUIRED" in _env_names(env)
+        assert _env_value(env, "MLFLOW_TRACKING_REQUIRED") == "false"
+
+    def test_mlflow_http_timeout_always_injected_with_default(self):
+        """MLFLOW_HTTP_REQUEST_TIMEOUT must always be injected, default is '10'."""
+        settings = _make_settings(AWS_BATCH_MLFLOW_TRACKING_URI="")
+        env = _build_environment(settings, self._job())
+        assert "MLFLOW_HTTP_REQUEST_TIMEOUT" in _env_names(env)
+        assert _env_value(env, "MLFLOW_HTTP_REQUEST_TIMEOUT") == "10"
+
+    def test_mlflow_tracking_required_true_when_set(self):
+        """MLFLOW_TRACKING_REQUIRED=True in settings → 'true' injected into Batch env."""
+        settings = _make_settings(MLFLOW_TRACKING_REQUIRED=True)
+        env = _build_environment(settings, self._job())
+        assert _env_value(env, "MLFLOW_TRACKING_REQUIRED") == "true"
+
+    def test_mlflow_http_timeout_custom_value_injected(self):
+        """Custom MLFLOW_HTTP_REQUEST_TIMEOUT in settings is forwarded to Batch env."""
+        settings = _make_settings(MLFLOW_HTTP_REQUEST_TIMEOUT=30)
+        env = _build_environment(settings, self._job())
+        assert _env_value(env, "MLFLOW_HTTP_REQUEST_TIMEOUT") == "30"
 
 
 class TestMlflowLogParser:
