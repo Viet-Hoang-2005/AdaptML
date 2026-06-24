@@ -27,6 +27,8 @@ import SettingsLayout from './pages/Settings/SettingsLayout';
 import { dashboardPlaceholders } from './pages/Dashboard/DashboardPage';
 import DriftMonitoringPage from './pages/Monitoring/DriftMonitoringPage';
 import CreateDriftMonitoringPage from './pages/Monitoring/CreateDriftMonitoringPage';
+import DriftReportPage from './pages/Monitoring/DriftReportPage';
+
 const router = createBrowserRouter(
   createRoutesFromElements(
     <>
@@ -73,6 +75,7 @@ const router = createBrowserRouter(
           <Route index element={<DriftMonitoringPage />} />
           <Route path=":modelId" element={<DriftMonitoringPage />} />
           <Route path=":modelId/new" element={<CreateDriftMonitoringPage />} />
+          <Route path=":modelId/report" element={<DriftReportPage />} />
         </Route>
 
         {/* Model Training Routes */}

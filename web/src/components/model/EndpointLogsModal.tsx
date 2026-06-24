@@ -93,7 +93,7 @@ export function EndpointLogsModal({
         </div>
 
         {/* Body */}
-        <div className="relative bg-[#0d1117] p-4 sm:p-6 flex-1 min-h-[400px] max-h-[70vh]">
+        <div className="relative bg-[#0d1117] p-4 sm:p-6 flex-1 min-h-100 max-h-[70vh]">
           {error ? (
             <div className="flex h-full items-center justify-center">
               <p className="text-sm font-medium text-red-400">Could not load endpoint logs.</p>

@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axiosInstance from '../lib/axios';
+import { AxiosError } from 'axios';
 import { controlPlaneURL } from '../lib/api';
+import { toast } from '../lib/toast';
+import axiosInstance from '../lib/axios';
 
 export interface DriftMonitoringJob {
   id: number;
@@ -101,9 +103,13 @@ export function useRunDriftMonitoringJob() {
       await axiosInstance.post(controlPlaneURL(`/drift/jobs/${payload.id}/run/`));
     },
     onSuccess: (_, variables) => {
-      // Invalidate results after triggering (although it's async, we might want to poll)
+      toast.success('Drift monitoring completed successfully');
       queryClient.invalidateQueries({ queryKey: ['drift-results', variables.id] });
     },
+    onError: (error: AxiosError<{error?: string}>) => {
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to run drift monitoring job';
+      toast.error(errorMsg);
+    }
   });
 }
 

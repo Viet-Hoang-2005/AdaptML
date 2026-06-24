@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Settings, Trash2, ExternalLink, LineChart } from 'lucide-react';
+import { Play, Settings, Trash2, ExternalLink, LineChart, Loader2 } from 'lucide-react';
 import { Table } from 'antd';
 
 import Placeholder from '../../components/layout/Placeholder';
@@ -29,8 +29,13 @@ export default function DriftMonitoringPage() {
   const { mutate: deleteJob, isPending: isDeleting } = useDeleteDriftMonitoringJob();
   const { mutate: runJob, isPending: isRunning } = useRunDriftMonitoringJob();
   
-  const [selectedReport, setSelectedReport] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const handleViewReport = (reportUrl: string) => {
+    navigate(`/dashboard/drift-monitoring/${modelId}/report`, { 
+      state: { reportS3Uri: reportUrl } 
+    });
+  };
 
   if (isLoadingJobs) {
     return <div className="p-8">Loading...</div>;
@@ -88,7 +93,7 @@ export default function DriftMonitoringPage() {
       render: (_: unknown, record: DriftMonitoringResult) => (
         <button 
           className="text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium transition-colors"
-          onClick={() => setSelectedReport(record.report_url)}
+          onClick={() => handleViewReport(record.report_url)}
         >
           <ExternalLink className="w-4 h-4" />
           <span>View Report</span>
@@ -123,10 +128,14 @@ export default function DriftMonitoringPage() {
                 size="md"
                 onClick={() => runJob({ id: activeJob.id, model_id: modelId! })}
                 disabled={isRunning}
-                className="flex items-center ml-2"
+                className="flex items-center ml-2 gap-2"
               >
-                <Play className="w-4 h-4" />
-                Run Now
+                {isRunning ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                )}
+                {isRunning ? 'Running...' : 'Run Now'}
               </Button>
             </div>
           </div>
@@ -155,25 +164,7 @@ export default function DriftMonitoringPage() {
           />
         </div>
 
-        {selectedReport && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
-              <div className="flex justify-between items-center p-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Evidently AI Report</h3>
-                <Button variant="secondary" onClick={() => setSelectedReport(null)}>
-                  Close
-                </Button>
-              </div>
-              <div className="flex-1 overflow-hidden bg-gray-50">
-                <iframe 
-                  src={`/api/s3-proxy?url=${encodeURIComponent(selectedReport)}`} 
-                  title="Evidently Report"
-                  className="w-full h-full border-0"
-                />
-              </div>
-            </div>
-          </div>
-        )}
+
       </PageContent>
 
       <ConfirmModal

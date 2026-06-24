@@ -483,7 +483,7 @@ export function SourceEditor({
     
     if (type === 'file') {
       setUnsavedContents(prev => ({ ...prev, [path]: '' }));
-      const virtualFile: S3File = { key: path, s3_uri: '', relative_path: path, size: 0, last_modified: new Date().toISOString(), download_url: '' };
+      const virtualFile: S3File = { key: path, relative_path: path, size: 0, last_modified: new Date().toISOString(), download_url: '' };
       setFiles(prev => [...prev.filter(f => f.relative_path !== path), virtualFile]);
       handleSelectPath(path, [...files, virtualFile]);
     } else {
