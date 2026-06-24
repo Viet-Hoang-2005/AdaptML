@@ -61,16 +61,51 @@ def _create_model_archive(model_dir: Path, archive_path: Path) -> None:
             archive.add(item, arcname=item.relative_to(model_dir))
 
 
-def _prepare_python(source_dir: Path, workspace: Path, requirements_file) -> str:
-    if not requirements_file or not settings.LOCAL_TRAINING_ALLOW_PIP_INSTALL:
-        return sys.executable
+def _resolve_requirements_path(source_dir: Path, requirements_field) -> Path | None:
+    """Return the resolved requirements.txt path using 3-level priority:
 
-    requirements_path = source_dir / "requirements.txt"
-    _write_field_file_to_path(requirements_file, requirements_path)
+    1. Uploaded FieldFile (if set and the backing file actually exists on disk).
+    2. requirements.txt inside the extracted source directory.
+    3. None — no requirements file, skip pip install.
+
+    Never raises; returns None if nothing is found.
+    """
+    # Priority 1: uploaded FieldFile
+    if requirements_field and getattr(requirements_field, "name", None):
+        try:
+            storage_path = requirements_field.storage.path(requirements_field.name)
+            if Path(storage_path).exists():
+                return Path(storage_path)
+        except (NotImplementedError, Exception):
+            # Storage backend doesn't support .path() (e.g. S3) — skip silently.
+            pass
+
+    # Priority 2: requirements.txt inside extracted source
+    candidate = source_dir / "requirements.txt"
+    if candidate.exists():
+        return candidate
+
+    # Priority 3: nothing found
+    return None
+
+
+def _prepare_python(source_dir: Path, workspace: Path, requirements_field) -> str:
+    requirements_path = _resolve_requirements_path(source_dir, requirements_field)
+
+    if requirements_path is None or not settings.LOCAL_TRAINING_ALLOW_PIP_INSTALL:
+        return sys.executable
 
     venv_dir = workspace / "venv"
     venv.EnvBuilder(with_pip=True).create(venv_dir)
     python_path = venv_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+    # Upgrade pip first to avoid resolver warnings.
+    subprocess.run(
+        [str(python_path), "-m", "pip", "install", "--upgrade", "pip"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
 
     install = subprocess.run(
         [str(python_path), "-m", "pip", "install", "-r", str(requirements_path)],

@@ -258,12 +258,19 @@ services:
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-southeast-1}
       - AWS_BUCKET_NAME=${AWS_BUCKET_NAME:-mlops-paas-artifacts}
       - MLFLOW_DB_SCHEMA=${MLFLOW_DB_SCHEMA:-mlflow}
-    command: >
-      mlflow server 
-      --host 0.0.0.0 
-      --port 5000 
-      --backend-store-uri ${MLFLOW_BACKEND_STORE_URI}
-      --default-artifact-root s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/
+    command:
+      - mlflow
+      - server
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "5000"
+      - --allowed-hosts
+      - ${MLFLOW_ALLOWED_HOSTS:-mlflow,mlflow:5000,mlops_paas_mlflow,mlops_paas_mlflow:5000,localhost,localhost:5001,127.0.0.1,127.0.0.1:5000,127.0.0.1:5001,control-plane,control_plane}
+      - --backend-store-uri
+      - ${MLFLOW_BACKEND_STORE_URI}
+      - --default-artifact-root
+      - s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/
     depends_on:
       postgres:
         condition: service_healthy

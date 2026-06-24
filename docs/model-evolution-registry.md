@@ -206,3 +206,97 @@ Use it for local development and admin use only. **Do not expose the MLflow UI t
 | 10E.2 | 🔲 Planned | Sync mlflow.log_metric into ModelMetric |
 | 10E.3 | 🔲 Planned | MLflow artifacts/checkpoints UI |
 | 10E.4 | 🔲 Planned | Mirror Native production marker to MLflow alias |
+
+---
+
+## Phase 10E.1 Troubleshooting
+
+### 1. `Invalid Host header - possible DNS rebinding attack detected` (HTTP 403)
+
+**Symptom:** Calling `http://mlflow:5000/api/2.0/...` from inside the `control-plane` container returns HTTP 403 with the message above.
+
+**Cause:** MLflow 3.x / Uvicorn enforces an allowlist of valid `Host` headers by default (`localhost` + private IPs only). Docker container-to-container calls use the service name (`mlflow`) as the Host header, which is rejected.
+
+**Fix:** Pass `--allowed-hosts` to `mlflow server`:
+
+```yaml
+# docker-compose.yml (mlflow service)
+command:
+  - mlflow
+  - server
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "5000"
+  - --allowed-hosts
+  - mlflow,mlflow:5000,mlops_paas_mlflow,localhost,127.0.0.1
+  - --backend-store-uri
+  - ${MLFLOW_BACKEND_STORE_URI}
+  - --default-artifact-root
+  - s3://...
+```
+
+Use the YAML list form for `command`, not the `>` block scalar, so multi-value flags are passed correctly.
+
+Set `MLFLOW_ALLOWED_HOSTS` in `.env` and reference it via `${MLFLOW_ALLOWED_HOSTS}` in compose for easier maintenance.
+
+---
+
+### 2. `ModuleNotFoundError: No module named 'mlflow'` in local training
+
+**Symptom:** Local training job fails immediately with `ModuleNotFoundError: No module named 'mlflow'`.
+
+**Causes:**
+1. `requirements.txt` in the uploaded source zip does not include `mlflow`.
+2. The training backend could not find/install requirements before running `train.py`.
+
+**Fixes:**
+
+1. Add `mlflow` to `requirements.txt` in your training zip:
+   ```
+   pandas
+   scikit-learn
+   mlflow
+   ```
+
+2. Ensure the local training backend uses the correct requirements resolution priority:
+   - Uploaded `requirements_file` FieldFile (if the backing file exists on disk)
+   - `requirements.txt` inside the extracted source directory
+   - Skip install (no crash) if neither is found
+
+3. If you see `[Errno 2] No such file or directory: '/app/src/media/training_uploads/requirements.txt'`, this means the uploaded FieldFile DB path exists but the file was cleaned up. The fixed resolver falls back to `source_dir/requirements.txt` automatically.
+
+---
+
+### 3. AWS Batch: no `MLFLOW_RUN_ID` in logs (expected)
+
+**Symptom:** AWS Batch job completes successfully, but `TrainingJob.mlflow_run_id` is `None`.
+
+**Cause:** This is **expected** when `AWS_BATCH_MLFLOW_TRACKING_URI` is empty (the default). The local Compose hostname `http://mlflow:5000` is NOT injected into AWS Batch because Batch containers cannot resolve internal Docker Compose DNS names.
+
+**Action:** No fix needed. If you want MLflow tracking from Batch, set:
+
+```env
+# .env
+AWS_BATCH_MLFLOW_TRACKING_URI=https://your-mlflow-server.example.com
+```
+
+Leave blank (the default) to skip MLflow injection for Batch. Training will still succeed using `METRIC_JSON` stdout logging.
+
+---
+
+### 4. Local training venv pip install fails
+
+**Symptom:** Training log contains `Failed to install requirements.` followed by pip errors.
+
+**Common causes:**
+- Package not found (typo in requirements)
+- Network timeout
+- Platform incompatibility
+
+**Fix:** Check the pip error in `TrainingJob.training_logs` (visible in the Training page). The full pip stderr is captured and stored.
+
+Increase `LOCAL_TRAINING_TIMEOUT` if install takes too long:
+```env
+LOCAL_TRAINING_TIMEOUT=3600
+```

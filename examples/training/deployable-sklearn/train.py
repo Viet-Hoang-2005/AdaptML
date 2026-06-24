@@ -82,12 +82,14 @@ def main():
             mlflow.log_metric("feature_count", float(feature_count))
             _run_id = mlflow.active_run().info.run_id
             _exp_id = mlflow.active_run().info.experiment_id
+            _artifact_uri = mlflow.get_artifact_uri()
             # Emit structured markers for Control Plane lineage capture.
-            print(f"MLFLOW_RUN_ID:{_run_id}")
-            print(f"MLFLOW_EXPERIMENT_ID:{_exp_id}")
-            print(f"MLFLOW_MODEL_URI:runs:/{_run_id}/sklearn-model")
+            print(f"MLFLOW_RUN_ID:{_run_id}", flush=True)
+            print(f"MLFLOW_EXPERIMENT_ID:{_exp_id}", flush=True)
+            print(f"MLFLOW_MODEL_URI:runs:/{_run_id}/sklearn-model", flush=True)
+            print(f"MLFLOW_ARTIFACT_URI:{_artifact_uri}", flush=True)
         except Exception as _e:
-            print(f"[mlflow] Logging skipped: {_e}")
+            print(f"MLFLOW_WARNING:Logging failed: {_e}", flush=True)
     # ─────────────────────────────────────────────────────────────────────────
 
     os.makedirs(model_dir, exist_ok=True)
