@@ -41,6 +41,20 @@ from .model_api_views import (
     ModelAPIRedeployView,
     ModelAPIStopEndpointView,
     ModelAPITriggerBuildView,
+    SourceCodeFileListView,
+    SourceCodeFileUploadView,
+)
+
+from .drift_views import (
+    DriftMonitoringJobListCreateView,
+    DriftMonitoringJobDetailView,
+    DriftMonitoringResultListView,
+    ProductionDataView,
+    ReferenceFileListView,
+    ReferenceFileUploadView,
+    TriggerDriftJobWebhookView,
+    TriggerDriftJobManualView,
+    DriftResultWebhookView,
 )
 
 urlpatterns = [
@@ -70,4 +84,15 @@ urlpatterns = [
     path('training-jobs/<int:training_job_id>/metrics/', TrainingJobMetricsView.as_view(), name='training_job_metrics'),
     path('training-jobs/<int:training_job_id>/restore/', TrainingJobRestoreView.as_view(), name='training_job_restore'),
     path('training-usage/', TrainingUsageView.as_view(), name='training_usage'),
+    path('drift-jobs/', DriftMonitoringJobListCreateView.as_view(), name='drift_job_list_create'),
+    path('drift-jobs/<int:pk>/', DriftMonitoringJobDetailView.as_view(), name='drift_job_detail'),
+    path('drift-jobs/<int:job_id>/results/', DriftMonitoringResultListView.as_view(), name='drift_job_results'),
+    path('drift-jobs/<int:job_id>/run/', TriggerDriftJobManualView.as_view(), name='drift_job_run_manual'),
+    path('models/<hashid:model_id>/production-data/', ProductionDataView.as_view(), name='model_production_data'),
+    path('models/<hashid:model_id>/reference-files/', ReferenceFileListView.as_view(), name='model_reference_files'),
+    path('models/<hashid:model_id>/reference-data/', ReferenceFileUploadView.as_view(), name='model_reference_upload'),
+    path('models/<hashid:model_id>/source-code-files/', SourceCodeFileListView.as_view(), name='model_source_code_files'),
+    path('models/<hashid:model_id>/source-code-upload/', SourceCodeFileUploadView.as_view(), name='model_source_code_upload'),
+    path('internal/trigger-drift-job', TriggerDriftJobWebhookView.as_view(), name='trigger_drift_job_webhook'),
+    path('internal/drift-webhook', DriftResultWebhookView.as_view(), name='drift_result_webhook'),
 ]

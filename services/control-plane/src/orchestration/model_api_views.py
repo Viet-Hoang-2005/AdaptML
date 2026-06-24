@@ -5,8 +5,10 @@ import zipfile
 
 from django.conf import settings
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.utils import timezone
 from django.utils.text import slugify
-from django.utils.text import slugify
+
 import requests
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -15,10 +17,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.core.cache import cache
 
-from authentication.models import ModelAPI
+from django.shortcuts import get_object_or_404
 from .build_adapter import get_build_adapter, DockerBuildAdapter
 from .deploy_adapter import DockerDeployAdapter
-from .hashid_utils import encode_model_id
+from .hashid_utils import encode_model_id, decode_model_id
+
+from authentication.models import ModelAPI, model_artifact_path
+from orchestration.utils.s3_zip_utils import upload_single_file_to_s3, get_s3_file_list, handle_upload_to_s3, delete_s3_path
 
 logger = logging.getLogger(__name__)
 
@@ -210,13 +215,24 @@ class ModelAPIListCreateView(APIView):
             build_status="building",
         )
         model_api.artifact = artifact_file
-        if source_code_file:
-            model_api.source_code_file = source_code_file
-        if reference_data_file:
-            model_api.reference_data_file = reference_data_file
+
+        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
+        safe_name = name.replace(' ', '') or "UnnamedModel"
+        safe_version = version.replace(' ', '') or "v1"
+
+        try:
+            if source_code_file:
+                code_prefix = f"{user_name}/models/{safe_name}/{safe_version}/code/"
+                handle_upload_to_s3(source_code_file, code_prefix)
+            if reference_data_file:
+                ref_prefix = f"{user_name}/models/{safe_name}/{safe_version}/references/"
+                handle_upload_to_s3(reference_data_file, ref_prefix)
+        except Exception as e:
+            model_api.delete()
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["artifact", "source_code_file", "reference_data_file", "endpoint_url", "updated_at"])
+        model_api.save(update_fields=["artifact", "endpoint_url", "updated_at"])
 
         try:
             get_build_adapter().trigger_build(
@@ -291,24 +307,34 @@ class ModelAPIBuildView(APIView):
             build_status="building",
         )
         model_api.source_artifact = source_artifact
-        if source_code_file:
-            model_api.source_code_file = source_code_file
-        if reference_data_file:
-            model_api.reference_data_file = reference_data_file
+
+        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
+        safe_name = name.replace(' ', '') or "UnnamedModel"
+        safe_version = version.replace(' ', '') or "v1"
+
+        try:
+            if source_code_file:
+                code_prefix = f"{user_name}/models/{safe_name}/{safe_version}/code/"
+                handle_upload_to_s3(source_code_file, code_prefix)
+            if reference_data_file:
+                ref_prefix = f"{user_name}/models/{safe_name}/{safe_version}/references/"
+                handle_upload_to_s3(reference_data_file, ref_prefix)
+        except Exception as e:
+            model_api.delete()
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         label_mapping_file = request.FILES.get("label_mapping_file")
         if label_mapping_file:
             model_api.label_mapping_file = label_mapping_file
 
         model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["source_artifact", "source_code_file", "reference_data_file", "label_mapping_file", "endpoint_url", "updated_at"])
+        model_api.save(update_fields=["source_artifact", "label_mapping_file", "endpoint_url", "updated_at"])
 
         # Gọi adapter chạy ngầm
         safe_name = slugify(name) or "model"
         package_filename = f"{safe_name}-mlflow-package.zip"
 
         # Đường dẫn dự kiến lưu file artifact sau khi build xong
-        from authentication.models import model_artifact_path
         output_key = model_artifact_path(model_api, package_filename)
 
         try:
@@ -394,10 +420,20 @@ class ModelAPIDetailView(APIView):
             if artifact_error:
                 return Response({"error": artifact_error}, status=status.HTTP_400_BAD_REQUEST)
             model_api.artifact = artifact_file
-        if source_code_file:
-            model_api.source_code_file = source_code_file
-        if reference_data_file:
-            model_api.reference_data_file = reference_data_file
+
+        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
+        safe_name = name.replace(' ', '') or "UnnamedModel"
+        safe_version = version.replace(' ', '') or "v1"
+
+        try:
+            if source_code_file:
+                code_prefix = f"{user_name}/models/{safe_name}/{safe_version}/code/"
+                handle_upload_to_s3(source_code_file, code_prefix)
+            if reference_data_file:
+                ref_prefix = f"{user_name}/models/{safe_name}/{safe_version}/references/"
+                handle_upload_to_s3(reference_data_file, ref_prefix)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         model_api.name = name
         model_api.description = description
@@ -411,7 +447,7 @@ class ModelAPIDetailView(APIView):
         if model_api.artifact:
             model_api.model_uri = model_api.artifact.url
         model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["model_uri", "endpoint_url", "source_code_file", "reference_data_file", "updated_at"])
+        model_api.save(update_fields=["model_uri", "endpoint_url", "updated_at"])
 
         if model_api.artifact:
             DockerDeployAdapter().deploy_model(
@@ -451,7 +487,6 @@ class ModelAPIDetailView(APIView):
             DockerDeployAdapter().remove_model(model_api.id)
             
             # Delete all files under the model's folder on S3
-            from django.core.files.storage import default_storage
             email_prefix = model_api.tenant.email.split('@')[0]
             safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
             model_prefix = f'{email_prefix}/models/{safe_model_name}/'
@@ -518,6 +553,7 @@ class ModelAPITriggerBuildView(APIView):
 
     def post(self, request, model_id):
         model_api = ModelAPI.objects.filter(id=model_id, tenant=request.user).exclude(status="disabled").first()
+        model_api = ModelAPI.objects.filter(id=model_id, tenant=request.user).exclude(status="disabled").first()
         if not model_api:
             return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
         if model_api.source_type != "training_job":
@@ -535,7 +571,6 @@ class ModelAPITriggerBuildView(APIView):
 
         safe_name = slugify(model_api.name) or "model"
         package_filename = f"{safe_name}-mlflow-package.zip"
-        from authentication.models import model_artifact_path
         output_key = model_artifact_path(model_api, package_filename)
 
         model_api.status = "uploading"
@@ -596,11 +631,6 @@ class ModelAPIBuildWebhookView(APIView):
             model_api.package_manifest = data.get("package_manifest", {})
             model_api.package_preview_tree = data.get("package_preview_tree", [])
 
-            # Giả định packager đã upload file lên output_key (model_api.artifact.name)
-            # Chúng ta cần đảm bảo model_uri / url map đúng với S3 bucket.
-            # Ở bước trước adapter đã tính output_key.
-            from authentication.models import model_artifact_path
-            from django.utils.text import slugify
             safe_name = slugify(model_api.name) or "model"
             package_filename = f"{safe_name}-mlflow-package.zip"
             bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "") or getattr(settings, "AWS_BUCKET_NAME", "")
@@ -665,7 +695,6 @@ class ModelAPIStopEndpointView(APIView):
         model_api.status = "ready" if model_api.build_status == "ready" else model_api.status
         model_api.endpoint_status = "stopped"
         model_api.endpoint_error = ""
-        from django.utils import timezone
         model_api.endpoint_last_checked_at = timezone.now()
         model_api.save(update_fields=["status", "endpoint_status", "endpoint_error", "endpoint_last_checked_at", "updated_at"])
         return Response(serialize_model_api(model_api), status=status.HTTP_200_OK)
@@ -679,7 +708,6 @@ class ModelAPICheckHealthView(APIView):
         if not model_api:
             return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
         healthy, payload = DockerDeployAdapter().check_health(model_api.id)
-        from django.utils import timezone
         model_api.endpoint_last_checked_at = timezone.now()
         if healthy:
             model_api.status = "deployed"
@@ -750,3 +778,69 @@ class ModelAPICancelBuildView(APIView):
             return Response({"status": "cancelled and deleted"}, status=status.HTTP_200_OK)
         except ModelAPI.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+class SourceCodeFileListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, model_id):
+        model_api = get_object_or_404(ModelAPI, id=model_id, tenant=request.user)
+        
+        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
+        safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+        safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
+        prefix = f'{user_name}/models/{safe_model_name}/{safe_version}/code/'
+        
+        files = get_s3_file_list(prefix)
+            
+        return Response(files)
+
+class SourceCodeFileUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, model_id):
+        model_api = get_object_or_404(ModelAPI, id=model_id, tenant=request.user)
+        
+        file_obj = request.FILES.get('file')
+        file_path = request.data.get('path') # The relative path of the file
+        if not file_obj or not file_path:
+            return Response({"error": "file and path are required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
+        safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+        safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
+        
+        # Ensure file_path doesn't have leading slash
+        if file_path.startswith('/'):
+            file_path = file_path[1:]
+            
+        key = f'{user_name}/models/{safe_model_name}/{safe_version}/code/{file_path}'
+        
+        bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'mlops-paas-artifacts')
+        
+        try:
+            upload_single_file_to_s3(file_obj, key)
+            s3_uri = f"s3://{bucket_name}/{key}"
+            return Response({"s3_uri": s3_uri, "message": "File updated successfully"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, model_id):
+        model_api = get_object_or_404(ModelAPI, id=model_id, tenant=request.user)
+        
+        file_path = request.data.get('path')
+        if not file_path:
+            return Response({"error": "path is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
+        safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+        safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
+        
+        if file_path.startswith('/'):
+            file_path = file_path[1:]
+            
+        key = f'{user_name}/models/{safe_model_name}/{safe_version}/code/{file_path}'
+        try:
+            delete_s3_path(key)
+            return Response({"message": "Deleted successfully"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

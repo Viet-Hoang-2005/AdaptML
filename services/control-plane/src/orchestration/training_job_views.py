@@ -4,6 +4,7 @@ import zipfile
 from django.conf import settings
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
+from django.core.files.base import ContentFile
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -12,8 +13,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from authentication.models import ModelAPI, TrainingJob
-from .model_api_views import serialize_model_api, validate_unique_model_version
-from .hashid_utils import encode_model_id
+from .model_api_views import serialize_model_api, validate_unique_model_version, build_endpoint_url
+from .hashid_utils import encode_model_id, decode_model_id
 from .aws_batch_training_service import (
     cancel_aws_batch_training_job,
     get_aws_batch_training_log_payload,
@@ -208,6 +209,11 @@ def _validate_accelerator_config(accelerator_type, accelerator_count, training_b
 
 
 def _validate_source_zip_entry_point(source_zip, entry_point):
+    if source_zip.name.lower().endswith('.py'):
+        if Path(entry_point).name != Path(source_zip.name).name:
+            raise ValidationError({"error": f"Entry point must match uploaded python file name '{source_zip.name}'."})
+        return
+
     try:
         source_zip.seek(0)
         with zipfile.ZipFile(source_zip) as archive:
@@ -289,7 +295,6 @@ def validate_create_training_job_request(request):
     base_model = None
 
     if registered_model_id:
-        from .hashid_utils import decode_model_id
         model_id_int = decode_model_id(registered_model_id)
         if not model_id_int:
             raise ValidationError({"error": "Invalid registered_model_id."})
@@ -325,8 +330,8 @@ def validate_create_training_job_request(request):
         _validate_upload_size(source_zip, "Source code zip")
         _validate_upload_size(training_data, "Training data CSV")
 
-        if not source_zip.name.lower().endswith(".zip"):
-            raise ValidationError({"error": "source_zip must be a .zip file."})
+        if not (source_zip.name.lower().endswith(".zip") or source_zip.name.lower().endswith(".py")):
+            raise ValidationError({"error": "source_zip must be a .zip or .py file."})
         if not training_data.name.lower().endswith(".csv"):
             raise ValidationError({"error": "training_data must be a .csv file."})
 
@@ -396,7 +401,6 @@ class TrainingJobListCreateView(APIView):
         # Lấy requirements_text từ base_model nếu có, tạo in-memory file để gán vào training_job
         requirements_file = None
         if payload["base_model"] and payload["base_model"].requirements_text:
-            from django.core.files.base import ContentFile
             req_bytes = payload["base_model"].requirements_text.encode("utf-8")
             requirements_file = ContentFile(req_bytes, name="requirements.txt")
 
@@ -627,7 +631,6 @@ class TrainingJobRegisterModelView(TrainingJobDetailView):
             status="uploading",
             build_status="not_started",
         )
-        from .model_api_views import build_endpoint_url
         model_api.endpoint_url = build_endpoint_url(model_api)
         model_api.save(update_fields=["endpoint_url", "updated_at"])
         create_training_job_event(

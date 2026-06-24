@@ -25,30 +25,37 @@ def user_avatar_history_path(instance, filename):
     email_prefix = instance.user.email.split('@')[0]
     return f'{email_prefix}/avatars/{filename}'
 
+def get_user_prefix(instance):
+    if hasattr(instance, 'tenant') and instance.tenant:
+        return instance.tenant.email.split('@')[0] if getattr(instance.tenant, 'email', None) else instance.tenant.tenant_id
+    elif hasattr(instance, 'user') and instance.user:
+        return instance.user.email.split('@')[0] if getattr(instance.user, 'email', None) else instance.user.tenant_id
+    return 'unknown_user'
+
 def model_artifact_path(instance, filename):
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'model/{safe_model_name}/{safe_version}/{filename}'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/{filename}'
 
 def model_source_artifact_path(instance, filename):
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'model/{safe_model_name}/{safe_version}/source/{filename}'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/source/{filename}'
 
 def label_mapping_path(instance, filename):
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'model/{safe_model_name}/{safe_version}/mapping/{filename}'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/mapping/{filename}'
 
 def model_source_code_path(instance, filename):
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'model/{safe_model_name}/{safe_version}/code/{filename}'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/code/{filename}'
 
 def model_reference_data_path(instance, filename):
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'model/{safe_model_name}/{safe_version}/references/{filename}'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/references/{filename}'
 
 def training_source_zip_path(instance, filename):
     return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/source/{filename}'
@@ -374,3 +381,38 @@ class TrainingJobEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} - {self.training_job_id}"
+
+class DriftMonitoringJob(models.Model):
+    STATUS_CHOICES = (
+        ("active", "Active"),
+        ("inactive", "Inactive"),
+    )
+    
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="drift_jobs")
+    model_api = models.OneToOneField(ModelAPI, on_delete=models.CASCADE, related_name="drift_job")
+    trigger_threshold = models.PositiveIntegerField(default=1000)
+    reference_data_s3_path = models.CharField(max_length=1024, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"DriftJob {self.model_api.name} ({self.trigger_threshold})"
+
+class DriftMonitoringResult(models.Model):
+    job = models.ForeignKey(DriftMonitoringJob, on_delete=models.CASCADE, related_name="results")
+    report_url = models.CharField(max_length=1024, blank=True) # HTML report S3 URI
+    drift_score = models.FloatField(default=0.0)
+    dataset_drift = models.BooleanField(default=False)
+    drifted_features_count = models.PositiveIntegerField(default=0)
+    total_features = models.PositiveIntegerField(default=0)
+    run_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ["-run_at"]
+
+    def __str__(self):
+        return f"Result {self.id} for {self.job.model_api.name}"

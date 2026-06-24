@@ -1,11 +1,13 @@
 # database.py: Quản lý kết nối đến PostgreSQL cho Consumer
 import os
+import json
 from urllib.parse import quote_plus
 
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
+from sqlalchemy.dialects.postgresql import JSONB
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(dotenv_path=os.path.join(ROOT_DIR, '.env'))
@@ -45,7 +47,13 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
         return False
 
     try:
-        df.to_sql(table_name, engine_rw, if_exists='append', index=False, chunksize=1000)
+        dtypes = {}
+        for col in df.columns:
+            if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
+                df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x)
+                dtypes[col] = JSONB
+
+        df.to_sql(table_name, engine_rw, if_exists='append', index=False, chunksize=1000, dtype=dtypes)
 
         if 'id' in df.columns:
             with engine_rw.begin() as conn:
@@ -85,3 +93,36 @@ def get_production_data_count() -> int:
     except Exception as e:
         print(f"Error counting records: {e}")
         return 0
+
+def get_production_data_count_by_model(model_id: str) -> int:
+    engine = engine_ro if engine_ro else engine_rw
+    if engine is None:
+        return 0
+
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT COUNT(*) FROM paas_production_logs WHERE model_id = :model_id"),
+                {"model_id": model_id}
+            )
+            return result.scalar()
+    except Exception as e:
+        if "relation \"paas_production_logs\" does not exist" not in str(e):
+            print(f"Error counting records for model: {e}")
+        return 0
+
+def get_model_drift_thresholds() -> dict:
+    engine = engine_ro if engine_ro else engine_rw
+    if engine is None:
+        return {}
+
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT model_api_id, trigger_threshold FROM authentication_driftmonitoringjob WHERE status = 'active'")
+            )
+            return {str(row[0]): row[1] for row in result.fetchall()}
+    except Exception as e:
+        if "relation \"authentication_driftmonitoringjob\" does not exist" not in str(e):
+            print(f"Error getting drift thresholds: {e}")
+        return {}
