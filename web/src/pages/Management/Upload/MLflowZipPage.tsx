@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react';
+import { Trash2, Rocket } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { useState } from 'react';
@@ -30,6 +30,7 @@ export default function MLflowZipPage({
   const navigate = useNavigate();
   const { createModelAPI } = useModelAPIMutations();
   const [createdModelId, setCreatedModelId] = useState<string | null>(null);
+  const [isBuildSuccess, setIsBuildSuccess] = useState(false);
 
   const submitAdvanced = async () => {
     onSubmitting(true);
@@ -75,6 +76,22 @@ export default function MLflowZipPage({
     setField('access_mode', 'public');
     setField('version', 'v1');
     setField('artifact', null);
+    setIsBuildSuccess(false);
+  };
+
+  const handleDeploy = async () => {
+    if (!createdModelId) return;
+    onSubmitting(true);
+    try {
+      await deployModelAPI(createdModelId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      toast.success("Deployment started!");
+      navigate(`/dashboard/api-management`);
+    } catch (e) {
+      const msg = getApiErrorMessage(e, "Deployment failed.");
+      toast.error(msg);
+      onSubmitting(false);
+    }
   };
 
   return (
@@ -155,17 +172,9 @@ export default function MLflowZipPage({
           onRebuild={submitAdvanced}
           onCancel={cancelBuild}
           buildDisabled={!form.artifact || !form.name.trim()}
-          onBuildSuccess={async (modelId) => {
-            onSubmitting(true);
-            try {
-              await deployModelAPI(modelId);
-              await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
-              navigate(`/dashboard/api-management`);
-            } catch (e) {
-              const msg = getApiErrorMessage(e, "Deployment failed.");
-              toast.error(msg);
-              onSubmitting(false);
-            }
+          onBuildSuccess={() => {
+            setIsBuildSuccess(true);
+            toast.success("Build successful! You can now deploy.");
           }}
         />
       </div>
@@ -180,6 +189,16 @@ export default function MLflowZipPage({
           onClick={handleClear}
         >
           Clear
+        </Button>
+        <Button
+          className="flex-1"
+          variant="primary"
+          size="md"
+          icon={<Rocket className="h-4 w-4" />}
+          disabled={!isBuildSuccess}
+          onClick={handleDeploy}
+        >
+          Deploy
         </Button>
       </div>
     </div>

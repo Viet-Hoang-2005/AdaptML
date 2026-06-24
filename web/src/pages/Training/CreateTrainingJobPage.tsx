@@ -14,6 +14,7 @@ import { createTrainingJob, getTrainingJobLogs } from '../../lib/api';
 import { toast } from '../../lib/toast';
 import { useModelSelection } from '../../hooks/useModelSelection';
 import { SourceEditor } from '../../components/ui/SourceEditor';
+import { Slider } from '../../components/ui/Slider';
 import type { TrainingJobFormValues, TrainingAcceleratorType } from '../../types/modelApi';
 
 const wizardSteps = [
@@ -229,12 +230,11 @@ export default function CreateTrainingJobPage() {
             <StepTitle title="Code & Data" subtitle="Review and edit the model's source code and reference data before starting the training job."/>
             
             <SourceEditor 
-              modelApi={selectedModel} 
-              fileType="source_code_file"
+              modelId={selectedModel.id.toString()} 
+              fileType="code_file"
               title="Source Code"
               icon={<FileCode2 className="w-4 h-4" />}
               accept=".zip,.py"
-              defaultFilename="main.py"
               editorType="code"
               currentEntryPoint={form.entry_point}
               onSetEntryPoint={(file) => setField('entry_point', file)}
@@ -242,12 +242,11 @@ export default function CreateTrainingJobPage() {
             />
 
             <SourceEditor
-              modelApi={selectedModel} 
-              fileType="reference_data_file"
+              modelId={selectedModel.id.toString()} 
+              fileType="data_file"
               title="Reference Data"
               icon={<Database className="w-4 h-4" />}
               accept=".zip,.csv"
-              defaultFilename="data.csv"
               editorType="csv"
               onDirtyChange={setReferenceDataDirty}
             />
@@ -263,60 +262,16 @@ export default function CreateTrainingJobPage() {
             <StepTitle title="Compute Resources" subtitle="Select the hardware configuration for the training job."/>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Max Runtime</label>
-              <div className="relative pt-2 pb-8 select-none px-4">
-                {(() => {
-                  const runtimeIndex = Math.max(0, runtimeOptions.findIndex(opt => opt.value === form.max_runtime_seconds));
-                  let sliderColor = 'bg-green-500';
-                  if (runtimeIndex >= 5) sliderColor = 'bg-red-500';
-                  else if (runtimeIndex >= 3) sliderColor = 'bg-yellow-500';
-                  
-                  return (
-                    <div className="relative h-2 bg-gray-200 rounded-full w-full">
-                      {/* Colored track */}
-                      <div 
-                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-300 ease-in-out ${sliderColor}`}
-                        style={{ width: `${(runtimeIndex / (runtimeOptions.length - 1)) * 100}%` }}
-                      />
-                      
-                      {/* Thumb */}
-                      <div 
-                        className={`absolute top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-4 rounded-full shadow transition-all duration-300 ease-in-out ${sliderColor.replace('bg-', 'border-')}`}
-                        style={{ left: `calc(${(runtimeIndex / (runtimeOptions.length - 1)) * 100}% - 10px)` }}
-                      />
-                      
-                      {/* Input Range */}
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max={runtimeOptions.length - 1} 
-                        step="1"
-                        value={runtimeIndex}
-                        onChange={(e) => setField('max_runtime_seconds', runtimeOptions[parseInt(e.target.value)].value)}
-                        className="absolute top-1/2 -translate-y-1/2 left-0 w-full h-8 opacity-0 cursor-pointer z-10 m-0"
-                      />
-                    </div>
-                  );
-                })()}
-
-                {/* Labels */}
-                <div className="absolute left-4 right-4 mt-4 h-4">
-                  {runtimeOptions.map((opt, i) => {
-                    const runtimeIndex = Math.max(0, runtimeOptions.findIndex(o => o.value === form.max_runtime_seconds));
-                    return (
-                      <div 
-                        key={opt.value}
-                        className={`absolute top-0 -translate-x-1/2 text-xs font-medium cursor-pointer transition-colors ${
-                          i === runtimeIndex ? 'text-gray-900 font-bold' : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                        style={{ left: `${(i / (runtimeOptions.length - 1)) * 100}%` }}
-                        onClick={() => setField('max_runtime_seconds', opt.value)}
-                      >
-                        {opt.label}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <Slider
+                options={runtimeOptions}
+                value={form.max_runtime_seconds}
+                onChange={(val) => setField('max_runtime_seconds', val)}
+                getColor={(index) => {
+                  if (index >= 5) return 'bg-red-500';
+                  if (index >= 3) return 'bg-yellow-500';
+                  return 'bg-green-500';
+                }}
+              />
             </div>
             
             <div className="mt-6">

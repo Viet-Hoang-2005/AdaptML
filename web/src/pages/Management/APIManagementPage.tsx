@@ -9,7 +9,8 @@ import Placeholder from '../../components/layout/Placeholder';
 import { useModelAPIs, useModelAPIMutations } from '../../hooks/useModelAPIs';
 import type { ModelAPI } from '../../types/modelApi';
 import EditModelModal from './EditModelModal';
-import { TitlePage } from '../../components/ui/TitlePage';
+import { PageHeader } from '../../components/layout/PageHeader';
+import { PageContent } from '../../components/layout/PageContent';
 
 export default function APIManagementPage() {
   const navigate = useNavigate();
@@ -130,9 +131,9 @@ export default function APIManagementPage() {
 
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
-      <TitlePage title="API Management" />
+      <PageHeader title="API Management" />
 
-      <section className="flex flex-1 flex-col rounded-lg border border-gray-300 bg-white">
+      <PageContent>
         <div className="px-6 py-6 space-y-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="w-full md:w-96">
@@ -147,7 +148,6 @@ export default function APIManagementPage() {
             <Button
               size="md"
               onClick={() => navigate('/dashboard/api-management/upload')}
-              className="px-4"
             >
               <Plus className="h-4 w-4"/>
               Upload model
@@ -177,7 +177,7 @@ export default function APIManagementPage() {
             )}
           </div>
         </div>
-      </section>
+      </PageContent>
       
       <EditModelModal
         key={`edit-modal-${selectedModel?.id || 'none'}-${isModalVisible}`}

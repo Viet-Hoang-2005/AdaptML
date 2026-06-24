@@ -6,7 +6,7 @@ import { queryKeys } from '../../../lib/queryKeys';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import type { ModelBuildFormValues, ModelFlavor } from '../../../types/modelApi';
-import { SummaryItem } from './UploadModelFormPage';
+import { SummaryItem } from './UploadModelPage';
 import { StepTitle } from '../../../components/ui/StepTitle';
 import { FileDropzone } from '../../../components/ui/FileDropzone';
 import { TextArea } from '../../../components/ui/TextArea';
@@ -368,6 +368,7 @@ function DeployStep({
         key={modelId || 'idle'}
         modelId={modelId}
         onBuildSuccess={(id, previewTree) => {
+          toast.success("Build successful! You can now deploy.");
           onBuildSuccess(id, previewTree);
         }}
         onRebuild={rebuild}

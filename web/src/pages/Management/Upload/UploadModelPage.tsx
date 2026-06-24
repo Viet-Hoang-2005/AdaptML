@@ -6,7 +6,7 @@ import { deleteModelAPI as deleteModelAPICore } from '../../../lib/api';
 import type { ModelAPIFormValues, ModelBuildFormValues } from '../../../types/modelApi';
 import BuildPackagePage from './BuildPackagePage';
 import MLflowZipPage from './MLflowZipPage';
-import { TitlePage } from '../../../components/ui/TitlePage';
+import { PageHeader } from '../../../components/layout/PageHeader';
 
 const emptyAdvancedForm: ModelAPIFormValues = {
   name: '',
@@ -27,7 +27,7 @@ const emptyBuildForm: ModelBuildFormValues = {
   requirements_file: null,
 };
 
-export default function UploadModelFormPage() {
+export default function UploadModelPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const mode = location.pathname.includes('mlflow-zip') ? 'advanced' : 'builder';
@@ -97,7 +97,7 @@ export default function UploadModelFormPage() {
           blocker.reset?.();
         }}
       />
-      <TitlePage
+      <PageHeader
         title="Upload model"
         backLink={{ to: '/dashboard/api-management', label: 'Back to API Management' }}
         tabs={[

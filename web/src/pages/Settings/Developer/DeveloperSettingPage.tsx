@@ -7,6 +7,7 @@ import { ApiModal } from '../../../components/ui/ApiModal';
 import { useDeveloperSettings } from '../../../hooks/useDeveloperSettings';
 import { useModelAPIs } from '../../../hooks/useModelAPIs';
 import type { APIKeyRecord } from '../../../types/auth';
+import { PageContent } from '../../../components/layout/PageContent';
 
 export default function DeveloperSettingPage() {
   const navigate = useNavigate();
@@ -125,7 +126,7 @@ export default function DeveloperSettingPage() {
 
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
-      <section className="flex flex-1 flex-col rounded-lg border border-gray-300 bg-white">
+      <PageContent>
         <div className="flex flex-col gap-4 border-b border-gray-100 px-6 py-6 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Developer Access</h2>
@@ -152,7 +153,7 @@ export default function DeveloperSettingPage() {
             pagination={{ pageSize: 10 }} 
           />
         </div>
-      </section>
+      </PageContent>
 
       {createdApiKey && (
         <ApiModal

@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button';
 import Placeholder from '../../../components/layout/Placeholder';
 import { toast } from '../../../lib/toast';
 import { useModelSelection } from '../../../hooks/useModelSelection';
+import { PageContent } from '../../../components/layout/PageContent';
 
 export default function ModelApiPage() {
   const navigate = useNavigate();
@@ -31,7 +32,7 @@ export default function ModelApiPage() {
   }
 
   return (
-    <section className="flex flex-col flex-1 rounded-lg border border-gray-300 bg-white">
+    <PageContent>
       <div className="border-b border-gray-200 p-6">
         <p className="text-xs font-semibold uppercase text-gray-400">{selectedModel.status}</p>
         <h2 className="mt-2 text-2xl font-bold text-gray-900">{selectedModel.name}</h2>
@@ -76,6 +77,6 @@ export default function ModelApiPage() {
           </div>
         </div>
       </div>
-    </section>
+    </PageContent>
   );
 }

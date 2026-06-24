@@ -1,6 +1,6 @@
 import { Code, UserRound } from 'lucide-react';
 import { Outlet } from 'react-router-dom';
-import { TitlePage } from '../../components/ui/TitlePage';
+import { PageHeader } from '../../components/layout/PageHeader';
 
 const settingsTabs = [
   { label: 'Profile', to: '/dashboard/settings/profile', icon: UserRound },
@@ -10,7 +10,7 @@ const settingsTabs = [
 export default function SettingsLayout() {
   return (
     <div className="flex flex-1 flex-col space-y-6">
-      <TitlePage title="Settings" tabs={settingsTabs} />
+      <PageHeader title="Settings" tabs={settingsTabs} />
 
       <Outlet />
     </div>

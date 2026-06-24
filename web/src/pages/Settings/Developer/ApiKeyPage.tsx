@@ -11,7 +11,8 @@ import { toast } from '../../../lib/toast';
 import { Table } from 'antd';
 import type { TableProps } from 'antd';
 import type { ModelAPI } from '../../../types/modelApi';
-import { TitlePage } from '../../../components/ui/TitlePage';
+import { PageHeader } from '../../../components/layout/PageHeader';
+import { PageContent } from '../../../components/layout/PageContent';
 
 export default function ApiKeyPage() {
   const { keyId } = useParams<{ keyId?: string }>();
@@ -86,12 +87,12 @@ export default function ApiKeyPage() {
 
   return (
     <div className="flex w-full flex-col space-y-6">
-      <TitlePage
+      <PageHeader
         title={keyId ? 'Edit API Key' : 'Create API Key'}
         backLink={{ to: '/dashboard/settings/developer', label: 'Back to Developer Settings' }}
       />
 
-      <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-6 space-y-6 shadow-sm">
+      <PageContent className="p-6 space-y-6">
         <div className="space-y-4">
           <Input
             id="input-api-key-name"
@@ -166,7 +167,7 @@ export default function ApiKeyPage() {
             {keyId ? 'Save changes' : 'Create API Key'}
           </Button>
         </div>
-      </div>
+      </PageContent>
 
       {createdApiKey && (
         <ApiModal

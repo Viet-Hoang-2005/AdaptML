@@ -11,6 +11,7 @@ import { toast } from '../../../lib/toast';
 import { FileDropzone } from '../../../components/ui/FileDropzone';
 import { CSVEditor } from '../../../components/ui/CSVEditor';
 import { SummaryCard } from '../../../components/ui/SummaryCard';
+import { PageContent } from '../../../components/layout/PageContent';
 
 const TARGET_COLUMN_NAMES = new Set([
   'label',
@@ -337,8 +338,7 @@ export default function ModelTestingPage() {
           blocker.reset?.();
         }}
       />
-      <section className="flex flex-col h-full flex-1">
-      <div className="flex-1 flex flex-col rounded-lg border border-gray-300 bg-white p-6">
+      <PageContent className="p-6 h-full">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Data Testing</h2>
@@ -470,8 +470,7 @@ export default function ModelTestingPage() {
             </div>
           </div>
         )}
-      </div>
-      </section>
+      </PageContent>
     </>
   );
 }
