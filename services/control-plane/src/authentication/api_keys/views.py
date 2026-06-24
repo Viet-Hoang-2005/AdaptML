@@ -2,15 +2,16 @@ import json
 import secrets
 
 from django.contrib.auth.hashers import make_password
-from django.core.cache import cache
 from django.utils import timezone
+from django_redis import get_redis_connection
+
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from authentication.models import ModelAPI, UserAPIKey
-
+from integrations.hashid_utils import decode_model_id, encode_model_id
 
 class APIKeyManagementView(APIView):
     permission_classes = [IsAuthenticated]
@@ -26,7 +27,7 @@ class APIKeyManagementView(APIView):
                     "name": key.name,
                     "description": key.description,
                     "scope": key.scope,
-                    "allowed_models": list(key.allowed_models.values_list("id", flat=True)),
+                    "allowed_models": [encode_model_id(mid) for mid in key.allowed_models.values_list("id", flat=True)],
                     "key_prefix": key.key_prefix,
                     "created_at": key.created_at,
                 }
@@ -46,6 +47,15 @@ class APIKeyManagementView(APIView):
 
         raw_key = f"sk_live_{secrets.token_urlsafe(32)}"
         key_prefix = raw_key[:16]
+        
+        decoded_model_ids = []
+        for mid in allowed_models_ids:
+            try:
+                decoded = decode_model_id(mid)
+                if decoded is not None:
+                    decoded_model_ids.append(decoded)
+            except Exception:
+                pass
 
         api_key = UserAPIKey.objects.create(
             user=user,
@@ -56,8 +66,8 @@ class APIKeyManagementView(APIView):
             key_hash=make_password(raw_key),
         )
 
-        if scope == "specific" and allowed_models_ids:
-            models = ModelAPI.objects.filter(id__in=allowed_models_ids, tenant=user)
+        if scope == "specific" and decoded_model_ids:
+            models = ModelAPI.objects.filter(id__in=decoded_model_ids, tenant=user)
             api_key.allowed_models.set(models)
 
         allowed_model_ids_list = list(api_key.allowed_models.values_list("id", flat=True))
@@ -66,8 +76,9 @@ class APIKeyManagementView(APIView):
             "scope": scope,
             "allowed_models": allowed_model_ids_list,
         }
-        cache.set(f"api_key:{raw_key}", json.dumps(payload), timeout=None)
-        cache.set(f"api_key_reverse:{api_key.id}", raw_key, timeout=None)
+        redis_client = get_redis_connection("default")
+        redis_client.set(f":1:api_key:{raw_key}", json.dumps(payload))
+        redis_client.set(f":1:api_key_reverse:{api_key.id}", raw_key)
 
         return Response({
             "message": "API key has been created. Store it now because it will only be shown once.",
@@ -77,7 +88,7 @@ class APIKeyManagementView(APIView):
             "name": api_key.name,
             "description": api_key.description,
             "scope": api_key.scope,
-            "allowed_models": allowed_model_ids_list,
+            "allowed_models": [encode_model_id(mid) for mid in allowed_model_ids_list],
         }, status=status.HTTP_201_CREATED)
 
 
@@ -102,22 +113,34 @@ class APIKeyDetailView(APIView):
         api_key.scope = scope
         api_key.save(update_fields=["name", "description", "scope"])
 
+        decoded_model_ids = []
+        for mid in allowed_models_ids:
+            try:
+                decoded = decode_model_id(mid)
+                if decoded is not None:
+                    decoded_model_ids.append(decoded)
+            except Exception:
+                pass
+
         if scope == "specific":
-            models = ModelAPI.objects.filter(id__in=allowed_models_ids, tenant=request.user)
+            models = ModelAPI.objects.filter(id__in=decoded_model_ids, tenant=request.user)
             api_key.allowed_models.set(models)
         else:
             api_key.allowed_models.clear()
 
         allowed_model_ids_list = list(api_key.allowed_models.values_list("id", flat=True))
 
-        raw_key = cache.get(f"api_key_reverse:{api_key.id}")
+        redis_client = get_redis_connection("default")
+        raw_key = redis_client.get(f":1:api_key_reverse:{api_key.id}")
         if raw_key:
+            if isinstance(raw_key, bytes):
+                raw_key = raw_key.decode("utf-8")
             payload = {
                 "tenant_id": request.user.tenant_id,
                 "scope": scope,
                 "allowed_models": allowed_model_ids_list,
             }
-            cache.set(f"api_key:{raw_key}", json.dumps(payload), timeout=None)
+            redis_client.set(f":1:api_key:{raw_key}", json.dumps(payload))
 
         return Response({
             "message": "API key updated successfully.",
@@ -125,7 +148,7 @@ class APIKeyDetailView(APIView):
             "name": api_key.name,
             "description": api_key.description,
             "scope": api_key.scope,
-            "allowed_models": allowed_model_ids_list,
+            "allowed_models": [encode_model_id(mid) for mid in allowed_model_ids_list],
             "key_prefix": api_key.key_prefix,
             "created_at": api_key.created_at,
         }, status=status.HTTP_200_OK)
@@ -137,11 +160,14 @@ class APIKeyDetailView(APIView):
 
         api_key.revoked_at = timezone.now()
         api_key.save(update_fields=["revoked_at"])
-
-        raw_key = cache.get(f"api_key_reverse:{api_key.id}")
+        
+        redis_client = get_redis_connection("default")
+        raw_key = redis_client.get(f":1:api_key_reverse:{api_key.id}")
         if raw_key:
-            cache.delete(f"api_key:{raw_key}")
-            cache.delete(f"api_key_reverse:{api_key.id}")
+            if isinstance(raw_key, bytes):
+                raw_key = raw_key.decode("utf-8")
+            redis_client.delete(f":1:api_key:{raw_key}")
+            redis_client.delete(f":1:api_key_reverse:{api_key.id}")
 
         return Response({"message": "API key deleted successfully."}, status=status.HTTP_200_OK)
 
@@ -154,9 +180,12 @@ class APIKeyRegenerateView(APIView):
         if not api_key:
             return Response({"error": "API key not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        old_raw_key = cache.get(f"api_key_reverse:{api_key.id}")
+        redis_client = get_redis_connection("default")
+        old_raw_key = redis_client.get(f":1:api_key_reverse:{api_key.id}")
         if old_raw_key:
-            cache.delete(f"api_key:{old_raw_key}")
+            if isinstance(old_raw_key, bytes):
+                old_raw_key = old_raw_key.decode("utf-8")
+            redis_client.delete(f":1:api_key:{old_raw_key}")
 
         raw_key = f"sk_live_{secrets.token_urlsafe(32)}"
         api_key.key_prefix = raw_key[:16]
@@ -169,9 +198,8 @@ class APIKeyRegenerateView(APIView):
             "scope": api_key.scope,
             "allowed_models": allowed_model_ids_list,
         }
-
-        cache.set(f"api_key:{raw_key}", json.dumps(payload), timeout=None)
-        cache.set(f"api_key_reverse:{api_key.id}", raw_key, timeout=None)
+        redis_client.set(f":1:api_key:{raw_key}", json.dumps(payload))
+        redis_client.set(f":1:api_key_reverse:{api_key.id}", raw_key)
 
         return Response({
             "message": "API key regenerated. Store it now because it will only be shown once.",
@@ -180,6 +208,6 @@ class APIKeyRegenerateView(APIView):
             "name": api_key.name,
             "description": api_key.description,
             "scope": api_key.scope,
-            "allowed_models": allowed_model_ids_list,
+            "allowed_models": [encode_model_id(mid) for mid in allowed_model_ids_list],
             "key_prefix": api_key.key_prefix,
         }, status=status.HTTP_200_OK)

@@ -1,11 +1,14 @@
+import uuid
+import secrets
+import os
+import json
+
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from django.utils import timezone
-import uuid
-import secrets
-import os
+from django_redis import get_redis_connection
 from django.core.cache import cache
 
 class TrainingUploadStorage(FileSystemStorage):
@@ -141,12 +144,13 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         try:
             # Đẩy/Cập nhật API Key lên Redis
             if self.is_active and self.api_key:
-                import json
                 payload = json.dumps({"tenant_id": self.tenant_id, "scope": "all", "allowed_models": []})
-                cache.set(f"api_key:{self.api_key}", payload, timeout=None)
+                redis_client = get_redis_connection("default")
+                redis_client.set(f":1:api_key:{self.api_key}", payload)
             elif not self.is_active and self.api_key:
                 # Thu hồi ngay lập tức nếu tài khoản bị khóa
-                cache.delete(f"api_key:{self.api_key}")
+                redis_client = get_redis_connection("default")
+                redis_client.delete(f":1:api_key:{self.api_key}")
         except Exception as e:
             print(f"Failed to update API key in Redis: {e}")
             # Dù Redis lỗi thì vẫn lưu user bình thường

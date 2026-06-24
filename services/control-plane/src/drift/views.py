@@ -188,12 +188,16 @@ class TriggerDriftJobManualView(views.APIView):
     def post(self, request, job_id):
         job = get_object_or_404(DriftMonitoringJob, id=job_id, tenant=request.user)
         
-        # Spawn docker container
-        run_evidently_job(job)
-        
-        return Response({"status": "Drift job manually triggered"})
+        # Spawn docker container synchronously and catch error
+        from drift.evidently_service import run_evidently_job_sync
+        try:
+            run_evidently_job_sync(job.id)
+            return Response({"status": "Drift job manually triggered and completed"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class DriftResultWebhookView(views.APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -202,14 +206,14 @@ class DriftResultWebhookView(views.APIView):
         if secret != expected_secret:
             return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
             
-        model_name = request.data.get("model_id")
+        model_id = request.data.get("model_id")
         summary = request.data.get("drift_summary", {})
         
-        if not model_name or not summary:
+        if not model_id or not summary:
             return Response({"error": "model_id and drift_summary required"}, status=status.HTTP_400_BAD_REQUEST)
             
         try:
-            model = ModelAPI.objects.get(name=model_name)
+            model = ModelAPI.objects.get(id=model_id)
             job = DriftMonitoringJob.objects.get(model_api=model, status="active")
             
             artifacts = summary.get("report_artifacts", {})
@@ -228,4 +232,32 @@ class DriftResultWebhookView(views.APIView):
             
         except Exception as e:
             logger.error(f"Failed to process drift result webhook: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class PresignedUrlView(views.APIView):
+    def post(self, request):
+        s3_uri = request.data.get("s3_uri")
+        if not s3_uri or not s3_uri.startswith("s3://"):
+            return Response({"error": "Invalid s3_uri"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        import boto3
+        from django.conf import settings
+        
+        aws_region = getattr(settings, "AWS_S3_REGION_NAME", "ap-southeast-1")
+        s3_client = boto3.client('s3', region_name=aws_region)
+        
+        try:
+            # s3://bucket-name/path/to/key
+            parts = s3_uri.replace("s3://", "").split("/", 1)
+            bucket_name = parts[0]
+            key = parts[1]
+            
+            url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': bucket_name, 'Key': key},
+                ExpiresIn=3600
+            )
+            return Response({"url": url})
+        except Exception as e:
+            logger.error(f"Failed to generate presigned URL: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

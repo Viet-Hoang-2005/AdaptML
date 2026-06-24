@@ -1,14 +1,16 @@
 import json
 import os
 import uuid
-from datetime import datetime
-from typing import Any, Dict
 
 import httpx
 import jwt
 import numpy as np
 import pandas as pd
 import redis
+import pickle
+
+from datetime import datetime
+from typing import Any, Dict
 from confluent_kafka import Producer
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
@@ -72,7 +74,7 @@ paas_latency_histogram = Histogram(
 Instrumentator().instrument(app).expose(app)
 
 try:
-    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    redis_client = redis.from_url(REDIS_URL)
     redis_client.ping()
     print(f"Redis Connected: {REDIS_URL}")
 except Exception as exc:
@@ -139,11 +141,16 @@ async def verify_model_access(
         if not redis_client:
             raise HTTPException(status_code=500, detail="Internal Server Error: Redis cache unavailable")
 
-        cached_data_str = redis_client.get(f":1:api_key:{api_key}")
-        if not cached_data_str:
+        cached_data_bytes = redis_client.get(f":1:api_key:{api_key}")
+        if not cached_data_bytes:
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid or revoked API Key")
             
         try:
+            if cached_data_bytes.startswith(b'\x80'):
+                cached_data_str = pickle.loads(cached_data_bytes)
+            else:
+                cached_data_str = cached_data_bytes.decode('utf-8')
+                
             cached_data = json.loads(cached_data_str)
             cached_tenant_id = cached_data.get("tenant_id")
             scope = cached_data.get("scope", "all")

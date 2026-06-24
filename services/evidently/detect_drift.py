@@ -31,9 +31,10 @@ DB_HOST_RO = os.getenv("DB_HOST_RO", "localhost")
 
 # PAAS MULTI-TENANT CONFIG
 TENANT_ID = os.getenv("TENANT_ID")
-MODEL_ID = os.getenv("MODEL_ID")
+MODEL_ID = os.getenv("MODEL_ID")  # integer DB ID, matches paas_production_logs.model_id
+MODEL_NAME = os.getenv("MODEL_NAME", MODEL_ID)  # human-readable name for MLflow and file naming
 REFERENCE_DATA_URL = os.getenv("REFERENCE_DATA_URL")
-MODEL_URI = os.getenv("MODEL_URI", f"models:/{MODEL_ID}/Production")
+MODEL_URI = os.getenv("MODEL_URI", f"models:/{MODEL_NAME}/Production")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/drift-webhook")
 HTML_S3_URI = os.getenv("HTML_S3_URI", "")
 REPORT_JSON_S3_URI = os.getenv("REPORT_JSON_S3_URI", "")
@@ -69,9 +70,9 @@ def load_reference_data():
 
     # Xác định đường dẫn file tạm
     reference_path = urlparse(REFERENCE_DATA_URL).path.lower()
-    local_filename = f"/tmp/ref_data_{MODEL_ID}.csv"
+    local_filename = f"/tmp/ref_data_{MODEL_NAME}.csv"
     if reference_path.endswith('.parquet'):
-        local_filename = f"/tmp/ref_data_{MODEL_ID}.parquet"
+        local_filename = f"/tmp/ref_data_{MODEL_NAME}.parquet"
 
     if REFERENCE_DATA_URL.startswith("http"):
         print(f"[1/4] Downloading from presigned URL to {local_filename}...")
@@ -193,7 +194,7 @@ def filter_column_mapping(column_mapping, common_cols):
 
 def save_drift_report(report, result_dict, summary):
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    report_dir = f"/tmp/drift_reports/{TENANT_ID}/{MODEL_ID}/{run_id}"
+    report_dir = f"/tmp/drift_reports/{TENANT_ID}/{MODEL_NAME}/{run_id}"
     os.makedirs(report_dir, exist_ok=True)
 
     html_path = os.path.join(report_dir, "report.html")

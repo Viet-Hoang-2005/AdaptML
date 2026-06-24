@@ -10,6 +10,7 @@ from drift.views import (
     ReferenceFileUploadView,
     TriggerDriftJobManualView,
     TriggerDriftJobWebhookView,
+    PresignedUrlView,
 )
 
 urlpatterns = [
@@ -22,4 +23,5 @@ urlpatterns = [
     path("models/<hashid:model_id>/reference-data/", ReferenceFileUploadView.as_view(), name="model_reference_upload"),
     path("internal/trigger-drift-job", TriggerDriftJobWebhookView.as_view(), name="trigger_drift_job_webhook"),
     path("internal/drift-webhook", DriftResultWebhookView.as_view(), name="drift_result_webhook"),
+    path("presigned-url/", PresignedUrlView.as_view(), name="drift_presigned_url"),
 ]

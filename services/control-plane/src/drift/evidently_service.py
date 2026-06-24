@@ -4,10 +4,11 @@ import logging
 import threading
 from django.conf import settings
 from authentication.models import DriftMonitoringJob
+from integrations.hashid_utils import encode_model_id
 
 logger = logging.getLogger(__name__)
 
-def run_evidently_job_async(job_id: int):
+def run_evidently_job_sync(job_id: int):
     try:
         job = DriftMonitoringJob.objects.get(id=job_id)
         client = docker.from_env()
@@ -45,9 +46,8 @@ def run_evidently_job_async(job_id: int):
 
         from datetime import datetime, timezone
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        reports_prefix = getattr(settings, 'DRIFT_REPORTS_S3_PREFIX', 'drift-reports')
         tenant_id_str = getattr(job.tenant, "tenant_id", "T-LOCALDEV")
-        base_report_key = f"{reports_prefix}/{tenant_id_str}/{job.model_api.name}/{run_id}"
+        base_report_key = f"{user_name}/models/{model_name}/{version}/drift-reports/{run_id}"
 
         html_upload_url = ""
         report_json_upload_url = ""
@@ -83,10 +83,11 @@ def run_evidently_job_async(job_id: int):
         env = {
             "JOB_ID": str(job.id),
             "TENANT_ID": tenant_id_str,
-            "MODEL_ID": job.model_api.name,
+            "MODEL_ID": str(job.model_api.id),  # integer DB ID matching paas_production_logs
+            "MODEL_NAME": job.model_api.name,   # human-readable name for MLflow
             "MODEL_URI": f"models:/{job.model_api.name}/Production",
             "REFERENCE_DATA_URL": ref_url,
-            "DRIFT_THRESHOLD": str(job.trigger_threshold),
+            "DRIFT_THRESHOLD": "0.6", # Hardcoded float share, DO NOT use job.trigger_threshold here
             
             # Webhook Artifact URIs
             "HTML_S3_URI": html_s3_uri,
@@ -106,31 +107,63 @@ def run_evidently_job_async(job_id: int):
             "DB_NAME": db_name,
             "DB_PORT": db_port,
             "MLFLOW_TRACKING_URI": os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000"),
-            "WEBHOOK_URL": f"{internal_base_url}/api/internal/drift-webhook",
+            "WEBHOOK_URL": f"{internal_base_url}/api/drift/internal/drift-webhook",
             "WEBHOOK_SECRET": getattr(settings, "WEBHOOK_SECRET", "super-secret-key"),
             "DRIFT_REPORTS_S3_PREFIX": "drift-reports"
         }
 
         network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
         
-        logger.info(f"Spawning mlops-paas-evidently container for job {job.id}")
+        model_hashid = encode_model_id(job.model_api.id)
+        container_name = f"evidently_{tenant_id_str.lower()}_model_{model_hashid.lower()}"
         
+        logger.info(f"Spawning container {container_name} for job {job.id}")
+        
+        # Cleanup existing container with same name if it stuck from a previous crash
+        try:
+            old_container = client.containers.get(container_name)
+            old_container.remove(force=True)
+        except docker.errors.NotFound:
+            pass
+
         # We reuse the mlops-paas-evidently image built by docker-compose
         # which already contains detect_drift.py and all dependencies.
-        logs = client.containers.run(
+        # Run detached to easily capture logs regardless of exit code
+        container = client.containers.run(
             image="mlops-paas-evidently",
+            name=container_name,
             command=["python", "/app/detect_drift.py"],
             environment=env,
             network=network_name,
-            detach=False,
-            remove=True
+            detach=True
         )
-        logger.info(f"Evidently job finished. Logs:\n{logs.decode('utf-8')}")
+        
+        result = container.wait()
+        log_str = container.logs().decode('utf-8')
+        container.remove()
+        
+        if result['StatusCode'] != 0:
+            logger.error(f"Evidently job container failed. Output: {log_str}")
+            raise Exception(f"Container error: {log_str}")
+            
+        logger.info(f"Evidently job finished. Logs:\n{log_str}")
+        
+        if "Skipping drift analysis" in log_str:
+            raise Exception("Not enough production data to run drift analysis. Please send more requests to the model first.")
+            
+        return log_str
 
     except Exception as e:
         logger.error(f"Failed to run evidently job: {e}")
+        raise Exception(f"Job execution failed: {str(e)}")
 
 def run_evidently_job(job: DriftMonitoringJob):
-    # Run in background
-    thread = threading.Thread(target=run_evidently_job_async, args=(job.id,))
+    # Run in background (for automated webhook triggers)
+    def bg_task():
+        try:
+            run_evidently_job_sync(job.id)
+        except Exception as e:
+            logger.error(f"Background Evidently job failed: {e}")
+            
+    thread = threading.Thread(target=bg_task)
     thread.start()
