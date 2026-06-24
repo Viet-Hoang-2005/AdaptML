@@ -11,30 +11,100 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 
-# ── Optional MLflow integration (Phase 10E.1) ───────────────────────────────
-# If mlflow is installed and MLFLOW_TRACKING_URI is set, this script will:
+# ── MLflow tracking is best-effort (non-fatal) ───────────────────────────────
+# If MLFLOW_TRACKING_URI is set and the server is reachable, this script will:
 #   1. Log parameters and metrics to the configured MLflow Tracking Server.
-#   2. Print MLFLOW_RUN_ID and MLFLOW_EXPERIMENT_ID so the Control Plane can
+#   2. Print MLFLOW_RUN_ID and related markers so the Control Plane can
 #      capture them for Model Evolution lineage linking.
 #
-# If mlflow is NOT installed or MLFLOW_TRACKING_URI is not set, training
-# continues normally using METRIC_JSON stdout logging only.
+# If MLFLOW_TRACKING_URI is not set, or the server is unreachable, or any
+# MLflow call fails, training continues normally and a MLFLOW_WARNING is
+# printed. The model artifact is always saved and uploaded.
 #
 # Container/internal URI (used in docker-compose local training):
 #   MLFLOW_TRACKING_URI=http://mlflow:5000
 #
+# AWS Batch: pass MLFLOW_TRACKING_URI via AWS_BATCH_MLFLOW_TRACKING_URI in .env
 # Do NOT use http://localhost:5001 inside training containers.
+#
+# Optional env vars:
+#   MLFLOW_TRACKING_REQUIRED=false   (default) — MLflow failure is a warning only
+#   MLFLOW_TRACKING_REQUIRED=true    — MLflow failure will raise and fail the job
+#   MLFLOW_HTTP_REQUEST_TIMEOUT=10   — seconds before MLflow HTTP calls time out
 # ─────────────────────────────────────────────────────────────────────────────
-try:
-    import mlflow
-    _MLFLOW_URI = os.environ.get("MLFLOW_TRACKING_URI", "").strip()
-    _MLFLOW_AVAILABLE = bool(_MLFLOW_URI)
-    if _MLFLOW_AVAILABLE:
-        mlflow.set_tracking_uri(_MLFLOW_URI)
-        _exp_name = os.environ.get("MLFLOW_EXPERIMENT_NAME", "mlops-paas-training")
-        mlflow.set_experiment(_exp_name)
-except ImportError:
-    _MLFLOW_AVAILABLE = False
+
+
+def try_log_to_mlflow(model, metrics: dict, params: dict) -> dict | None:
+    """
+    Attempt to log training run to MLflow.
+
+    Returns a dict with mlflow metadata keys if successful, or None if MLflow
+    is unavailable or logging fails. Never raises — all errors are caught and
+    printed as MLFLOW_WARNING markers.
+
+    Set MLFLOW_TRACKING_REQUIRED=true to make MLflow failure fatal.
+    """
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "").strip()
+    experiment_name = os.environ.get("MLFLOW_EXPERIMENT_NAME", "mlops-paas-training").strip()
+    tracking_required = os.environ.get("MLFLOW_TRACKING_REQUIRED", "false").strip().lower() == "true"
+
+    if not tracking_uri:
+        print(
+            "MLFLOW_WARNING:MLFLOW_TRACKING_URI is not set; skipping MLflow logging",
+            flush=True,
+        )
+        return None
+
+    # Apply optional request timeout so MLflow doesn't hang the entire job.
+    timeout_str = os.environ.get("MLFLOW_HTTP_REQUEST_TIMEOUT", "").strip()
+    if timeout_str:
+        try:
+            os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "1")
+            os.environ.setdefault("MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR", "0")
+        except Exception:
+            pass
+
+    try:
+        import mlflow
+        import mlflow.sklearn
+
+        mlflow.set_tracking_uri(tracking_uri)
+        mlflow.set_experiment(experiment_name)
+
+        with mlflow.start_run() as run:
+            for key, value in params.items():
+                mlflow.log_param(key, value)
+            for key, value in metrics.items():
+                mlflow.log_metric(key, value)
+
+            mlflow.sklearn.log_model(model, "sklearn-model")
+
+            run_id = run.info.run_id
+            experiment_id = run.info.experiment_id
+            artifact_uri = mlflow.get_artifact_uri()
+
+            # Emit structured markers for Control Plane lineage capture.
+            print(f"MLFLOW_RUN_ID:{run_id}", flush=True)
+            print(f"MLFLOW_EXPERIMENT_ID:{experiment_id}", flush=True)
+            print(f"MLFLOW_MODEL_URI:runs:/{run_id}/sklearn-model", flush=True)
+            print(f"MLFLOW_ARTIFACT_URI:{artifact_uri}", flush=True)
+
+            return {
+                "mlflow_run_id": run_id,
+                "mlflow_experiment_id": experiment_id,
+                "mlflow_model_uri": f"runs:/{run_id}/sklearn-model",
+                "mlflow_artifact_uri": artifact_uri,
+            }
+
+    except Exception as exc:
+        warning_msg = f"MLFLOW_WARNING:MLflow logging skipped due to error: {exc}"
+        print(warning_msg, flush=True)
+
+        if tracking_required:
+            # Re-raise only when explicitly configured as mandatory.
+            raise RuntimeError(warning_msg) from exc
+
+        return None
 
 
 def main():
@@ -70,28 +140,7 @@ def main():
         "feature_count": feature_count,
     }))
 
-    # ── Optional: log to MLflow if available ─────────────────────────────────
-    _mlflow_run = None
-    if _MLFLOW_AVAILABLE:
-        try:
-            _mlflow_run = mlflow.start_run(run_name=f"train-{model_version}")
-            mlflow.log_param("n_estimators", 10)
-            mlflow.log_param("model_version", model_version)
-            mlflow.log_param("target", target)
-            mlflow.log_metric("accuracy", accuracy)
-            mlflow.log_metric("feature_count", float(feature_count))
-            _run_id = mlflow.active_run().info.run_id
-            _exp_id = mlflow.active_run().info.experiment_id
-            _artifact_uri = mlflow.get_artifact_uri()
-            # Emit structured markers for Control Plane lineage capture.
-            print(f"MLFLOW_RUN_ID:{_run_id}", flush=True)
-            print(f"MLFLOW_EXPERIMENT_ID:{_exp_id}", flush=True)
-            print(f"MLFLOW_MODEL_URI:runs:/{_run_id}/sklearn-model", flush=True)
-            print(f"MLFLOW_ARTIFACT_URI:{_artifact_uri}", flush=True)
-        except Exception as _e:
-            print(f"MLFLOW_WARNING:Logging failed: {_e}", flush=True)
-    # ─────────────────────────────────────────────────────────────────────────
-
+    # ── Save model artifacts (always happens, independent of MLflow) ─────────
     os.makedirs(model_dir, exist_ok=True)
     with open(os.path.join(model_dir, "model.pkl"), "wb") as handle:
         pickle.dump(model, handle)
@@ -114,12 +163,21 @@ def main():
     if requirements_path.exists():
         shutil.copy2(requirements_path, os.path.join(model_dir, "requirements.txt"))
 
-    # End MLflow run if one was started.
-    if _mlflow_run is not None:
-        try:
-            mlflow.end_run()
-        except Exception:
-            pass
+    # ── Optional: log to MLflow (best-effort, non-fatal) ─────────────────────
+    # This runs AFTER artifact saving to ensure artifacts are never blocked by
+    # MLflow availability issues.
+    try_log_to_mlflow(
+        model=model,
+        metrics={
+            "accuracy": accuracy,
+            "feature_count": float(feature_count),
+        },
+        params={
+            "n_estimators": 10,
+            "model_version": model_version,
+            "target": target,
+        },
+    )
 
 
 if __name__ == "__main__":

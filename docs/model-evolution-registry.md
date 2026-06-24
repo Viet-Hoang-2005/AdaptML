@@ -375,3 +375,88 @@ environment:
 ```
 
 Without this wiring, `.env` variables are read by Compose but not forwarded to the container's process environment, so `os.environ.get("AWS_BATCH_MLFLOW_TRACKING_URI")` always returns `""` inside Django.
+
+---
+
+## MLflow Tracking Resilience (Best-Effort)
+
+### MLflow tracking is best-effort
+
+AWS Batch training may receive `MLFLOW_TRACKING_URI` through `AWS_BATCH_MLFLOW_TRACKING_URI`.
+If MLflow is reachable, training logs emit `MLFLOW_RUN_ID` and related markers.
+If MLflow is unreachable, training still completes and emits `MLFLOW_WARNING` instead.
+In that case, Model Evolution can still register/deploy the model using the normal artifact package, but the MLflow deep link will be unavailable.
+
+### Environment variables
+
+```env
+# Public MLflow endpoint for AWS Batch (e.g. Cloudflare Tunnel URL)
+# Leave empty to skip MLflow tracking in Batch jobs.
+AWS_BATCH_MLFLOW_TRACKING_URI=
+
+MLFLOW_EXPERIMENT_NAME=mlops-paas-training
+
+# Optional: set to 'true' to make MLflow failure fatal (fail the training job)
+# Default is 'false' — MLflow is best-effort
+MLFLOW_TRACKING_REQUIRED=false
+
+# Optional: timeout for MLflow HTTP requests (seconds)
+MLFLOW_HTTP_REQUEST_TIMEOUT=10
+```
+
+### What happens when MLflow is unreachable
+
+| Field | Behavior |
+|-------|----------|
+| `TrainingJob.status` | `completed` (training succeeded) |
+| `TrainingJob.mlflow_run_id` | `None` / empty |
+| `training_logs` | Contains `MLFLOW_WARNING:<reason>` |
+| Register Model | ✅ Works using normal artifact path |
+| Deploy Model | ✅ Works using normal artifact path |
+| MLflow deep link in UI | ⚠️ Not shown (hidden when `mlflow_run_id` is empty) |
+
+### Training job stdout markers
+
+Success (MLflow reachable):
+
+```
+MLFLOW_RUN_ID:<run_id>
+MLFLOW_EXPERIMENT_ID:<experiment_id>
+MLFLOW_MODEL_URI:runs:/<run_id>/sklearn-model
+MLFLOW_ARTIFACT_URI:s3://...
+```
+
+Failure (MLflow unreachable):
+
+```
+MLFLOW_WARNING:MLflow logging skipped due to error: <reason>
+```
+
+### 6. Training failed due to Cloudflare Tunnel expiry
+
+**Symptom:** AWS Batch exitCode=1 with logs showing:
+
+```
+urllib3.exceptions.NameResolutionError: HTTPSConnection(host='your-tunnel.trycloudflare.com', ...): Failed to resolve ...
+mlflow.exceptions.MlflowException: API request to https://... failed
+```
+
+**Root cause:** The Cloudflare Tunnel URL expired mid-training. Previous versions of the training script called `mlflow.set_experiment()` at module level, which caused the entire training process to crash before training even began.
+
+**Fix:** Training script now wraps all MLflow calls inside `try_log_to_mlflow()` which is best-effort. Training and artifact saving always happen first, MLflow logging happens after as an optional step.
+
+**Verification:**
+
+```powershell
+docker compose exec -T control-plane python src/manage.py shell -c "
+from authentication.models import TrainingJob
+from orchestration.mlflow_utils import parse_mlflow_metadata_from_logs
+j = TrainingJob.objects.filter(name='<your-job-name>').order_by('-created_at').first()
+logs = j.training_logs or ''
+print('status=', j.status)
+print('has warning=', 'MLFLOW_WARNING' in logs)
+print('has run marker=', 'MLFLOW_RUN_ID' in logs)
+print('parsed=', parse_mlflow_metadata_from_logs(logs))
+print('run_id=', j.mlflow_run_id)
+"
+```

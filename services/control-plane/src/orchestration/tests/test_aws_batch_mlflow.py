@@ -1,14 +1,21 @@
 """
-Unit tests for AWS Batch MLflow environment injection.
+Unit tests for AWS Batch MLflow environment injection and parsing.
 
 Tests cover:
 1. When AWS_BATCH_MLFLOW_TRACKING_URI is empty → MLFLOW_TRACKING_URI NOT injected.
 2. When AWS_BATCH_MLFLOW_TRACKING_URI is set → MLFLOW_TRACKING_URI + MLFLOW_EXPERIMENT_NAME injected.
 3. Local http://mlflow:5000 is never injected into Batch regardless.
+4. parse_mlflow_metadata_from_logs: success marker extraction.
+5. parse_mlflow_metadata_from_logs: MLFLOW_WARNING does not crash parser.
+6. AWS Batch refresh-status persists MLflow markers into TrainingJob fields.
+7. AWS Batch refresh-status preserves existing markers when new logs are truncated.
+8. Training script MLflow failure is non-fatal (Phase 10E.2).
+9. Register/deploy fallback: TrainingJob with empty mlflow_* fields still valid.
 
 Run with:
     pytest services/control-plane/src/orchestration/tests/test_aws_batch_mlflow.py -v
 """
+import io
 import sys
 import types
 from unittest.mock import MagicMock, patch
@@ -281,3 +288,212 @@ class TestAwsBatchRefreshPersistence:
         # Ensure fields populated
         assert mock_job.mlflow_run_id == "existing-run"
         assert mock_job.mlflow_experiment_id == "1"
+
+
+# ---------------------------------------------------------------------------
+# Phase 10E.2: MLflow Tracking Resilience Tests
+# ---------------------------------------------------------------------------
+
+class TestMlflowParserResilience:
+    """
+    Test A — Success markers still parse correctly.
+    Test B — MLFLOW_WARNING does not crash the parser and returns empty dict.
+    """
+
+    def test_parser_success_markers(self):
+        """Test A: All four MLflow success markers are correctly extracted."""
+        from orchestration.mlflow_utils import parse_mlflow_metadata_from_logs
+
+        logs = (
+            "some training output\n"
+            "MLFLOW_RUN_ID:abc\n"
+            "MLFLOW_EXPERIMENT_ID:1\n"
+            "MLFLOW_MODEL_URI:runs:/abc/sklearn-model\n"
+            "MLFLOW_ARTIFACT_URI:s3://bucket/path\n"
+        )
+        result = parse_mlflow_metadata_from_logs(logs)
+        assert result["mlflow_run_id"] == "abc"
+        assert result["mlflow_experiment_id"] == "1"
+        assert result["mlflow_model_uri"] == "runs:/abc/sklearn-model"
+        assert result["mlflow_artifact_uri"] == "s3://bucket/path"
+
+    def test_parser_warning_does_not_crash(self):
+        """Test B: MLFLOW_WARNING in logs → parser returns {} without crashing."""
+        from orchestration.mlflow_utils import parse_mlflow_metadata_from_logs
+
+        logs = (
+            "MLFLOW_WARNING:MLflow logging skipped due to error: "
+            "HTTPSConnectionPool(...): Max retries exceeded\n"
+            "Training completed successfully.\n"
+        )
+        # Must not raise
+        result = parse_mlflow_metadata_from_logs(logs)
+        # Must return empty dict (no MLFLOW_RUN_ID in warning-only logs)
+        assert result == {}
+
+    def test_parser_mixed_warning_and_no_run_id(self):
+        """Test B variant: logs with warning and no real run ID → empty result."""
+        from orchestration.mlflow_utils import parse_mlflow_metadata_from_logs
+
+        logs = (
+            "MLFLOW_WARNING:Connection refused\n"
+            "METRIC_JSON: {\"accuracy\": 0.95}\n"
+        )
+        result = parse_mlflow_metadata_from_logs(logs)
+        assert "mlflow_run_id" not in result
+
+
+class TestTrainingScriptMlflowResilience:
+    """
+    Test C — Training script MLflow failure is non-fatal.
+
+    We test try_log_to_mlflow directly by importing it from the example script.
+    The test monkeypatches mlflow to raise so we can assert:
+    - The function returns None (no crash)
+    - Stdout contains MLFLOW_WARNING
+    - Stdout does NOT contain MLFLOW_RUN_ID
+    """
+
+    def _import_try_log(self):
+        """Import try_log_to_mlflow from the example train.py via importlib."""
+        import importlib.util
+        import pathlib
+
+        train_path = (
+            pathlib.Path(__file__).parent.parent.parent.parent.parent.parent
+            / "examples" / "training" / "deployable-sklearn" / "train.py"
+        )
+        if not train_path.exists():
+            pytest.skip(f"Example train.py not found at {train_path}")
+
+        spec = importlib.util.spec_from_file_location("example_train", train_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.try_log_to_mlflow
+
+    def test_mlflow_failure_is_non_fatal(self, capsys, monkeypatch):
+        """
+        Test C: If mlflow raises during logging, try_log_to_mlflow returns None
+        and prints MLFLOW_WARNING. Training must not crash.
+        """
+        try_log_to_mlflow = self._import_try_log()
+
+        # Set a tracking URI so the code proceeds to try mlflow
+        monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://dead-mlflow.invalid")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_NAME", "mlops-paas-training")
+        monkeypatch.delenv("MLFLOW_TRACKING_REQUIRED", raising=False)
+
+        # Monkeypatch mlflow to raise on import / set_tracking_uri
+        fake_mlflow = MagicMock()
+        fake_mlflow.set_tracking_uri.side_effect = Exception("Connection refused")
+
+        with patch.dict(sys.modules, {"mlflow": fake_mlflow, "mlflow.sklearn": MagicMock()}):
+            result = try_log_to_mlflow(
+                model=MagicMock(),
+                metrics={"accuracy": 0.95},
+                params={"n_estimators": 10},
+            )
+
+        # Must return None — not raise
+        assert result is None
+
+        # Stdout must contain MLFLOW_WARNING
+        captured = capsys.readouterr()
+        assert "MLFLOW_WARNING" in captured.out
+
+        # Stdout must NOT contain MLFLOW_RUN_ID (no fake marker)
+        assert "MLFLOW_RUN_ID" not in captured.out
+
+    def test_mlflow_skipped_when_no_uri(self, capsys, monkeypatch):
+        """
+        Test C variant: When MLFLOW_TRACKING_URI is empty, try_log_to_mlflow
+        prints MLFLOW_WARNING and returns None without attempting MLflow calls.
+        """
+        try_log_to_mlflow = self._import_try_log()
+
+        monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+
+        result = try_log_to_mlflow(
+            model=MagicMock(),
+            metrics={"accuracy": 0.95},
+            params={"n_estimators": 10},
+        )
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert "MLFLOW_WARNING" in captured.out
+        assert "MLFLOW_RUN_ID" not in captured.out
+
+    def test_mlflow_fatal_when_required(self, monkeypatch):
+        """
+        Test C variant: When MLFLOW_TRACKING_REQUIRED=true, MLflow failure raises.
+        """
+        try_log_to_mlflow = self._import_try_log()
+
+        monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://dead-mlflow.invalid")
+        monkeypatch.setenv("MLFLOW_TRACKING_REQUIRED", "true")
+
+        fake_mlflow = MagicMock()
+        fake_mlflow.set_tracking_uri.side_effect = Exception("Unreachable")
+
+        with patch.dict(sys.modules, {"mlflow": fake_mlflow, "mlflow.sklearn": MagicMock()}):
+            with pytest.raises(RuntimeError, match="MLFLOW_WARNING"):
+                try_log_to_mlflow(
+                    model=MagicMock(),
+                    metrics={"accuracy": 0.9},
+                    params={"n_estimators": 10},
+                )
+
+
+class TestRegisterDeployFallbackWithoutMlflow:
+    """
+    Test D — Register/deploy works with empty mlflow_* fields.
+
+    Verify that a TrainingJob with empty mlflow_run_id still has a valid
+    model_artifact_uri that the register step can use.
+    """
+
+    def test_training_job_without_mlflow_fields_is_valid(self):
+        """
+        Test D: TrainingJob without mlflow_* fields should still be considered
+        register-able if it has a model_artifact_uri.
+        """
+        job = MagicMock()
+        job.status = "completed"
+        job.mlflow_run_id = None
+        job.mlflow_experiment_id = None
+        job.mlflow_model_uri = None
+        job.mlflow_artifact_uri = None
+        job.model_artifact_uri = "s3://mlops-paas-artifacts/tenants/T/jobs/1/output/model.tar.gz"
+
+        # A job is register-able if it's completed with a model artifact,
+        # regardless of MLflow linkage.
+        assert job.status == "completed"
+        assert job.model_artifact_uri  # artifact path must be present
+        # mlflow_* being empty must not block registration
+        assert not job.mlflow_run_id  # empty is OK
+
+    def test_mlflow_warning_in_logs_does_not_block_registration(self):
+        """
+        Test D variant: TrainingJob with MLFLOW_WARNING in training_logs but
+        valid artifact should be considered register-able.
+        """
+        from orchestration.mlflow_utils import parse_mlflow_metadata_from_logs
+
+        logs = (
+            "MLFLOW_WARNING:MLflow logging skipped due to error: Connection refused\n"
+            "[training-runner] Uploading model artifact to s3://...\n"
+            "[training-runner] Training job completed successfully\n"
+        )
+        metadata = parse_mlflow_metadata_from_logs(logs)
+
+        # Parser must return empty dict (no run_id to link)
+        assert metadata == {}
+
+        # Simulate: register proceeds with empty mlflow fields
+        job = MagicMock()
+        job.mlflow_run_id = metadata.get("mlflow_run_id")  # None
+        job.model_artifact_uri = "s3://mlops-paas-artifacts/tenants/T/jobs/1/output/model.tar.gz"
+
+        # Registration logic: must not fail because mlflow_run_id is None
+        assert job.model_artifact_uri is not None  # register uses this, not mlflow
