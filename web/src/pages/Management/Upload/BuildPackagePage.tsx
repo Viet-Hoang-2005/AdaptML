@@ -6,12 +6,14 @@ import { queryKeys } from '../../../lib/queryKeys';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import type { ModelBuildFormValues, ModelFlavor } from '../../../types/modelApi';
-import { StepTitle, SummaryItem, } from './UploadModelFormPage';
+import { SummaryItem } from './UploadModelFormPage';
+import { StepTitle } from '../../../components/ui/StepTitle';
 import { FileDropzone } from '../../../components/ui/FileDropzone';
 import { TextArea } from '../../../components/ui/TextArea';
 import { AccessModePicker } from '../../../components/ui/Picker';
 import { toast } from '../../../lib/toast';
 import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
+import { LineSteps } from '../../../components/ui/LineSteps';
 import { buildModelAPI, cancelBuildAPI, getApiErrorMessage, deployModelAPI } from '../../../lib/api';
 
 const wizardSteps = [
@@ -90,56 +92,7 @@ export default function BuildPackagePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="hidden sm:block rounded-lg border border-gray-300 bg-white px-8 pb-10 pt-6">
-        <div className="relative flex items-center justify-between">
-          {/* Background line */}
-          <div className="absolute left-0 top-5 h-0.5 w-full bg-gray-200" />
-          {/* Active line */}
-          <div
-            className="absolute left-0 top-5 h-0.5 bg-black transition-all duration-300"
-            style={{ width: `${((step - 1) / (wizardSteps.length - 1)) * 100}%` }}
-          />
-
-          {wizardSteps.map((item) => {
-            const Icon = item.icon;
-            const active = step === item.id;
-            const done = step > item.id;
-            const disabled = item.id > step;
-
-            return (
-              <div key={item.id} className="relative z-10 flex flex-col items-center bg-white px-2">
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => setStep(item.id)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
-                    active
-                      ? 'border-black bg-black text-white'
-                      : done
-                        ? 'border-black bg-white text-black hover:bg-gray-100'
-                        : 'border-gray-200 bg-white text-gray-300'
-                  } ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                >
-                  <Icon className="h-4 w-4" />
-                </button>
-                <span
-                  className={`absolute -bottom-7 whitespace-nowrap text-xs font-bold ${
-                    active ? 'text-black' : done ? 'text-gray-700' : 'text-gray-400'
-                  }`}
-                >
-                  {item.label}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Fallback stepper cho mobile */}
-      <div className="sm:hidden rounded-lg border border-gray-300 bg-white p-4 flex items-center justify-between">
-        <span className="text-sm font-bold text-gray-900">Step {step} of {wizardSteps.length}</span>
-        <span className="text-sm font-semibold text-gray-500">{wizardSteps[step - 1]?.label}</span>
-      </div>
+      <LineSteps steps={wizardSteps} currentStep={step} onStepChange={setStep} />
 
       <div className="rounded-lg border border-gray-300 bg-white p-6">
         {step === 1 && (

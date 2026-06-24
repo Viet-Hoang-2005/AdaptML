@@ -1,5 +1,5 @@
-import { ArrowLeft, Copy } from 'lucide-react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Copy } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -11,6 +11,7 @@ import { toast } from '../../../lib/toast';
 import { Table } from 'antd';
 import type { TableProps } from 'antd';
 import type { ModelAPI } from '../../../types/modelApi';
+import { TitlePage } from '../../../components/ui/TitlePage';
 
 export default function ApiKeyPage() {
   const { keyId } = useParams<{ keyId?: string }>();
@@ -85,20 +86,10 @@ export default function ApiKeyPage() {
 
   return (
     <div className="flex w-full flex-col space-y-6">
-      <div className="flex flex-col gap-4 border-b border-gray-200 md:flex-row md:items-end md:justify-between">
-        <div className="mb-2">
-          <Link
-            to="/dashboard/settings/developer"
-            className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 transition-colors hover:text-black"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Developer Settings
-          </Link>
-          <h1 className="text-xl font-bold text-gray-900">
-            {keyId ? 'Edit API Key' : 'Create API Key'}
-          </h1>
-        </div>
-      </div>
+      <TitlePage
+        title={keyId ? 'Edit API Key' : 'Create API Key'}
+        backLink={{ to: '/dashboard/settings/developer', label: 'Back to Developer Settings' }}
+      />
 
       <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-6 space-y-6 shadow-sm">
         <div className="space-y-4">

@@ -17,6 +17,7 @@ import ModelTestingPage from './pages/Home/Test/ModelTestingPage';
 import APIManagementPage from './pages/Management/APIManagementPage';
 import TrainModelPage from './pages/Training/TrainModelPage';
 import TrainingJobDetailPage from './pages/Training/TrainingJobDetailPage';
+import CreateTrainingJobPage from './pages/Training/CreateTrainingJobPage';
 import ModelAPIFormPage from './pages/Management/Upload/UploadModelFormPage';
 import ModelDetailPage from './pages/Management/Detail/ModelDetailPage';
 import DeveloperSettingPage from './pages/Settings/Developer/DeveloperSettingPage';
@@ -75,7 +76,10 @@ const router = createBrowserRouter(
         {/* Model Training Routes */}
         <Route path="model-training">
           <Route index element={<TrainModelPage />} />
+          <Route path="new" element={<CreateTrainingJobPage />} />
           <Route path=":modelId" element={<TrainModelPage />} />
+          <Route path=":modelId/new" element={<CreateTrainingJobPage />} />
+          <Route path=":modelId/job/:jobId" element={<TrainingJobDetailPage />} />
         </Route>
         <Route path="model-training/:modelId/job/:jobId" element={<TrainingJobDetailPage />} />
 

@@ -15,6 +15,7 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
       matchPath("/dashboard/home/model-testing/:modelId", location.pathname) ||
       matchPath("/dashboard/drift-monitoring/:modelId", location.pathname) ||
       matchPath("/dashboard/model-training/:modelId", location.pathname) ||
+      matchPath("/dashboard/model-training/:modelId/new", location.pathname) ||
       matchPath("/dashboard/model-evolution/:modelId", location.pathname);
   }, [location.pathname]);
 

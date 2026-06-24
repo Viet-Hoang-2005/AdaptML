@@ -1,6 +1,6 @@
 import { FlaskConical, UploadCloud } from 'lucide-react';
 import { Outlet } from 'react-router-dom';
-import { PageTabs } from '../../components/layout/PageTabs';
+import { TitlePage } from '../../components/ui/TitlePage';
 
 const homeTabs = [
   { label: 'Model API', to: '/dashboard/home/model-api', icon: UploadCloud },
@@ -10,10 +10,7 @@ const homeTabs = [
 export default function HomeLayout() {
   return (
     <div className="flex flex-1 flex-col space-y-6">
-      <div className="flex flex-col gap-2 border-b border-gray-300 md:flex-row md:items-center md:justify-between">
-        <h1 className="text-xl font-bold text-gray-900">Home</h1>
-        <PageTabs tabs={homeTabs} />
-      </div>
+      <TitlePage title="Home" tabs={homeTabs} />
 
       <Outlet />
     </div>

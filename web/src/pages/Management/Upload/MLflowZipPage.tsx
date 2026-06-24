@@ -10,7 +10,7 @@ import { queryKeys } from '../../../lib/queryKeys';
 import { toast } from '../../../lib/toast';
 import { useNavigate } from 'react-router-dom';
 import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
-import { StepTitle } from './UploadModelFormPage';
+import { StepTitle } from '../../../components/ui/StepTitle';
 import { AccessModePicker } from '../../../components/ui/Picker';
 import { FileDropzone } from '../../../components/ui/FileDropzone';
 import { TextArea } from '../../../components/ui/TextArea';
@@ -80,10 +80,7 @@ export default function MLflowZipPage({
   return (
     <div className="space-y-6 rounded-lg border border-gray-300 bg-white p-6 lg:p-8">
       <div>
-        <h2 className="text-lg font-bold text-gray-900">Advanced MLflow Artifact</h2>
-        <p className="mb-4 mt-1 text-sm leading-6 text-gray-500">
-          Upload a `.zip` package that already contains an `MLmodel` file.
-        </p>
+        <StepTitle title="Advanced MLflow Artifact" description="Upload a .zip package that already contains an MLmodel file." />
         <FileDropzone
           accept=".zip,application/zip"
           title={form.artifact ? form.artifact.name : 'Choose MLflow package'}

@@ -371,11 +371,11 @@ const trainingJobFormData = (payload: TrainingJobFormValues) => {
   if (payload.source_zip) {
     formData.append('source_zip', payload.source_zip);
   }
-  if (payload.requirements_file) {
-    formData.append('requirements_file', payload.requirements_file);
-  }
   if (payload.training_data) {
     formData.append('training_data', payload.training_data);
+  }
+  if (payload.registered_model_id) {
+    formData.append('registered_model_id', payload.registered_model_id);
   }
   return formData;
 };
@@ -385,6 +385,14 @@ export const createTrainingJob = async (payload: TrainingJobFormValues): Promise
     controlPlaneURL('/training-jobs/'),
     trainingJobFormData(payload),
     { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+  return data;
+};
+
+export const updateModelRequirements = async (modelId: string, requirementsText: string): Promise<ModelAPI> => {
+  const { data } = await axiosInstance.patch<ModelAPI>(
+    controlPlaneURL(`/models/${modelId}/`),
+    { requirements_text: requirementsText },
   );
   return data;
 };

@@ -1,5 +1,4 @@
 import { FileSpreadsheet, Play, Pause, Download, Trash2, SendHorizontal, X, Check, Percent } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { useRef, useState, useMemo, useEffect } from 'react';
 import { useBlocker } from 'react-router-dom';
 import { ConfirmModal } from '../../../components/ui/ConfirmModal';
@@ -11,6 +10,7 @@ import { getApiErrorMessage } from '../../../lib/apiError';
 import { toast } from '../../../lib/toast';
 import { FileDropzone } from '../../../components/ui/FileDropzone';
 import { CSVEditor } from '../../../components/ui/CSVEditor';
+import { SummaryCard } from '../../../components/ui/SummaryCard';
 
 const TARGET_COLUMN_NAMES = new Set([
   'label',
@@ -107,37 +107,7 @@ const extractPredictionError = (error: unknown) => {
   };
 };
 
-function SummaryCard({
-  label,
-  value,
-  helper,
-  icon,
-  tone = 'default',
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  icon: ReactNode;
-  tone?: 'default' | 'success' | 'warning' | 'error' | 'info';
-}) {
-  const iconColor =
-    tone === 'success' ? 'text-emerald-600' :
-    tone === 'error' ? 'text-red-600' :
-    tone === 'warning' ? 'text-amber-600' :
-    tone === 'info' ? 'text-blue-500' :
-    'text-gray-500';
 
-  return (
-    <div className="rounded-lg border border-gray-300 bg-white p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-        <div className={iconColor}>{icon}</div>
-      </div>
-      <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
-      <p className="mt-1 text-xs text-gray-500">{helper}</p>
-    </div>
-  );
-}
 
 export default function ModelTestingPage() {
   const { selectedModel } = useModelSelection();

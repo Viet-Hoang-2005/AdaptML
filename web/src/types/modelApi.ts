@@ -164,8 +164,8 @@ export interface TrainingJobFormValues {
   accelerator_type: TrainingAcceleratorType;
   accelerator_count: number;
   source_zip: File | null;
-  requirements_file: File | null;
   training_data: File | null;
+  registered_model_id?: string;
 }
 
 export interface TrainingJobDownloadURLResponse {
