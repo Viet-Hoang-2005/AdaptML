@@ -58,11 +58,10 @@ def try_log_to_mlflow(model, metrics: dict, params: dict) -> dict | None:
     # Apply optional request timeout so MLflow doesn't hang the entire job.
     timeout_str = os.environ.get("MLFLOW_HTTP_REQUEST_TIMEOUT", "").strip()
     if timeout_str:
-        try:
-            os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "1")
-            os.environ.setdefault("MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR", "0")
-        except Exception:
-            pass
+        # Force max retries to 0 so DNS/connection failures fail fast instead of hanging.
+        os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = "0"
+        os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR"] = "0"
+
 
     try:
         import mlflow
@@ -138,7 +137,7 @@ def main():
         "step": 1,
         "accuracy": round(accuracy, 4),
         "feature_count": feature_count,
-    }))
+    }), flush=True)
 
     # ── Save model artifacts (always happens, independent of MLflow) ─────────
     os.makedirs(model_dir, exist_ok=True)
