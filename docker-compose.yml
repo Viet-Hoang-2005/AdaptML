@@ -56,7 +56,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 2. Django Control Plane (Auth & Users)
+  # 2. Django Control Plane
   control-plane:
     build:
       context: ./services/control-plane
@@ -131,6 +131,29 @@ services:
     networks:
       - mlops_paas_network
 
+  # 3. FastAPI Model Server (Image Builder)
+  model-server:
+    build:
+      context: ./services/model-server
+      dockerfile: Dockerfile
+    image: mlops-paas-model-server
+    container_name: mlops_paas_model_server
+    restart: "no"
+    command: ["echo", "Model Server Image Built Successfully. Waiting for dynamic execution..."]
+    environment:
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./models:/models # Mount thư mục models local vào container
+      - ./services/model-server:/app
+
+    depends_on:
+      postgres:
+        condition: service_healthy # Đợi postgres healthy mới start API
+      redpanda:
+        condition: service_started
+    networks:
+      - mlops_paas_network
+
   # Traefik API Gateway cho Model Server
   traefik:
     image: traefik:latest
@@ -149,50 +172,6 @@ services:
     networks:
       - mlops_paas_network
 
-  # 3. FastAPI Inference Server Image Blueprint (Data Plane)
-  model-server:
-    build:
-      context: ./services/model-server
-      dockerfile: Dockerfile
-    image: mlops-paas-model-server
-    container_name: mlops_paas_model_server
-    restart: "no"
-    command: ["echo", "Model Server Image Built Successfully. Waiting for dynamic execution..."]
-    environment:
-      PYTHONUNBUFFERED: 1
-      MODEL_VERSION: ${MODEL_VERSION:-v1}
-      # CloudNativePG local: cả RW và RO đều trỏ về cùng 1 container postgres
-      DB_HOST_RW: postgres
-      DB_HOST_RO: postgres
-      DB_HOST: postgres
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME}
-      REDPANDA_BROKERS: redpanda:9092
-      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_logs}
-      JWKS_URL: http://control-plane:8000/api/auth/.well-known/jwks.json
-      CONTROL_PLANE_DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control_plane}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
-      EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
-      GITHUB_REPO: ${GITHUB_REPO}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
-      HASHIDS_SALT: ${HASHIDS_SALT:-mlops_paas_secret_salt}
-    volumes:
-      - ./models:/models # Mount thư mục models local vào container
-      - ./services/model-server:/app
-
-    depends_on:
-      postgres:
-        condition: service_healthy # Đợi postgres healthy mới start API
-      redpanda:
-        condition: service_started
-    networks:
-      - mlops_paas_network
-
   # 4. Internal MLflow Package Builder
   model-packager:
     build:
@@ -207,43 +186,17 @@ services:
     networks:
       - mlops_paas_network
 
-  # 5. Evidently Drift Monitor
+  # 5. Evidently Drift Monitor (Image Builder)
   evidently:
     build:
       context: ./services/evidently
       dockerfile: Dockerfile
     image: mlops-paas-evidently
     container_name: mlops_paas_evidently
-    # Không restart tự động - đây là job chạy 1 lần như CronJob trong K3s
     restart: "no"
+    command: ["echo", "Evidently Drift Monitor Image Built Successfully. Waiting for dynamic execution..."]
     environment:
-      # Chạy local: cả RO đều trỏ về postgres container
-      DB_HOST_RO: postgres
-      DB_HOST: postgres
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME}
-      DRIFT_THRESHOLD: ${DRIFT_THRESHOLD:-0.5}
-      MIN_SAMPLES: ${MIN_SAMPLES:-100}
-      MAX_SAMPLES: ${MAX_SAMPLES:-100000}
-      TENANT_ID: ${TENANT_ID:-T-LOCALDEV}
-      MODEL_ID: ${MODEL_ID:-demo-model}
-      MODEL_URI: ${MODEL_URI:-models:/demo-model/Production}
-      REFERENCE_DATA_S3_URI: ${REFERENCE_DATA_S3_URI:-s3://mlops-paas-artifacts/reference-data/demo-model/reference.csv}
-      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
-      WEBHOOK_URL: ${WEBHOOK_URL:-http://control-plane:8000/api/v1/internal/drift-webhook}
-      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-super-secret-key}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-mlops-paas-artifacts}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
-      DRIFT_REPORTS_S3_PREFIX: ${DRIFT_REPORTS_S3_PREFIX:-drift-reports}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mlflow:
-        condition: service_started
+      PYTHONUNBUFFERED: 1
     networks:
       - mlops_paas_network
 
