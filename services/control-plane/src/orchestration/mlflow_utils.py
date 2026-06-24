@@ -73,12 +73,20 @@ def parse_mlflow_metadata_from_logs(log_text: Optional[str]) -> dict:
 
     If a marker appears multiple times, the LAST valid value wins.
     """
-    if not log_text:
-        return {}
+    patterns = {
+        "mlflow_run_id": r"(?i)MLFLOW_RUN_ID:\s*(\S+)",
+        "mlflow_experiment_id": r"(?i)MLFLOW_EXPERIMENT_ID:\s*(\S+)",
+        "mlflow_model_uri": r"(?i)MLFLOW_MODEL_URI:\s*(\S+)",
+        "mlflow_artifact_uri": r"(?i)MLFLOW_ARTIFACT_URI:\s*(\S+)",
+        "mlflow_experiment_name": r"(?i)MLFLOW_EXPERIMENT_NAME:\s*(\S+)",
+    }
 
     result: dict[str, str] = {}
-    for field, pattern in _PATTERNS.items():
-        matches = pattern.findall(log_text)
+    if not log_text:
+        return result
+        
+    for field, pattern in patterns.items():
+        matches = re.findall(pattern, log_text)
         if matches:
             # Take the last match (most recent line in logs).
             value = matches[-1].strip()

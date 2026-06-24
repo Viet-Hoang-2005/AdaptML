@@ -57,9 +57,6 @@ sys.modules["orchestration.sagemaker_service"] = MagicMock(
     get_training_job_prefix=MagicMock(return_value="tenants/T/jobs/1"),
     upload_training_inputs_to_s3=MagicMock(return_value=("s3://src", "s3://data", "prefix")),
 )
-sys.modules["orchestration.mlflow_utils"] = MagicMock(
-    parse_mlflow_metadata_from_logs=MagicMock(return_value={}),
-)
 
 
 def _build_environment(settings_obj, training_job) -> list[dict]:
@@ -157,3 +154,130 @@ class TestBatchMlflowInjection:
         env = _build_environment(settings, self._job())
         assert _env_value(env, "MLFLOW_TRACKING_URI") == tunnel_url
         assert "MLFLOW_EXPERIMENT_NAME" not in _env_names(env)
+
+
+class TestMlflowLogParser:
+    def test_parser_extracts_markers(self):
+        from orchestration.mlflow_utils import parse_mlflow_metadata_from_logs
+        
+        logs = (
+            "some line\n"
+            "MLFLOW_RUN_ID:abc123\n"
+            "MLFLOW_EXPERIMENT_ID:1\n"
+            "MLFLOW_MODEL_URI:runs:/abc123/sklearn-model\n"
+            "MLFLOW_ARTIFACT_URI:s3://bucket/path/artifacts\n"
+            "MLFLOW_EXPERIMENT_NAME:mlops-paas-training\n"
+        )
+        
+        result = parse_mlflow_metadata_from_logs(logs)
+        assert result == {
+            "mlflow_run_id": "abc123",
+            "mlflow_experiment_id": "1",
+            "mlflow_model_uri": "runs:/abc123/sklearn-model",
+            "mlflow_artifact_uri": "s3://bucket/path/artifacts",
+            "mlflow_experiment_name": "mlops-paas-training",
+        }
+
+    def test_parser_uses_last_occurrence(self):
+        from orchestration.mlflow_utils import parse_mlflow_metadata_from_logs
+        
+        logs = (
+            "MLFLOW_RUN_ID:first-run-id\n"
+            "some other log\n"
+            "MLFLOW_RUN_ID:second-run-id\n"
+        )
+        
+        result = parse_mlflow_metadata_from_logs(logs)
+        assert result["mlflow_run_id"] == "second-run-id"
+
+
+class TestAwsBatchRefreshPersistence:
+    @patch("orchestration.aws_batch_training_service._validate_batch_config")
+    @patch("orchestration.aws_batch_training_service._describe_batch_job")
+    @patch("orchestration.aws_batch_training_service.get_aws_batch_training_logs")
+    @patch("orchestration.aws_batch_training_service.parse_mlflow_metadata_from_logs")
+    def test_refresh_persists_markers_on_success(
+        self, mock_parse, mock_get_logs, mock_describe, mock_validate
+    ):
+        from orchestration.aws_batch_training_service import refresh_aws_batch_training_job
+
+        # Mock job from DB
+        mock_job = MagicMock()
+        mock_job.external_job_id = "aws-batch-123"
+        mock_job.status = "running"
+        mock_job.started_at = None
+        mock_job.completed_at = None
+        mock_job.training_logs = ""
+        
+        # Mock MLflow fields returning empty initially
+        for field in ["mlflow_run_id", "mlflow_experiment_id", "mlflow_model_uri", "mlflow_artifact_uri"]:
+            setattr(mock_job, field, "")
+
+        # AWS Batch returns SUCCEEDED
+        mock_describe.return_value = {"status": "SUCCEEDED", "startedAt": 1000, "stoppedAt": 2000}
+        mock_get_logs.return_value = "MLFLOW_RUN_ID:abc123"
+        
+        # Parser finds markers
+        mock_parse.return_value = {
+            "mlflow_run_id": "abc123",
+            "mlflow_experiment_id": "1",
+            "mlflow_model_uri": "runs:/abc",
+            "mlflow_artifact_uri": "s3://art",
+        }
+
+        # Run refresh
+        refresh_aws_batch_training_job(mock_job)
+
+        # Verify fields were updated in memory
+        assert mock_job.mlflow_run_id == "abc123"
+        assert mock_job.mlflow_experiment_id == "1"
+        assert mock_job.mlflow_model_uri == "runs:/abc"
+        assert mock_job.mlflow_artifact_uri == "s3://art"
+
+        # Verify save was called with the new fields
+        mock_job.save.assert_called_once()
+        update_fields = mock_job.save.call_args.kwargs.get("update_fields", [])
+        
+        for field in ["mlflow_run_id", "mlflow_experiment_id", "mlflow_model_uri", "mlflow_artifact_uri"]:
+            assert field in update_fields, f"{field} not in update_fields"
+
+    @patch("orchestration.aws_batch_training_service._validate_batch_config")
+    @patch("orchestration.aws_batch_training_service._describe_batch_job")
+    @patch("orchestration.aws_batch_training_service.get_aws_batch_training_logs")
+    @patch("orchestration.aws_batch_training_service.parse_mlflow_metadata_from_logs")
+    def test_refresh_preserves_existing_logs_with_markers(
+        self, mock_parse, mock_get_logs, mock_describe, mock_validate
+    ):
+        from orchestration.aws_batch_training_service import refresh_aws_batch_training_job
+
+        mock_job = MagicMock()
+        mock_job.external_job_id = "aws-batch-123"
+        mock_job.status = "completed"
+        mock_job.started_at = None
+        mock_job.completed_at = None
+        # Existing logs have markers
+        mock_job.training_logs = "MLFLOW_RUN_ID:existing-run"
+        
+        # MLflow DB fields empty
+        for field in ["mlflow_run_id", "mlflow_experiment_id", "mlflow_model_uri", "mlflow_artifact_uri"]:
+            setattr(mock_job, field, "")
+
+        mock_describe.return_value = {"status": "SUCCEEDED"}
+        # AWS Batch / CloudWatch returns empty or truncated logs (no markers)
+        mock_get_logs.return_value = "some new generic log line"
+        
+        # Parser mocks extracting from combined logs
+        mock_parse.return_value = {
+            "mlflow_run_id": "existing-run",
+            "mlflow_experiment_id": "1",
+        }
+
+        refresh_aws_batch_training_job(mock_job)
+
+        # Ensure logs were not erased
+        assert "MLFLOW_RUN_ID:existing-run" in mock_job.training_logs
+        assert "some new generic log line" in mock_job.training_logs or mock_job.training_logs == "MLFLOW_RUN_ID:existing-run"
+
+        # Ensure fields populated
+        assert mock_job.mlflow_run_id == "existing-run"
+        assert mock_job.mlflow_experiment_id == "1"

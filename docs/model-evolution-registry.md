@@ -305,7 +305,19 @@ LOCAL_TRAINING_TIMEOUT=3600
 
 ### 5. AWS Batch job completed but no `MLFLOW_RUN_ID`
 
-**Symptom:** AWS Batch job shows `status=completed` but `mlflow_run_id=None`, `run_id=None`.
+**Symptom:** AWS Batch logs contain `MLFLOW_RUN_ID` but `TrainingJob.mlflow_run_id` is empty.
+
+This means CloudWatch logs were fetched successfully, but marker persistence failed.
+Refresh-status must parse the full `training_logs` and save:
+- `mlflow_run_id`
+- `mlflow_experiment_id`
+- `mlflow_model_uri`
+- `mlflow_artifact_uri`
+
+Manual regex verification:
+`MLFLOW_RUN_ID:\s*(\S+)`
+
+**Symptom:** AWS Batch job shows `status=completed` but logs do not contain markers.
 
 **Diagnosis checklist:**
 

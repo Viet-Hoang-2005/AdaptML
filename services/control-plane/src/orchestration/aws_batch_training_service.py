@@ -354,6 +354,7 @@ def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:
     batch_status = job.get("status", "")
     started_at = _aws_millis_to_datetime(job.get("startedAt"))
     stopped_at = _aws_millis_to_datetime(job.get("stoppedAt"))
+
     if batch_status in {"SUBMITTED", "PENDING", "RUNNABLE", "STARTING", "RUNNING"}:
         training_job.status = "running"
         if started_at and not training_job.started_at:
@@ -363,19 +364,37 @@ def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:
         training_job.status = "completed"
         training_job.error_message = ""
         training_job.stop_reason = ""
-        training_job.training_logs = get_aws_batch_training_logs(training_job)
+        
+        existing_logs = training_job.training_logs or ""
+        fetched_logs = get_aws_batch_training_logs(training_job) or ""
+        
+        if fetched_logs and fetched_logs not in existing_logs:
+            combined_logs = existing_logs + "\n" + fetched_logs
+        elif fetched_logs:
+            combined_logs = fetched_logs if len(fetched_logs) >= len(existing_logs) else existing_logs
+        else:
+            combined_logs = existing_logs
+            
+        # Ensure we do not erase markers that were already captured
+        if "MLFLOW_RUN_ID" in existing_logs and "MLFLOW_RUN_ID" not in combined_logs:
+            combined_logs = existing_logs
+            
+        training_job.training_logs = combined_logs
+        
         if started_at and not training_job.started_at:
             training_job.started_at = started_at
         if stopped_at and not training_job.completed_at:
             training_job.completed_at = stopped_at
         training_job.mark_finished(save=False)
+        
         # Phase 10E.1: Parse MLflow metadata from CloudWatch logs.
-        _mlflow_meta = parse_mlflow_metadata_from_logs(training_job.training_logs)
-        _mlflow_extra_fields = []
-        for _field, _value in _mlflow_meta.items():
-            if _value and not getattr(training_job, _field, None):
-                setattr(training_job, _field, _value)
-                _mlflow_extra_fields.append(_field)
+        # Persist markers every time logs are fetched, to handle retries and updates correctly.
+        mlflow_metadata = parse_mlflow_metadata_from_logs(training_job.training_logs or "")
+        training_job.mlflow_run_id = mlflow_metadata.get("mlflow_run_id") or training_job.mlflow_run_id
+        training_job.mlflow_experiment_id = mlflow_metadata.get("mlflow_experiment_id") or training_job.mlflow_experiment_id
+        training_job.mlflow_model_uri = mlflow_metadata.get("mlflow_model_uri") or training_job.mlflow_model_uri
+        training_job.mlflow_artifact_uri = mlflow_metadata.get("mlflow_artifact_uri") or training_job.mlflow_artifact_uri
+            
     elif batch_status == "FAILED":
         failure_message = _failure_message(job)
         if "user cancelled" in failure_message.lower() or "terminated" in failure_message.lower():
@@ -386,7 +405,21 @@ def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:
             training_job.status = "failed"
             training_job.error_message = failure_message
             training_job.stop_reason = training_job.error_message
-        training_job.training_logs = get_aws_batch_training_logs(training_job)
+            
+        existing_logs = training_job.training_logs or ""
+        fetched_logs = get_aws_batch_training_logs(training_job) or ""
+        
+        if fetched_logs and fetched_logs not in existing_logs:
+            combined_logs = existing_logs + "\n" + fetched_logs
+        elif fetched_logs:
+            combined_logs = fetched_logs if len(fetched_logs) >= len(existing_logs) else existing_logs
+        else:
+            combined_logs = existing_logs
+            
+        if "MLFLOW_RUN_ID" in existing_logs and "MLFLOW_RUN_ID" not in combined_logs:
+            combined_logs = existing_logs
+            
+        training_job.training_logs = combined_logs
         if started_at and not training_job.started_at:
             training_job.started_at = started_at
         if stopped_at and not training_job.completed_at:
@@ -399,16 +432,20 @@ def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:
             training_job.started_at = started_at
         training_job.mark_started(save=False)
 
-    training_job.save(
-        update_fields=[
-            "status",
-            "error_message",
-            "training_logs",
-            "started_at",
-            "completed_at",
-            "runtime_seconds",
-            "stop_reason",
-            "updated_at",
-        ] + (locals().get("_mlflow_extra_fields") or [])
-    )
+    update_fields = [
+        "status",
+        "error_message",
+        "training_logs",
+        "started_at",
+        "completed_at",
+        "runtime_seconds",
+        "stop_reason",
+        "updated_at",
+        "mlflow_run_id",
+        "mlflow_experiment_id",
+        "mlflow_model_uri",
+        "mlflow_artifact_uri",
+    ]
+
+    training_job.save(update_fields=update_fields)
     return training_job
