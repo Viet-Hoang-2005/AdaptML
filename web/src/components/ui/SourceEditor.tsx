@@ -230,7 +230,7 @@ const TreeRenderer = ({
 
 export function SourceEditor({ 
   modelId, 
-  fileType, 
+  fileType,
   title, 
   icon, 
   accept,  
@@ -592,7 +592,7 @@ export function SourceEditor({
                     : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
                 }`}
                 onClick={() => onSetEntryPoint(selectedPath)}
-                title={setAsMainLabel ?? "Set this file as the main entry point for the training job"}
+                title={setAsMainLabel ?? "Set this file as the main entry point"}
               >
                 <Play className="w-3 h-3" />
                 {currentEntryPoint === selectedPath ? 'Selected' : (setAsMainLabel ?? 'Set as Main')}

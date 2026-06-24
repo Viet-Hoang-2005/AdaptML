@@ -368,7 +368,6 @@ function DeployStep({
         key={modelId || 'idle'}
         modelId={modelId}
         onBuildSuccess={(id, previewTree) => {
-          toast.success("Build successful! You can now deploy.");
           onBuildSuccess(id, previewTree);
         }}
         onRebuild={rebuild}

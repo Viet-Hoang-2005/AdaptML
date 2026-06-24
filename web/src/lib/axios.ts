@@ -9,9 +9,9 @@ type TokenRefreshResponse = {
   refresh?: string;
 };
 
-const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/auth';
-const refreshTokenPath = '/token/refresh/';
-const publicAuthPaths = ['/token/', '/oauth/', '/register/', '/password-reset/'];
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const refreshTokenPath = '/auth/token/refresh/';
+const publicAuthPaths = ['/auth/token/', '/auth/oauth/', '/auth/register/', '/auth/password-reset/'];
 
 let refreshPromise: Promise<string> | null = null;
 

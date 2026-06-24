@@ -27,7 +27,7 @@ export function useDriftMonitoringJobs(modelId?: string) {
   return useQuery({
     queryKey: ['drift-jobs', modelId],
     queryFn: async () => {
-      const { data } = await axiosInstance.get<DriftMonitoringJob[]>(controlPlaneURL('/drift-jobs/'), {
+      const { data } = await axiosInstance.get<DriftMonitoringJob[]>(controlPlaneURL('/drift/jobs/'), {
         params: { model_id: modelId }
       });
       return data;
@@ -40,7 +40,7 @@ export function useDriftMonitoringResults(jobId?: number) {
   return useQuery({
     queryKey: ['drift-results', jobId],
     queryFn: async () => {
-      const { data } = await axiosInstance.get<DriftMonitoringResult[]>(controlPlaneURL(`/drift-jobs/${jobId}/results/`));
+      const { data } = await axiosInstance.get<DriftMonitoringResult[]>(controlPlaneURL(`/drift/jobs/${jobId}/results/`));
       return data;
     },
     enabled: !!jobId,
@@ -55,7 +55,7 @@ export function useCreateDriftMonitoringJob() {
       trigger_threshold: number;
       reference_data_s3_path: string;
     }) => {
-      const { data } = await axiosInstance.post<DriftMonitoringJob>(controlPlaneURL('/drift-jobs/'), payload);
+      const { data } = await axiosInstance.post<DriftMonitoringJob>(controlPlaneURL('/drift/jobs/'), payload);
       return data;
     },
     onSuccess: (_, variables) => {
@@ -68,7 +68,7 @@ export function useDeleteDriftMonitoringJob() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { id: number; model_id: string }) => {
-      await axiosInstance.delete(controlPlaneURL(`/drift-jobs/${payload.id}/`));
+      await axiosInstance.delete(controlPlaneURL(`/drift/jobs/${payload.id}/`));
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['drift-jobs', variables.model_id] });
@@ -85,7 +85,7 @@ export function useUpdateDriftMonitoringJob() {
       trigger_threshold: number;
       reference_data_s3_path: string;
     }) => {
-      const { data } = await axiosInstance.put<DriftMonitoringJob>(controlPlaneURL(`/drift-jobs/${payload.id}/`), payload);
+      const { data } = await axiosInstance.put<DriftMonitoringJob>(controlPlaneURL(`/drift/jobs/${payload.id}/`), payload);
       return data;
     },
     onSuccess: (_, variables) => {
@@ -98,7 +98,7 @@ export function useRunDriftMonitoringJob() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { id: number; model_id: string }) => {
-      await axiosInstance.post(controlPlaneURL(`/drift-jobs/${payload.id}/run/`));
+      await axiosInstance.post(controlPlaneURL(`/drift/jobs/${payload.id}/run/`));
     },
     onSuccess: (_, variables) => {
       // Invalidate results after triggering (although it's async, we might want to poll)
@@ -111,7 +111,7 @@ export function useProductionData(modelId?: string) {
   return useQuery({
     queryKey: ['production-data', modelId],
     queryFn: async () => {
-      const { data } = await axiosInstance.get<{ features: Record<string, unknown>; prediction: string }[]>(controlPlaneURL(`/models/${modelId}/production-data/`));
+      const { data } = await axiosInstance.get<{ features: Record<string, unknown>; prediction: string }[]>(controlPlaneURL(`/drift/models/${modelId}/production-data/`));
       return data;
     },
     enabled: !!modelId,
@@ -122,7 +122,7 @@ export function useReferenceFiles(modelId?: string) {
   return useQuery({
     queryKey: ['reference-files', modelId],
     queryFn: async () => {
-      const { data } = await axiosInstance.get<{key: string, s3_uri: string, size: number, last_modified: string}[]>(controlPlaneURL(`/models/${modelId}/reference-files/`));
+      const { data } = await axiosInstance.get<{key: string, size: number, last_modified: string}[]>(controlPlaneURL(`/drift/models/${modelId}/reference-files/`));
       return data;
     },
     enabled: !!modelId,
@@ -135,7 +135,7 @@ export function useUploadReferenceData() {
     mutationFn: async ({ modelId, file }: { modelId: string, file: File }) => {
       const formData = new FormData();
       formData.append('file', file);
-      const { data } = await axiosInstance.post<{s3_uri: string, message: string}>(controlPlaneURL(`/models/${modelId}/reference-data/`), formData, {
+      const { data } = await axiosInstance.post<{message: string}>(controlPlaneURL(`/drift/models/${modelId}/reference-data/`), formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

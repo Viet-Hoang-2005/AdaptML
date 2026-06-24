@@ -25,7 +25,7 @@ export default function CreateDriftMonitoringPage() {
   const { modelId } = useParams<{ modelId: string }>();
   const navigate = useNavigate();
 
-  const [referenceS3Uri, setReferenceS3Uri] = useState<string>('');
+  const [referencePath, setReferencePath] = useState<string>('');
   const [triggerThreshold, setTriggerThreshold] = useState<number>(1000);
   
   const { data: productionLogs } = useProductionData(modelId);
@@ -56,7 +56,7 @@ export default function CreateDriftMonitoringPage() {
   }, [productionLogs]);
 
   const handleSubmit = async () => {
-    if (!referenceS3Uri) {
+    if (!referencePath) {
       toast.error('Please select a reference data file to set as main.');
       return;
     }
@@ -64,7 +64,7 @@ export default function CreateDriftMonitoringPage() {
       await createJob({
         model_id: modelId!,
         trigger_threshold: triggerThreshold,
-        reference_data_s3_path: referenceS3Uri,
+        reference_data_s3_path: referencePath,
       });
       toast.success('Drift monitoring config created!');
       navigate(`/dashboard/drift-monitoring/${modelId}`);
@@ -94,8 +94,8 @@ export default function CreateDriftMonitoringPage() {
           icon={<Database className="w-4 h-4" />}
           accept=".csv"
           editorType="csv"
-          currentEntryPoint={referenceS3Uri}
-          onSetEntryPoint={setReferenceS3Uri}
+          currentEntryPoint={referencePath}
+          onSetEntryPoint={setReferencePath}
           entryPointExtension=".csv"
           setAsMainLabel="Set as Reference"
         />
@@ -152,7 +152,7 @@ export default function CreateDriftMonitoringPage() {
           size="md"
           className="flex-1"
           onClick={handleSubmit}
-          disabled={isSubmitting || !referenceS3Uri}
+          disabled={isSubmitting || !referencePath}
         >
           {isSubmitting ? 'Saving...' : 'Create'}
         </Button>
