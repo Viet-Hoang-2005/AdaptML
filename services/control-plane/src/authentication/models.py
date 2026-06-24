@@ -26,29 +26,29 @@ def user_avatar_history_path(instance, filename):
     return f'{email_prefix}/avatars/{filename}'
 
 def model_artifact_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'model/{safe_model_name}/{safe_version}/{filename}'
 
 def model_source_artifact_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/source/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'model/{safe_model_name}/{safe_version}/source/{filename}'
 
 def label_mapping_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/mapping/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'model/{safe_model_name}/{safe_version}/mapping/{filename}'
 
 def model_source_code_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/code/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'model/{safe_model_name}/{safe_version}/code/{filename}'
 
 def model_reference_data_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/references/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'model/{safe_model_name}/{safe_version}/references/{filename}'
 
 def training_source_zip_path(instance, filename):
     return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/source/{filename}'

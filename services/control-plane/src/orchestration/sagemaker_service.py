@@ -167,6 +167,7 @@ def start_sagemaker_training_job(training_job: TrainingJob) -> tuple[str, str]:
             output_path=output_s3_uri,
             environment={
                 "MODEL_VERSION": training_job.model_version,
+                "MLFLOW_MODEL_NAME": training_job.name,
                 "AWS_BUCKET_NAME": config.bucket_name,
             },
             base_job_name=f"mlops-paas-{training_job.tenant.tenant_id.lower()}-{training_job.id}",

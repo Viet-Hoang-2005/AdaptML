@@ -141,7 +141,9 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
                 "SM_CHANNEL_TRAIN": str(input_train_dir),
                 "SM_MODEL_DIR": str(model_dir),
                 "SM_OUTPUT_DIR": str(output_dir),
+                "ENTRY_POINT": training_job.entry_point,
                 "MODEL_VERSION": training_job.model_version,
+                "MLFLOW_MODEL_NAME": training_job.name,
                 "AWS_BUCKET_NAME": settings.AWS_STORAGE_BUCKET_NAME,
             }
         )

@@ -284,8 +284,18 @@ def validate_create_training_job_request(request):
     accelerator_type = (request.data.get("accelerator_type") or "none").strip().lower()
     accelerator_count = _parse_non_negative_int(request.data.get("accelerator_count"), "accelerator_count", 0)
     source_zip = request.FILES.get("source_zip")
-    requirements_file = request.FILES.get("requirements_file")
     training_data = request.FILES.get("training_data")
+    registered_model_id = request.data.get("registered_model_id")
+    base_model = None
+
+    if registered_model_id:
+        from .hashid_utils import decode_model_id
+        model_id_int = decode_model_id(registered_model_id)
+        if not model_id_int:
+            raise ValidationError({"error": "Invalid registered_model_id."})
+        base_model = ModelAPI.objects.filter(id=model_id_int, tenant=request.user).first()
+        if not base_model:
+            raise ValidationError({"error": "Registered model not found."})
 
     if not name:
         raise ValidationError({"error": "Training job name is required."})
@@ -306,29 +316,31 @@ def validate_create_training_job_request(request):
         )
     training_backend = settings.TRAINING_BACKEND
     _validate_accelerator_config(accelerator_type, accelerator_count, training_backend)
-    if not source_zip:
-        raise ValidationError({"error": "Source code zip is required."})
-    if not training_data:
-        raise ValidationError({"error": "Training data CSV is required."})
+    if not base_model:
+        if not source_zip:
+            raise ValidationError({"error": "Source code zip is required."})
+        if not training_data:
+            raise ValidationError({"error": "Training data CSV is required."})
 
-    _validate_upload_size(source_zip, "Source code zip")
-    _validate_upload_size(training_data, "Training data CSV")
+        _validate_upload_size(source_zip, "Source code zip")
+        _validate_upload_size(training_data, "Training data CSV")
 
-    if not source_zip.name.lower().endswith(".zip"):
-        raise ValidationError({"error": "source_zip must be a .zip file."})
-    if not training_data.name.lower().endswith(".csv"):
-        raise ValidationError({"error": "training_data must be a .csv file."})
-
-    if requirements_file:
-        _validate_upload_size(requirements_file, "requirements.txt")
-        requirements_name = requirements_file.name.lower()
-        if not (requirements_name.endswith(".txt") or requirements_name == "requirements.txt"):
-            raise ValidationError({"error": "requirements_file must be a .txt file or named requirements.txt."})
+        if not source_zip.name.lower().endswith(".zip"):
+            raise ValidationError({"error": "source_zip must be a .zip file."})
+        if not training_data.name.lower().endswith(".csv"):
+            raise ValidationError({"error": "training_data must be a .csv file."})
 
     entry_point_path = Path(entry_point)
     if entry_point_path.is_absolute() or ".." in entry_point_path.parts:
         raise ValidationError({"error": "entry_point must be a relative path inside source_zip."})
-    _validate_source_zip_entry_point(source_zip, entry_point)
+        
+    if base_model:
+        if base_model.source_code_file:
+            _validate_source_zip_entry_point(base_model.source_code_file.file, entry_point)
+        else:
+            raise ValidationError({"error": "Base model does not have source code."})
+    else:
+        _validate_source_zip_entry_point(source_zip, entry_point)
 
     return {
         "name": name,
@@ -340,8 +352,8 @@ def validate_create_training_job_request(request):
         "accelerator_type": accelerator_type,
         "accelerator_count": accelerator_count,
         "source_zip": source_zip,
-        "requirements_file": requirements_file,
         "training_data": training_data,
+        "base_model": base_model,
     }
 
 
@@ -378,6 +390,16 @@ class TrainingJobListCreateView(APIView):
                 }
             )
 
+        source_zip = payload["base_model"].source_code_file if payload["base_model"] else payload["source_zip"]
+        training_data = payload["base_model"].reference_data_file if payload["base_model"] else payload["training_data"]
+
+        # Lấy requirements_text từ base_model nếu có, tạo in-memory file để gán vào training_job
+        requirements_file = None
+        if payload["base_model"] and payload["base_model"].requirements_text:
+            from django.core.files.base import ContentFile
+            req_bytes = payload["base_model"].requirements_text.encode("utf-8")
+            requirements_file = ContentFile(req_bytes, name="requirements.txt")
+
         training_job = TrainingJob.objects.create(
             tenant=request.user,
             name=payload["name"],
@@ -389,9 +411,9 @@ class TrainingJobListCreateView(APIView):
             max_runtime_seconds=payload["max_runtime_seconds"],
             accelerator_type=payload["accelerator_type"],
             accelerator_count=payload["accelerator_count"],
-            source_zip=payload["source_zip"],
-            requirements_file=payload["requirements_file"],
-            training_data=payload["training_data"],
+            source_zip=source_zip,
+            requirements_file=requirements_file,
+            training_data=training_data,
             status="pending",
         )
         create_training_job_event(training_job, "JOB_CREATED", "Training job created.")

@@ -423,6 +423,21 @@ class ModelAPIDetailView(APIView):
 
         return Response(serialize_model_api(model_api), status=status.HTTP_200_OK)
 
+    def patch(self, request, model_id):
+        """Partial update — only updates fields provided (e.g. requirements_text)."""
+        model_api = self.get_model(request, model_id)
+        if not model_api:
+            return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        update_fields = ["updated_at"]
+
+        if "requirements_text" in request.data:
+            model_api.requirements_text = request.data.get("requirements_text") or ""
+            update_fields.append("requirements_text")
+
+        model_api.save(update_fields=update_fields)
+        return Response(serialize_model_api(model_api), status=status.HTTP_200_OK)
+
     def delete(self, request, model_id):
         model_api = self.get_model(request, model_id)
         if not model_api:

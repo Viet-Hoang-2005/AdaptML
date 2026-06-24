@@ -114,6 +114,7 @@ def start_aws_batch_training_job(training_job: TrainingJob) -> tuple[str, str]:
         {"name": "S3_OUTPUT_URI", "value": model_artifact_uri},
         {"name": "ENTRY_POINT", "value": training_job.entry_point},
         {"name": "MODEL_VERSION", "value": training_job.model_version},
+        {"name": "MLFLOW_MODEL_NAME", "value": training_job.name},
         {"name": "TRAINING_JOB_ID", "value": str(training_job.id)},
     ]
     if requirements_uri:
