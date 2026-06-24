@@ -45,7 +45,7 @@ const controlPlaneApiBaseURL =
   import.meta.env.VITE_CONTROL_PLANE_API_BASE_URL ||
   authApiBaseURL.replace(/\/api\/auth\/?$/, '/api');
 
-const controlPlaneURL = (path: string) => `${controlPlaneApiBaseURL.replace(/\/+$/, '')}${path}`;
+export const controlPlaneURL = (path: string) => `${controlPlaneApiBaseURL.replace(/\/+$/, '')}${path}`;
 
 // 1. AUTHENTICATION
 // Base Auth
@@ -478,3 +478,64 @@ export function getApiErrorMessage(e: unknown, defaultMessage = 'An unexpected e
       || axiosError.message 
       || defaultMessage;
 }
+
+export interface S3File {
+  key: string;
+  relative_path: string;
+  s3_uri: string;
+  size: number;
+  last_modified: string;
+  download_url: string;
+}
+
+export const listSourceCodeFiles = async (modelIdStr: string): Promise<S3File[]> => {
+  const { data } = await axiosInstance.get<S3File[]>(controlPlaneURL(`/models/${modelIdStr}/source-code-files/`));
+  return data;
+};
+
+export const uploadSourceCodeFile = async (modelIdStr: string, file: File, path: string): Promise<{ s3_uri: string, message: string }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('path', path);
+  
+  const { data } = await axiosInstance.put<{ s3_uri: string, message: string }>(
+    controlPlaneURL(`/models/${modelIdStr}/source-code-upload/`),
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return data;
+};
+
+export const deleteSourceCodeFile = async (modelId: string, path: string): Promise<MessageResponse> => {
+  const { data } = await axiosInstance.delete<MessageResponse>(
+    controlPlaneURL(`/models/${modelId}/source-code-upload/`),
+    { data: { path } }
+  );
+  return data;
+};
+
+export const deleteReferenceFile = async (modelId: string, path: string): Promise<MessageResponse> => {
+  const { data } = await axiosInstance.delete<MessageResponse>(
+    controlPlaneURL(`/models/${modelId}/reference-data/`),
+    { data: { path } }
+  );
+  return data;
+};
+
+export const listReferenceFiles = async (modelIdStr: string): Promise<S3File[]> => {
+  const { data } = await axiosInstance.get<S3File[]>(controlPlaneURL(`/models/${modelIdStr}/reference-files/`));
+  return data;
+};
+
+export const uploadReferenceFile = async (modelIdStr: string, file: File, path: string): Promise<{ s3_uri: string, message: string }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('path', path);
+
+  const { data } = await axiosInstance.post<{ s3_uri: string, message: string }>(
+    controlPlaneURL(`/models/${modelIdStr}/reference-data/`),
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return data;
+};
