@@ -6,7 +6,7 @@ kind: NetworkPolicy
 metadata:
   name: np-postgres
   annotations:
-    description: "Chỉ cho phép các dịch vụ hợp lệ truy cập Database"
+    description: "Only allow valid Pods in the namespace to access the database."
 spec:
   podSelector:
     matchLabels:
@@ -19,20 +19,9 @@ spec:
         - podSelector:
             matchLabels:
               cnpg.io/cluster: mlops-paas-postgres
-    # Cho phép các ứng dụng truy cập cổng 5432
+    # Cho phép toàn bộ ứng dụng và Argo workflows nội bộ truy cập cổng 5432
     - from:
-        - podSelector:
-            matchExpressions:
-              - key: app
-                operator: In
-                values:
-                  - mlops-paas-api
-                  - mlops-paas-consumer
-                  - mlflow-server
-                  - mlops-paas-evidently
-                  - mlops-paas-dispatch
-                  - mlops-paas-sync-data
-                  - mlflow-db-init
+        - podSelector: {}
       ports:
         - protocol: TCP
           port: 5432
@@ -52,7 +41,7 @@ kind: NetworkPolicy
 metadata:
   name: np-redpanda
   annotations:
-    description: "Chỉ cho phép API và Consumer kết nối Kafka"
+    description: "Only allow internal services to connect to Kafka/Redpanda."
 spec:
   podSelector:
     matchLabels:
@@ -65,22 +54,12 @@ spec:
         - podSelector:
             matchLabels:
               app: redpanda
-    # Cho phép API và Consumer truy cập cổng 9092
-    - from:
-        - podSelector:
-            matchExpressions:
-              - key: app
-                operator: In
-                values:
-                  - mlops-paas-api
-                  - mlops-paas-consumer
-      ports:
-        - protocol: TCP
-          port: 9092
-    # Cho phép localhost port-forwarding (thường bypass NP, nhưng an toàn thì mở cổng 19092 cho toàn bộ namespace default)
+    # Cho phép Control Plane, Consumer và Workflows truy cập cổng 9092 & 19092
     - from:
         - podSelector: {}
       ports:
+        - protocol: TCP
+          port: 9092
         - protocol: TCP
           port: 19092
     # Cho phép Prometheus lấy metrics từ cổng 9644
@@ -93,17 +72,17 @@ spec:
           port: 9644
 
 ---
-# 3. Bảo vệ API
+# 3. Bảo vệ Django Control Plane
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: np-api
+  name: np-control-plane
   annotations:
-    description: "Chỉ cho phép Traefik Ingress và Prometheus truy cập API"
+    description: "Only allow Traefik Ingress, internal Pods, and Prometheus to access the Control Plane."
 spec:
   podSelector:
     matchLabels:
-      app: mlops-paas-api
+      app: mlops-paas-control-plane
   policyTypes:
     - Ingress
   ingress:
@@ -117,7 +96,13 @@ spec:
               app.kubernetes.io/name: traefik
       ports:
         - protocol: TCP
-          port: 5000
+          port: 8000
+    # Cho phép các Pod nội bộ (như Consumer hoặc Workflows gọi webhook)
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8000
     # Cho phép Prometheus lấy metrics
     - from:
         - namespaceSelector:
@@ -125,27 +110,33 @@ spec:
               kubernetes.io/metadata.name: monitoring
       ports:
         - protocol: TCP
-          port: 5000
+          port: 8000
 
 ---
-# 4. Bảo vệ MLflow Server
+# 4. Bảo vệ Frontend Web (React Vite)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: np-mlflow-server
+  name: np-web
   annotations:
-    description: "Chỉ cho phép Cloudflared proxy vào MLflow Server"
+    description: "Only allow Traefik and Cloudflared to access the Frontend."
 spec:
   podSelector:
     matchLabels:
-      app: mlflow-server
+      app: mlops-paas-web
   policyTypes:
     - Ingress
   ingress:
     - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
         - podSelector:
             matchLabels:
               app: cloudflared
       ports:
         - protocol: TCP
-          port: 5000
+          port: 80

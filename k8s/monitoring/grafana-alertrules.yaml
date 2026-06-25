@@ -1,4 +1,4 @@
-# grafana-alertrules.yaml: Cấu hình PrometheusRule với các ngưỡng cảnh báo cho hệ thống paas
+# grafana-alertrules.yaml: Cấu hình PrometheusRule với các ngưỡng cảnh báo cho hệ thống AI PaaS
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -9,25 +9,58 @@ metadata:
     release: monitoring
 spec:
   groups:
-    # Nhóm 1: API Health
-    - name: paas.api.health
+    # Nhóm 1: Microservices Health & Availability
+    - name: paas.services.health
       rules:
-        # Cảnh báo khi API latency p95 vượt 100ms liên tục 3 phút
-        - alert: HighAPILatency
+        # Cảnh báo khi Control Plane pod không còn chạy
+        - alert: ControlPlanePodsUnavailable
+          expr: kube_deployment_status_replicas_available{deployment="mlops-paas-control-plane"} < 1
+          for: 1m
+          labels:
+            severity: critical
+            team: mlops
+          annotations:
+            summary: "Control Plane Pods unavailable"
+            description: "The mlops-paas-control-plane deployment has 0 available replicas!"
+
+        # Cảnh báo khi Consumer pod không còn chạy
+        - alert: ConsumerPodsUnavailable
+          expr: kube_deployment_status_replicas_available{deployment="mlops-paas-consumer"} < 1
+          for: 1m
+          labels:
+            severity: critical
+            team: mlops
+          annotations:
+            summary: "Consumer Pods unavailable"
+            description: "The mlops-paas-consumer deployment has 0 available replicas!"
+
+        # Cảnh báo khi Frontend Web pod không còn chạy
+        - alert: WebPodsUnavailable
+          expr: kube_deployment_status_replicas_available{deployment="mlops-paas-web"} < 1
+          for: 1m
+          labels:
+            severity: critical
+            team: mlops
+          annotations:
+            summary: "Frontend Web Pods unavailable"
+            description: "The mlops-paas-web deployment has 0 available replicas!"
+
+        # Cảnh báo khi HTTP Latency p95 vượt ngưỡng 500ms
+        - alert: HighServiceLatency
           expr: |
             histogram_quantile(0.95,
-              rate(http_request_duration_seconds_bucket{handler="/predict"}[5m])
-            ) > 0.1
+              rate(http_request_duration_seconds_bucket[5m])
+            ) > 0.5
           for: 3m
           labels:
             severity: warning
             team: mlops
           annotations:
-            summary: "API /predict latency is above 100ms"
-            description: "The current p95 latency is {{ $value | humanizeDuration }}. Please check the Pod resources and Redpanda connection!"
+            summary: "HTTP Service p95 latency > 500ms"
+            description: "Current p95 latency is {{ $value | humanizeDuration }}."
 
-        # Cảnh báo khi error rate vượt 1%
-        - alert: HighAPIErrorRate
+        # Cảnh báo khi tỷ lệ lỗi HTTP 5xx vượt 1%
+        - alert: HighHTTPErrorRate
           expr: |
             rate(http_requests_total{status=~"5.."}[5m]) /
             rate(http_requests_total[5m]) > 0.01
@@ -36,60 +69,23 @@ spec:
             severity: critical
             team: mlops
           annotations:
-            summary: "API Error Rate is above 1%"
-            description: "The current error rate is {{ $value | humanizePercentage }}. Please check the API logs!"
+            summary: "HTTP Error Rate > 1%"
+            description: "Current error rate is {{ $value | humanizePercentage }}."
 
-        # Cảnh báo khi API pod không còn running
-        - alert: APIPodsUnavailable
-          expr: kube_deployment_status_replicas_available{deployment="mlops-paas-api"} < 1
-          for: 1m
-          labels:
-            severity: critical
-            team: mlops
-          annotations:
-            summary: "API Pods unavailable"
-            description: "The API deployment has 0 available replicas. Please check immediately!"
-
-    # Nhóm 2: PaaS Security Events
-    - name: paas.security
+    # Nhóm 2: AI Inference & Model Endpoints
+    - name: paas.inference
       rules:
-        # Cảnh báo khi phát hiện DDoS traffic đột biến (tấn công thực)
-        - alert: DDoSSpikeDetected
+        # Cảnh báo khi lượng lỗi suy luận tăng cao
+        - alert: HighInferenceErrors
           expr: |
-            rate(paas_predictions_total{label="DDoS"}[2m]) > 50
-          for: 1m
-          labels:
-            severity: critical
-            team: security
-          annotations:
-            summary: "DDoS Traffic Spike detected!"
-            description: "The system is detecting {{ $value | humanize }} DDoS predictions/second. It may be under real attack!"
-
-        # Cảnh báo khi PortScan tăng đột biến (giai đoạn trinh sát mạng)
-        - alert: PortScanActivityDetected
-          expr: |
-            rate(paas_predictions_total{label="PortScan"}[5m]) > 20
+            rate(paas_predictions_total{status=~"error.*"}[5m]) > 5
           for: 2m
           labels:
             severity: warning
-            team: security
-          annotations:
-            summary: "PortScan activity detected!"
-            description: "{{ $value | humanize }} PortScan predictions/second in the last 5 minutes."
-
-        # Cảnh báo khi confidence score trung bình quá thấp (model có thể đang xử lý data lạ)
-        - alert: LowModelConfidence
-          expr: |
-            histogram_quantile(0.5,
-              rate(paas_prediction_confidence_bucket[10m])
-            ) < 0.7
-          for: 5m
-          labels:
-            severity: warning
             team: mlops
           annotations:
-            summary: "Model Confidence Score < 70%"
-            description: "The model is not confident with the input data. It may need to check Data Drift!"
+            summary: "High Model Inference Errors"
+            description: "Model Endpoint is generating {{ $value }} errors/sec."
 
     # Nhóm 3: Database Health
     - name: paas.database

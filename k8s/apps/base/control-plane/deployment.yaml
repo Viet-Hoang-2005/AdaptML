@@ -28,13 +28,39 @@ spec:
                       values:
                         - mlops-paas-control-plane
                 topologyKey: "kubernetes.io/hostname"
+      initContainers:
+        - name: db-migrate
+          image: mlops-paas-django:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - "python src/manage.py ensure_db_schema && python src/manage.py migrate"
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DJANGO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: DJANGO_SECRET_KEY
+          envFrom:
+            - configMapRef:
+                name: mlops-paas-control-plane-config
       containers:
         - name: control-plane
           image: mlops-paas-django:latest
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
-            - "python src/manage.py ensure_db_schema && python src/manage.py migrate && cd src && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
+            - "cd src && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
           ports:
             - containerPort: 8000
           env:
@@ -63,16 +89,36 @@ spec:
                 secretKeyRef:
                   name: mlops-paas-secret
                   key: JWT_PUBLIC_KEY
-            - name: AWS_ACCESS_KEY_ID
+            - name: CONTROL_PLANE_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: aws-secrets
-                  key: AWS_ACCESS_KEY_ID
-            - name: AWS_SECRET_ACCESS_KEY
+                  name: mlops-paas-secret
+                  key: CONTROL_PLANE_WEBHOOK_SECRET
+            - name: GOOGLE_OAUTH2_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: aws-secrets
-                  key: AWS_SECRET_ACCESS_KEY
+                  name: mlops-paas-secret
+                  key: GOOGLE_OAUTH2_CLIENT_ID
+            - name: GITHUB_OAUTH2_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: GITHUB_OAUTH2_CLIENT_ID
+            - name: GITHUB_OAUTH2_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: GITHUB_OAUTH2_CLIENT_SECRET
+            - name: EMAIL_HOST_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: EMAIL_HOST_USER
+            - name: EMAIL_HOST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: EMAIL_HOST_PASSWORD
           envFrom:
             - configMapRef:
                 name: mlops-paas-control-plane-config

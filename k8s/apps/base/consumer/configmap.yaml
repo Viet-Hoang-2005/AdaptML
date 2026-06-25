@@ -5,13 +5,12 @@ metadata:
   labels:
     app: mlops-paas-consumer
 data:
-  KAFKA_TOPIC: "paas_production_data"
-  WEBHOOK_URL: "http://mlops-paas-control-plane:8000/api/v1/internal/trigger-drift-job"
+  KAFKA_TOPIC: "mlops_paas_production_data"
+  CONTROL_PLANE_WEBHOOK_URL: "http://mlops-paas-control-plane:8000/api/drift/internal/trigger-drift-job"
   REDPANDA_BROKERS: "redpanda-service:9092"
   EVIDENTLY_TRIGGER_THRESHOLD: "100"
   GITHUB_REPO: "Viet-Hoang-2005/MLOps-nids-system"
   DB_HOST_RW: "mlops-paas-postgres-rw"
   DB_HOST_RO: "mlops-paas-postgres-ro"
-  DB_HOST: "mlops-paas-postgres-rw"
   DB_PORT: "5432"
   DB_NAME: "mlops_paas_db"

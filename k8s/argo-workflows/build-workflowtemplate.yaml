@@ -6,6 +6,11 @@ metadata:
 spec:
   serviceAccountName: argo-workflow-sa
   entrypoint: build-model
+  volumes:
+    - name: docker-sock
+      hostPath:
+        path: /var/run/docker.sock
+        type: Socket
   templates:
     - name: build-model
       inputs:
@@ -23,6 +28,9 @@ spec:
         image: tnvhoang/mlops-paas-model-packager:latest
         imagePullPolicy: Always
         command: ["python", "src/cli.py"]
+        volumeMounts:
+          - name: docker-sock
+            mountPath: /var/run/docker.sock
         env:
           - name: TASK_TYPE
             value: "{{inputs.parameters.task_type}}"
@@ -42,14 +50,16 @@ spec:
             value: "{{inputs.parameters.output_key}}"
           - name: CONTROL_PLANE_WEBHOOK_URL
             value: "{{inputs.parameters.control_plane_webhook_url}}"
-          - name: MODEL_BUILD_WEBHOOK_SECRET
+          - name: CONTROL_PLANE_WEBHOOK_SECRET
             valueFrom:
               secretKeyRef:
                 name: mlops-paas-secret
-                key: WEBHOOK_SECRET
+                key: CONTROL_PLANE_WEBHOOK_SECRET
           # AWS Keys and Database configurations
         envFrom:
           - secretRef:
               name: mlops-paas-secret
+          - secretRef:
+              name: harbor-registry-secret
           - configMapRef:
               name: mlops-paas-control-plane-config

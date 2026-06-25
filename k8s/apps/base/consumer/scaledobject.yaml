@@ -20,7 +20,7 @@ spec:
         # Địa chỉ Redpanda Service bên trong K3s
         bootstrapServers: redpanda-service.default.svc.cluster.local:9092
         # Tên Topic cần giám sát
-        topic: paas_production_data
+        topic: mlops_paas_production_data
         consumerGroup: paas-db-writer-group
         # Ngưỡng kích hoạt: Cứ mỗi 2000 tin nhắn bị trễ (lag) thì tạo thêm 1 Pod
         lagThreshold: "2000"

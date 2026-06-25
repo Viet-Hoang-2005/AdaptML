@@ -19,7 +19,7 @@ spec:
       eventName: drift
   triggers:
     - template:
-        name: argo-workflow-trigger
+        name: build-workflow-trigger
         conditions: "build-dep"
         k8s:
           operation: create
@@ -188,7 +188,7 @@ spec:
                       value: ""
                     - name: summary_json_upload_url
                       value: ""
-                    - name: webhook_url
+                    - name: control_plane_webhook_url
                       value: ""
           parameters:
             - src: { dependencyName: drift-dep, dataKey: body.job_id }
@@ -217,5 +217,5 @@ spec:
               dest: spec.arguments.parameters.11.value
             - src: { dependencyName: drift-dep, dataKey: body.summary_json_upload_url }
               dest: spec.arguments.parameters.12.value
-            - src: { dependencyName: drift-dep, dataKey: body.webhook_url }
+            - src: { dependencyName: drift-dep, dataKey: body.control_plane_webhook_url }
               dest: spec.arguments.parameters.13.value

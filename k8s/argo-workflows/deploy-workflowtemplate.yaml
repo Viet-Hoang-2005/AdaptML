@@ -52,6 +52,17 @@ spec:
                           name: mlops-paas-secret
                       - configMapRef:
                           name: mlops-paas-control-plane-config
+                    env:
+                      - name: DB_USER
+                        valueFrom:
+                          secretKeyRef:
+                            name: postgres-secrets
+                            key: POSTGRES_USER
+                      - name: DB_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: postgres-secrets
+                            key: POSTGRES_PASSWORD
                     resources:
                       requests:
                         cpu: 250m

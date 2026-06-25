@@ -37,7 +37,7 @@ spec:
         - name: init-kafka-topic
           image: docker.redpanda.com/redpandadata/redpanda:v23.3.21
           command: ["/bin/sh", "-c"]
-          args: ["rpk topic create paas_production_data --brokers redpanda-service:9092 || true"]
+          args: ["rpk topic create mlops_paas_production_data --brokers redpanda-service:9092 || true"]
       containers:
         - name: consumer
           image: mlops-paas-consumer:latest
@@ -47,11 +47,11 @@ spec:
             - configMapRef:
                 name: mlops-paas-consumer-config
           env:
-            - name: WEBHOOK_SECRET
+            - name: CONTROL_PLANE_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
                   name: mlops-paas-secret
-                  key: WEBHOOK_SECRET
+                  key: CONTROL_PLANE_WEBHOOK_SECRET
             - name: GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:

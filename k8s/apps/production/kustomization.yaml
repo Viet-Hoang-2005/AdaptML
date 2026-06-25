@@ -15,9 +15,6 @@ images:
   - name: mlops-paas-django
     newName: tnvhoang/mlops-paas-django
     newTag: latest
-  - name: mlops-paas-mlflow
-    newName: tnvhoang/mlops-paas-mlflow
-    newTag: latest
   - name: mlops-paas-web
     newName: tnvhoang/mlops-paas-web
     newTag: latest

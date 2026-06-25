@@ -1,16 +1,16 @@
 # pod-disruption-budgets.yaml: Bảo vệ các service khỏi downtime khi bảo trì node (kubectl drain)
-# 1. PDB cho API PaaS
+# 1. PDB cho Django Control Plane
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: mlops-paas-api-pdb
+  name: mlops-paas-control-plane-pdb
   namespace: default
 spec:
-  minAvailable: 1 # Luôn giữ ít nhất 1 Pod phục vụ Inference
+  minAvailable: 1 # Luôn giữ ít nhất 1 Pod phục vụ API
   selector:
     matchLabels:
-      app: mlops-paas-api
+      app: mlops-paas-control-plane
 ---
 # 2. PDB cho Cloudflare Tunnel
 apiVersion: policy/v1
@@ -23,15 +23,15 @@ spec:
     matchLabels:
       app: cloudflared
 ---
-# 3. PDB cho MLflow Server
+# 3. PDB cho Frontend Web
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: mlflow-server-pdb
+  name: mlops-paas-web-pdb
   namespace: default
 spec:
   minAvailable: 1
   selector:
     matchLabels:
-      app: mlflow-server
+      app: mlops-paas-web
 ---

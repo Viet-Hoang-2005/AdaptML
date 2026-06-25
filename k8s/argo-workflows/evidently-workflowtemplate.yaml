@@ -23,7 +23,7 @@ spec:
           - name: html_upload_url
           - name: report_json_upload_url
           - name: summary_json_upload_url
-          - name: webhook_url
+          - name: control_plane_webhook_url
       container:
         image: tnvhoang/mlops-paas-evidently:latest
         imagePullPolicy: Always
@@ -62,14 +62,12 @@ spec:
             value: "{{inputs.parameters.report_json_upload_url}}"
           - name: SUMMARY_JSON_UPLOAD_URL
             value: "{{inputs.parameters.summary_json_upload_url}}"
-          - name: WEBHOOK_URL
-            value: "{{inputs.parameters.webhook_url}}"
+          - name: CONTROL_PLANE_WEBHOOK_URL
+            value: "{{inputs.parameters.control_plane_webhook_url}}"
           - name: DRIFT_REPORTS_S3_PREFIX
             value: "drift-reports"
           - name: DB_HOST_RO
             value: "mlops-paas-postgres-ro"
-          - name: MLFLOW_TRACKING_URI
-            value: "http://mlflow-service:5000"
         resources:
           requests:
             cpu: 250m

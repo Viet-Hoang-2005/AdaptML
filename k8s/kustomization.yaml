@@ -16,6 +16,7 @@ bases:
   - health
   - harbor
   - argo-workflows
+  - cronjobs
 
   # 2. Applications (Dùng overlay production)
   - apps/production
