@@ -1,4 +1,5 @@
 import os
+import hashlib
 import json
 import shutil
 import subprocess
@@ -18,6 +19,11 @@ SOURCE_DIR = WORKSPACE / "source"
 INPUT_TRAIN_DIR = WORKSPACE / "input" / "train"
 MODEL_DIR = WORKSPACE / "model"
 OUTPUT_DIR = WORKSPACE / "output"
+MLOPS_DIR_NAME = "_mlops"
+RUNNER_VERSION = "mlops-metadata-bundle-v1"
+MODEL_FILE_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
+CHECKPOINT_EXTENSIONS = {".pt", ".pth", ".ckpt", ".h5", ".onnx", ".keras"}
+METADATA_EXTENSIONS = {".json", ".yaml", ".yml", ".txt"}
 
 
 def log(message: str) -> None:
@@ -26,6 +32,195 @@ def log(message: str) -> None:
 
 def metric_log(payload: dict) -> None:
     print(f"METRIC_JSON {json.dumps(payload, separators=(',', ':'))}", flush=True)
+
+
+def warn(warnings: list[dict], code: str, message: str, **extra) -> None:
+    warning = {"code": code, "message": message}
+    warning.update(extra)
+    warnings.append(warning)
+
+
+def write_json(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str), encoding="utf-8")
+
+
+def safe_json_value(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [safe_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): safe_json_value(item) for key, item in value.items()}
+    return str(value)
+
+
+def is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def parse_metric_events(stdout_text: str, warnings: list[dict]) -> tuple[list[dict], dict]:
+    events: list[dict] = []
+    metrics: dict = {}
+
+    for line_number, line in enumerate(stdout_text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped.startswith("METRIC_JSON:"):
+            continue
+
+        raw_payload = stripped.split("METRIC_JSON:", 1)[1].strip()
+        try:
+            payload = json.loads(raw_payload)
+        except json.JSONDecodeError as exc:
+            warn(
+                warnings,
+                "invalid_metric_json",
+                "Invalid METRIC_JSON line was ignored.",
+                line_number=line_number,
+                error=str(exc),
+            )
+            continue
+
+        if not isinstance(payload, dict):
+            warn(
+                warnings,
+                "invalid_metric_json_shape",
+                "METRIC_JSON payload must be a JSON object.",
+                line_number=line_number,
+            )
+            continue
+
+        normalized_payload = safe_json_value(payload)
+        events.append({"line_number": line_number, "payload": normalized_payload})
+        for key, value in normalized_payload.items():
+            if is_number(value):
+                metrics[str(key)] = value
+
+    return events, metrics
+
+
+def read_json_object(path: Path, label: str, warnings: list[dict]) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        warn(warnings, f"invalid_{label}_json", f"{label}.json could not be parsed and was ignored.", error=str(exc))
+        return {}
+    if not isinstance(payload, dict):
+        warn(warnings, f"invalid_{label}_shape", f"{label}.json must contain a JSON object.")
+        return {}
+    return safe_json_value(payload)
+
+
+def split_numeric_metrics(payload: dict, warnings: list[dict], source: str) -> dict:
+    metrics = {}
+    for key, value in payload.items():
+        if is_number(value):
+            metrics[str(key)] = value
+        elif value is not None:
+            warn(
+                warnings,
+                "non_numeric_metric_ignored",
+                "Non-numeric metric value was ignored.",
+                source=source,
+                metric=str(key),
+            )
+    return metrics
+
+
+def artifact_kind(relative_path: Path) -> str:
+    name = relative_path.name
+    suffix = relative_path.suffix.lower()
+    if name == "MLmodel" or suffix in MODEL_FILE_EXTENSIONS:
+        return "model"
+    if suffix in CHECKPOINT_EXTENSIONS:
+        return "checkpoint"
+    if suffix in METADATA_EXTENSIONS:
+        return "metadata"
+    if suffix == ".log":
+        return "log"
+    return "other"
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_artifact_manifest(model_dir: Path) -> list[dict]:
+    manifest = []
+    root = model_dir.resolve()
+    for item in sorted(model_dir.rglob("*")):
+        if not item.is_file():
+            continue
+        resolved = item.resolve()
+        if not str(resolved).startswith(str(root)):
+            continue
+        relative_path = item.relative_to(model_dir)
+        manifest.append(
+            {
+                "path": relative_path.as_posix(),
+                "size_bytes": item.stat().st_size,
+                "sha256": sha256_file(item),
+                "kind": artifact_kind(relative_path),
+            }
+        )
+    return manifest
+
+
+def write_metric_events(path: Path, events: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for event in events:
+            handle.write(json.dumps(event, sort_keys=True, default=str))
+            handle.write("\n")
+
+
+def write_mlops_bundle(
+    *,
+    entry_point: str,
+    model_version: str,
+    training_job_id: str,
+    status: str,
+    stdout_text: str,
+    stderr_text: str,
+) -> None:
+    warnings: list[dict] = []
+    mlops_dir = MODEL_DIR / MLOPS_DIR_NAME
+    mlops_dir.mkdir(parents=True, exist_ok=True)
+
+    metric_events, stdout_metrics = parse_metric_events(stdout_text, warnings)
+    file_metrics_payload = read_json_object(OUTPUT_DIR / "metrics.json", "metrics", warnings)
+    params_payload = read_json_object(OUTPUT_DIR / "params.json", "params", warnings)
+    metrics = {**stdout_metrics, **split_numeric_metrics(file_metrics_payload, warnings, "metrics.json")}
+    params = safe_json_value(params_payload)
+
+    (mlops_dir / "stdout.txt").write_text(stdout_text, encoding="utf-8")
+    (mlops_dir / "stderr.txt").write_text(stderr_text, encoding="utf-8")
+    write_metric_events(mlops_dir / "metric_events.jsonl", metric_events)
+    write_json(mlops_dir / "metrics.json", metrics)
+    write_json(mlops_dir / "params.json", params)
+    write_json(mlops_dir / "warnings.json", warnings)
+
+    manifest = build_artifact_manifest(MODEL_DIR)
+    write_json(mlops_dir / "artifact_manifest.json", manifest)
+
+    summary = {
+        "runner_version": RUNNER_VERSION,
+        "entry_point": entry_point,
+        "model_version": model_version,
+        "training_job_id": training_job_id,
+        "status": status,
+        "metrics": metrics,
+        "params": params,
+        "artifact_count": len(manifest),
+        "warnings_count": len(warnings),
+    }
+    write_json(mlops_dir / "training_summary.json", summary)
 
 
 def require_env(name: str) -> str:
@@ -247,7 +442,7 @@ def start_metric_emitter(stop_event: threading.Event, interval_seconds: int = 5)
     return thread
 
 
-def run_training(entry_point: str, model_version: str) -> None:
+def run_training(entry_point: str, model_version: str) -> subprocess.CompletedProcess:
     entry_point_path = SOURCE_DIR / entry_point
     if not entry_point_path.exists() or not entry_point_path.is_file():
         raise RuntimeError(f"Source zip must contain entry point: {entry_point}")
@@ -267,25 +462,37 @@ def run_training(entry_point: str, model_version: str) -> None:
     stop_metrics = threading.Event()
     start_metric_emitter(stop_metrics)
     try:
-        subprocess.run(
+        result = subprocess.run(
             [sys.executable, str(entry_point_path)],
             cwd=str(SOURCE_DIR),
             env=env,
-            check=True,
+            capture_output=True,
+            text=True,
+            check=False,
         )
     finally:
         stop_metrics.set()
+    if result.stdout:
+        print(result.stdout, end="", flush=True)
+    if result.stderr:
+        print(result.stderr, end="", file=sys.stderr, flush=True)
+    return result
 
 
 def create_model_archive(archive_path: Path) -> None:
-    model_files = [item for item in MODEL_DIR.rglob("*") if item.is_file()]
+    model_files = [
+        item
+        for item in MODEL_DIR.rglob("*")
+        if item.is_file() and MLOPS_DIR_NAME not in item.relative_to(MODEL_DIR).parts
+    ]
     if not model_files:
         raise RuntimeError("Training completed but SM_MODEL_DIR does not contain any model files.")
 
     log(f"Packaging {len(model_files)} model file(s) into model.tar.gz")
     with tarfile.open(archive_path, "w:gz") as archive:
         for item in MODEL_DIR.rglob("*"):
-            archive.add(item, arcname=item.relative_to(MODEL_DIR))
+            if item.is_file():
+                archive.add(item, arcname=item.relative_to(MODEL_DIR))
 
 
 def main() -> None:
@@ -294,6 +501,7 @@ def main() -> None:
     output_uri = require_env("S3_OUTPUT_URI")
     entry_point = os.environ.get("ENTRY_POINT", "train.py").strip() or "train.py"
     model_version = os.environ.get("MODEL_VERSION", "").strip()
+    training_job_id = os.environ.get("TRAINING_JOB_ID", "").strip()
     requirements_uri = os.environ.get("S3_REQUIREMENTS_URI", "").strip()
 
     log("Preparing workspace")
@@ -318,7 +526,18 @@ def main() -> None:
     safe_extract_zip(source_zip_path, SOURCE_DIR)
 
     install_requirements(requirements_path)
-    run_training(entry_point, model_version)
+    result = run_training(entry_point, model_version)
+    training_status = "succeeded" if result.returncode == 0 else "failed"
+    write_mlops_bundle(
+        entry_point=entry_point,
+        model_version=model_version,
+        training_job_id=training_job_id,
+        status=training_status,
+        stdout_text=result.stdout or "",
+        stderr_text=result.stderr or "",
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Training entry point failed with exit code {result.returncode}")
     create_model_archive(model_archive_path)
     upload_s3(model_archive_path, output_uri)
     log("Training job completed successfully")
