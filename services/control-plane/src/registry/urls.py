@@ -16,6 +16,13 @@ from registry.views import (
     ModelAPIRedeployView,
     ModelAPIStopEndpointView,
     ModelAPITriggerBuildView,
+    RegistryFamilyDetailView,
+    RegistryFamilyHistoryView,
+    RegistryFamilyListView,
+    RegistryFamilyVersionsView,
+    RegistryVersionDetailView,
+    RegistryVersionHistoryView,
+    RegistryVersionMetricsView,
     SourceCodeFileListView,
     SourceCodeFileUploadView,
 )
@@ -34,6 +41,18 @@ class HashIdConverter:
 register_converter(HashIdConverter, "hashid")
 
 urlpatterns = [
+    path("families/", RegistryFamilyListView.as_view(), name="registry_family_list"),
+    path("families/<int:family_id>/", RegistryFamilyDetailView.as_view(), name="registry_family_detail"),
+    path("families/<int:family_id>/versions/", RegistryFamilyVersionsView.as_view(), name="registry_family_versions"),
+    path(
+        "families/<int:family_id>/versions/<int:version_id>/metrics/",
+        RegistryVersionMetricsView.as_view(),
+        name="registry_family_version_metrics",
+    ),
+    path("families/<int:family_id>/history/", RegistryFamilyHistoryView.as_view(), name="registry_family_history"),
+    path("versions/<int:version_id>/", RegistryVersionDetailView.as_view(), name="registry_version_detail"),
+    path("versions/<int:version_id>/metrics/", RegistryVersionMetricsView.as_view(), name="registry_version_metrics"),
+    path("versions/<int:version_id>/history/", RegistryVersionHistoryView.as_view(), name="registry_version_history"),
     path("", ModelAPIListCreateView.as_view(), name="model_api_list_create"),
     path("build/", ModelAPIBuildView.as_view(), name="model_api_build"),
     path("<hashid:model_id>/package-preview/", ModelAPIPackagePreviewView.as_view(), name="model_api_package_preview"),

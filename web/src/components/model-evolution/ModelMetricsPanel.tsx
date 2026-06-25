@@ -76,7 +76,7 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
         </div>
         <h3 className="text-lg font-bold text-gray-900 mb-2">No Structured Metrics Found</h3>
         <p className="text-sm text-gray-600 max-w-lg mb-6">
-          Metrics are parsed from stdout during training. Emit <code className="bg-white border border-gray-200 text-gray-800 px-1.5 py-0.5 rounded font-mono text-xs">METRIC_JSON</code> lines from your training script, or log metrics using <code className="bg-white border border-gray-200 text-gray-800 px-1.5 py-0.5 rounded font-mono text-xs">mlflow.log_metric()</code>.
+          Metrics are parsed from training outputs. Emit <code className="bg-white border border-gray-200 text-gray-800 px-1.5 py-0.5 rounded font-mono text-xs">METRIC_JSON</code> lines from your training script; experiment tracking is captured automatically when training artifacts are ingested.
         </p>
         
         <div className="text-left bg-[#1e1e1e] rounded-lg overflow-hidden w-full shadow-sm border border-gray-800 mb-4">
@@ -87,12 +87,12 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
                 <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
                 <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
               </div>
-              <span className="text-xs font-mono text-gray-400">train.py — two supported methods</span>
+              <span className="text-xs font-mono text-gray-400">train.py - metric output contract</span>
             </div>
             <button 
               className="text-xs text-gray-400 hover:text-white transition-colors"
               onClick={() => {
-                navigator.clipboard.writeText('import json\n\n# Option A: METRIC_JSON stdout (always works, no extra dependency)\nprint("METRIC_JSON:", json.dumps({\n    "step": 1,\n    "accuracy": 0.95,\n    "loss": 0.12,\n    "f1": 0.93\n}))\n\n# Option B: mlflow.log_metric (requires MLflow + MLFLOW_TRACKING_URI)\nimport mlflow\nwith mlflow.start_run() as run:\n    mlflow.log_metric("accuracy", 0.95)\n    print(f"MLFLOW_RUN_ID:{run.info.run_id}")\n    print(f"MLFLOW_EXPERIMENT_ID:{run.info.experiment_id}")');
+                navigator.clipboard.writeText('import json\n\n# METRIC_JSON stdout works without extra dependencies.\nprint("METRIC_JSON:", json.dumps({\n    "step": 1,\n    "accuracy": 0.95,\n    "loss": 0.12,\n    "f1": 0.93\n}))');
                 toast.success('Snippet copied to clipboard');
               }}
             >
@@ -103,26 +103,19 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
             <pre className="text-xs font-mono text-emerald-400 overflow-x-auto leading-relaxed">
               <code>{`import json
 
-# Option A: METRIC_JSON stdout (always works, no extra dependency)
+# METRIC_JSON stdout works without extra dependencies.
 print("METRIC_JSON:", json.dumps({
     "step": 1,
     "accuracy": 0.95,
     "loss": 0.12,
     "f1": 0.93
-}))
-
-# Option B: mlflow.log_metric (requires MLflow + MLFLOW_TRACKING_URI)
-import mlflow
-with mlflow.start_run() as run:
-    mlflow.log_metric("accuracy", 0.95)
-    print(f"MLFLOW_RUN_ID:{run.info.run_id}")
-    print(f"MLFLOW_EXPERIMENT_ID:{run.info.experiment_id}")`}</code>
+}))`}</code>
             </pre>
           </div>
         </div>
 
         <p className="text-xs font-medium text-gray-500">
-          Metrics appear here after the training job completes and data is synced. MLflow metrics sync is coming in Phase 10E.2.
+          Metrics appear here after the training job completes and registry data is synced.
         </p>
       </div>
     );
@@ -234,3 +227,4 @@ with mlflow.start_run() as run:
     </div>
   );
 }
+

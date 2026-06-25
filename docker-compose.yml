@@ -213,13 +213,17 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-southeast-1}
       - AWS_BUCKET_NAME=${AWS_BUCKET_NAME:-mlops-paas-artifacts}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
       - MLFLOW_DB_SCHEMA=${MLFLOW_DB_SCHEMA:-mlflow}
     command: >
-      mlflow server 
-      --host 0.0.0.0 
-      --port 5000 
-      --backend-store-uri postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?options=-csearch_path%3D${MLFLOW_DB_SCHEMA:-mlflow}%2Cpublic
-      --default-artifact-root s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/
+      sh -c 'ENCODED_DB_PASSWORD=$$(python -c "import os, urllib.parse; print(urllib.parse.quote(os.environ.get(\"DB_PASSWORD\", \"\"), safe=\"\"))");
+      exec mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri "postgresql://$${DB_USER}:$${ENCODED_DB_PASSWORD}@postgres:5432/$${DB_NAME}?options=-csearch_path%3D$${MLFLOW_DB_SCHEMA:-mlflow}%2Cpublic"
+      --default-artifact-root "s3://$${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/"'
     depends_on:
       postgres:
         condition: service_healthy

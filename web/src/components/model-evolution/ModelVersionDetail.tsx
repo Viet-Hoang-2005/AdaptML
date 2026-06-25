@@ -238,7 +238,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-3 flex flex-col gap-1">
                       <p className="text-xs font-semibold text-gray-500">No MLflow run linked</p>
                       <p className="text-[11px] text-gray-400 leading-relaxed">
-                        Emit <code className="bg-white border border-gray-200 px-1 rounded font-mono">MLFLOW_RUN_ID</code> from your training script, or use the MLflow-enabled training template.
+                        Experiment tracking is captured automatically when training artifacts are ingested.
                       </p>
                     </div>
                   )}

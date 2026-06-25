@@ -7,6 +7,7 @@ import zipfile
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db.models import Count
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -22,7 +23,14 @@ from deployment.build_adapter import get_build_adapter, DockerBuildAdapter
 from deployment.deploy_adapter import get_deploy_adapter
 from integrations.hashid_utils import encode_model_id, decode_model_id
 
-from authentication.models import ModelAPI, model_artifact_path
+from authentication.models import (
+    ModelAPI,
+    ModelDeploymentHistory,
+    ModelFamily,
+    ModelMetric,
+    ModelVersion,
+    model_artifact_path,
+)
 from integrations.s3_zip_utils import upload_single_file_to_s3, get_s3_file_list, handle_upload_to_s3, delete_s3_path
 
 logger = logging.getLogger(__name__)
@@ -76,6 +84,190 @@ def serialize_model_api(model_api):
         "created_at": model_api.created_at,
         "updated_at": model_api.updated_at,
     }
+
+
+def serialize_registry_metric(metric):
+    return {
+        "id": metric.id,
+        "metric_name": metric.metric_name,
+        "name": metric.metric_name,
+        "metric_value": metric.metric_value,
+        "value": metric.metric_value,
+        "step": metric.step,
+        "source": metric.source,
+        "extra": metric.extra,
+        "timestamp": metric.created_at,
+        "created_at": metric.created_at,
+    }
+
+
+def serialize_registry_version(version, include_metrics=False):
+    source_job = version.source_training_job
+    payload = {
+        "id": version.id,
+        "family": version.family_id,
+        "family_id": version.family_id,
+        "family_name": version.family.name if version.family_id else "",
+        "version": version.version,
+        "stage": version.stage,
+        "source_type": version.source_type,
+        "source_training_job": source_job.id if source_job else None,
+        "source_training_job_id": source_job.id if source_job else None,
+        "source_training_job_name": source_job.name if source_job else "",
+        "source_training_job_status": source_job.status if source_job else "",
+        "artifact_uri": version.artifact_uri,
+        "image_name": version.image_name,
+        "endpoint_url": version.endpoint_url,
+        "model_api": encode_model_id(version.model_api_id) if version.model_api_id else None,
+        "mlflow_run_id": version.mlflow_run_id or "",
+        "mlflow_experiment_id": version.mlflow_experiment_id or "",
+        "mlflow_model_uri": version.mlflow_model_uri or "",
+        "mlflow_artifact_uri": version.mlflow_artifact_uri or "",
+        "created_at": version.created_at,
+        "updated_at": version.updated_at,
+    }
+    if include_metrics:
+        payload["metrics"] = [serialize_registry_metric(metric) for metric in version.metrics.all()]
+    return payload
+
+
+def serialize_registry_family(family):
+    latest_version = family.versions.order_by("-created_at").first()
+    production_version = family.current_production_version or family.versions.filter(stage="production").order_by("-created_at").first()
+    version_count = getattr(family, "version_count", None)
+    if version_count is None:
+        version_count = family.versions.count()
+
+    return {
+        "id": family.id,
+        "name": family.name,
+        "display_name": family.display_name,
+        "description": family.description,
+        "is_active": family.is_active,
+        "version_count": version_count,
+        "versions_count": version_count,
+        "latest_version": serialize_registry_version(latest_version) if latest_version else None,
+        "production_version": serialize_registry_version(production_version) if production_version else None,
+        "current_production_version": serialize_registry_version(production_version) if production_version else None,
+        "created_at": family.created_at,
+        "updated_at": family.updated_at,
+    }
+
+
+def serialize_registry_history(event):
+    version = event.model_version
+    return {
+        "id": event.id,
+        "action": event.action,
+        "status": event.status,
+        "version": version.version if version else "",
+        "version_id": version.id if version else None,
+        "family": event.family_id,
+        "from_stage": event.from_stage,
+        "to_stage": event.to_stage,
+        "message": event.message,
+        "extra": event.extra,
+        "actor": event.actor,
+        "created_at": event.created_at,
+    }
+
+
+class RegistryFamilyListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        families = (
+            ModelFamily.objects.filter(tenant=request.user, is_active=True)
+            .select_related("current_production_version", "current_production_version__source_training_job")
+            .annotate(version_count=Count("versions"))
+            .order_by("-updated_at")
+        )
+        return Response([serialize_registry_family(family) for family in families])
+
+
+class RegistryFamilyDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, family_id):
+        family = get_object_or_404(
+            ModelFamily.objects.select_related(
+                "current_production_version",
+                "current_production_version__source_training_job",
+            ).annotate(version_count=Count("versions")),
+            id=family_id,
+            tenant=request.user,
+        )
+        return Response(serialize_registry_family(family))
+
+
+class RegistryFamilyVersionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, family_id):
+        family = get_object_or_404(ModelFamily, id=family_id, tenant=request.user)
+        versions = (
+            ModelVersion.objects.filter(family=family, tenant=request.user)
+            .select_related("family", "model_api", "source_training_job")
+            .order_by("-created_at")
+        )
+        return Response([serialize_registry_version(version) for version in versions])
+
+
+class RegistryVersionDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, version_id):
+        version = get_object_or_404(
+            ModelVersion.objects.select_related("family", "model_api", "source_training_job").prefetch_related("metrics"),
+            id=version_id,
+            tenant=request.user,
+        )
+        return Response(serialize_registry_version(version, include_metrics=True))
+
+
+def _group_metrics(metrics):
+    grouped = {}
+    for metric in metrics:
+        grouped.setdefault(metric.metric_name, []).append(serialize_registry_metric(metric))
+    return grouped
+
+
+class RegistryVersionMetricsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, version_id, family_id=None):
+        filters = {"id": version_id, "tenant": request.user}
+        if family_id is not None:
+            filters["family_id"] = family_id
+        version = get_object_or_404(ModelVersion, **filters)
+        metrics = version.metrics.filter(tenant=request.user).order_by("metric_name", "step", "created_at")
+        return Response(_group_metrics(metrics))
+
+
+class RegistryFamilyHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, family_id):
+        family = get_object_or_404(ModelFamily, id=family_id, tenant=request.user)
+        history = (
+            ModelDeploymentHistory.objects.filter(family=family, tenant=request.user)
+            .select_related("model_version", "model_api")
+            .order_by("-created_at")
+        )
+        return Response([serialize_registry_history(event) for event in history])
+
+
+class RegistryVersionHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, version_id):
+        version = get_object_or_404(ModelVersion, id=version_id, tenant=request.user)
+        history = (
+            ModelDeploymentHistory.objects.filter(model_version=version, tenant=request.user)
+            .select_related("model_version", "model_api")
+            .order_by("-created_at")
+        )
+        return Response([serialize_registry_history(event) for event in history])
 
 
 def validate_model_artifact(artifact_file):
