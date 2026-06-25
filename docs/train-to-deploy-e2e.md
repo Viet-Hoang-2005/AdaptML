@@ -12,7 +12,7 @@ Use a real `.env` for AWS/S3 credentials when testing AWS Batch. Keep the Docker
 DOCKER_NETWORK_NAME=mlops_paas_network
 MODEL_PACKAGER_URL=http://model-packager:7000
 CONTROL_PLANE_INTERNAL_URL=http://control-plane:8000
-MODEL_BUILD_WEBHOOK_SECRET=change-me-local-build-webhook-secret
+CONTROL_PLANE_WEBHOOK_SECRET=change-me-local-build-webhook-secret
 ```
 
 Start the required services. `--remove-orphans` and `--force-recreate` are intentional after branch merges because older compose revisions used different service names or network definitions while keeping the same container names:
@@ -142,7 +142,7 @@ Also verify the original API Management flow:
 
 - If `control-plane` cannot resolve `postgres`, confirm all services are on the same compose network and `DOCKER_NETWORK_NAME` is consistent.
 - If the build webhook returns 400, confirm `DJANGO_ALLOWED_HOSTS` includes `control-plane`.
-- If the build webhook returns 403, confirm `MODEL_BUILD_WEBHOOK_SECRET` is identical in control-plane and model-packager build containers.
+- If the build webhook returns 403, confirm `CONTROL_PLANE_WEBHOOK_SECRET` is identical in control-plane and model-packager build containers.
 - If endpoint health is unhealthy, open endpoint logs and check whether the model artifact can be downloaded from S3.
 - If the public route returns 404, confirm the Traefik route path includes `/<tenant-id>/models/<model-name>/<version>/predict`.
 - If PowerShell curl requests fail with JSON decode errors, write the JSON to a temporary file and use `--data-binary "@file.json"`.
