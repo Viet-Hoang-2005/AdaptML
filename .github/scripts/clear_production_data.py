@@ -12,10 +12,10 @@ load_dotenv(dotenv_path=os.path.join(ROOT_DIR, '.env'))
 DB_USER = os.environ.get("DB_USER")
 DB_PASSWORD = os.environ.get("DB_PASSWORD")
 # Ưu tiên sử dụng DB_HOST_RW để đảm bảo kết nối vào node Primary có quyền ghi/xóa
-DB_HOST = os.environ.get("DB_HOST_RW", os.environ.get("DB_HOST", "localhost"))
+DB_HOST = os.environ.get("DB_HOST_RW", "postgres")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "mlops_paas_db")
-TARGET_TABLE = "paas_production_data"
+TARGET_TABLE = "mlops_paas_production_data"
 
 def clear_production_data():
     db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
