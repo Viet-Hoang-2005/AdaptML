@@ -27,5 +27,5 @@ resource "aws_secretsmanager_secret" "tunnel_token" {
 # Khởi tạo khung Secret cho GitHub Actions
 resource "aws_secretsmanager_secret" "github_actions_secrets" {
   name        = "mlops/github-actions-secrets"
-  description = "Secrets for GitHub Actions CI/CD pipeline (DockerHub, Slack, ArgoCD)"
+  description = "Secrets for GitHub Actions CI/CD pipeline (Harbor, Slack, ArgoCD)"
 }

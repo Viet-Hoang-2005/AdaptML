@@ -34,11 +34,6 @@ variable "enable_dns" {
   default     = false
 }
 
-variable "enable_serverless" {
-  description = "Enable legacy Lambda S3 webhook trigger"
-  type        = bool
-  default     = false
-}
 
 variable "enable_legacy_sagemaker_pipeline" {
   description = "Enable legacy GitHub Actions and SageMaker IAM resources"

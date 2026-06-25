@@ -3,10 +3,6 @@ output "worker_profile_name" {
   value       = aws_iam_instance_profile.worker_profile.name
 }
 
-output "lambda_exec_role_arn" {
-  description = "ARN of the Lambda execution role"
-  value       = try(aws_iam_role.lambda_exec_role[0].arn, null)
-}
 
 output "github_actions_role_arn" {
   description = "IAM Role ARN to configure in GitHub Variables"

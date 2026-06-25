@@ -1,6 +1,6 @@
 locals {
-  enable_shared_iam     = var.enable_compute || var.enable_serverless || var.enable_legacy_sagemaker_pipeline
-  enable_shared_secrets = var.enable_serverless || var.enable_legacy_sagemaker_pipeline
+  enable_shared_iam     = var.enable_compute || var.enable_legacy_sagemaker_pipeline
+  enable_shared_secrets = var.enable_legacy_sagemaker_pipeline
   enable_lb_stack       = var.enable_alb && var.enable_compute && var.enable_dns
 }
 
@@ -32,7 +32,6 @@ module "iam" {
   github_actions_secrets_arn = local.enable_shared_secrets ? module.secrets[0].github_actions_secrets_arn : "*"
   mlflow_basic_auth_arn      = local.enable_shared_secrets ? module.secrets[0].mlflow_basic_auth_arn : "*"
 
-  enable_serverless                = var.enable_serverless
   enable_legacy_sagemaker_pipeline = var.enable_legacy_sagemaker_pipeline
 }
 
@@ -61,14 +60,6 @@ module "alb" {
   certificate_arn     = module.dns[0].certificate_arn
   zone_id             = module.dns[0].zone_id
   domain_name         = "api.mlops-nids-nt114.id.vn"
-}
-
-module "serverless" {
-  count                = var.enable_serverless ? 1 : 0
-  source               = "./modules/serverless"
-  lambda_exec_role_arn = module.iam[0].lambda_exec_role_arn
-  artifacts_bucket_id  = module.storage.bucket_id
-  artifacts_bucket_arn = module.storage.bucket_arn
 }
 
 module "batch_training" {

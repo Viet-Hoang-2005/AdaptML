@@ -18,11 +18,6 @@ variable "mlflow_basic_auth_arn" {
   type        = string
 }
 
-variable "enable_serverless" {
-  description = "Whether to create IAM resources for the Lambda webhook trigger"
-  type        = bool
-  default     = false
-}
 
 variable "enable_legacy_sagemaker_pipeline" {
   description = "Whether to create legacy GitHub Actions and SageMaker IAM resources"
