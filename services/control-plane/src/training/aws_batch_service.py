@@ -389,4 +389,13 @@ def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:
             "updated_at",
         ]
     )
+    if training_job.status == "completed" and training_job.model_artifact_uri:
+        try:
+            from training.tracking_ingestion_service import ingest_training_job_tracking
+
+            ingest_training_job_tracking(training_job)
+        except Exception as exc:
+            training_job.tracking_status = "failed"
+            training_job.tracking_error = f"Tracking ingestion failed: {exc}"
+            training_job.save(update_fields=["tracking_status", "tracking_error", "updated_at"])
     return training_job

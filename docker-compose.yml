@@ -217,11 +217,13 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
       - MLFLOW_DB_SCHEMA=${MLFLOW_DB_SCHEMA:-mlflow}
+      - MLFLOW_ALLOWED_HOSTS=${MLFLOW_ALLOWED_HOSTS:-localhost,127.0.0.1,mlflow,mlflow:5000,mlops_paas_mlflow,mlops_paas_mlflow:5000}
     command: >
       sh -c 'ENCODED_DB_PASSWORD=$$(python -c "import os, urllib.parse; print(urllib.parse.quote(os.environ.get(\"DB_PASSWORD\", \"\"), safe=\"\"))");
       exec mlflow server
       --host 0.0.0.0
       --port 5000
+      --allowed-hosts "$${MLFLOW_ALLOWED_HOSTS}"
       --backend-store-uri "postgresql://$${DB_USER}:$${ENCODED_DB_PASSWORD}@postgres:5432/$${DB_NAME}?options=-csearch_path%3D$${MLFLOW_DB_SCHEMA:-mlflow}%2Cpublic"
       --default-artifact-root "s3://$${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/"'
     depends_on:

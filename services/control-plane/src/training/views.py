@@ -29,6 +29,10 @@ from training.sagemaker_service import (
     refresh_sagemaker_training_job,
     start_sagemaker_training_job,
 )
+from training.tracking_ingestion_service import (
+    ingest_training_job_tracking,
+    serialize_training_tracking_summary,
+)
 
 MAX_TRAINING_FILE_SIZE_BYTES = 512 * 1024 * 1024
 RUNTIME_PROFILES = {
@@ -143,6 +147,18 @@ def serialize_training_job(training_job: TrainingJob):
         "is_deleted": bool(training_job.deleted_at),
         "registered_model": serialize_model_api(registered_model) if registered_model else None,
         "registered_model_id": encode_model_id(registered_model.id) if registered_model else None,
+        "tracking_status": training_job.tracking_status,
+        "tracking_error": training_job.tracking_error,
+        "tracking_ingested_at": training_job.tracking_ingested_at,
+        "training_summary": training_job.training_summary,
+        "metrics_summary": training_job.metrics_summary,
+        "params_summary": training_job.params_summary,
+        "artifact_manifest": training_job.artifact_manifest,
+        "deployability_status": training_job.deployability_status,
+        "deployability_reason": training_job.deployability_reason,
+        "mlflow_run_id": training_job.mlflow_run_id or "",
+        "mlflow_experiment_id": training_job.mlflow_experiment_id or "",
+        "mlflow_artifact_uri": training_job.mlflow_artifact_uri or "",
         "created_at": training_job.created_at,
         "updated_at": training_job.updated_at,
     }
@@ -484,6 +500,8 @@ class TrainingJobRefreshStatusView(TrainingJobDetailView):
                     event_type,
                     f"Training job status changed from {previous_status} to {training_job.status}.",
                 )
+            if training_job.status == "completed" and training_job.model_artifact_uri:
+                ingest_training_job_tracking(training_job)
         except Exception as exc:
             training_job.error_message = str(exc)
             training_job.save(update_fields=["error_message", "updated_at"])
@@ -681,6 +699,22 @@ class TrainingJobMetricsView(TrainingJobDetailView):
     def get(self, request, training_job_id):
         training_job = self.get_training_job(request, training_job_id)
         return Response(get_training_metrics_payload(training_job), status=status.HTTP_200_OK)
+
+
+class TrainingJobSummaryView(TrainingJobDetailView):
+    def get(self, request, training_job_id):
+        training_job = self.get_training_job(request, training_job_id)
+        return Response(serialize_training_tracking_summary(training_job), status=status.HTTP_200_OK)
+
+
+class TrainingJobIngestTrackingView(TrainingJobDetailView):
+    parser_classes = [JSONParser, FormParser]
+
+    def post(self, request, training_job_id):
+        training_job = self.get_training_job(request, training_job_id)
+        force = bool(request.data.get("force") in {True, "true", "1", "yes"})
+        payload = ingest_training_job_tracking(training_job, force=force)
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class TrainingJobEventsView(TrainingJobDetailView):

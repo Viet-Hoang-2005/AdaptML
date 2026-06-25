@@ -5,6 +5,7 @@ from training.views import (
     TrainingJobDetailView,
     TrainingJobDownloadURLView,
     TrainingJobEventsView,
+    TrainingJobIngestTrackingView,
     TrainingJobListCreateView,
     TrainingJobLogsView,
     TrainingJobMetricsView,
@@ -12,6 +13,7 @@ from training.views import (
     TrainingJobRegisterModelView,
     TrainingJobRestoreView,
     TrainingJobRetryView,
+    TrainingJobSummaryView,
     TrainingUsageView,
 )
 
@@ -26,6 +28,8 @@ urlpatterns = [
     path("jobs/<int:training_job_id>/events/", TrainingJobEventsView.as_view(), name="training_job_events"),
     path("jobs/<int:training_job_id>/logs/", TrainingJobLogsView.as_view(), name="training_job_logs"),
     path("jobs/<int:training_job_id>/metrics/", TrainingJobMetricsView.as_view(), name="training_job_metrics"),
+    path("jobs/<int:training_job_id>/summary/", TrainingJobSummaryView.as_view(), name="training_job_summary"),
+    path("jobs/<int:training_job_id>/ingest-tracking/", TrainingJobIngestTrackingView.as_view(), name="training_job_ingest_tracking"),
     path("jobs/<int:training_job_id>/restore/", TrainingJobRestoreView.as_view(), name="training_job_restore"),
     path("usage/", TrainingUsageView.as_view(), name="training_usage"),
 ]

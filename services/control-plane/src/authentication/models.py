@@ -304,6 +304,19 @@ class TrainingJob(models.Model):
         ("failed", "Failed"),
         ("cancelled", "Cancelled"),
     )
+    TRACKING_STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("ingesting", "Ingesting"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+        ("skipped", "Skipped"),
+    )
+    DEPLOYABILITY_STATUS_CHOICES = (
+        ("unknown", "Unknown"),
+        ("deployable", "Deployable"),
+        ("track_only", "Track Only"),
+        ("invalid", "Invalid"),
+    )
 
     tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="training_jobs")
     name = models.CharField(max_length=160)
@@ -341,6 +354,19 @@ class TrainingJob(models.Model):
     mlflow_run_name = models.CharField(max_length=255, blank=True, null=True)
     mlflow_model_uri = models.CharField(max_length=1024, blank=True, null=True)
     mlflow_artifact_uri = models.CharField(max_length=1024, blank=True, null=True)
+    tracking_status = models.CharField(max_length=30, choices=TRACKING_STATUS_CHOICES, default="pending")
+    tracking_error = models.TextField(blank=True)
+    tracking_ingested_at = models.DateTimeField(null=True, blank=True)
+    training_summary = models.JSONField(default=dict, blank=True)
+    metrics_summary = models.JSONField(default=dict, blank=True)
+    params_summary = models.JSONField(default=dict, blank=True)
+    artifact_manifest = models.JSONField(default=list, blank=True)
+    deployability_status = models.CharField(
+        max_length=30,
+        choices=DEPLOYABILITY_STATUS_CHOICES,
+        default="unknown",
+    )
+    deployability_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
