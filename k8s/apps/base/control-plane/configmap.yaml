@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mlops-paas-control-plane-config
+  labels:
+    app: mlops-paas-control-plane
+data:
+  PYTHONUNBUFFERED: "1"
+  DB_HOST: "mlops-paas-postgres-rw"
+  DB_PORT: "5432"
+  DB_NAME: "mlops_paas_db"
+  DJANGO_DEBUG: "True"
+  BUILD_STRATEGY: "argo"
+  ARGO_EVENTS_WEBHOOK_URL: "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/build"
+  ARGO_DEPLOY_WEBHOOK_URL: "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/deploy"
+  ARGO_DRIFT_WEBHOOK_URL: "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/drift"
+  AWS_DEFAULT_REGION: "ap-southeast-1"
+  AWS_BUCKET_NAME: "mlops-paas-artifacts"
+  REDIS_HOST: "mlops-paas-redis"
+  REDIS_PORT: "6379"

@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlops-paas-control-plane
+  labels:
+    app: mlops-paas-control-plane
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mlops-paas-control-plane
+  template:
+    metadata:
+      labels:
+        app: mlops-paas-control-plane
+    spec:
+      nodeSelector:
+        workload-type: worker
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - mlops-paas-control-plane
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: control-plane
+          image: mlops-paas-django:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - "python src/manage.py ensure_db_schema && python src/manage.py migrate && cd src && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DJANGO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: DJANGO_SECRET_KEY
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: JWT_PRIVATE_KEY
+            - name: JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: JWT_PUBLIC_KEY
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-secrets
+                  key: AWS_SECRET_ACCESS_KEY
+          envFrom:
+            - configMapRef:
+                name: mlops-paas-control-plane-config
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi

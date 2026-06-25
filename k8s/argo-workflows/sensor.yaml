@@ -1,0 +1,221 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: build-model-sensor
+  namespace: default
+spec:
+  serviceAccountName: argo-events-sa
+  template:
+    serviceAccountName: argo-events-sa
+  dependencies:
+    - name: build-dep
+      eventSourceName: webhook-eventsource
+      eventName: build
+    - name: deploy-dep
+      eventSourceName: webhook-eventsource
+      eventName: deploy
+    - name: drift-dep
+      eventSourceName: webhook-eventsource
+      eventName: drift
+  triggers:
+    - template:
+        name: argo-workflow-trigger
+        conditions: "build-dep"
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: build-model-job-
+                namespace: default
+              spec:
+                workflowTemplateRef:
+                  name: mlops-paas-model-packager-template
+                arguments:
+                  parameters:
+                    - name: model_id
+                      value: ""
+                    - name: flavor
+                      value: ""
+                    - name: requirements_text
+                      value: ""
+                    - name: source_key
+                      value: ""
+                    - name: source_type
+                      value: ""
+                    - name: training_artifact_uri
+                      value: ""
+                    - name: output_key
+                      value: ""
+                    - name: task_type
+                      value: ""
+                    - name: control_plane_webhook_url
+                      value: ""
+          parameters:
+            - src:
+                dependencyName: build-dep
+                dataKey: body.model_id
+              dest: spec.arguments.parameters.0.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.flavor
+              dest: spec.arguments.parameters.1.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.requirements_text
+              dest: spec.arguments.parameters.2.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.source_key
+              dest: spec.arguments.parameters.3.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.source_type
+              dest: spec.arguments.parameters.4.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.training_artifact_uri
+              dest: spec.arguments.parameters.5.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.output_key
+              dest: spec.arguments.parameters.6.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.task_type
+              dest: spec.arguments.parameters.7.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.control_plane_webhook_url
+              dest: spec.arguments.parameters.8.value
+    - template:
+        name: deploy-workflow-trigger
+        conditions: "deploy-dep"
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: deploy-model-job-
+                namespace: default
+              spec:
+                workflowTemplateRef:
+                  name: mlops-paas-model-server-deploy-template
+                arguments:
+                  parameters:
+                    - name: tenant_id
+                      value: ""
+                    - name: model_id
+                      value: ""
+                    - name: hashid
+                      value: ""
+                    - name: version
+                      value: ""
+                    - name: image_name
+                      value: ""
+                    - name: container_name
+                      value: ""
+          parameters:
+            - src:
+                dependencyName: deploy-dep
+                dataKey: body.tenant_id
+              dest: spec.arguments.parameters.0.value
+            - src:
+                dependencyName: deploy-dep
+                dataKey: body.model_id
+              dest: spec.arguments.parameters.1.value
+            - src:
+                dependencyName: deploy-dep
+                dataKey: body.hashid
+              dest: spec.arguments.parameters.2.value
+            - src:
+                dependencyName: deploy-dep
+                dataKey: body.version
+              dest: spec.arguments.parameters.3.value
+            - src:
+                dependencyName: deploy-dep
+                dataKey: body.image_name
+              dest: spec.arguments.parameters.4.value
+            - src:
+                dependencyName: deploy-dep
+                dataKey: body.container_name
+              dest: spec.arguments.parameters.5.value
+
+    - template:
+        name: drift-workflow-trigger
+        conditions: "drift-dep"
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: evidently-job-
+                namespace: default
+              spec:
+                workflowTemplateRef:
+                  name: mlops-paas-evidently-template
+                arguments:
+                  parameters:
+                    - name: job_id
+                      value: ""
+                    - name: tenant_id
+                      value: ""
+                    - name: model_id
+                      value: ""
+                    - name: model_name
+                      value: ""
+                    - name: model_uri
+                      value: ""
+                    - name: reference_data_url
+                      value: ""
+                    - name: html_s3_uri
+                      value: ""
+                    - name: report_json_s3_uri
+                      value: ""
+                    - name: summary_json_s3_uri
+                      value: ""
+                    - name: html_public_url
+                      value: ""
+                    - name: html_upload_url
+                      value: ""
+                    - name: report_json_upload_url
+                      value: ""
+                    - name: summary_json_upload_url
+                      value: ""
+                    - name: webhook_url
+                      value: ""
+          parameters:
+            - src: { dependencyName: drift-dep, dataKey: body.job_id }
+              dest: spec.arguments.parameters.0.value
+            - src: { dependencyName: drift-dep, dataKey: body.tenant_id }
+              dest: spec.arguments.parameters.1.value
+            - src: { dependencyName: drift-dep, dataKey: body.model_id }
+              dest: spec.arguments.parameters.2.value
+            - src: { dependencyName: drift-dep, dataKey: body.model_name }
+              dest: spec.arguments.parameters.3.value
+            - src: { dependencyName: drift-dep, dataKey: body.model_uri }
+              dest: spec.arguments.parameters.4.value
+            - src: { dependencyName: drift-dep, dataKey: body.reference_data_url }
+              dest: spec.arguments.parameters.5.value
+            - src: { dependencyName: drift-dep, dataKey: body.html_s3_uri }
+              dest: spec.arguments.parameters.6.value
+            - src: { dependencyName: drift-dep, dataKey: body.report_json_s3_uri }
+              dest: spec.arguments.parameters.7.value
+            - src: { dependencyName: drift-dep, dataKey: body.summary_json_s3_uri }
+              dest: spec.arguments.parameters.8.value
+            - src: { dependencyName: drift-dep, dataKey: body.html_public_url }
+              dest: spec.arguments.parameters.9.value
+            - src: { dependencyName: drift-dep, dataKey: body.html_upload_url }
+              dest: spec.arguments.parameters.10.value
+            - src: { dependencyName: drift-dep, dataKey: body.report_json_upload_url }
+              dest: spec.arguments.parameters.11.value
+            - src: { dependencyName: drift-dep, dataKey: body.summary_json_upload_url }
+              dest: spec.arguments.parameters.12.value
+            - src: { dependencyName: drift-dep, dataKey: body.webhook_url }
+              dest: spec.arguments.parameters.13.value

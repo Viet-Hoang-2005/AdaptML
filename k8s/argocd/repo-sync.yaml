@@ -2,18 +2,17 @@ apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: argocd-github-repo-sync
-  namespace: argocd # Bắt buộc phải nằm trong namespace của ArgoCD
+  namespace: argocd
 spec:
   refreshInterval: "1h"
   secretStoreRef:
     name: aws-secrets-manager
     kind: ClusterSecretStore
   target:
-    name: github-repo-creds # Tên secret mà ArgoCD sẽ sử dụng
+    name: github-repo-creds
     template:
       metadata:
         labels:
-          # Label này cực kỳ quan trọng để ArgoCD nhận diện đây là cấu hình Repo
           argocd.argoproj.io/secret-type: repository
       data:
         type: git

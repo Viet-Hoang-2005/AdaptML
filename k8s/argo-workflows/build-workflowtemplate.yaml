@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: mlops-paas-model-packager-template
+  namespace: default
+spec:
+  serviceAccountName: argo-workflow-sa
+  entrypoint: build-model
+  templates:
+    - name: build-model
+      inputs:
+        parameters:
+          - name: model_id
+          - name: flavor
+          - name: requirements_text
+          - name: source_key
+          - name: source_type
+          - name: training_artifact_uri
+          - name: output_key
+          - name: task_type
+          - name: control_plane_webhook_url
+      container:
+        image: tnvhoang/mlops-paas-model-packager:latest
+        imagePullPolicy: Always
+        command: ["python", "src/cli.py"]
+        env:
+          - name: TASK_TYPE
+            value: "{{inputs.parameters.task_type}}"
+          - name: MODEL_ID
+            value: "{{inputs.parameters.model_id}}"
+          - name: FLAVOR
+            value: "{{inputs.parameters.flavor}}"
+          - name: REQUIREMENTS_TEXT
+            value: "{{inputs.parameters.requirements_text}}"
+          - name: SOURCE_KEY
+            value: "{{inputs.parameters.source_key}}"
+          - name: SOURCE_TYPE
+            value: "{{inputs.parameters.source_type}}"
+          - name: TRAINING_ARTIFACT_URI
+            value: "{{inputs.parameters.training_artifact_uri}}"
+          - name: OUTPUT_KEY
+            value: "{{inputs.parameters.output_key}}"
+          - name: CONTROL_PLANE_WEBHOOK_URL
+            value: "{{inputs.parameters.control_plane_webhook_url}}"
+          - name: MODEL_BUILD_WEBHOOK_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: mlops-paas-secret
+                key: WEBHOOK_SECRET
+          # AWS Keys and Database configurations
+        envFrom:
+          - secretRef:
+              name: mlops-paas-secret
+          - configMapRef:
+              name: mlops-paas-control-plane-config
