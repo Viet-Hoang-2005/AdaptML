@@ -17,10 +17,10 @@ DB_PASSWORD = os.environ.get("DB_PASSWORD")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "mlops_paas_db")
 
-DB_HOST_RW = os.environ.get("DB_HOST_RW", "localhost")
-DB_HOST_RO = os.environ.get("DB_HOST_RO", "localhost")
+DB_HOST_RW = os.environ.get("DB_HOST_RW", "postgres")
+DB_HOST_RO = os.environ.get("DB_HOST_RO", "postgres")
 
-def _create_engine_safe(host: str, label: str):
+def create_engine_safe(host: str, label: str):
     db_password_encoded = quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
     db_url = f"postgresql://{DB_USER}:{db_password_encoded}@{host}:{DB_PORT}/{DB_NAME}"
     try:
@@ -38,8 +38,8 @@ def _create_engine_safe(host: str, label: str):
         print(f"[{label}] Database connection failed: {e}")
         return None
         
-engine_rw = _create_engine_safe(DB_HOST_RW, "Read Write")
-engine_ro = _create_engine_safe(DB_HOST_RO, "Read Only")
+engine_rw = create_engine_safe(DB_HOST_RW, "Read Write")
+engine_ro = create_engine_safe(DB_HOST_RO, "Read Only")
 
 def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
     if engine_rw is None:

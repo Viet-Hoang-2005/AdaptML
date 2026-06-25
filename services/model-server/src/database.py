@@ -2,11 +2,31 @@
 import os
 import re
 from typing import Dict, Any
+from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine, text
 
-CONTROL_PLANE_DATABASE_URL = os.environ.get("CONTROL_PLANE_DATABASE_URL")
-CONTROL_PLANE_DB_SCHEMA = os.environ.get("CONTROL_PLANE_DB_SCHEMA", "control_plane")
+def build_control_plane_database_url() -> str | None:
+    explicit_url = os.environ.get("CONTROL_PLANE_DATABASE_URL")
+    if explicit_url:
+        return explicit_url
+
+    db_user = os.environ.get("DB_USER")
+    db_password = os.environ.get("DB_PASSWORD")
+    db_host = os.environ.get("DB_HOST_RO", "postgres")
+    db_port = os.environ.get("DB_PORT", "5432")
+    db_name = os.environ.get("DB_NAME", "mlops_paas_db")
+
+    if not db_user or not db_password:
+        return None
+
+    return (
+        f"postgresql://{quote_plus(db_user)}:{quote_plus(db_password)}"
+        f"@{db_host}:{db_port}/{db_name}"
+    )
+
+CONTROL_PLANE_DATABASE_URL = build_control_plane_database_url()
+CONTROL_PLANE_DB_SCHEMA = os.environ.get("CONTROL_PLANE_DB_SCHEMA") or os.environ.get("DB_SCHEMA", "control_plane")
 
 if CONTROL_PLANE_DB_SCHEMA and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", CONTROL_PLANE_DB_SCHEMA):
     raise RuntimeError("CONTROL_PLANE_DB_SCHEMA must be a simple PostgreSQL identifier.")

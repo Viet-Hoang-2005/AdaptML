@@ -605,14 +605,14 @@ class ModelAPIBuildWebhookView(APIView):
 
     def post(self, request, model_id):
         # Xác thực Webhook Secret nếu cần... (có thể dùng request.headers.get("X-Webhook-Secret"))
-        webhook_secret = getattr(settings, "MODEL_BUILD_WEBHOOK_SECRET", "")
+        webhook_secret = getattr(settings, "CONTROL_PLANE_WEBHOOK_SECRET", "")
         if webhook_secret:
-            provided_secret = request.headers.get("X-Build-Webhook-Secret", "")
+            provided_secret = request.headers.get("X-Build-Webhook-Secret", "") or request.headers.get("Authorization", "").replace("Bearer ", "")
             if provided_secret != webhook_secret:
                 logger.warning("Rejected build webhook for model %s due to invalid secret.", model_id)
                 return Response({"error": "Invalid build webhook secret."}, status=status.HTTP_403_FORBIDDEN)
         else:
-            logger.warning("MODEL_BUILD_WEBHOOK_SECRET is not configured. Build webhook is insecure.")
+            logger.warning("CONTROL_PLANE_WEBHOOK_SECRET is not configured. Build webhook is insecure.")
 
         model_api = ModelAPI.objects.filter(id=model_id).first()
         if not model_api:

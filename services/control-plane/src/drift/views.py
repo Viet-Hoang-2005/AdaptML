@@ -160,7 +160,7 @@ class TriggerDriftJobWebhookView(views.APIView):
 
     def post(self, request):
         secret = request.headers.get("Authorization", "")
-        expected_secret = getattr(settings, 'WEBHOOK_SECRET', 'Bearer super-secret-key')
+        expected_secret = f"Bearer {getattr(settings, 'CONTROL_PLANE_WEBHOOK_SECRET', 'super-secret-key')}"
         if secret != expected_secret:
             return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
             
@@ -202,7 +202,7 @@ class DriftResultWebhookView(views.APIView):
 
     def post(self, request):
         secret = request.headers.get("Authorization", "")
-        expected_secret = f"Bearer {getattr(settings, 'WEBHOOK_SECRET', 'super-secret-key')}"
+        expected_secret = f"Bearer {getattr(settings, 'CONTROL_PLANE_WEBHOOK_SECRET', 'super-secret-key')}"
         if secret != expected_secret:
             return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
             

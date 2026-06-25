@@ -98,7 +98,7 @@ def find_label_mapping_file(root: Path) -> Path | None:
     return sorted(candidates, key=lambda item: item.as_posix())[0] if candidates else None
 
 def webhook_headers() -> dict[str, str]:
-    secret = os.environ.get("MODEL_BUILD_WEBHOOK_SECRET", "").strip()
+    secret = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "").strip()
     return {"X-Build-Webhook-Secret": secret} if secret else {}
 
 def post_webhook(webhook_url: str, payload: dict) -> None:

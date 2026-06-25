@@ -121,10 +121,10 @@ DB_SCHEMA = env_db_identifier('DB_SCHEMA', 'control_plane')
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'mlops_paas'),
+        'NAME': os.environ.get('DB_NAME', 'mlops_paas_db'),
         'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres0123'),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': os.environ.get('DB_HOST_RW', 'postgres'),
         'PORT': os.environ.get('DB_PORT', '5432'),
         'OPTIONS': {
             'options': f'-c search_path={DB_SCHEMA},public',
@@ -188,7 +188,7 @@ SIMPLE_JWT = {
 
 CORS_ALLOWED_ORIGINS = env_list(
     'CORS_ALLOWED_ORIGINS',
-    'http://localhost:5173,http://127.0.0.1:5173',
+    'https://mlops-nids-nt114.id.vn,http://localhost:5173,http://127.0.0.1:5173',
 )
 
 
@@ -251,8 +251,7 @@ MODEL_SERVER_PUBLIC_URL = os.environ.get('MODEL_SERVER_PUBLIC_URL', 'http://loca
 MODEL_PACKAGER_URL = os.environ.get('MODEL_PACKAGER_URL', 'http://model-packager:7000')
 CONTROL_PLANE_INTERNAL_URL = os.environ.get('CONTROL_PLANE_INTERNAL_URL', 'http://control-plane:8000').rstrip('/')
 DOCKER_NETWORK_NAME = os.environ.get('DOCKER_NETWORK_NAME', 'mlops_paas_network').strip() or 'mlops_paas_network'
-MODEL_BUILD_WEBHOOK_SECRET = os.environ.get('MODEL_BUILD_WEBHOOK_SECRET', '').strip()
-WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "super-secret-key")
+CONTROL_PLANE_WEBHOOK_SECRET = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key").strip()
 
 # SageMaker Training PaaS configuration.
 TRAINING_BACKEND = os.environ.get('TRAINING_BACKEND', 'sagemaker').strip().lower()

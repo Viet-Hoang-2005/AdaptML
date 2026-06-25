@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+import mlflow
 import requests
 import pandas as pd
 from dotenv import load_dotenv
@@ -14,11 +15,6 @@ from evidently.report import Report
 from evidently.metric_preset import DataDriftPreset
 from evidently.pipeline.column_mapping import ColumnMapping
 
-try:
-    import mlflow
-except ImportError:
-    mlflow = None
-
 # 1. NẠP CẤU HÌNH TỪ BIẾN MÔI TRƯỜNG
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(dotenv_path=os.path.join(ROOT_DIR, ".env"))
@@ -27,15 +23,16 @@ DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "mlops_paas_db")
-DB_HOST_RO = os.getenv("DB_HOST_RO", "localhost")
+DB_HOST_RO = os.getenv("DB_HOST_RO", "postgres")
 
 # PAAS MULTI-TENANT CONFIG
 TENANT_ID = os.getenv("TENANT_ID")
-MODEL_ID = os.getenv("MODEL_ID")  # integer DB ID, matches paas_production_logs.model_id
-MODEL_NAME = os.getenv("MODEL_NAME", MODEL_ID)  # human-readable name for MLflow and file naming
+MODEL_ID = os.getenv("MODEL_ID")
+MODEL_NAME = os.getenv("MODEL_NAME", MODEL_ID)
 REFERENCE_DATA_URL = os.getenv("REFERENCE_DATA_URL")
 MODEL_URI = os.getenv("MODEL_URI", f"models:/{MODEL_NAME}/Production")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/drift-webhook")
+CONTROL_PLANE_WEBHOOK_URL = os.getenv("CONTROL_PLANE_WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/drift-webhook")
+CONTROL_PLANE_WEBHOOK_SECRET = os.getenv("CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key")
 HTML_S3_URI = os.getenv("HTML_S3_URI", "")
 REPORT_JSON_S3_URI = os.getenv("REPORT_JSON_S3_URI", "")
 SUMMARY_JSON_S3_URI = os.getenv("SUMMARY_JSON_S3_URI", "")
@@ -45,15 +42,9 @@ HTML_UPLOAD_URL = os.getenv("HTML_UPLOAD_URL", "")
 REPORT_JSON_UPLOAD_URL = os.getenv("REPORT_JSON_UPLOAD_URL", "")
 SUMMARY_JSON_UPLOAD_URL = os.getenv("SUMMARY_JSON_UPLOAD_URL", "")
 
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "super-secret-key")
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
-
 DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD", "0.6"))
 MAX_SAMPLES = int(os.getenv("MAX_SAMPLES", "100000"))
 MIN_SAMPLES = int(os.getenv("MIN_SAMPLES", "100"))
-
-if MLFLOW_TRACKING_URI and mlflow:
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 if not 0 <= DRIFT_THRESHOLD <= 1:
     print("CRITICAL ERROR: DRIFT_THRESHOLD must be between 0 and 1.")
@@ -335,7 +326,7 @@ def trigger_django_webhook(drift_summary):
     session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
 
     headers = {
-        "Authorization": f"Bearer {WEBHOOK_SECRET}",
+        "Authorization": f"Bearer {CONTROL_PLANE_WEBHOOK_SECRET}",
         "Content-Type": "application/json"
     }
     
@@ -347,7 +338,7 @@ def trigger_django_webhook(drift_summary):
     }
 
     try:
-        response = session.post(WEBHOOK_URL, headers=headers, json=payload, timeout=15)
+        response = session.post(CONTROL_PLANE_WEBHOOK_URL, headers=headers, json=payload, timeout=15)
         if response.status_code in [200, 201, 204]:
             print("Webhook sent successfully to Django Control Plane.")
         else:

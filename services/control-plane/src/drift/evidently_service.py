@@ -13,7 +13,7 @@ def run_evidently_job_sync(job_id: int):
         job = DriftMonitoringJob.objects.get(id=job_id)
         client = docker.from_env()
         
-        db_host = os.environ.get("DB_HOST_RO", os.environ.get("DB_HOST_RW", "postgres"))
+        db_host = os.environ.get("DB_HOST_RO", "postgres")
         db_user = os.environ.get("DB_USER", "postgres")
         db_password = os.environ.get("DB_PASSWORD", "postgres")
         db_name = os.environ.get("DB_NAME", "mlops_paas_db")
@@ -101,14 +101,12 @@ def run_evidently_job_sync(job_id: int):
             "SUMMARY_JSON_UPLOAD_URL": summary_json_upload_url,
             
             "DB_HOST_RO": db_host,
-            "DB_HOST": db_host,
             "DB_USER": db_user,
             "DB_PASSWORD": db_password,
             "DB_NAME": db_name,
             "DB_PORT": db_port,
-            "MLFLOW_TRACKING_URI": os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000"),
-            "WEBHOOK_URL": f"{internal_base_url}/api/drift/internal/drift-webhook",
-            "WEBHOOK_SECRET": getattr(settings, "WEBHOOK_SECRET", "super-secret-key"),
+            "CONTROL_PLANE_WEBHOOK_URL": f"{internal_base_url}/api/drift/internal/drift-webhook",
+            "CONTROL_PLANE_WEBHOOK_SECRET": getattr(settings, "CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key"),
             "DRIFT_REPORTS_S3_PREFIX": "drift-reports"
         }
 
@@ -130,7 +128,7 @@ def run_evidently_job_sync(job_id: int):
                 "html_upload_url": html_upload_url,
                 "report_json_upload_url": report_json_upload_url,
                 "summary_json_upload_url": summary_json_upload_url,
-                "webhook_url": f"{internal_base_url}/api/drift/internal/drift-webhook"
+                "control_plane_webhook_url": f"{internal_base_url}/api/drift/internal/drift-webhook"
             }
             logger.info(f"Triggering Argo Drift Workflow for job {job.id}")
             response = requests.post(webhook_url, json=payload, timeout=10)

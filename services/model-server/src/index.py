@@ -27,7 +27,7 @@ from hashids import Hashids
 
 JWKS_URL = os.environ.get("JWKS_URL", "http://django-service/.well-known/jwks.json")
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "localhost:19092")
-KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_logs")
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
 HASHIDS_SALT = os.environ.get("HASHIDS_SALT", "mlops_paas_secret_salt")
 hashids = Hashids(salt=HASHIDS_SALT, min_length=6)

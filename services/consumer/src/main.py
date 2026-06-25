@@ -10,10 +10,10 @@ from src.database import save_dataframe_to_db, get_production_data_count_by_mode
 
 # Lấy biến môi trường
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
-KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_logs")
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
 EVIDENTLY_TRIGGER_THRESHOLD = int(os.environ.get('EVIDENTLY_TRIGGER_THRESHOLD', '100'))
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/trigger-drift-job")
-WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "super-secret-key")
+CONTROL_PLANE_WEBHOOK_URL = os.environ.get("CONTROL_PLANE_WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/trigger-drift-job")
+WEBHOOK_SECRET = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key")
 
 # Cờ báo hiệu trạng thái hoạt động
 RUNNING = True
@@ -39,7 +39,7 @@ def trigger_django_webhook(model_name: str, count: int):
     }
 
     try:
-        response = requests.post(WEBHOOK_URL, headers=headers, json=payload, timeout=10)
+        response = requests.post(CONTROL_PLANE_WEBHOOK_URL, headers=headers, json=payload, timeout=10)
         if response.status_code in [200, 201, 204]:
             print(f"[{model_name}] Webhook sent Successfully! Django has been notified.")
         else:

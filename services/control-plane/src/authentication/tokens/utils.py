@@ -7,7 +7,15 @@ PRIVATE_KEY_PATH = os.path.join(KEYS_DIR, 'private_key.pem')
 PUBLIC_KEY_PATH = os.path.join(KEYS_DIR, 'public_key.pem')
 
 def generate_or_load_keys():
-    """Tự động sinh ra cặp khóa RSA (2048-bit) nếu chưa tồn tại, hoặc load từ file."""
+    """Tự động load cặp khóa RSA từ biến môi trường (K3s), hoặc sinh ra file local nếu chạy dev."""
+    env_priv = os.environ.get("JWT_PRIVATE_KEY")
+    env_pub = os.environ.get("JWT_PUBLIC_KEY")
+    if env_priv and env_pub:
+        # Xử lý trường hợp chuỗi PEM trong biến môi trường bị thoát ký tự xuống dòng (\n)
+        priv_bytes = env_priv.replace("\\n", "\n").encode("utf-8")
+        pub_bytes = env_pub.replace("\\n", "\n").encode("utf-8")
+        return priv_bytes, pub_bytes
+
     if not os.path.exists(KEYS_DIR):
         os.makedirs(KEYS_DIR)
         
