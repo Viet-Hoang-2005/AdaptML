@@ -16,22 +16,20 @@ export function ModelSourcePage({
   return (
     <div className="flex-1 w-full h-full min-h-150 flex flex-col gap-6">
       <SourceEditor 
-        modelApi={model} 
-        fileType="source_code_file"
+        modelId={model.id.toString()} 
+        fileType="code_file"
         title="Source Code"
         icon={<FileCode2 className="w-4 h-4" />}
         accept=".zip,.py"
-        defaultFilename="main.py"
         editorType="code"
         onDirtyChange={setSourceCodeDirty}
       />
       <SourceEditor
-        modelApi={model} 
-        fileType="reference_data_file"
+        modelId={model.id.toString()} 
+        fileType="data_file"
         title="Reference Data"
         icon={<Database className="w-4 h-4" />}
         accept=".zip,.csv"
-        defaultFilename="data.csv"
         editorType="csv"
         onDirtyChange={setReferenceDataDirty}
       />

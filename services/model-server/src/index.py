@@ -1,14 +1,16 @@
 import json
 import os
 import uuid
-from datetime import datetime
-from typing import Any, Dict
 
 import httpx
 import jwt
 import numpy as np
 import pandas as pd
 import redis
+import pickle
+
+from datetime import datetime
+from typing import Any, Dict
 from confluent_kafka import Producer
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,11 +23,20 @@ from pydantic import BaseModel
 from src.database import get_model_api_record, model_registry_engine
 from src.loading import load_model_for_record, MODEL_CACHE
 from contextlib import asynccontextmanager
+from hashids import Hashids
 
 JWKS_URL = os.environ.get("JWKS_URL", "http://django-service/.well-known/jwks.json")
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "localhost:19092")
-KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_logs")
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
+HASHIDS_SALT = os.environ.get("HASHIDS_SALT", "mlops_paas_secret_salt")
+hashids = Hashids(salt=HASHIDS_SALT, min_length=6)
+
+def decode_model_id(hash_str: str) -> int:
+    res = hashids.decode(hash_str)
+    if res:
+        return res[0]
+    raise ValueError(f"Invalid model_id hash: {hash_str}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,7 +74,7 @@ paas_latency_histogram = Histogram(
 Instrumentator().instrument(app).expose(app)
 
 try:
-    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    redis_client = redis.from_url(REDIS_URL)
     redis_client.ping()
     print(f"Redis Connected: {REDIS_URL}")
 except Exception as exc:
@@ -108,11 +119,12 @@ async def get_public_key(kid: str):
 
 
 async def verify_model_access(
-    model_id: int,
+    model_id_str: str,
     api_key: str = Security(api_key_header),
     authorization: str = Header(None),
 ):
     try:
+        model_id = decode_model_id(model_id_str)
         model_record = get_model_api_record(model_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -129,11 +141,16 @@ async def verify_model_access(
         if not redis_client:
             raise HTTPException(status_code=500, detail="Internal Server Error: Redis cache unavailable")
 
-        cached_data_str = redis_client.get(f":1:api_key:{api_key}")
-        if not cached_data_str:
+        cached_data_bytes = redis_client.get(f":1:api_key:{api_key}")
+        if not cached_data_bytes:
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid or revoked API Key")
             
         try:
+            if cached_data_bytes.startswith(b'\x80'):
+                cached_data_str = pickle.loads(cached_data_bytes)
+            else:
+                cached_data_str = cached_data_bytes.decode('utf-8')
+                
             cached_data = json.loads(cached_data_str)
             cached_tenant_id = cached_data.get("tenant_id")
             scope = cached_data.get("scope", "all")
@@ -215,8 +232,8 @@ async def health_check():
     }
 
 
-@app.get("/models/{model_id}/health")
-async def model_health(model_id: int, token_payload: dict = Depends(verify_model_access)):
+@app.get("/models/{model_id_str}/health")
+async def model_health(model_id_str: str, token_payload: dict = Depends(verify_model_access)):
     model_record = token_payload["model_api"]
     loaded = load_model_for_record(model_record)
     return {
@@ -228,9 +245,9 @@ async def model_health(model_id: int, token_payload: dict = Depends(verify_model
     }
 
 
-@app.post("/models/{model_id}/predict")
+@app.post("/models/{model_id_str}/predict")
 async def predict(
-    model_id: int,
+    model_id_str: str,
     request: Request,
     payload: InferenceRequest,
     background_tasks: BackgroundTasks,

@@ -94,7 +94,8 @@ def list_run_artifacts_for_debug(client: MlflowClient, run_id: str, artifact_pat
 def register_model_to_mlflow(run_id: str, artifact_uri: str) -> tuple[str, str]:
     model_uri = f"runs:/{run_id}/model" # Đường dẫn để trỏ đến model đã log trong MLflow run artifacts
     client = MlflowClient()
-    candidate_s3_prefix = f"s3://{AWS_BUCKET_NAME}/models/{MODEL_VERSION}/"
+    safe_model_name = MLFLOW_MODEL_NAME.replace(' ', '') if MLFLOW_MODEL_NAME else 'UnnamedModel'
+    candidate_s3_prefix = f"s3://{AWS_BUCKET_NAME}/model/{safe_model_name}/{MODEL_VERSION}/"
 
     try:
         # Đăng ký model vào MLflow Model Registry
@@ -263,7 +264,7 @@ def main() -> None:
                 "pipeline": "sagemaker_retrain",
                 "approval_status": "pending",
                 "model_version": MODEL_VERSION,
-                "candidate_s3_prefix": f"s3://{AWS_BUCKET_NAME}/models/{MODEL_VERSION}/",
+                "candidate_s3_prefix": f"s3://{AWS_BUCKET_NAME}/model/{MLFLOW_MODEL_NAME.replace(' ', '') if MLFLOW_MODEL_NAME else 'UnnamedModel'}/{MODEL_VERSION}/",
                 "training_source": "sagemaker",
             }
         )

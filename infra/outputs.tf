@@ -4,8 +4,18 @@ output "master_public_ip" {
 }
 
 output "alb_dns" {
-  description = "Link to call the MLOps API"
+  description = "Application Load Balancer AWS Domain"
   value       = local.enable_lb_stack ? module.alb[0].lb_dns_name : null
+}
+
+output "frontend_url" {
+  description = "Public URL for ReactJS Dashboard"
+  value       = local.enable_lb_stack ? "https://${var.domain_name}" : null
+}
+
+output "api_url" {
+  description = "Public URL for Django Control Plane API"
+  value       = local.enable_lb_stack ? "https://api.${var.domain_name}" : null
 }
 
 output "s3_bucket_name" {
@@ -23,9 +33,9 @@ output "sagemaker_execution_role_arn" {
   value       = local.enable_shared_iam ? module.iam[0].sagemaker_execution_role_arn : null
 }
 
-output "name_servers" {
-  description = "Name Servers to configure in your domain registrar"
-  value       = var.enable_dns ? module.dns[0].name_servers : null
+output "acm_ssl_validation_records" {
+  description = "CNAME records to copy to Cloudflare DNS table to validate ACM SSL Certificate"
+  value       = var.enable_dns ? module.dns[0].acm_domain_validation_options : null
 }
 
 output "batch_training_ecr_repository_url" {

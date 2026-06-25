@@ -56,7 +56,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 2. Django Control Plane (Auth & Users)
+  # 2. Django Control Plane
   control-plane:
     build:
       context: ./services/control-plane
@@ -71,8 +71,9 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-local-dev-change-me}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,control-plane,mlops_paas_django}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
-      DB_HOST: postgres
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://mlops-nids-nt114.id.vn,http://localhost:5173,http://127.0.0.1:5173}
+      DB_HOST_RW: postgres
+      DB_HOST_RO: postgres
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_PORT: ${DB_PORT:-5432}
@@ -113,20 +114,8 @@ services:
       MODEL_PACKAGER_URL: ${MODEL_PACKAGER_URL:-http://model-packager:7000}
       CONTROL_PLANE_INTERNAL_URL: ${CONTROL_PLANE_INTERNAL_URL:-http://control-plane:8000}
       DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME:-mlops_paas_network}
-      MODEL_BUILD_WEBHOOK_SECRET: ${MODEL_BUILD_WEBHOOK_SECRET}
-      # Phase 10E.1: MLflow wiring
-      # Container-facing URI (local Compose only — NOT for AWS Batch)
-      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
-      # Browser-facing URL for Model Evolution deep links
-      MLFLOW_UI_URL: ${MLFLOW_UI_URL:-http://localhost:5001}
-      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-mlops-paas-training}
-      # Public/private URL for AWS Batch to reach MLflow. Empty = no MLflow in Batch.
-      # Do NOT set this to http://mlflow:5000 — Batch cannot resolve Docker Compose hostnames.
-      AWS_BATCH_MLFLOW_TRACKING_URI: ${AWS_BATCH_MLFLOW_TRACKING_URI:-}
-      # false = best-effort (training succeeds even if MLflow is down)
-      MLFLOW_TRACKING_REQUIRED: ${MLFLOW_TRACKING_REQUIRED:-false}
-      # Timeout in seconds for MLflow HTTP calls inside Batch containers
-      MLFLOW_HTTP_REQUEST_TIMEOUT: ${MLFLOW_HTTP_REQUEST_TIMEOUT:-10}
+      CONTROL_PLANE_WEBHOOK_SECRET: ${CONTROL_PLANE_WEBHOOK_SECRET:-super-secret-key}
+      HASHIDS_SALT: ${HASHIDS_SALT:-mlops_paas_secret_salt}
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock
@@ -139,6 +128,29 @@ services:
       redis:
         condition: service_started
       model-packager:
+        condition: service_started
+    networks:
+      - mlops_paas_network
+
+  # 3. FastAPI Model Server (Image Builder)
+  model-server:
+    build:
+      context: ./services/model-server
+      dockerfile: Dockerfile
+    image: mlops-paas-model-server
+    container_name: mlops_paas_model_server
+    restart: "no"
+    command: ["echo", "Model Server Image Built Successfully. Waiting for dynamic execution..."]
+    environment:
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./models:/models # Mount thư mục models local vào container
+      - ./services/model-server:/app
+
+    depends_on:
+      postgres:
+        condition: service_healthy # Đợi postgres healthy mới start API
+      redpanda:
         condition: service_started
     networks:
       - mlops_paas_network
@@ -161,49 +173,6 @@ services:
     networks:
       - mlops_paas_network
 
-  # 3. FastAPI Inference Server Image Blueprint (Data Plane)
-  model-server:
-    build:
-      context: ./services/model-server
-      dockerfile: Dockerfile
-    image: mlops-paas-model-server
-    container_name: mlops_paas_model_server
-    restart: "no"
-    command: ["echo", "Model Server Image Built Successfully. Waiting for dynamic execution..."]
-    environment:
-      PYTHONUNBUFFERED: 1
-      MODEL_VERSION: ${MODEL_VERSION:-v1}
-      # CloudNativePG local: cả RW và RO đều trỏ về cùng 1 container postgres
-      DB_HOST_RW: postgres
-      DB_HOST_RO: postgres
-      DB_HOST: postgres
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME}
-      REDPANDA_BROKERS: redpanda:9092
-      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_logs}
-      JWKS_URL: http://control-plane:8000/api/auth/.well-known/jwks.json
-      CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL}
-      CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control_plane}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
-      EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
-      GITHUB_REPO: ${GITHUB_REPO}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
-    volumes:
-      - ./models:/models # Mount thư mục models local vào container
-      - ./services/model-server:/app
-
-    depends_on:
-      postgres:
-        condition: service_healthy # Đợi postgres healthy mới start API
-      redpanda:
-        condition: service_started
-    networks:
-      - mlops_paas_network
-
   # 4. Internal MLflow Package Builder
   model-packager:
     build:
@@ -218,43 +187,17 @@ services:
     networks:
       - mlops_paas_network
 
-  # 5. Evidently Drift Monitor
+  # 5. Evidently Drift Monitor (Image Builder)
   evidently:
     build:
       context: ./services/evidently
       dockerfile: Dockerfile
     image: mlops-paas-evidently
     container_name: mlops_paas_evidently
-    # Không restart tự động - đây là job chạy 1 lần như CronJob trong K3s
     restart: "no"
+    command: ["echo", "Evidently Drift Monitor Image Built Successfully. Waiting for dynamic execution..."]
     environment:
-      # Chạy local: cả RO đều trỏ về postgres container
-      DB_HOST_RO: postgres
-      DB_HOST: postgres
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME}
-      DRIFT_THRESHOLD: ${DRIFT_THRESHOLD:-0.5}
-      MIN_SAMPLES: ${MIN_SAMPLES:-100}
-      MAX_SAMPLES: ${MAX_SAMPLES:-100000}
-      TENANT_ID: ${TENANT_ID:-T-LOCALDEV}
-      MODEL_ID: ${MODEL_ID:-demo-model}
-      MODEL_URI: ${MODEL_URI:-models:/demo-model/Production}
-      REFERENCE_DATA_S3_URI: ${REFERENCE_DATA_S3_URI:-s3://mlops-paas-artifacts/reference-data/demo-model/reference.csv}
-      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
-      WEBHOOK_URL: ${WEBHOOK_URL:-http://control-plane:8000/api/v1/internal/drift-webhook}
-      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-super-secret-key}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-mlops-paas-artifacts}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
-      DRIFT_REPORTS_S3_PREFIX: ${DRIFT_REPORTS_S3_PREFIX:-drift-reports}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mlflow:
-        condition: service_started
+      PYTHONUNBUFFERED: 1
     networks:
       - mlops_paas_network
 
@@ -271,19 +214,12 @@ services:
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-southeast-1}
       - AWS_BUCKET_NAME=${AWS_BUCKET_NAME:-mlops-paas-artifacts}
       - MLFLOW_DB_SCHEMA=${MLFLOW_DB_SCHEMA:-mlflow}
-    command:
-      - mlflow
-      - server
-      - --host
-      - "0.0.0.0"
-      - --port
-      - "5000"
-      - --allowed-hosts
-      - ${MLFLOW_ALLOWED_HOSTS:-mlflow,mlflow:5000,mlops_paas_mlflow,mlops_paas_mlflow:5000,localhost,localhost:5001,127.0.0.1,127.0.0.1:5000,127.0.0.1:5001,control-plane,control_plane}
-      - --backend-store-uri
-      - ${MLFLOW_BACKEND_STORE_URI}
-      - --default-artifact-root
-      - s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/
+    command: >
+      mlflow server 
+      --host 0.0.0.0 
+      --port 5000 
+      --backend-store-uri postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?options=-csearch_path%3D${MLFLOW_DB_SCHEMA:-mlflow}%2Cpublic
+      --default-artifact-root s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/
     depends_on:
       postgres:
         condition: service_healthy
@@ -309,8 +245,9 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       REDPANDA_BROKERS: redpanda:9092
-      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_logs}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_data}
       EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
+      CONTROL_PLANE_WEBHOOK_SECRET: ${CONTROL_PLANE_WEBHOOK_SECRET:-super-secret-key}
       GITHUB_REPO: ${GITHUB_REPO}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:

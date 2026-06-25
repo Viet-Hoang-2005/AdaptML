@@ -1,9 +1,17 @@
 from django.urls import path
-from .views import CustomTokenObtainPairView, CustomTokenRefreshView, JWKSView
-from .base_auth_views import RequestOTPView, VerifyOTPView, CompleteRegistrationView
-from .oauth2_views import GoogleOAuthView, GitHubOAuthView
-from .password_reset_views import PasswordResetCompleteView, PasswordResetRequestOTPView, PasswordResetVerifyOTPView
-from .profile_views import ProfileView, PasswordChangeRequestView, PasswordChangeVerifyOTPView, PasswordChangeCompleteView, AccountDeleteView, APIKeyManagementView, APIKeyDetailView, APIKeyRegenerateView, AvatarHistoryView, AvatarSelectView
+from authentication.api_keys.views import APIKeyDetailView, APIKeyManagementView, APIKeyRegenerateView
+from authentication.avatars.views import AvatarHistoryView, AvatarSelectView
+from authentication.oauth.views import GitHubOAuthView, GoogleOAuthView
+from authentication.passwords.views import PasswordResetCompleteView, PasswordResetRequestOTPView, PasswordResetVerifyOTPView
+from authentication.profiles.views import (
+    AccountDeleteView,
+    PasswordChangeCompleteView,
+    PasswordChangeRequestView,
+    PasswordChangeVerifyOTPView,
+    ProfileView,
+)
+from authentication.registration.views import CompleteRegistrationView, RequestOTPView, VerifyOTPView
+from authentication.tokens.views import CustomTokenObtainPairView, CustomTokenRefreshView, JWKSView
 
 urlpatterns = [
     # JWT & JWKS

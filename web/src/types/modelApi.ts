@@ -17,7 +17,7 @@ export type ModelFlavor = 'sklearn' | 'xgboost';
 export type ModelSourceType = 'manual_upload' | 'training_job';
 
 export interface ModelAPI {
-  id: number;
+  id: string;
   name: string;
   version: string;
   description: string;
@@ -82,7 +82,7 @@ export interface ModelBuildFormValues {
 }
 
 export interface PackagePreviewResponse {
-  model_id: number;
+  model_id: string;
   package_manifest: Record<string, unknown>;
   package_preview_tree: string[];
   build_status: ModelBuildStatus;
@@ -90,7 +90,7 @@ export interface PackagePreviewResponse {
 }
 
 export interface ModelEndpointLogsResponse {
-  model_id: number;
+  model_id: string;
   container_name: string;
   logs: string;
 }
@@ -101,6 +101,68 @@ export interface ModelPredictionResponse {
   confidence: number | null;
   tenant_id: string;
   model_id: string;
+}
+
+export type RegistryStage = 'none' | 'candidate' | 'staging' | 'production' | 'archived';
+export type RegistrySourceType = 'manual_upload' | 'training_job' | 'imported';
+export type RegistryHistoryStatus = 'success' | 'failed' | 'running';
+
+export interface RegistryVersion {
+  id: number;
+  tenant?: number | string;
+  family?: number;
+  version: string;
+  model_api?: string | number | null;
+  source_training_job?: number | null;
+  source_training_job_id?: number | null;
+  source_type: RegistrySourceType;
+  artifact_uri: string;
+  image_name: string;
+  endpoint_url: string;
+  stage: RegistryStage;
+  mlflow_run_id?: string | null;
+  mlflow_experiment_id?: string | null;
+  mlflow_run_url?: string | null;
+  mlflow_model_uri?: string | null;
+  mlflow_artifact_uri?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RegistryFamily {
+  id: number;
+  tenant?: number | string;
+  name: string;
+  display_name: string;
+  description: string;
+  current_production_version: RegistryVersion | null;
+  version_count?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RegistryMetric {
+  id: number;
+  metric_name: string;
+  value: number;
+  step: number;
+  source: string;
+  created_at: string;
+  extra?: Record<string, unknown>;
+}
+
+export interface RegistryHistory {
+  id: number;
+  action: string;
+  status: RegistryHistoryStatus;
+  version: string;
+  from_stage: string;
+  to_stage: string;
+  message: string;
+  actor: string;
+  created_at: string;
+  extra?: Record<string, unknown>;
 }
 
 export type TrainingJobStatus = 'pending' | 'uploading' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -137,13 +199,7 @@ export interface TrainingJob {
   deleted_at: string | null;
   is_deleted: boolean;
   registered_model: ModelAPI | null;
-  registered_model_id: number | null;
-  // Phase 10E.1: MLflow lineage fields
-  mlflow_run_id: string;
-  mlflow_experiment_id: string;
-  mlflow_run_url: string;
-  mlflow_model_uri: string;
-  mlflow_artifact_uri: string;
+  registered_model_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -170,8 +226,8 @@ export interface TrainingJobFormValues {
   accelerator_type: TrainingAcceleratorType;
   accelerator_count: number;
   source_zip: File | null;
-  requirements_file: File | null;
   training_data: File | null;
+  registered_model_id?: string;
 }
 
 export interface TrainingJobDownloadURLResponse {
@@ -240,53 +296,3 @@ export interface TrainingUsageResponse {
   current_month_start: string;
   current_month_end: string;
 }
-
-export interface RegistryVersion {
-  id: number;
-  version: string;
-  source_type: ModelSourceType | 'imported';
-  source_training_job_id: number | null;
-  artifact_uri: string;
-  image_name: string;
-  endpoint_url: string;
-  stage: 'none' | 'candidate' | 'staging' | 'production' | 'archived';
-  // Phase 10E.1: MLflow lineage fields
-  mlflow_run_id: string;
-  mlflow_experiment_id: string;
-  mlflow_run_url: string;
-  mlflow_model_uri: string;
-  mlflow_artifact_uri: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface RegistryFamily {
-  id: number;
-  name: string;
-  display_name: string;
-  description: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  current_production_version: RegistryVersion | null;
-  version_count?: number;
-}
-
-export interface RegistryHistory {
-  id: number;
-  action: string;
-  status: string;
-  version: string;
-  from_stage: string;
-  to_stage: string;
-  message: string;
-  actor: string;
-  created_at: string;
-}
-
-export interface RegistryMetric {
-  value: number;
-  step: number;
-  source: string;
-}
-

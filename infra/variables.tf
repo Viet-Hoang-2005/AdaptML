@@ -1,3 +1,9 @@
+variable "domain_name" {
+  description = "Base domain name for AI PaaS system"
+  type        = string
+  default     = "mlops-nids-nt114.id.vn"
+}
+
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
@@ -34,11 +40,6 @@ variable "enable_dns" {
   default     = false
 }
 
-variable "enable_serverless" {
-  description = "Enable legacy Lambda S3 webhook trigger"
-  type        = bool
-  default     = false
-}
 
 variable "enable_legacy_sagemaker_pipeline" {
   description = "Enable legacy GitHub Actions and SageMaker IAM resources"

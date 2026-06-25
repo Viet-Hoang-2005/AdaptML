@@ -291,7 +291,7 @@ export default function TrainingJobDetailPage() {
   });
 
   const buildRegisteredModelMutation = useMutation({
-    mutationFn: (modelId: number) => triggerModelAPIBuild(modelId),
+    mutationFn: (modelId: string) => triggerModelAPIBuild(modelId),
     onSuccess: async (model) => {
       toast.success(`Build started for ${model.name} ${model.version || 'v1'}.`);
       queryClient.setQueryData([...queryKeys.trainingJobs, 'detail', parsedJobId], (current: TrainingJob | undefined) =>
@@ -306,7 +306,7 @@ export default function TrainingJobDetailPage() {
   });
 
   const deployRegisteredModelMutation = useMutation({
-    mutationFn: (modelId: number) => deployModelAPI(modelId),
+    mutationFn: (modelId: string) => deployModelAPI(modelId),
     onSuccess: async (model) => {
       toast.success(model.endpoint_status === 'healthy' ? 'Endpoint deployed and healthy.' : 'Deployment started.');
       await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
@@ -318,7 +318,7 @@ export default function TrainingJobDetailPage() {
   });
 
   const checkHealthMutation = useMutation({
-    mutationFn: (modelId: number) => checkModelEndpointHealth(modelId),
+    mutationFn: (modelId: string) => checkModelEndpointHealth(modelId),
     onSuccess: async (model) => {
       toast[model.endpoint_status === 'healthy' ? 'success' : 'warning'](
         model.endpoint_status === 'healthy' ? 'Endpoint is healthy.' : 'Endpoint is unhealthy.',
@@ -330,7 +330,7 @@ export default function TrainingJobDetailPage() {
   });
 
   const redeployMutation = useMutation({
-    mutationFn: (modelId: number) => redeployModelAPI(modelId),
+    mutationFn: (modelId: string) => redeployModelAPI(modelId),
     onSuccess: async () => {
       toast.success('Redeploy started.');
       await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
@@ -340,7 +340,7 @@ export default function TrainingJobDetailPage() {
   });
 
   const stopEndpointMutation = useMutation({
-    mutationFn: (modelId: number) => stopModelEndpoint(modelId),
+    mutationFn: (modelId: string) => stopModelEndpoint(modelId),
     onSuccess: async () => {
       toast.success('Endpoint stopped.');
       await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
@@ -350,7 +350,7 @@ export default function TrainingJobDetailPage() {
   });
 
   const endpointLogsMutation = useMutation({
-    mutationFn: (modelId: number) => getModelEndpointLogs(modelId),
+    mutationFn: (modelId: string) => getModelEndpointLogs(modelId),
     onSuccess: (payload) => {
       setEndpointLogs(payload.logs || 'No endpoint logs available.');
       setEndpointLogsOpen(true);
@@ -1022,7 +1022,7 @@ export default function TrainingJobDetailPage() {
                 Close
               </Button>
             </div>
-            <pre className="max-h-120 overflow-auto rounded-lg bg-black p-4 text-xs text-green-100">
+            <pre className="max-h-120t overflow-auto rounded-lg bg-black p-4 text-xs text-green-100">
               {endpointLogs}
             </pre>
           </div>

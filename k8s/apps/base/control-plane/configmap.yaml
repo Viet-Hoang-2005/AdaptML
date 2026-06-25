@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mlops-paas-control-plane-config
+  labels:
+    app: mlops-paas-control-plane
+data:
+  PYTHONUNBUFFERED: "1"
+  DB_HOST_RW: "mlops-paas-postgres-rw"
+  DB_HOST_RO: "mlops-paas-postgres-ro"
+  DB_PORT: "5432"
+  DB_NAME: "mlops_paas_db"
+  CONTROL_PLANE_DB_SCHEMA: "control_plane"
+  DJANGO_DEBUG: "True"
+  BUILD_STRATEGY: "argo"
+  CORS_ALLOWED_ORIGINS: "https://mlops-nids-nt114.id.vn,http://localhost:5173,http://127.0.0.1:5173"
+  ARGO_EVENTS_WEBHOOK_URL: "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/build"
+  ARGO_DEPLOY_WEBHOOK_URL: "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/deploy"
+  ARGO_DRIFT_WEBHOOK_URL: "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/drift"
+  AWS_DEFAULT_REGION: "ap-southeast-1"
+  AWS_BUCKET_NAME: "mlops-paas-artifacts"
+  KAFKA_TOPIC: "mlops_paas_production_data"
+  REDPANDA_BROKERS: "redpanda-service:9092"
+  JWKS_URL: "http://mlops-paas-control-plane:8000/api/auth/.well-known/jwks.json"
+  REDIS_URL: "redis://mlops-paas-redis:6379/1"
+  REDIS_HOST: "mlops-paas-redis"
+  REDIS_PORT: "6379"

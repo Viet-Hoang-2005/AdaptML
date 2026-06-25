@@ -1,12 +1,12 @@
 import type { ModelAPI } from '../../../types/modelApi';
 import { PackagePreview } from '../../../components/ui/PackagePreview';
 
-interface ModelDetailDeploymentPageProps {
+interface ModelDeploymentPageProps {
   model: ModelAPI;
   zipFile: string;
 }
 
-export function ModelDeploymentPage({ model, zipFile }: ModelDetailDeploymentPageProps) {
+export function ModelDeploymentPage({ model, zipFile }: ModelDeploymentPageProps) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

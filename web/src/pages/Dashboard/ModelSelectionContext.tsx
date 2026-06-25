@@ -15,14 +15,15 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
       matchPath("/dashboard/home/model-testing/:modelId", location.pathname) ||
       matchPath("/dashboard/drift-monitoring/:modelId", location.pathname) ||
       matchPath("/dashboard/model-training/:modelId", location.pathname) ||
+      matchPath("/dashboard/model-training/:modelId/new", location.pathname) ||
       matchPath("/dashboard/model-evolution/:modelId", location.pathname);
   }, [location.pathname]);
 
-  const urlModelId = match?.params.modelId ? Number(match.params.modelId) : null;
+  const urlModelId = match?.params.modelId ? match.params.modelId : null;
 
-  const [localModelId, setLocalModelId] = useState<number | null>(() => {
+  const [localModelId, setLocalModelId] = useState<string | null>(() => {
     const stored = localStorage.getItem('selected_model_api_id');
-    return stored ? Number(stored) : null;
+    return stored ? stored : null;
   });
 
   const [prevUrlModelId, setPrevUrlModelId] = useState(urlModelId);
@@ -43,7 +44,7 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
     return {
       models,
       selectedModel,
-      selectModel: (modelId: number) => {
+      selectModel: (modelId: string) => {
         setLocalModelId(modelId);
         localStorage.setItem('selected_model_api_id', String(modelId));
         

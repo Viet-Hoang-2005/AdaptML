@@ -1,12 +1,14 @@
+import os
+import datetime
+import boto3
+import json
+import logging
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from confluent_kafka import Producer
-import datetime
-import boto3
-import json
-import logging
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -26,13 +28,13 @@ class Command(BaseCommand):
             return
             
         # Khởi tạo Kafka Producer
-        redpanda_brokers = getattr(settings, 'REDPANDA_BROKERS', 'localhost:19092')
+        redpanda_brokers = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
         producer = Producer({'bootstrap.servers': redpanda_brokers})
         
         # Khởi tạo Boto3 S3 Client
-        # Nếu chạy trên EC2/K3s, boto3 tự động lấy IAM Role
-        s3 = boto3.client('s3', region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'ap-southeast-1'))
-        bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'mlops-paas-artifacts')
+        region_name = os.environ.get('AWS_DEFAULT_REGION', 'ap-southeast-1')
+        bucket_name = os.environ.get('AWS_BUCKET_NAME', 'mlops-paas-artifacts')
+        s3 = boto3.client('s3', region_name=region_name)
 
         for user in expired_users:
             tenant_id = user.tenant_id

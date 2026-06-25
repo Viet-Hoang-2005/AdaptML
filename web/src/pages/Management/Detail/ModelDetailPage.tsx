@@ -1,4 +1,4 @@
-import { ArrowLeft, Trash2, Download, Bot, Rocket, Database } from 'lucide-react';
+import { ArrowLeft, Trash2, Download, Bot, Rocket, Database, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useMemo } from 'react';
 import type { ModelAPI } from '../../../types/modelApi';
@@ -14,11 +14,12 @@ import { useModelAPIs } from '../../../hooks/useModelAPIs';
 import { ModelInformationPage } from './ModelInformationPage';
 import { ModelDeploymentPage } from './ModelDeploymentPage';
 import { ModelSourcePage } from './ModelSourcePage';
+import { ModelStatus } from './ModelStatus';
 
 export default function ModelDetailPage() {
   const { modelId } = useParams();
   const { data } = useModelAPIs();
-  const model = useMemo(() => data?.models.find((item) => item.id === Number(modelId)) ?? null, [data?.models, modelId]);
+  const model = useMemo(() => data?.models.find((item) => item.id === modelId) ?? null, [data?.models, modelId]);
 
   if (!model) {
     return <div className="p-8 text-center text-gray-500">Model not found or loading...</div>;
@@ -31,9 +32,9 @@ export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
   const { tab } = useParams();
   const navigate = useNavigate();
 
-  const activeTab = tab === 'source' ? '3' : tab === 'deployment' ? '2' : '1';
+  const activeTab = tab === 'source' ? '3' : tab === 'deployment' ? '2' : tab === 'status' ? '4' : '1';
   
-  const handleTabChange = (newTab: 'information' | 'deployment' | 'source') => {
+  const handleTabChange = (newTab: 'information' | 'deployment' | 'source' | 'status') => {
     navigate(`/dashboard/api-management/${model.id}/${newTab}`);
   };
 
@@ -136,6 +137,12 @@ export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
                 isActive: activeTab === '3',
                 onClick: () => handleTabChange('source'),
               },
+              {
+                label: 'Status',
+                icon: Activity,
+                isActive: activeTab === '4',
+                onClick: () => handleTabChange('status'),
+              },
             ]}
           />
         </div>
@@ -171,6 +178,10 @@ export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
                 setSourceCodeDirty={setSourceCodeDirty}
                 setReferenceDataDirty={setReferenceDataDirty}
               />
+            )}
+
+            {activeTab === '4' && (
+              <ModelStatus model={model} />
             )}
           </div>
 

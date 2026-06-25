@@ -1,5 +1,5 @@
 variable "domain_name" {
-  description = "The domain name for the API"
+  description = "The base domain name for the AI PaaS"
   type        = string
-  default     = "api.mlops-nids-nt114.id.vn"
+  default     = "mlops-nids-nt114.id.vn"
 }

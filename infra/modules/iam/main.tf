@@ -81,50 +81,6 @@ resource "aws_iam_instance_profile" "worker_profile" {
   role = aws_iam_role.worker_role.name
 }
 
-# IAM Rule cho Lambda (GitHub Webhook Trigger)
-data "aws_iam_policy_document" "lambda_assume_role" {
-  statement {
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["lambda.amazonaws.com"]
-    }
-    actions = ["sts:AssumeRole"]
-  }
-}
-
-resource "aws_iam_role" "lambda_exec_role" {
-  count              = var.enable_serverless ? 1 : 0
-  name               = "mlops-lambda-github-webhook-role"
-  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
-}
-
-# Gán quyền IAM Rule cho Lambda thực thi
-resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
-  count      = var.enable_serverless ? 1 : 0
-  role       = aws_iam_role.lambda_exec_role[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# IAM Policy cho Lambda đọc Secrets Manager
-data "aws_iam_policy_document" "lambda_secrets_policy" {
-  statement {
-    effect = "Allow"
-    actions = [
-      "secretsmanager:GetSecretValue"
-    ]
-    resources = [
-      var.github_secrets_arn
-    ]
-  }
-}
-
-resource "aws_iam_role_policy" "lambda_secrets_policy_attach" {
-  count  = var.enable_serverless ? 1 : 0
-  name   = "mlops-lambda-secrets-policy"
-  role   = aws_iam_role.lambda_exec_role[0].id
-  policy = data.aws_iam_policy_document.lambda_secrets_policy.json
-}
 
 # GITHUB ACTIONS OIDC
 # Tạo OIDC Provider cho GitHub

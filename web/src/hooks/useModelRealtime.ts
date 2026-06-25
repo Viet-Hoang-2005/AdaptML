@@ -30,7 +30,7 @@ const MAX_RETRIES = 5;
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 30_000;
 
-function buildWsUrl(modelId: number, token: string): string {
+function buildWsUrl(modelId: string, token: string): string {
   const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/auth';
   const httpBase = apiBase.replace(/\/api\/auth\/?$/, '').replace(/\/api\/?$/, '');
   const wsBase = httpBase.replace(/^http/, 'ws');
@@ -38,7 +38,7 @@ function buildWsUrl(modelId: number, token: string): string {
 }
 
 export function useModelRealtime(
-  modelId: number | null | undefined,
+  modelId: string | null | undefined,
   options: UseModelRealtimeOptions = {},
 ) {
   const queryClient = useQueryClient();
@@ -173,7 +173,7 @@ export function useModelRealtime(
         return;
       }
 
-      const msgModelId = Number(message.model_id);
+      const msgModelId = String(message.model_id);
       if (!msgModelId) return;
 
       if (type === 'model.build_logs') {

@@ -1,11 +1,14 @@
+import uuid
+import secrets
+import os
+import json
+
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from django.utils import timezone
-import uuid
-import secrets
-import os
+from django_redis import get_redis_connection
 from django.core.cache import cache
 
 class TrainingUploadStorage(FileSystemStorage):
@@ -25,30 +28,37 @@ def user_avatar_history_path(instance, filename):
     email_prefix = instance.user.email.split('@')[0]
     return f'{email_prefix}/avatars/{filename}'
 
+def get_user_prefix(instance):
+    if hasattr(instance, 'tenant') and instance.tenant:
+        return instance.tenant.email.split('@')[0] if getattr(instance.tenant, 'email', None) else instance.tenant.tenant_id
+    elif hasattr(instance, 'user') and instance.user:
+        return instance.user.email.split('@')[0] if getattr(instance.user, 'email', None) else instance.user.tenant_id
+    return 'unknown_user'
+
 def model_artifact_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/{filename}'
 
 def model_source_artifact_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/source/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/source/{filename}'
 
 def label_mapping_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/mapping/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/mapping/{filename}'
 
 def model_source_code_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/code/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/code/{filename}'
 
 def model_reference_data_path(instance, filename):
-    email_prefix = instance.tenant.email.split('@')[0]
     safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
-    return f'{email_prefix}/models/{safe_model_name}/references/{filename}'
+    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
+    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/references/{filename}'
 
 def training_source_zip_path(instance, filename):
     return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/source/{filename}'
@@ -134,12 +144,13 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         try:
             # Đẩy/Cập nhật API Key lên Redis
             if self.is_active and self.api_key:
-                import json
                 payload = json.dumps({"tenant_id": self.tenant_id, "scope": "all", "allowed_models": []})
-                cache.set(f"api_key:{self.api_key}", payload, timeout=None)
+                redis_client = get_redis_connection("default")
+                redis_client.set(f":1:api_key:{self.api_key}", payload)
             elif not self.is_active and self.api_key:
                 # Thu hồi ngay lập tức nếu tài khoản bị khóa
-                cache.delete(f"api_key:{self.api_key}")
+                redis_client = get_redis_connection("default")
+                redis_client.delete(f":1:api_key:{self.api_key}")
         except Exception as e:
             print(f"Failed to update API key in Redis: {e}")
             # Dù Redis lỗi thì vẫn lưu user bình thường
@@ -383,9 +394,7 @@ class TrainingJobEvent(models.Model):
     def __str__(self):
         return f"{self.event_type} - {self.training_job_id}"
 
-
 # --- Model Evolution / Registry ---
-
 
 
 class ModelFamily(models.Model):
@@ -552,3 +561,42 @@ class ModelMetric(models.Model):
 
     def __str__(self):
         return f"{self.metric_name}={self.metric_value} step={self.step}"
+
+
+# --- Drift Monitoring ---
+
+class DriftMonitoringJob(models.Model):
+    STATUS_CHOICES = (
+        ("active", "Active"),
+        ("inactive", "Inactive"),
+    )
+    
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="drift_jobs")
+    model_api = models.OneToOneField(ModelAPI, on_delete=models.CASCADE, related_name="drift_job")
+    trigger_threshold = models.PositiveIntegerField(default=1000)
+    reference_data_s3_path = models.CharField(max_length=1024, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"DriftJob {self.model_api.name} ({self.trigger_threshold})"
+
+class DriftMonitoringResult(models.Model):
+    job = models.ForeignKey(DriftMonitoringJob, on_delete=models.CASCADE, related_name="results")
+    report_url = models.CharField(max_length=1024, blank=True) # HTML report S3 URI
+    drift_score = models.FloatField(default=0.0)
+    dataset_drift = models.BooleanField(default=False)
+    drifted_features_count = models.PositiveIntegerField(default=0)
+    total_features = models.PositiveIntegerField(default=0)
+    run_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ["-run_at"]
+
+    def __str__(self):
+        return f"Result {self.id} for {self.job.model_api.name}"
+

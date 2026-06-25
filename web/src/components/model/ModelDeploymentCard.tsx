@@ -484,7 +484,7 @@ function TrackerStep({ label, state }: { label: string; state: string }) {
 function TrackerLine({ state }: { state: 'completed' | 'pending' }) {
   return (
     <div className="flex-1 shrink-0 px-2 -mt-6">
-      <div className={`h-[2px] w-full rounded-full ${state === 'completed' ? 'bg-emerald-400' : 'bg-gray-100'}`} />
+      <div className={`h-0.5 w-full rounded-full ${state === 'completed' ? 'bg-emerald-400' : 'bg-gray-100'}`} />
     </div>
   );
 }

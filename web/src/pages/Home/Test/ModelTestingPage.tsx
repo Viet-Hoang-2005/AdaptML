@@ -1,5 +1,8 @@
-import { CheckCircle, Clipboard, FileSpreadsheet, Play, Pause, Terminal, XCircle, Download, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { FileSpreadsheet, Play, Pause, Download, Trash2, SendHorizontal, X, Check, Percent } from 'lucide-react';
+import { useRef, useState, useMemo, useEffect } from 'react';
+import { useBlocker } from 'react-router-dom';
+import { ConfirmModal } from '../../../components/ui/ConfirmModal';
+import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
 import { Button } from '../../../components/ui/Button';
 import { useModelSelection } from '../../../hooks/useModelSelection';
 import { predictWithModelAPI } from '../../../lib/api';
@@ -7,20 +10,18 @@ import { getApiErrorMessage } from '../../../lib/apiError';
 import { toast } from '../../../lib/toast';
 import { FileDropzone } from '../../../components/ui/FileDropzone';
 import { CSVEditor } from '../../../components/ui/CSVEditor';
+import { SummaryCard } from '../../../components/ui/SummaryCard';
+import { PageContent } from '../../../components/layout/PageContent';
 
 const TARGET_COLUMN_NAMES = new Set([
   'label',
   'target',
   'y',
   'class',
-  'ground_truth',
-  'true_label',
   'output',
   'result',
   'category',
 ]);
-
-const MAX_TEST_ROWS = 50;
 
 type TestSummary = {
   total: number;
@@ -107,98 +108,7 @@ const extractPredictionError = (error: unknown) => {
   };
 };
 
-function LogTerminal({ logs }: { logs: TestLogEntry[] }) {
-  const terminalRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-    terminal.scrollTop = terminal.scrollHeight;
-  }, [logs]);
-
-  const copyLogs = async () => {
-    const text = logs.map((log) => `[${log.time}] ${log.level.toUpperCase()} ${log.message}${log.detail ? `\n${log.detail}` : ''}`).join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success('Testing log copied.');
-    } catch {
-      toast.warning('Unable to copy testing log.');
-    }
-  };
-
-  return (
-    <div className="rounded-lg border border-gray-300 bg-white p-6">
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2">
-          <Terminal className="h-5 w-5 text-gray-700" />
-          <div>
-            <h3 className="text-lg font-bold text-gray-900">Testing Console</h3>
-            <p className="text-sm text-gray-500">Shows feature filtering, request progress, predictions, and backend errors.</p>
-          </div>
-        </div>
-        <Button size="sm" variant="secondary" icon={<Clipboard className="h-4 w-4" />} onClick={copyLogs} disabled={!logs.length}>
-          Copy log
-        </Button>
-      </div>
-
-      <div ref={terminalRef} className="max-h-115 overflow-auto rounded-lg bg-gray-950 p-4 font-mono text-xs leading-6 text-gray-100">
-        {logs.length === 0 ? (
-          <p className="text-gray-500">Click "Run" to start processing the CSV file...</p>
-        ) : (
-          logs.map((log) => (
-            <div key={log.id} className="mb-2">
-              <span className="text-gray-500">[{log.time}]</span>{' '}
-              <span
-                className={
-                  log.level === 'success'
-                    ? 'text-emerald-300'
-                    : log.level === 'warning'
-                      ? 'text-amber-300'
-                      : log.level === 'error'
-                        ? 'text-red-300'
-                        : 'text-blue-300'
-                }
-              >
-                {log.level.toUpperCase()}
-              </span>{' '}
-              <span>{log.message}</span>
-              {log.detail && <pre className="mt-1 whitespace-pre-wrap wrap-break-words text-gray-400">{log.detail}</pre>}
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  helper,
-  tone = 'default',
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  tone?: 'default' | 'success' | 'warning' | 'error';
-}) {
-  const icon =
-    tone === 'success' ? <CheckCircle className="h-4 w-4 text-emerald-600" /> :
-      tone === 'error' ? <XCircle className="h-4 w-4 text-red-600" /> :
-        tone === 'warning' ? <XCircle className="h-4 w-4 text-amber-600" /> :
-          <Terminal className="h-4 w-4 text-gray-500" />;
-
-  return (
-    <div className="rounded-lg border border-gray-300 bg-white p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-        {icon}
-      </div>
-      <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
-      <p className="mt-1 text-xs text-gray-500">{helper}</p>
-    </div>
-  );
-}
 
 export default function ModelTestingPage() {
   const { selectedModel } = useModelSelection();
@@ -206,14 +116,33 @@ export default function ModelTestingPage() {
   const [csvText, setCsvText] = useState('');
   const [fileName, setFileName] = useState('');
   const [logs, setLogs] = useState<TestLogEntry[]>([]);
+  
+  const stringLogs = useMemo(() => {
+    return logs.map((log) => `[${log.time}] [${log.level.toUpperCase()}] ${log.message}${log.detail ? `\n${log.detail}` : ''}`);
+  }, [logs]);
   const [predictions, setPredictions] = useState<string[]>([]);
   const [summary, setSummary] = useState<TestSummary>({ total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 });
   const [running, setRunning] = useState(false);
   const [testFinished, setTestFinished] = useState(false);
   const isRunningRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [currentRowIndex, setCurrentRowIndex] = useState(0);
 
-  const testingRows = Math.min(rows.length, MAX_TEST_ROWS);
+  const isDirty = rows.length > 0;
+
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    return isDirty && currentLocation.pathname !== nextLocation.pathname;
+  });
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   const pushLog = (entry: TestLogEntry) => setLogs((current) => [...current, entry]);
 
@@ -229,6 +158,7 @@ export default function ModelTestingPage() {
     setSummary({ total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 });
     setPredictions([]);
     setTestFinished(false);
+    setCurrentRowIndex(0);
     setLogs([
       makeLog('info', `Loaded ${file.name}: ${parsedRows.length} row(s).`),
       makeLog(
@@ -247,6 +177,7 @@ export default function ModelTestingPage() {
     setLogs([]);
     setPredictions([]);
     setTestFinished(false);
+    setCurrentRowIndex(0);
   };
 
   const runTesting = async () => {
@@ -266,40 +197,48 @@ export default function ModelTestingPage() {
     if (running) {
       isRunningRef.current = false;
       setRunning(false);
+      pushLog(makeLog('warning', 'Testing paused by user.'));
       return;
     }
 
     setRunning(true);
     isRunningRef.current = true;
-    setTestFinished(false);
-    setPredictions([]);
-    setSummary({ total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 });
-    setLogs([
-      makeLog('info', `Selected model: ${selectedModel.name}@${selectedModel.version || 'v1'}.`),
-      makeLog('info', `Endpoint: ${selectedModel.endpoint_url}.`),
-      makeLog('info', `Running prediction test for ${testingRows} row(s).`),
-    ]);
+    
+    const isStartingFresh = currentRowIndex === 0 || testFinished;
+    
+    let currentSummary: TestSummary;
+    let currentPredictions: string[];
+    
+    if (isStartingFresh) {
+      setCurrentRowIndex(0);
+      setTestFinished(false);
+      setPredictions([]);
+      setSummary({ total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 });
+      setLogs([
+        makeLog('info', `Selected model: ${selectedModel.name}@${selectedModel.version || 'v1'}.`),
+        makeLog('info', `Endpoint: ${selectedModel.endpoint_url}.`),
+        makeLog('info', `Running prediction test for ${rows.length} row(s).`),
+      ]);
+      
+      currentSummary = { total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 };
+      currentPredictions = [];
+    } else {
+      pushLog(makeLog('info', `Resuming prediction from row ${currentRowIndex + 1}...`));
+      currentSummary = { ...summary };
+      currentPredictions = [...predictions];
+    }
 
-    const nextSummary: TestSummary = { total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 };
-    const nextPredictions: string[] = [];
+    let i = isStartingFresh ? 0 : currentRowIndex;
 
-    for (const [index, row] of rows.slice(0, MAX_TEST_ROWS).entries()) {
+    for (; i < rows.length; i++) {
       if (!isRunningRef.current) break;
 
+      const row = rows[i];
       const { features, expectedLabel } = splitRow(row);
-      const featureNames = Object.keys(features);
-      const rowNumber = index + 1;
+      const rowNumber = i + 1;
 
-      nextSummary.total += 1;
-      if (expectedLabel !== undefined) nextSummary.withExpected += 1;
-
-      pushLog(
-        makeLog(
-          'info',
-          `Row ${rowNumber}: sending ${featureNames.length} feature(s) [${featureNames.join(', ')}].`,
-          expectedLabel !== undefined ? `Expected label kept for comparison only: ${expectedLabel}` : undefined,
-        ),
-      );
+      currentSummary.total += 1;
+      if (expectedLabel !== undefined) currentSummary.withExpected += 1;
 
       try {
         const response = await predictWithModelAPI(selectedModel.endpoint_url, features);
@@ -307,25 +246,25 @@ export default function ModelTestingPage() {
         const confidence = response.confidence == null ? '' : ` | confidence=${response.confidence}%`;
         const isCorrect = expectedLabel !== undefined && prediction.toLowerCase() === expectedLabel.toLowerCase();
 
-        nextSummary.success += 1;
+        currentSummary.success += 1;
         if (expectedLabel !== undefined) {
-          if (isCorrect) nextSummary.correct += 1;
-          else nextSummary.mismatch += 1;
+          if (isCorrect) currentSummary.correct += 1;
+          else currentSummary.mismatch += 1;
         }
 
-        nextPredictions.push(prediction);
+        currentPredictions.push(prediction);
 
         pushLog(
           makeLog(
             expectedLabel === undefined || isCorrect ? 'success' : 'warning',
-            `Row ${rowNumber}: predicted=${prediction}${expectedLabel !== undefined ? ` | expected=${expectedLabel}` : ''}${confidence}.`,
+            `Row ${rowNumber}: Predicted=${prediction}${expectedLabel !== undefined ? ` | Expected=${expectedLabel}` : ''}${confidence} |`,
             expectedLabel !== undefined ? (isCorrect ? 'Result: correct.' : 'Result: mismatch.') : undefined,
           ),
         );
       } catch (error) {
         const parsedError = extractPredictionError(error);
-        nextSummary.failed += 1;
-        nextPredictions.push('ERROR');
+        currentSummary.failed += 1;
+        currentPredictions.push('ERROR');
         pushLog(
           makeLog(
             'error',
@@ -335,22 +274,26 @@ export default function ModelTestingPage() {
         );
       }
 
-      setSummary({ ...nextSummary });
-      setPredictions([...nextPredictions]);
+      setSummary({ ...currentSummary });
+      setPredictions([...currentPredictions]);
+      setCurrentRowIndex(i + 1);
     }
 
-    pushLog(
-      makeLog(
-        nextSummary.failed > 0 ? 'warning' : 'success',
-        `Finished: ${nextSummary.success}/${nextSummary.total} succeeded, ${nextSummary.failed} failed.`,
-        nextSummary.withExpected > 0
-          ? `Expected-label comparison: ${nextSummary.correct}/${nextSummary.withExpected} correct, ${nextSummary.mismatch} mismatch.`
-          : undefined,
-      ),
-    );
-    setRunning(false);
-    isRunningRef.current = false;
-    setTestFinished(true);
+    if (isRunningRef.current) {
+      pushLog(
+        makeLog(
+          currentSummary.failed > 0 ? 'warning' : 'success',
+          `Finished: ${currentSummary.success}/${currentSummary.total} succeeded, ${currentSummary.failed} failed.`,
+          currentSummary.withExpected > 0
+            ? `Expected-label comparison: ${currentSummary.correct}/${currentSummary.withExpected} correct, ${currentSummary.mismatch} mismatch.`
+            : undefined,
+        ),
+      );
+      setRunning(false);
+      isRunningRef.current = false;
+      setTestFinished(true);
+      setCurrentRowIndex(0);
+    }
   };
 
   const handleDownloadCSV = () => {
@@ -361,7 +304,7 @@ export default function ModelTestingPage() {
     
     const csvContent = [
       newHeaders.join(','),
-      ...rows.slice(0, MAX_TEST_ROWS).map((row, index) => {
+      ...rows.slice(0, predictions.length).map((row, index) => {
         const values = headers.map(h => row[h]);
         values.push(predictions[index] || '');
         return values.join(',');
@@ -381,8 +324,21 @@ export default function ModelTestingPage() {
   const accuracy = summary.withExpected > 0 ? Math.round((summary.correct / summary.withExpected) * 100) : null;
 
   return (
-    <section className="flex flex-col h-full flex-1">
-      <div className="flex-1 flex flex-col rounded-lg border border-gray-300 bg-white p-6">
+    <>
+      <ConfirmModal
+        open={blocker.state === 'blocked'}
+        title="Leave Testing Page?"
+        description="You have uploaded a CSV file for testing. If you leave this page, your test data and current progress will be lost. Are you sure you want to leave?"
+        tone="danger"
+        confirmText="Leave"
+        onConfirm={() => {
+          blocker.proceed?.();
+        }}
+        onCancel={() => {
+          blocker.reset?.();
+        }}
+      />
+      <PageContent className="p-6 h-full">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Data Testing</h2>
@@ -457,7 +413,7 @@ export default function ModelTestingPage() {
                     size="md" 
                     variant="secondary" 
                     icon={<Download className="h-4 w-4" />} 
-                    disabled={!testFinished}
+                    disabled={running || predictions.length === 0}
                     onClick={handleDownloadCSV}
                   >
                     Download
@@ -473,25 +429,48 @@ export default function ModelTestingPage() {
                 </div>
               </div>
               
-              {summary.total > 0 && (
-                <div className="grid gap-3 md:grid-cols-4">
-                  <SummaryCard label="Requests" value={`${summary.success}/${summary.total}`} helper="successful rows" />
-                  <SummaryCard label="Failed" value={String(summary.failed)} tone={summary.failed ? 'error' : 'default'} helper="backend/API errors" />
-                  <SummaryCard label="Expected labels" value={String(summary.withExpected)} helper="from label columns" />
-                  <SummaryCard
-                    label="Accuracy"
-                    value={accuracy === null ? '-' : `${accuracy}%`}
-                    tone={accuracy === null ? 'default' : summary.mismatch > 0 ? 'warning' : 'success'}
-                    helper={summary.withExpected ? `${summary.correct}/${summary.withExpected} correct` : 'no labels'}
-                  />
-                </div>
-              )}
+              <div className="grid gap-3 md:grid-cols-4">
+                <SummaryCard 
+                  label="Processed" 
+                  value={`${summary.success + summary.failed}/${rows.length}`} 
+                  helper="rows completed" 
+                  tone={testFinished && rows.length > 0 ? 'info' : 'default'}
+                  icon={<SendHorizontal className="h-4 w-4" />}
+                />
+                <SummaryCard 
+                  label="Failed" 
+                  value={String(summary.failed)} 
+                  tone={summary.failed ? 'error' : 'default'} 
+                  helper="backend/API errors" 
+                  icon={<X className="h-4 w-4" />}
+                />
+                <SummaryCard 
+                  label="Successful" 
+                  value={String(summary.success)} 
+                  tone={summary.success > 0 ? 'success' : 'default'} 
+                  helper="backend/API successes" 
+                  icon={<Check className="h-4 w-4" />}
+                />
+                <SummaryCard
+                  label="Accuracy"
+                  value={accuracy === null ? '-' : `${accuracy}%`}
+                  tone={accuracy === null ? 'default' : summary.mismatch > 0 ? 'warning' : 'success'}
+                  helper={summary.withExpected ? `${summary.correct}/${summary.withExpected} correct` : 'no labels'}
+                  icon={<Percent className="h-4 w-4" />}
+                />
+              </div>
 
-              <LogTerminal logs={logs} />
+              <div className="mt-6">
+                <TerminalLogViewer 
+                  title="Testing Console" 
+                  placeholder='Click "Run" to start processing the CSV file...' 
+                  logsOverride={stringLogs} 
+                />
+              </div>
             </div>
           </div>
         )}
-      </div>
-    </section>
+      </PageContent>
+    </>
   );
 }

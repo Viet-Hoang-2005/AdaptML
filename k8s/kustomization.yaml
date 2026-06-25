@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Root Kustomization
+# Gọi tất cả các module hạ tầng (Infrastructure) và ứng dụng (Apps)
+bases:
+  # 1. Infrastructure & Platform Services
+  - cloudflare
+  - monitoring
+  - postgres
+  - redis
+  - redpanda
+  - secrets
+  - security
+  - storage
+  - health
+  - harbor
+  - argo-workflows
+  - cronjobs
+
+  # 2. Applications (Dùng overlay production)
+  - apps/production

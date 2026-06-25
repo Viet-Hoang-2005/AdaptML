@@ -1,0 +1,262 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: "Detect Changed Components"
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Filter changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'web/**'
+            backend:
+              - 'services/**'
+            infra:
+              - 'k8s/**'
+              - '.github/**'
+
+  secret-scan:
+    name: "Secret Scan (GitLeaks)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: GitLeaks Scan
+        uses: zricethezav/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Report Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "**GitLeaks**: No secrets found." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**GitLeaks**: Secrets found! Please check logs." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  lint-frontend:
+    name: "Frontend Code Quality (ESLint)"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - name: Install Dependencies
+        working-directory: web
+        run: npm ci
+      - name: Run ESLint
+        working-directory: web
+        run: npm run lint
+      - name: Report Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **ESLint**: Passed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **ESLint**: Failed! Please fix frontend code." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  lint-backend:
+    name: "Backend Code Quality (Pylint)"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install Dependencies
+        run: |
+          pip install pylint
+          # Install deps to make pylint resolve imports
+          for d in services/*/; do
+            if [ -f "$d/requirements.txt" ]; then
+              pip install -r "$d/requirements.txt" --quiet || true
+            fi
+          done
+      - name: Run Pylint (Warnings Only)
+        run: |
+          # Dùng || true để đảm bảo luồng CI không bị fail theo ý người dùng
+          find services -name "*.py" -not -path "*/migrations/*" -not -path "*/venv/*" > pyfiles.txt
+          pylint $(cat pyfiles.txt) --output-format=text > pylint_report.txt || true
+          cat pylint_report.txt
+          score=$(grep -oP 'Your code has been rated at \K[0-9.]+/10' pylint_report.txt || echo "N/A")
+          echo "**Pylint Score**: $score (Warnings Only)" >> $GITHUB_STEP_SUMMARY
+  lint-infra:
+    name: "Infrastructure Validation (Kustomize & Kubeconform)"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+      - name: Install Kubeconform
+        run: |
+          wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
+          tar -xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+      - name: Validate K8s Manifests
+        run: |
+          echo "Building Kustomize to check syntax..."
+          kustomize build --enable-helm k8s/ > full_manifest.yaml
+          echo "Validating structure with Kubeconform..."
+          kubeconform -ignore-missing-schemas -summary full_manifest.yaml
+      - name: Report Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "**Infra Validation**: Kustomize & Kubeconform passed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Infra Validation**: Failed! Please check K8s YAML files." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  build-and-scan:
+    name: "Build Images & Trivy Scan"
+    needs: [detect-changes, lint-frontend, lint-backend, lint-infra, secret-scan]
+    # Chạy kể cả khi linter bị skip, nhưng bắt buộc secret-scan pass
+    if: always() && needs.secret-scan.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # === FRONTEND ===
+      - name: Build Web Image
+        if: needs.detect-changes.outputs.frontend == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: web
+          push: false
+          tags: mlops-paas-web:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy Scan Web
+        if: needs.detect-changes.outputs.frontend == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'mlops-paas-web:test'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # === BACKEND (Control Plane) ===
+      - name: Build Control Plane Image
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: services/control-plane
+          push: false
+          tags: mlops-paas-control-plane:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy Scan Control Plane
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'mlops-paas-control-plane:test'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # === BACKEND (Consumer) ===
+      - name: Build Consumer Image
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: services/consumer
+          push: false
+          tags: mlops-paas-consumer:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy Scan Consumer
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'mlops-paas-consumer:test'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # === BACKEND (Packager) ===
+      - name: Build Packager Image
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: services/model-packager
+          push: false
+          tags: mlops-paas-model-packager:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy Scan Packager
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'mlops-paas-model-packager:test'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # === BACKEND (Evidently) ===
+      - name: Build Evidently Image
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: services/evidently
+          push: false
+          tags: mlops-paas-evidently:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy Scan Evidently
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'mlops-paas-evidently:test'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Report Status
+        run: |
+          echo "**Trivy Image Scan**: Passed without blocking vulnerabilities." >> $GITHUB_STEP_SUMMARY

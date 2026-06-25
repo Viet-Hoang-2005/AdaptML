@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react';
+import { Trash2, Rocket } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { useState } from 'react';
@@ -10,7 +10,7 @@ import { queryKeys } from '../../../lib/queryKeys';
 import { toast } from '../../../lib/toast';
 import { useNavigate } from 'react-router-dom';
 import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
-import { StepTitle } from './UploadModelFormPage';
+import { StepTitle } from '../../../components/ui/StepTitle';
 import { AccessModePicker } from '../../../components/ui/Picker';
 import { FileDropzone } from '../../../components/ui/FileDropzone';
 import { TextArea } from '../../../components/ui/TextArea';
@@ -24,12 +24,13 @@ export default function MLflowZipPage({
   form: ModelAPIFormValues;
   setField: (field: keyof ModelAPIFormValues, value: string | File | null) => void;
   onSubmitting: (val: boolean) => void;
-  onModelCreated: (id: number | null) => void;
+  onModelCreated: (id: string | null) => void;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { createModelAPI } = useModelAPIMutations();
-  const [createdModelId, setCreatedModelId] = useState<number | null>(null);
+  const [createdModelId, setCreatedModelId] = useState<string | null>(null);
+  const [isBuildSuccess, setIsBuildSuccess] = useState(false);
 
   const submitAdvanced = async () => {
     onSubmitting(true);
@@ -75,15 +76,28 @@ export default function MLflowZipPage({
     setField('access_mode', 'public');
     setField('version', 'v1');
     setField('artifact', null);
+    setIsBuildSuccess(false);
+  };
+
+  const handleDeploy = async () => {
+    if (!createdModelId) return;
+    onSubmitting(true);
+    try {
+      await deployModelAPI(createdModelId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      toast.success("Deployment started!");
+      navigate(`/dashboard/api-management`);
+    } catch (e) {
+      const msg = getApiErrorMessage(e, "Deployment failed.");
+      toast.error(msg);
+      onSubmitting(false);
+    }
   };
 
   return (
     <div className="space-y-6 rounded-lg border border-gray-300 bg-white p-6 lg:p-8">
       <div>
-        <h2 className="text-lg font-bold text-gray-900">Advanced MLflow Artifact</h2>
-        <p className="mb-4 mt-1 text-sm leading-6 text-gray-500">
-          Upload a `.zip` package that already contains an `MLmodel` file.
-        </p>
+        <StepTitle title="Advanced MLflow Artifact" description="Upload a .zip package that already contains an MLmodel file." />
         <FileDropzone
           accept=".zip,application/zip"
           title={form.artifact ? form.artifact.name : 'Choose MLflow package'}
@@ -158,17 +172,9 @@ export default function MLflowZipPage({
           onRebuild={submitAdvanced}
           onCancel={cancelBuild}
           buildDisabled={!form.artifact || !form.name.trim()}
-          onBuildSuccess={async (modelId) => {
-            onSubmitting(true);
-            try {
-              await deployModelAPI(modelId);
-              await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
-              navigate(`/dashboard/api-management`);
-            } catch (e) {
-              const msg = getApiErrorMessage(e, "Deployment failed.");
-              toast.error(msg);
-              onSubmitting(false);
-            }
+          onBuildSuccess={() => {
+            setIsBuildSuccess(true);
+            toast.success("Build successful! You can now deploy.");
           }}
         />
       </div>
@@ -183,6 +189,16 @@ export default function MLflowZipPage({
           onClick={handleClear}
         >
           Clear
+        </Button>
+        <Button
+          className="flex-1"
+          variant="primary"
+          size="md"
+          icon={<Rocket className="h-4 w-4" />}
+          disabled={!isBuildSuccess}
+          onClick={handleDeploy}
+        >
+          Deploy
         </Button>
       </div>
     </div>
