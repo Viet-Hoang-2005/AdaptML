@@ -46,8 +46,9 @@ module "compute" {
 }
 
 module "dns" {
-  count  = var.enable_dns ? 1 : 0
-  source = "./modules/dns"
+  count       = var.enable_dns ? 1 : 0
+  source      = "./modules/dns"
+  domain_name = var.domain_name
 }
 
 module "alb" {
@@ -59,7 +60,7 @@ module "alb" {
   worker_instance_ids = module.compute[0].worker_instance_ids
   certificate_arn     = module.dns[0].certificate_arn
   zone_id             = module.dns[0].zone_id
-  domain_name         = "api.mlops-nids-nt114.id.vn"
+  domain_name         = var.domain_name
 }
 
 module "batch_training" {

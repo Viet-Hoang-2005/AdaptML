@@ -4,8 +4,18 @@ output "master_public_ip" {
 }
 
 output "alb_dns" {
-  description = "Link to call the MLOps API"
+  description = "Application Load Balancer AWS Domain"
   value       = local.enable_lb_stack ? module.alb[0].lb_dns_name : null
+}
+
+output "frontend_url" {
+  description = "Public URL for ReactJS Dashboard"
+  value       = local.enable_lb_stack ? "https://${var.domain_name}" : null
+}
+
+output "api_url" {
+  description = "Public URL for Django Control Plane API"
+  value       = local.enable_lb_stack ? "https://api.${var.domain_name}" : null
 }
 
 output "s3_bucket_name" {

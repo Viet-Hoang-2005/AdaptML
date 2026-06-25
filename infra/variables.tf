@@ -1,3 +1,9 @@
+variable "domain_name" {
+  description = "Base domain name for AI PaaS system"
+  type        = string
+  default     = "mlops-nids-nt114.id.vn"
+}
+
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string

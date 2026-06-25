@@ -66,10 +66,23 @@ resource "aws_lb_listener" "http_listener" {
   }
 }
 
-# Tạo bản ghi A (Alias) tại gốc của subdomain zone trỏ về Load Balancer
-resource "aws_route53_record" "api_dns" {
+# Tạo bản ghi A (Alias) cho Frontend Web (Tên miền gốc) trỏ về Load Balancer
+resource "aws_route53_record" "frontend_dns" {
   zone_id = var.zone_id
   name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.api_alb.dns_name
+    zone_id                = aws_lb.api_alb.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Tạo bản ghi A (Alias) cho Control Plane API (Subdomain api.) trỏ về Load Balancer
+resource "aws_route53_record" "api_dns" {
+  zone_id = var.zone_id
+  name    = "api.${var.domain_name}"
   type    = "A"
 
   alias {

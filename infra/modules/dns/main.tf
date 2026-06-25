@@ -6,10 +6,11 @@ resource "aws_route53_zone" "mlops_zone" {
 
 # Yêu cầu chứng chỉ SSL
 resource "aws_acm_certificate" "mlops_cert" {
-  domain_name       = var.domain_name
-  validation_method = "DNS"
+  domain_name               = var.domain_name
+  subject_alternative_names = ["*.${var.domain_name}"]
+  validation_method         = "DNS"
 
-  tags = { Name = "mlops-api-cert" }
+  tags = { Name = "mlops-cert" }
 
   lifecycle {
     create_before_destroy = true
