@@ -9,7 +9,9 @@ type TokenRefreshResponse = {
   refresh?: string;
 };
 
-const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const normalizeApiBaseURL = (url: string) => url.replace(/\/+$/, '').replace(/\/auth$/, '');
+
+const apiBaseURL = normalizeApiBaseURL(import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api');
 const refreshTokenPath = '/auth/token/refresh/';
 const publicAuthPaths = ['/auth/token/', '/auth/oauth/', '/auth/register/', '/auth/password-reset/'];
 

@@ -20,7 +20,7 @@ const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 30_000;
 
 function buildWsUrl(jobId: number, token: string): string {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/auth';
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
   const httpBase = apiBase.replace(/\/api\/auth\/?$/, '').replace(/\/api\/?$/, '');
   const wsBase = httpBase.replace(/^http/, 'ws');
   return `${wsBase}/ws/training-jobs/${jobId}/?token=${encodeURIComponent(token)}`;
