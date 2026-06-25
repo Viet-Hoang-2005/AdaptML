@@ -1,2 +1,0 @@
-mlflow==3.11.1
-requests>=2.32.0

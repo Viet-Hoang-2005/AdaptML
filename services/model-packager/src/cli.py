@@ -119,7 +119,13 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
 
     docker_client = docker.from_env()
-    image_tag = f"{tenant_id.lower()}-model-{model_id.lower()}:latest"
+    harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
+    harbor_user = os.environ.get("HARBOR_USERNAME", "").strip()
+    harbor_pass = os.environ.get("HARBOR_PASSWORD", "").strip()
+
+    base_name = f"{tenant_id.lower()}-model-{model_id.lower()}:latest"
+    image_tag = f"{harbor_url}/mlops-paas/{base_name}" if harbor_url else base_name
+
     print(f"Building Docker image {image_tag} from workspace {workspace}...")
     for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
         if "stream" in line:
@@ -127,6 +133,17 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
         elif "errorDetail" in line:
             raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
     print(f"Docker image {image_tag} built successfully!")
+
+    if harbor_url and harbor_user and harbor_pass:
+        print(f"Logging into Harbor registry at {harbor_url}...")
+        docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
+        print(f"Pushing image {image_tag} to Harbor...")
+        for line in docker_client.images.push(image_tag, stream=True, decode=True):
+            if "status" in line:
+                print(line.get("status", ""))
+            elif "errorDetail" in line:
+                raise RuntimeError(line["errorDetail"].get("message", "Failed to push image to Harbor"))
+        print("Image successfully pushed to Harbor!")
 
 def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
     try:

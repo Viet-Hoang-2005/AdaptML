@@ -65,8 +65,8 @@ def _get_build_logs(model_id: int) -> list:
 def _get_endpoint_logs(model_id: int) -> str:
     """Read recent Docker logs from the endpoint container."""
     try:
-        from deployment.deploy_adapter import DockerDeployAdapter
-        return DockerDeployAdapter().endpoint_logs(model_id, tail=100)
+        from deployment.deploy_adapter import get_deploy_adapter
+        return get_deploy_adapter().endpoint_logs(model_id, tail=100)
     except Exception as exc:
         # Container not running / not found — not an error worth spamming
         return f"[Container not available: {exc}]"

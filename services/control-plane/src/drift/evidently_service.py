@@ -112,46 +112,67 @@ def run_evidently_job_sync(job_id: int):
             "DRIFT_REPORTS_S3_PREFIX": "drift-reports"
         }
 
-        network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
-        
-        model_hashid = encode_model_id(job.model_api.id)
-        container_name = f"evidently_{tenant_id_str.lower()}_model_{model_hashid.lower()}"
-        
-        logger.info(f"Spawning container {container_name} for job {job.id}")
-        
-        # Cleanup existing container with same name if it stuck from a previous crash
-        try:
-            old_container = client.containers.get(container_name)
-            old_container.remove(force=True)
-        except docker.errors.NotFound:
-            pass
+        strategy = getattr(settings, "BUILD_STRATEGY", "docker").lower()
+        if strategy == "argo":
+            import requests
+            webhook_url = os.environ.get("ARGO_DRIFT_WEBHOOK_URL", "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/drift")
+            payload = {
+                "job_id": str(job.id),
+                "tenant_id": tenant_id_str,
+                "model_id": str(job.model_api.id),
+                "model_name": job.model_api.name,
+                "model_uri": f"models:/{job.model_api.name}/Production",
+                "reference_data_url": ref_url,
+                "html_s3_uri": html_s3_uri,
+                "report_json_s3_uri": report_json_s3_uri,
+                "summary_json_s3_uri": summary_json_s3_uri,
+                "html_public_url": html_public_url,
+                "html_upload_url": html_upload_url,
+                "report_json_upload_url": report_json_upload_url,
+                "summary_json_upload_url": summary_json_upload_url,
+                "webhook_url": f"{internal_base_url}/api/drift/internal/drift-webhook"
+            }
+            logger.info(f"Triggering Argo Drift Workflow for job {job.id}")
+            response = requests.post(webhook_url, json=payload, timeout=10)
+            response.raise_for_status()
+            return "Argo Workflow triggered successfully."
+        else:
+            network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
+            
+            model_hashid = encode_model_id(job.model_api.id)
+            container_name = f"evidently_{tenant_id_str.lower()}_model_{model_hashid.lower()}"
+            
+            logger.info(f"Spawning container {container_name} for job {job.id}")
+            
+            try:
+                old_container = client.containers.get(container_name)
+                old_container.remove(force=True)
+            except docker.errors.NotFound:
+                pass
 
-        # We reuse the mlops-paas-evidently image built by docker-compose
-        # which already contains detect_drift.py and all dependencies.
-        # Run detached to easily capture logs regardless of exit code
-        container = client.containers.run(
-            image="mlops-paas-evidently",
-            name=container_name,
-            command=["python", "/app/detect_drift.py"],
-            environment=env,
-            network=network_name,
-            detach=True
-        )
-        
-        result = container.wait()
-        log_str = container.logs().decode('utf-8')
-        container.remove()
-        
-        if result['StatusCode'] != 0:
-            logger.error(f"Evidently job container failed. Output: {log_str}")
-            raise Exception(f"Container error: {log_str}")
+            container = client.containers.run(
+                image="mlops-paas-evidently",
+                name=container_name,
+                command=["python", "/app/detect_drift.py"],
+                environment=env,
+                network=network_name,
+                detach=True
+            )
             
-        logger.info(f"Evidently job finished. Logs:\n{log_str}")
-        
-        if "Skipping drift analysis" in log_str:
-            raise Exception("Not enough production data to run drift analysis. Please send more requests to the model first.")
+            result = container.wait()
+            log_str = container.logs().decode('utf-8')
+            container.remove()
             
-        return log_str
+            if result['StatusCode'] != 0:
+                logger.error(f"Evidently job container failed. Output: {log_str}")
+                raise Exception(f"Container error: {log_str}")
+                
+            logger.info(f"Evidently job finished. Logs:\n{log_str}")
+            
+            if "Skipping drift analysis" in log_str:
+                raise Exception("Not enough production data to run drift analysis. Please send more requests to the model first.")
+                
+            return log_str
 
     except Exception as e:
         logger.error(f"Failed to run evidently job: {e}")

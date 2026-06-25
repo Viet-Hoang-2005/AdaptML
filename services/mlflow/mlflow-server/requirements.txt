@@ -1,4 +1,0 @@
-# Thư viện bổ sung cho MLflow 
-mlflow[auth]==3.11.1
-psycopg2-binary==2.9.9
-boto3==1.34.0

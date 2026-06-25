@@ -1,3 +1,4 @@
+import os
 import base64
 import json
 import logging
@@ -18,7 +19,7 @@ from django.core.cache import cache
 
 from django.shortcuts import get_object_or_404
 from deployment.build_adapter import get_build_adapter, DockerBuildAdapter
-from deployment.deploy_adapter import DockerDeployAdapter
+from deployment.deploy_adapter import get_deploy_adapter
 from integrations.hashid_utils import encode_model_id, decode_model_id
 
 from authentication.models import ModelAPI, model_artifact_path
@@ -449,7 +450,7 @@ class ModelAPIDetailView(APIView):
         model_api.save(update_fields=["model_uri", "endpoint_url", "updated_at"])
 
         if model_api.artifact:
-            DockerDeployAdapter().deploy_model(
+            get_deploy_adapter().deploy_model(
                 model_id=model_api.id,
                 tenant_id=model_api.tenant.tenant_id,
                 model_name=model_api.name,
@@ -483,7 +484,7 @@ class ModelAPIDetailView(APIView):
             # Kill build process if running
             DockerBuildAdapter().cancel_build(model_id)
             # Kill endpoint container
-            DockerDeployAdapter().remove_model(model_api.id)
+            get_deploy_adapter().remove_model(model_api.id)
             
             # Delete all files under the model's folder on S3
             email_prefix = model_api.tenant.email.split('@')[0]
@@ -511,7 +512,7 @@ class ModelAPIDetailView(APIView):
             model_api.delete()
             return Response({"message": "Model API has been completely destroyed."}, status=status.HTTP_200_OK)
 
-        DockerDeployAdapter().remove_model(model_api.id)
+        get_deploy_adapter().remove_model(model_api.id)
         model_api.status = "disabled"
         model_api.save(update_fields=["status", "updated_at"])
         return Response({"message": "Model API has been disabled."}, status=status.HTTP_200_OK)
@@ -647,6 +648,9 @@ class ModelAPIBuildWebhookView(APIView):
                     else model_api.artifact.url
                 )
             model_api.endpoint_url = build_endpoint_url(model_api)
+            harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "harbor.mlops-nids-nt114.id.vn").strip().rstrip("/")
+            custom_tag = f"{model_api.tenant.tenant_id.lower()}-model-{encode_model_id(model_api.id).lower()}:latest"
+            model_api.endpoint_image_name = f"{harbor_url}/mlops-paas/{custom_tag}"
             logger.info("Model %s build marked ready. Artifact key=%s", model_id, model_api.artifact.name)
         else:
             model_api.status = "error"
@@ -667,7 +671,7 @@ class ModelAPIDeployView(APIView):
             if model_api.build_status and model_api.build_status != "ready":
                 return Response({"error": "Model build is not ready yet."}, status=status.HTTP_400_BAD_REQUEST)
 
-            DockerDeployAdapter().deploy_model(
+            get_deploy_adapter().deploy_model(
                 model_id=model_api.id,
                 tenant_id=model_api.tenant.tenant_id,
                 model_name=model_api.name,
@@ -690,7 +694,7 @@ class ModelAPIStopEndpointView(APIView):
         model_api = ModelAPI.objects.filter(pk=model_id, tenant=request.user).exclude(status="disabled").first()
         if not model_api:
             return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
-        DockerDeployAdapter().remove_model(model_api.id)
+        get_deploy_adapter().remove_model(model_api.id)
         model_api.status = "ready" if model_api.build_status == "ready" else model_api.status
         model_api.endpoint_status = "stopped"
         model_api.endpoint_error = ""
@@ -706,7 +710,7 @@ class ModelAPICheckHealthView(APIView):
         model_api = ModelAPI.objects.filter(pk=model_id, tenant=request.user).exclude(status="disabled").first()
         if not model_api:
             return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
-        healthy, payload = DockerDeployAdapter().check_health(model_api.id)
+        healthy, payload = get_deploy_adapter().check_health(model_api.id)
         model_api.endpoint_last_checked_at = timezone.now()
         if healthy:
             model_api.status = "deployed"
@@ -734,7 +738,7 @@ class ModelAPIEndpointLogsView(APIView):
         except ValueError:
             tail = 300
         try:
-            logs = DockerDeployAdapter().endpoint_logs(model_api.id, tail=tail)
+            logs = get_deploy_adapter().endpoint_logs(model_api.id, tail=tail)
         except Exception as exc:
             return Response({"error": f"Unable to read endpoint logs: {exc}"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
@@ -755,7 +759,7 @@ class ModelAPICleanupView(APIView):
         if not model_api:
             return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
         remove_images = bool(request.data.get("remove_images", False))
-        removed = DockerDeployAdapter().cleanup_model(model_api.id, remove_images=remove_images)
+        removed = get_deploy_adapter().cleanup_model(model_api.id, remove_images=remove_images)
         if model_api.endpoint_status != "not_deployed":
             model_api.endpoint_status = "stopped"
             model_api.status = "ready" if model_api.build_status == "ready" else model_api.status

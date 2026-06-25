@@ -255,3 +255,108 @@ class DockerDeployAdapter(DeployAdapter):
             except docker.errors.ImageNotFound:
                 pass
         return removed
+
+class ArgoDeployAdapter(DeployAdapter):
+    def deploy_model(self, model_id: int, tenant_id: str, model_name: str, version: str):
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        if not model_api:
+            logger.error("Cannot deploy missing model %s", model_id)
+            return
+
+        webhook_url = os.environ.get("ARGO_DEPLOY_WEBHOOK_URL", "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/deploy")
+        container_name = endpoint_container_name(tenant_id, model_id)
+        hashid_str = encode_model_id(model_id)
+        public_path = f"/{tenant_id}/models/{hashid_str}/{version}/predict"
+        internal_path = f"/models/{hashid_str}/predict"
+        
+        image_name = model_api.endpoint_image_name
+        if not image_name:
+            harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "harbor.mlops-nids-nt114.id.vn").strip().rstrip("/")
+            image_name = f"{harbor_url}/mlops-paas/{tenant_id.lower()}-model-{hashid_str.lower()}:latest"
+
+        payload = {
+            "tenant_id": tenant_id,
+            "model_id": str(model_id),
+            "hashid": hashid_str,
+            "version": version,
+            "image_name": image_name,
+            "container_name": container_name
+        }
+
+        model_api.status = "deploying"
+        model_api.endpoint_status = "deploying"
+        model_api.endpoint_error = ""
+        model_api.endpoint_container_name = container_name
+        model_api.endpoint_image_name = image_name
+        model_api.endpoint_public_path = public_path
+        model_api.endpoint_internal_path = internal_path
+        model_api.endpoint_last_checked_at = timezone.now()
+        model_api.save(update_fields=[
+            "status", "endpoint_status", "endpoint_error",
+            "endpoint_container_name", "endpoint_image_name",
+            "endpoint_public_path", "endpoint_internal_path",
+            "endpoint_last_checked_at", "updated_at"
+        ])
+
+        try:
+            logger.info("Sending deploy payload to Argo Events at %s: %s", webhook_url, payload)
+            response = requests.post(webhook_url, json=payload, timeout=10)
+            response.raise_for_status()
+            logger.info("Successfully triggered Argo Deploy Workflow for model %s", model_id)
+        except Exception as e:
+            logger.error("Failed to trigger Argo Deploy Workflow for model %s: %s", model_id, e)
+            model_api.status = "deploy_failed"
+            model_api.endpoint_status = "deploy_failed"
+            model_api.endpoint_error = str(e)
+            model_api.save(update_fields=["status", "endpoint_status", "endpoint_error", "updated_at"])
+
+    def wait_for_health(self, model_id: int, timeout_seconds: int = 45, interval_seconds: int = 3) -> tuple[bool, str]:
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
+        container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
+        url = f"http://{container_name}-svc:5000/models/{encode_model_id(model_id)}/health"
+        deadline = time.monotonic() + timeout_seconds
+        last_error = "Endpoint health check did not run."
+        while time.monotonic() < deadline:
+            try:
+                response = requests.get(url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("model_loaded") is True:
+                        return True, str(data)
+                    last_error = f"Endpoint returned health payload but model_loaded is not true: {data}"
+                else:
+                    last_error = f"HTTP {response.status_code}: {response.text[:500]}"
+            except Exception as exc:
+                last_error = str(exc)
+            time.sleep(interval_seconds)
+        return False, last_error
+
+    def check_health(self, model_id: int) -> tuple[bool, dict | str]:
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
+        container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
+        url = f"http://{container_name}-svc:5000/models/{encode_model_id(model_id)}/health"
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("model_loaded") is True, data
+            return False, f"HTTP {response.status_code}: {response.text[:500]}"
+        except Exception as exc:
+            return False, str(exc)
+
+    def remove_model(self, model_id: int):
+        pass
+
+    def endpoint_logs(self, model_id: int, tail: int = 300) -> str:
+        return "Log retrieval not yet implemented for Argo/Kubernetes endpoints."
+
+    def cleanup_model(self, model_id: int, remove_images: bool = False) -> dict:
+        return {"containers": [], "images": []}
+
+def get_deploy_adapter() -> DeployAdapter:
+    strategy = getattr(settings, "BUILD_STRATEGY", "docker").lower()
+    if strategy == "argo":
+        return ArgoDeployAdapter()
+    return DockerDeployAdapter()
