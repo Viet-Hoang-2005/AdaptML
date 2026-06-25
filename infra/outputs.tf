@@ -33,9 +33,9 @@ output "sagemaker_execution_role_arn" {
   value       = local.enable_shared_iam ? module.iam[0].sagemaker_execution_role_arn : null
 }
 
-output "name_servers" {
-  description = "Name Servers to configure in your domain registrar"
-  value       = var.enable_dns ? module.dns[0].name_servers : null
+output "acm_ssl_validation_records" {
+  description = "CNAME records to copy to Cloudflare DNS table to validate ACM SSL Certificate"
+  value       = var.enable_dns ? module.dns[0].acm_domain_validation_options : null
 }
 
 output "batch_training_ecr_repository_url" {

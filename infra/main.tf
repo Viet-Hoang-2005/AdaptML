@@ -28,9 +28,9 @@ module "iam" {
   count                      = local.enable_shared_iam ? 1 : 0
   source                     = "./modules/iam"
   artifacts_bucket_arn       = module.storage.bucket_arn
-  github_secrets_arn         = local.enable_shared_secrets ? module.secrets[0].github_secrets_arn : "*"
+  github_secrets_arn         = local.enable_shared_secrets ? module.secrets[0].aws_secrets_arn : "*"
   github_actions_secrets_arn = local.enable_shared_secrets ? module.secrets[0].github_actions_secrets_arn : "*"
-  mlflow_basic_auth_arn      = local.enable_shared_secrets ? module.secrets[0].mlflow_basic_auth_arn : "*"
+  mlflow_basic_auth_arn      = local.enable_shared_secrets ? module.secrets[0].production_secrets_arn : "*"
 
   enable_legacy_sagemaker_pipeline = var.enable_legacy_sagemaker_pipeline
 }
@@ -59,8 +59,6 @@ module "alb" {
   lb_sg_id            = module.security.lb_sg_id
   worker_instance_ids = module.compute[0].worker_instance_ids
   certificate_arn     = module.dns[0].certificate_arn
-  zone_id             = module.dns[0].zone_id
-  domain_name         = var.domain_name
 }
 
 module "batch_training" {
