@@ -1,4 +1,5 @@
 import os
+import boto3
 import docker
 import logging
 import threading
@@ -19,14 +20,11 @@ def run_evidently_job_sync(job_id: int):
         db_name = os.environ.get("DB_NAME", "mlops_paas_db")
         db_port = os.environ.get("DB_PORT", "5432")
         
-        aws_access_key = os.environ.get("AWS_ACCESS_KEY_ID", "")
-        aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
         aws_region = getattr(settings, "AWS_S3_REGION_NAME", "ap-southeast-1")
         bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "mlops-paas-artifacts")
         
         internal_base_url = getattr(settings, "CONTROL_PLANE_INTERNAL_URL", "http://control-plane:8000").rstrip("/")
         
-        import boto3
         s3_client = boto3.client('s3', region_name=aws_region)
         
         ref_path = job.reference_data_s3_path
@@ -80,12 +78,31 @@ def run_evidently_job_sync(job_id: int):
         domain = f"s3.{aws_region}.amazonaws.com" if aws_region != "us-east-1" else "s3.amazonaws.com"
         html_public_url = f"https://{bucket_name}.{domain}/{base_report_key}/report.html"
 
+        def get_signed_model_url(api):
+            s3_key = None
+            uri = api.model_uri or api.source_artifact_uri or ""
+            if uri.startswith("s3://"):
+                s3_key = uri.split("/", 3)[-1]
+            elif api.artifact:
+                s3_key = api.artifact.name
+            elif api.source_artifact:
+                s3_key = api.source_artifact.name
+
+            if s3_key:
+                try:
+                    return s3_client.generate_presigned_url('get_object', Params={'Bucket': bucket_name, 'Key': s3_key}, ExpiresIn=3600)
+                except Exception as e:
+                    logger.error(f"Failed to generate presigned model URL: {e}")
+            return f"models:/{api.name}/Production"
+
+        model_uri_resolved = get_signed_model_url(job.model_api)
+
         env = {
             "JOB_ID": str(job.id),
             "TENANT_ID": tenant_id_str,
             "MODEL_ID": str(job.model_api.id),  # integer DB ID matching paas_production_logs
             "MODEL_NAME": job.model_api.name,   # human-readable name for MLflow
-            "MODEL_URI": f"models:/{job.model_api.name}/Production",
+            "MODEL_URI": model_uri_resolved,
             "REFERENCE_DATA_URL": ref_url,
             "DRIFT_THRESHOLD": "0.6", # Hardcoded float share, DO NOT use job.trigger_threshold here
             
@@ -119,7 +136,7 @@ def run_evidently_job_sync(job_id: int):
                 "tenant_id": tenant_id_str,
                 "model_id": str(job.model_api.id),
                 "model_name": job.model_api.name,
-                "model_uri": f"models:/{job.model_api.name}/Production",
+                "model_uri": model_uri_resolved,
                 "reference_data_url": ref_url,
                 "html_s3_uri": html_s3_uri,
                 "report_json_s3_uri": report_json_s3_uri,
