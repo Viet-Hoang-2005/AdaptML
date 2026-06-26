@@ -24,6 +24,7 @@ from django.shortcuts import get_object_or_404
 from deployment.build_adapter import get_build_adapter, DockerBuildAdapter
 from deployment.deploy_adapter import get_deploy_adapter
 from integrations.hashid_utils import encode_model_id, decode_model_id
+from registry.compare_service import build_version_compare_payload
 
 from authentication.models import (
     ModelAPI,
@@ -393,6 +394,28 @@ class RegistryFamilyHistoryView(APIView):
             .order_by("-created_at")
         )
         return Response([serialize_registry_history(event) for event in history])
+
+
+class RegistryFamilyCompareView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, family_id):
+        family = get_object_or_404(ModelFamily, id=family_id, tenant=request.user, is_active=True)
+        left_id = request.query_params.get("left")
+        right_id = request.query_params.get("right")
+        if not left_id or not right_id:
+            return Response({"error": "Both left and right version ids are required."}, status=status.HTTP_400_BAD_REQUEST)
+        if left_id == right_id:
+            return Response({"error": "Choose two different versions to compare."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            left_id_int = int(left_id)
+            right_id_int = int(right_id)
+        except (TypeError, ValueError):
+            return Response({"error": "Version ids must be integers."}, status=status.HTTP_400_BAD_REQUEST)
+
+        left_version = get_object_or_404(ModelVersion, id=left_id_int, family=family, tenant=request.user)
+        right_version = get_object_or_404(ModelVersion, id=right_id_int, family=family, tenant=request.user)
+        return Response(build_version_compare_payload(family, left_version, right_version), status=status.HTTP_200_OK)
 
 
 class RegistryVersionHistoryView(APIView):

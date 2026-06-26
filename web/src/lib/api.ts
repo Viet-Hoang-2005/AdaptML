@@ -44,6 +44,7 @@ import type {
   RegistrySmokeTestRequest,
   RegistrySmokeTestResponse,
   RegistryVersion,
+  RegistryVersionCompareResponse,
 } from '../types/modelApi';
 
 const normalizeApiBaseURL = (url: string) => url.replace(/\/+$/, '').replace(/\/auth$/, '');
@@ -499,6 +500,17 @@ export const getRegistryMetrics = async (
 
 export const getRegistryHistory = async (familyId: number): Promise<RegistryHistory[]> => {
   const { data } = await axiosInstance.get<RegistryHistory[]>(controlPlaneURL(`/registry/families/${familyId}/history/`));
+  return data;
+};
+
+export const compareRegistryVersions = async (
+  familyId: number,
+  leftVersionId: number,
+  rightVersionId: number,
+): Promise<RegistryVersionCompareResponse> => {
+  const { data } = await axiosInstance.get<RegistryVersionCompareResponse>(
+    controlPlaneURL(`/registry/families/${familyId}/compare/?left=${leftVersionId}&right=${rightVersionId}`),
+  );
   return data;
 };
 

@@ -17,6 +17,7 @@ from registry.views import (
     ModelAPIStopEndpointView,
     ModelAPITriggerBuildView,
     RegistryFamilyDetailView,
+    RegistryFamilyCompareView,
     RegistryFamilyHistoryView,
     RegistryFamilyListView,
     RegistryFamilyVersionsView,
@@ -48,6 +49,7 @@ urlpatterns = [
     path("families/", RegistryFamilyListView.as_view(), name="registry_family_list"),
     path("families/<int:family_id>/", RegistryFamilyDetailView.as_view(), name="registry_family_detail"),
     path("families/<int:family_id>/versions/", RegistryFamilyVersionsView.as_view(), name="registry_family_versions"),
+    path("families/<int:family_id>/compare/", RegistryFamilyCompareView.as_view(), name="registry_family_compare"),
     path(
         "families/<int:family_id>/versions/<int:version_id>/metrics/",
         RegistryVersionMetricsView.as_view(),

@@ -175,6 +175,68 @@ export interface RegistrySmokeTestResponse {
   error?: string;
 }
 
+export interface RegistryMetricDiff {
+  name: string;
+  left: unknown;
+  right: unknown;
+  delta: number | null;
+  delta_percent: number | null;
+  higher_is_better: boolean | null;
+  winner: 'left' | 'right' | 'tie' | 'unknown';
+}
+
+export interface RegistryParamDiff {
+  name: string;
+  left: unknown;
+  right: unknown;
+  changed: boolean;
+  only_in?: 'left' | 'right' | '';
+}
+
+export interface RegistryArtifactDiff {
+  added: RegistryArtifactManifestItem[];
+  removed: RegistryArtifactManifestItem[];
+  changed: Array<{
+    path: string;
+    left_size_bytes?: number;
+    right_size_bytes?: number;
+    left_sha256?: string;
+    right_sha256?: string;
+    left_kind?: string;
+    right_kind?: string;
+  }>;
+  unchanged_count: number;
+}
+
+export interface RegistryVersionCompareResponse {
+  family: Pick<RegistryFamily, 'id' | 'name' | 'display_name'>;
+  left: Partial<RegistryVersion> & Pick<RegistryVersion, 'id' | 'version' | 'stage'>;
+  right: Partial<RegistryVersion> & Pick<RegistryVersion, 'id' | 'version' | 'stage'>;
+  metrics_diff: RegistryMetricDiff[];
+  params_diff: RegistryParamDiff[];
+  artifact_diff: RegistryArtifactDiff;
+  deployability_diff: {
+    left: { status: string; reason: string };
+    right: { status: string; reason: string };
+  };
+  deployment_diff: {
+    left_stage: string;
+    right_stage: string;
+    left_endpoint_url: string;
+    right_endpoint_url: string;
+    left_deployed: boolean;
+    right_deployed: boolean;
+    left_image_name: string;
+    right_image_name: string;
+  };
+  recommendation: {
+    winner: 'left' | 'right' | 'unknown';
+    confidence: 'low' | 'medium' | 'high';
+    reason: string;
+    warnings: string[];
+  };
+}
+
 export interface RegistryFamily {
   id: number;
   tenant?: number | string;

@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
-import { X, GitCompare } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, GitCompare, X } from 'lucide-react';
 import { Button } from './../ui/Button';
-import type { RegistryFamily, RegistryVersion, RegistryMetric } from '../../types/modelApi';
-import { getRegistryMetrics } from '../../lib/api';
+import type { RegistryFamily, RegistryVersion, RegistryVersionCompareResponse } from '../../types/modelApi';
+import { compareRegistryVersions } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 import { formatVersion } from '../../lib/formatters';
+import { toast } from '../../lib/toast';
 
 interface Props {
   family: RegistryFamily;
@@ -11,51 +13,59 @@ interface Props {
   onClose: () => void;
 }
 
+const classNames = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(' ');
+
+function formatValue(value: unknown): string {
+  if (typeof value === 'number') return Number.isInteger(value) ? value.toString() : value.toFixed(4);
+  if (value === null || value === undefined || value === '') return '-';
+  return String(value);
+}
+
+function formatDelta(value: number | null): string {
+  if (value === null || value === undefined) return '-';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(4)}`;
+}
+
+function winnerClass(winner: string) {
+  if (winner === 'right') return 'text-blue-700 bg-blue-50 border-blue-200';
+  if (winner === 'left') return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+  if (winner === 'tie') return 'text-gray-700 bg-gray-50 border-gray-200';
+  return 'text-gray-500 bg-gray-50 border-gray-200';
+}
+
+function DeployabilityPill({ status }: { status?: string }) {
+  const cls = status === 'deployable'
+    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+    : status === 'track_only'
+      ? 'bg-amber-100 text-amber-800 border-amber-200'
+      : status === 'invalid'
+        ? 'bg-red-100 text-red-800 border-red-200'
+        : 'bg-gray-100 text-gray-700 border-gray-200';
+  return <span className={classNames('rounded-full border px-2 py-0.5 text-xs font-bold uppercase', cls)}>{status || 'unknown'}</span>;
+}
+
 export function VersionComparisonModal({ family, versions, onClose }: Props) {
-  const [v1Id, setV1Id] = useState<number>(versions[0]?.id);
-  const [v2Id, setV2Id] = useState<number>(versions[1]?.id || versions[0]?.id);
-  
-  const [metrics1, setMetrics1] = useState<Record<string, RegistryMetric[]>>({});
-  const [metrics2, setMetrics2] = useState<Record<string, RegistryMetric[]>>({});
-  
-  const v1 = versions.find(v => v.id === v1Id);
-  const v2 = versions.find(v => v.id === v2Id);
+  const [leftId, setLeftId] = useState<number>(versions[0]?.id);
+  const [rightId, setRightId] = useState<number>(versions[1]?.id || versions[0]?.id);
+  const [loading, setLoading] = useState(false);
+  const [comparison, setComparison] = useState<RegistryVersionCompareResponse | null>(null);
 
-  useEffect(() => {
-    if (v1Id) {
-      void getRegistryMetrics(family.id, v1Id).then(setMetrics1).catch(() => setMetrics1({}));
+  const runCompare = async () => {
+    if (!leftId || !rightId || leftId === rightId) {
+      toast.error('Choose two different versions to compare.');
+      return;
     }
-  }, [family.id, v1Id]);
-
-  useEffect(() => {
-    if (v2Id) {
-      void getRegistryMetrics(family.id, v2Id).then(setMetrics2).catch(() => setMetrics2({}));
+    setLoading(true);
+    try {
+      const data = await compareRegistryVersions(family.id, leftId, rightId);
+      setComparison(data);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to compare versions.'));
+    } finally {
+      setLoading(false);
     }
-  }, [family.id, v2Id]);
-
-  const getLatestMetricValue = (metrics: Record<string, RegistryMetric[]>, name: string) => {
-    const arr = metrics[name];
-    if (!arr || arr.length === 0) return null;
-    const sorted = [...arr].sort((a, b) => a.step - b.step);
-    return sorted[sorted.length - 1].value;
   };
-
-  const formatMetric = (val: number | null) => {
-    if (val === null) return 'N/A';
-    return Number.isInteger(val) ? val.toString() : val.toFixed(4);
-  };
-
-  const renderDelta = (val1: number | null, val2: number | null) => {
-    if (val1 === null || val2 === null) return null;
-    const delta = val2 - val1;
-    if (delta === 0) return <span className="text-gray-400 text-xs ml-2">(0)</span>;
-    const isPositive = delta > 0;
-    const color = isPositive ? 'text-emerald-600' : 'text-red-600';
-    const sign = isPositive ? '+' : '';
-    return <span className={`${color} text-xs ml-2 font-bold bg-white px-1.5 py-0.5 rounded border border-gray-100`}>({sign}{Number.isInteger(delta) ? delta : delta.toFixed(4)})</span>;
-  };
-
-  const allMetricNames = Array.from(new Set([...Object.keys(metrics1), ...Object.keys(metrics2)]));
 
   if (versions.length < 2) {
     return (
@@ -65,9 +75,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
             <GitCompare className="h-8 w-8 text-gray-400" />
           </div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">Not Enough Versions</h3>
-          <p className="text-sm text-gray-500 mb-6">
-            Add another version to compare model evolution.
-          </p>
+          <p className="text-sm text-gray-500 mb-6">Add another version to compare model evolution.</p>
           <Button variant="primary" onClick={onClose} className="w-full justify-center">Close</Button>
         </div>
       </div>
@@ -76,8 +84,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-        
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <div className="bg-blue-50 text-blue-600 p-2 rounded-lg">
@@ -85,7 +92,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">Compare Versions</h2>
-              <p className="text-sm text-gray-500">Family: {family.name}</p>
+              <p className="text-sm text-gray-500">Family: {family.display_name || family.name}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-100">
@@ -94,110 +101,175 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50">
-          <div className="grid grid-cols-3 gap-4 mb-6 sticky top-0 bg-gray-50/90 backdrop-blur-md py-4 border-b border-gray-200 z-10">
-            <div className="font-bold text-gray-500 uppercase tracking-wider flex items-center pl-4">Attribute</div>
-            <div>
-              <select 
-                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-blue-500"
-                value={v1Id}
-                onChange={(e) => setV1Id(Number(e.target.value))}
-              >
-                {versions.map(v => (
-                  <option key={v.id} value={v.id}>Version {formatVersion(v.version)} {v.stage === 'production' ? '(Prod)' : ''}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <select 
-                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-blue-500"
-                value={v2Id}
-                onChange={(e) => setV2Id(Number(e.target.value))}
-              >
-                {versions.map(v => (
-                  <option key={v.id} value={v.id}>Version {formatVersion(v.version)} {v.stage === 'production' ? '(Prod)' : ''}</option>
-                ))}
-              </select>
-            </div>
+          <div className="grid md:grid-cols-[1fr_1fr_auto] gap-4 mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <select
+              className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-blue-500"
+              value={leftId}
+              onChange={(event) => setLeftId(Number(event.target.value))}
+            >
+              {versions.map(version => (
+                <option key={version.id} value={version.id}>Left: {formatVersion(version.version)} {version.stage === 'production' ? '(Production)' : ''}</option>
+              ))}
+            </select>
+            <select
+              className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-blue-500"
+              value={rightId}
+              onChange={(event) => setRightId(Number(event.target.value))}
+            >
+              {versions.map(version => (
+                <option key={version.id} value={version.id}>Right: {formatVersion(version.version)} {version.stage === 'production' ? '(Production)' : ''}</option>
+              ))}
+            </select>
+            <Button variant="primary" onClick={() => void runCompare()} disabled={loading}>
+              {loading ? 'Comparing...' : 'Compare'}
+            </Button>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-            <table className="w-full text-sm text-left">
-              <tbody className="divide-y divide-gray-100">
-                <tr className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-gray-700 w-1/4 uppercase tracking-wider text-xs">Stage</td>
-                  <td className="px-6 py-4 w-3/8">
-                    <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${v1?.stage === 'production' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600'}`}>
-                      {v1?.stage}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 w-3/8 border-l border-gray-100 bg-gray-50/30">
-                    <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${v2?.stage === 'production' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600'}`}>
-                      {v2?.stage}
-                    </span>
-                  </td>
-                </tr>
-                <tr className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-gray-700 w-1/4 uppercase tracking-wider text-xs border-r border-gray-100">Source</td>
-                  <td className="px-6 py-4 text-gray-600 font-medium border-r border-gray-100">
-                    {v1?.source_type.replace('_', ' ')} {v1?.source_training_job_id ? `(#${v1.source_training_job_id})` : ''}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 font-medium bg-gray-50/30">
-                    {v2?.source_type.replace('_', ' ')} {v2?.source_training_job_id ? `(#${v2.source_training_job_id})` : ''}
-                  </td>
-                </tr>
-                <tr className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-gray-700 uppercase tracking-wider text-xs">Created</td>
-                  <td className="px-6 py-4 text-gray-600 font-medium">{v1 ? new Date(v1.created_at).toLocaleString() : ''}</td>
-                  <td className="px-6 py-4 text-gray-600 font-medium border-l border-gray-100 bg-gray-50/30">{v2 ? new Date(v2.created_at).toLocaleString() : ''}</td>
-                </tr>
-                <tr className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-gray-700 uppercase tracking-wider text-xs">Endpoint Ready</td>
-                  <td className="px-6 py-4 text-gray-600 font-medium">
-                    {v1?.endpoint_url ? <span className="text-emerald-600 font-bold">Yes</span> : <span className="text-gray-400">No</span>}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 font-medium border-l border-gray-100 bg-gray-50/30">
-                    {v2?.endpoint_url ? <span className="text-emerald-600 font-bold">Yes</span> : <span className="text-gray-400">No</span>}
-                  </td>
-                </tr>
-                <tr className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-gray-700 uppercase tracking-wider text-xs">Image Name</td>
-                  <td className="px-6 py-4 text-gray-600 font-mono text-xs break-all">{v1?.image_name || '-'}</td>
-                  <td className="px-6 py-4 text-gray-600 font-mono text-xs break-all border-l border-gray-100 bg-gray-50/30">{v2?.image_name || '-'}</td>
-                </tr>
-                
-                {/* Metrics */}
-                {allMetricNames.length > 0 && (
-                  <tr className="bg-blue-50/50 border-y border-blue-100">
-                    <td colSpan={3} className="px-6 py-3 font-extrabold text-blue-900 uppercase tracking-wider text-xs">
-                      Latest Metrics Comparison
-                    </td>
-                  </tr>
-                )}
-                
-                {allMetricNames.length === 0 && (
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-bold text-gray-700 uppercase tracking-wider text-xs">Metrics</td>
-                    <td colSpan={2} className="px-6 py-4 text-gray-400 italic">No metrics parsed for these versions.</td>
-                  </tr>
-                )}
+          <p className="mb-6 text-sm text-gray-600">
+            Compare uses captured training summaries and artifact manifests from Model Evolution. MLflow is used only as internal tracking when available.
+          </p>
 
-                {allMetricNames.map(name => {
-                  const m1 = getLatestMetricValue(metrics1, name);
-                  const m2 = getLatestMetricValue(metrics2, name);
-                  return (
-                    <tr key={name} className="hover:bg-gray-50 transition-colors group">
-                      <td className="px-6 py-4 font-bold text-gray-700 capitalize text-sm">{name.replace(/_/g, ' ')}</td>
-                      <td className="px-6 py-4 font-mono text-gray-900 font-bold text-lg">{formatMetric(m1)}</td>
-                      <td className="px-6 py-4 font-mono text-gray-900 font-bold text-lg border-l border-gray-100 bg-gray-50/30 flex items-center group-hover:bg-white transition-colors">
-                        {formatMetric(m2)}
-                        {renderDelta(m1, m2)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {comparison ? (
+            <div className="space-y-6">
+              <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Recommendation</h3>
+                    <p className="mt-1 text-sm text-gray-600">{comparison.recommendation.reason}</p>
+                  </div>
+                  <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-bold uppercase text-gray-700">
+                    Winner: {comparison.recommendation.winner} · {comparison.recommendation.confidence}
+                  </span>
+                </div>
+                {comparison.recommendation.warnings.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {comparison.recommendation.warnings.map((warning) => (
+                      <div key={warning} className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        {warning}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="grid md:grid-cols-2 gap-4">
+                {[comparison.left, comparison.right].map((version, index) => (
+                  <div key={version.id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-500">{index === 0 ? 'Left' : 'Right'}</p>
+                    <h3 className="mt-1 text-xl font-bold text-gray-900">{formatVersion(version.version)}</h3>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold uppercase text-gray-700">{version.stage}</span>
+                      <DeployabilityPill status={version.deployability_status} />
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold uppercase text-blue-700">{version.tracking_status || 'not synced'}</span>
+                    </div>
+                  </div>
+                ))}
+              </section>
+
+              <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                <div className="border-b border-gray-100 px-5 py-3">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">Metrics Diff</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Metric</th>
+                        <th className="px-4 py-2 text-right">Left</th>
+                        <th className="px-4 py-2 text-right">Right</th>
+                        <th className="px-4 py-2 text-right">Delta</th>
+                        <th className="px-4 py-2 text-left">Winner</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {comparison.metrics_diff.length === 0 ? (
+                        <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-500">No metrics captured for these versions.</td></tr>
+                      ) : comparison.metrics_diff.map(metric => (
+                        <tr key={metric.name}>
+                          <td className="px-4 py-2 font-semibold text-gray-700">{metric.name}</td>
+                          <td className="px-4 py-2 text-right font-mono">{formatValue(metric.left)}</td>
+                          <td className="px-4 py-2 text-right font-mono">{formatValue(metric.right)}</td>
+                          <td className="px-4 py-2 text-right font-mono">{formatDelta(metric.delta)}</td>
+                          <td className="px-4 py-2">
+                            <span className={classNames('rounded-full border px-2 py-0.5 text-xs font-bold uppercase', winnerClass(metric.winner))}>
+                              {metric.winner}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="grid xl:grid-cols-2 gap-6">
+                <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <div className="border-b border-gray-100 px-5 py-3">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">Params Diff</h3>
+                  </div>
+                  <div className="max-h-72 overflow-auto">
+                    <table className="min-w-full text-sm">
+                      <tbody className="divide-y divide-gray-100">
+                        {comparison.params_diff.length === 0 ? (
+                          <tr><td className="px-4 py-6 text-center text-gray-500">No params captured.</td></tr>
+                        ) : comparison.params_diff.map(param => (
+                          <tr key={param.name} className={param.changed ? 'bg-amber-50/40' : ''}>
+                            <td className="px-4 py-2 font-semibold text-gray-700">{param.name}</td>
+                            <td className="px-4 py-2 font-mono text-gray-600">{formatValue(param.left)}</td>
+                            <td className="px-4 py-2 font-mono text-gray-900">{formatValue(param.right)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">Deployability / Deployment</h3>
+                  <div className="mt-4 grid gap-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-gray-500">Left</span>
+                      <DeployabilityPill status={comparison.deployability_diff.left.status} />
+                    </div>
+                    <p className="text-xs text-gray-500">{comparison.deployability_diff.left.reason || '-'}</p>
+                    <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                      <span className="font-medium text-gray-500">Right</span>
+                      <DeployabilityPill status={comparison.deployability_diff.right.status} />
+                    </div>
+                    <p className="text-xs text-gray-500">{comparison.deployability_diff.right.reason || '-'}</p>
+                    <div className="border-t border-gray-100 pt-3 text-xs text-gray-600">
+                      <p>Left stage: <strong>{comparison.deployment_diff.left_stage}</strong> · deployed: <strong>{comparison.deployment_diff.left_deployed ? 'yes' : 'no'}</strong></p>
+                      <p>Right stage: <strong>{comparison.deployment_diff.right_stage}</strong> · deployed: <strong>{comparison.deployment_diff.right_deployed ? 'yes' : 'no'}</strong></p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">Artifacts / Weights Diff</h3>
+                <div className="mt-4 grid md:grid-cols-4 gap-3 text-sm">
+                  <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3"><strong>{comparison.artifact_diff.added.length}</strong><br />Added</div>
+                  <div className="rounded-lg bg-red-50 border border-red-100 p-3"><strong>{comparison.artifact_diff.removed.length}</strong><br />Removed</div>
+                  <div className="rounded-lg bg-amber-50 border border-amber-100 p-3"><strong>{comparison.artifact_diff.changed.length}</strong><br />Changed</div>
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-3"><strong>{comparison.artifact_diff.unchanged_count}</strong><br />Unchanged</div>
+                </div>
+                <div className="mt-4 max-h-64 overflow-auto rounded-lg border border-gray-100">
+                  <table className="min-w-full text-xs">
+                    <tbody className="divide-y divide-gray-100">
+                      {comparison.artifact_diff.added.map(item => <tr key={`added-${item.path}`}><td className="px-3 py-2 font-bold text-emerald-700">Added</td><td className="px-3 py-2 font-mono">{item.path}</td><td className="px-3 py-2">{item.kind}</td></tr>)}
+                      {comparison.artifact_diff.removed.map(item => <tr key={`removed-${item.path}`}><td className="px-3 py-2 font-bold text-red-700">Removed</td><td className="px-3 py-2 font-mono">{item.path}</td><td className="px-3 py-2">{item.kind}</td></tr>)}
+                      {comparison.artifact_diff.changed.map(item => <tr key={`changed-${item.path}`}><td className="px-3 py-2 font-bold text-amber-700">Changed</td><td className="px-3 py-2 font-mono">{item.path}</td><td className="px-3 py-2">{item.left_sha256?.slice(0, 8)} {'->'} {item.right_sha256?.slice(0, 8)}</td></tr>)}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
+              Choose two versions and run compare.
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
