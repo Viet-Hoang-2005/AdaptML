@@ -107,6 +107,8 @@ jobs:
           build-args: |
             VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
             VITE_GITHUB_CLIENT_ID=${{ vars.VITE_GITHUB_CLIENT_ID }}
+            VITE_GITHUB_REDIRECT_URI=${{ vars.VITE_GITHUB_REDIRECT_URI }}
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
           tags: |
             harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}
             harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest

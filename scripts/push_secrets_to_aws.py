@@ -85,7 +85,6 @@ def main():
         "TUNNEL_TOKEN",
         "HARBOR_USERNAME",
         "HARBOR_PASSWORD",
-        "HARBOR_REGISTRY_URL",
         "DJANGO_SECRET_KEY",
         "JWT_PRIVATE_KEY",
         "JWT_PUBLIC_KEY",
