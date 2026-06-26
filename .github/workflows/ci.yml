@@ -104,9 +104,13 @@ jobs:
         run: |
           pnpm run lint > eslint_out.txt 2>&1 || true
           cat eslint_out.txt
-          err_count=$(grep -oP '\d+(?= errors?)' eslint_out.txt | tail -1 || echo "0")
+          err_count=$(grep -oP '\d+(?= errors?)' eslint_out.txt | tail -1 || true)
+          if [ -z "$err_count" ]; then
+            err_count="0"
+          fi
           echo "errors=$err_count" >> $GITHUB_OUTPUT
           if [ "$err_count" != "0" ]; then
+            echo "::error::ESLint found $err_count errors!"
             exit 1
           fi
 
@@ -221,7 +225,8 @@ jobs:
           infra_res = "${{ needs.lint-infra.result }}" == "success"
 
           fmt = lambda ok: "Passed" if ok else "Failed"
-          eslint_fmt = fmt(eslint_res) if eslint_res else f"Failed ({eslint_errs or '?' } errors)"
+          err_str = eslint_errs if eslint_errs else "?"
+          eslint_fmt = fmt(eslint_res) if eslint_res else f"Failed ({err_str} errors)"
           pylint_fmt = f"{pylint_score}" if pylint_score else fmt(pylint_res)
 
           summary = ["### Unified CI Pipeline Results\n"]
