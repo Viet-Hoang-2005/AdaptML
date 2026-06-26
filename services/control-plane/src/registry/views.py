@@ -2,8 +2,10 @@ import os
 import base64
 import json
 import logging
+import time
 import zipfile
 
+import requests
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -46,6 +48,18 @@ def get_model_server_public_url():
 
 def get_model_packager_url():
     return getattr(settings, "MODEL_PACKAGER_URL", "http://model-packager:7000").rstrip("/")
+
+
+def get_model_server_internal_url():
+    return getattr(settings, "MODEL_SERVER_INTERNAL_URL", "").rstrip("/")
+
+
+def resolve_smoke_test_url(endpoint_url):
+    internal_base = get_model_server_internal_url()
+    public_base = get_model_server_public_url()
+    if internal_base and endpoint_url.startswith(public_base):
+        return endpoint_url.replace(public_base, internal_base, 1)
+    return endpoint_url
 
 
 def serialize_model_api(model_api):
@@ -113,6 +127,36 @@ def _primary_metrics(metrics_summary):
     return primary
 
 
+def _version_action_state(version):
+    model_api = version.model_api
+    deployable = (version.deployability_status or "unknown") == "deployable"
+    deployability_reason = version.deployability_reason or "Deployment is available only for versions with a supported serving artifact."
+    build_disabled_reason = ""
+    deploy_disabled_reason = ""
+
+    if not deployable:
+        build_disabled_reason = deployability_reason
+        deploy_disabled_reason = deployability_reason
+    elif not model_api:
+        build_disabled_reason = "This registry version is not linked to a deployable ModelAPI record."
+        deploy_disabled_reason = build_disabled_reason
+    elif model_api.build_status != "ready":
+        deploy_disabled_reason = "Build package before deploying this version."
+
+    return {
+        "can_build": deployable and bool(model_api),
+        "can_deploy": deployable and bool(model_api) and model_api.build_status == "ready",
+        "build_disabled_reason": build_disabled_reason,
+        "deploy_disabled_reason": deploy_disabled_reason,
+        "deployment_status": model_api.endpoint_status if model_api else "not_deployed",
+        "build_status": model_api.build_status if model_api else "",
+        "build_error": model_api.build_error if model_api else "",
+        "endpoint_status": model_api.endpoint_status if model_api else "not_deployed",
+        "endpoint_error": model_api.endpoint_error if model_api else "",
+        "endpoint_last_checked_at": model_api.endpoint_last_checked_at if model_api else None,
+    }
+
+
 def serialize_registry_version(version, include_metrics=False):
     source_job = version.source_training_job
     payload = {
@@ -142,6 +186,7 @@ def serialize_registry_version(version, include_metrics=False):
         "deployability_status": version.deployability_status or "unknown",
         "deployability_reason": version.deployability_reason or "",
         "primary_metrics": _primary_metrics(version.metrics_summary or {}),
+        **_version_action_state(version),
         "mlflow_run_id": version.mlflow_run_id or "",
         "mlflow_experiment_id": version.mlflow_experiment_id or "",
         "mlflow_run_url": getattr(settings, "MLFLOW_PUBLIC_URL", "").rstrip("/") + f"/#/experiments/{version.mlflow_experiment_id}/runs/{version.mlflow_run_id}" if version.mlflow_experiment_id and version.mlflow_run_id and getattr(settings, "MLFLOW_PUBLIC_URL", "") else "",
@@ -363,6 +408,187 @@ class RegistryVersionHistoryView(APIView):
         return Response([serialize_registry_history(event) for event in history])
 
 
+class RegistryVersionBuildPackageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, version_id):
+        version = _get_registry_version_for_action(request, version_id)
+        deployability_response = _deployability_error(version, "build a deployment package")
+        if deployability_response:
+            return deployability_response
+        model_response = _require_model_api(version)
+        if model_response:
+            return model_response
+
+        try:
+            _trigger_training_model_build(version.model_api)
+            version.model_api.refresh_from_db()
+            _sync_version_runtime_fields(version)
+            _create_registry_history(
+                version,
+                "built",
+                "running",
+                "Build package requested from Model Evolution.",
+                actor=request.user.email,
+            )
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            version.model_api.status = "error"
+            version.model_api.build_status = "error"
+            version.model_api.error_message = "Unable to start build process."
+            version.model_api.build_error = str(exc)
+            version.model_api.save()
+            _create_registry_history(
+                version,
+                "failed",
+                "failed",
+                f"Build package failed to start: {exc}",
+                actor=request.user.email,
+            )
+            return Response(serialize_registry_version(version), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(serialize_registry_version(version), status=status.HTTP_200_OK)
+
+
+class RegistryVersionDeployView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, version_id):
+        version = _get_registry_version_for_action(request, version_id)
+        deployability_response = _deployability_error(version, "deploy")
+        if deployability_response:
+            return deployability_response
+        model_response = _require_model_api(version)
+        if model_response:
+            return model_response
+        model_api = version.model_api
+        if model_api.build_status != "ready":
+            return Response(
+                {
+                    "error": "Build package before deploying this version.",
+                    "build_status": model_api.build_status,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        get_deploy_adapter().deploy_model(
+            model_id=model_api.id,
+            tenant_id=model_api.tenant.tenant_id,
+            model_name=model_api.name,
+            version=model_api.version or "v1",
+        )
+        model_api.refresh_from_db()
+        _sync_version_runtime_fields(version)
+        _create_registry_history(
+            version,
+            "deployed",
+            "running",
+            "Deploy endpoint requested from Model Evolution.",
+            actor=request.user.email,
+        )
+        return Response(serialize_registry_version(version), status=status.HTTP_200_OK)
+
+
+class RegistryVersionCheckHealthView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, version_id):
+        version = _get_registry_version_for_action(request, version_id)
+        model_response = _require_model_api(version)
+        if model_response:
+            return model_response
+        model_api = version.model_api
+        if not (model_api.endpoint_url or version.endpoint_url):
+            return Response({"error": "This version does not have a deployed endpoint URL."}, status=status.HTTP_400_BAD_REQUEST)
+
+        healthy, payload = get_deploy_adapter().check_health(model_api.id)
+        model_api.endpoint_last_checked_at = timezone.now()
+        if healthy:
+            model_api.status = "deployed"
+            model_api.endpoint_status = "healthy"
+            model_api.endpoint_error = ""
+            history_status = "success"
+            message = "Endpoint health check passed."
+        else:
+            model_api.status = "unhealthy"
+            model_api.endpoint_status = "unhealthy"
+            model_api.endpoint_error = str(payload)
+            history_status = "failed"
+            message = "Endpoint health check failed."
+        model_api.save(update_fields=["status", "endpoint_status", "endpoint_error", "endpoint_last_checked_at", "updated_at"])
+        _sync_version_runtime_fields(version)
+        _create_registry_history(
+            version,
+            "health_checked",
+            history_status,
+            message,
+            {"health": payload},
+            actor=request.user.email,
+        )
+        response = serialize_registry_version(version)
+        response["health"] = payload
+        return Response(response, status=status.HTTP_200_OK)
+
+
+class RegistryVersionSmokeTestView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request, version_id):
+        version = _get_registry_version_for_action(request, version_id)
+        model_response = _require_model_api(version)
+        if model_response:
+            return model_response
+        endpoint_url = version.model_api.endpoint_url or version.endpoint_url
+        if not endpoint_url:
+            return Response({"error": "This version does not have a deployed endpoint URL."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(request.data, dict) or "features" not in request.data:
+            return Response(
+                {"error": "Smoke test request must include a features object.", "example": {"features": {"f1": 1, "f2": 2}}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        started = time.perf_counter()
+        request_url = resolve_smoke_test_url(endpoint_url)
+        try:
+            prediction_response = requests.post(request_url, json=request.data, timeout=15)
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            try:
+                payload = prediction_response.json()
+            except ValueError:
+                payload = {"raw": prediction_response.text}
+        except Exception as exc:
+            _create_registry_history(
+                version,
+                "failed",
+                "failed",
+                f"Smoke test failed: {exc}",
+                actor=request.user.email,
+            )
+            return Response({"success": False, "endpoint_url": endpoint_url, "error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        success = 200 <= prediction_response.status_code < 300
+        result = {
+            "success": success,
+            "endpoint_url": endpoint_url,
+            "prediction": payload.get("prediction") if isinstance(payload, dict) else None,
+            "confidence": payload.get("confidence") if isinstance(payload, dict) else None,
+            "latency_ms": latency_ms,
+            "status_code": prediction_response.status_code,
+            "response": payload,
+        }
+        _create_registry_history(
+            version,
+            "health_checked",
+            "success" if success else "failed",
+            "Smoke test completed." if success else "Smoke test returned an error response.",
+            {"status_code": prediction_response.status_code, "latency_ms": latency_ms},
+            actor=request.user.email,
+        )
+        return Response(result, status=status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST)
+
+
 def validate_model_artifact(artifact_file):
     if artifact_file.size > MAX_MODEL_ARTIFACT_SIZE_BYTES:
         return "Model artifact must be 512MB or smaller."
@@ -452,6 +678,94 @@ def validate_unique_model_version(tenant, name, version, exclude_model_id=None):
     if queryset.exists():
         return f"A model named '{name}' with version '{version or 'v1'}' already exists."
     return ""
+
+
+def _get_registry_version_for_action(request, version_id):
+    return get_object_or_404(
+        ModelVersion.objects.select_related("family", "model_api", "source_training_job"),
+        id=version_id,
+        tenant=request.user,
+    )
+
+
+def _deployability_error(version, action):
+    if (version.deployability_status or "unknown") == "deployable":
+        return None
+    return Response(
+        {
+            "error": f"This version cannot {action} because it is not deployable.",
+            "message": "Deployment is available only for versions with a supported serving artifact. Track-only versions can still be reviewed and compared.",
+            "deployability_status": version.deployability_status or "unknown",
+            "deployability_reason": version.deployability_reason or "Deployability has not been computed for this version yet.",
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _require_model_api(version):
+    if version.model_api:
+        return None
+    return Response(
+        {"error": "This registry version is not linked to a ModelAPI record."},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _sync_version_runtime_fields(version):
+    model_api = version.model_api
+    if not model_api:
+        return version
+    version.artifact_uri = model_api.source_artifact_uri or model_api.model_uri or version.artifact_uri or ""
+    version.image_name = model_api.endpoint_image_name or version.image_name or ""
+    version.endpoint_url = model_api.endpoint_url or version.endpoint_url or ""
+    version.save(update_fields=["artifact_uri", "image_name", "endpoint_url", "updated_at"])
+    return version
+
+
+def _create_registry_history(version, action, status_value="success", message="", extra=None, actor=""):
+    if not version.family_id:
+        return
+    ModelDeploymentHistory.objects.create(
+        tenant=version.tenant,
+        family=version.family,
+        model_version=version,
+        model_api=version.model_api,
+        action=action,
+        status=status_value,
+        message=message,
+        extra=extra or {},
+        actor=actor,
+    )
+
+
+def _trigger_training_model_build(model_api):
+    if model_api.source_type != "training_job":
+        raise ValueError("This endpoint only builds models registered from training jobs.")
+    if not model_api.source_artifact_uri:
+        raise ValueError("Registered training model does not have a source artifact URI.")
+    if model_api.flavor not in SUPPORTED_BUILD_FLAVORS:
+        raise ValueError("Flavor must be sklearn or xgboost.")
+
+    safe_name = slugify(model_api.name) or "model"
+    package_filename = f"{safe_name}-mlflow-package.zip"
+    output_key = model_artifact_path(model_api, package_filename)
+
+    model_api.status = "uploading"
+    model_api.build_status = "building"
+    model_api.build_error = ""
+    model_api.error_message = ""
+    model_api.endpoint_url = build_endpoint_url(model_api)
+    model_api.save(update_fields=["status", "build_status", "build_error", "error_message", "endpoint_url", "updated_at"])
+
+    get_build_adapter().trigger_build(
+        model_id=str(model_api.id),
+        flavor=model_api.flavor,
+        requirements_text=model_api.requirements_text,
+        source_key="",
+        output_key=output_key,
+        training_artifact_uri=model_api.source_artifact_uri,
+    )
+    return model_api
 
 
 class ModelAPIListCreateView(APIView):
@@ -838,42 +1152,13 @@ class ModelAPITriggerBuildView(APIView):
 
     def post(self, request, model_id):
         model_api = ModelAPI.objects.filter(id=model_id, tenant=request.user).exclude(status="disabled").first()
-        model_api = ModelAPI.objects.filter(id=model_id, tenant=request.user).exclude(status="disabled").first()
         if not model_api:
             return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
-        if model_api.source_type != "training_job":
-            return Response(
-                {"error": "This endpoint only builds models registered from training jobs."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not model_api.source_artifact_uri:
-            return Response(
-                {"error": "Registered training model does not have a source artifact URI."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if model_api.flavor not in SUPPORTED_BUILD_FLAVORS:
-            return Response({"error": "Flavor must be sklearn or xgboost."}, status=status.HTTP_400_BAD_REQUEST)
-
-        safe_name = slugify(model_api.name) or "model"
-        package_filename = f"{safe_name}-mlflow-package.zip"
-        output_key = model_artifact_path(model_api, package_filename)
-
-        model_api.status = "uploading"
-        model_api.build_status = "building"
-        model_api.build_error = ""
-        model_api.error_message = ""
-        model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["status", "build_status", "build_error", "error_message", "endpoint_url", "updated_at"])
 
         try:
-            get_build_adapter().trigger_build(
-                model_id=str(model_api.id),
-                flavor=model_api.flavor,
-                requirements_text=model_api.requirements_text,
-                source_key="",
-                output_key=output_key,
-                training_artifact_uri=model_api.source_artifact_uri,
-            )
+            _trigger_training_model_build(model_api)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
             model_api.status = "error"
             model_api.build_status = "error"

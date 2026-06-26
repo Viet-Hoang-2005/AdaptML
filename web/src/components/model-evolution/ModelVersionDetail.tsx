@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import type { RegistryFamily, RegistryVersion } from '../../types/modelApi';
-import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck } from 'lucide-react';
+import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck, Package, Rocket, HeartPulse, Play } from 'lucide-react';
 import { formatVersion } from '../../lib/formatters';
 import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';
+import { buildRegistryVersionPackage, checkRegistryVersionHealth, deployRegistryVersion, smokeTestRegistryVersion } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 
 import { ModelMetricsPanel } from './ModelMetricsPanel';
 import { ModelHistoryTimeline } from './ModelHistoryTimeline';
@@ -54,6 +56,10 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState<'build' | 'deploy' | 'health' | 'smoke' | null>(null);
+  const [smokePayload, setSmokePayload] = useState('{\n  "features": {}\n}');
+  const [actionResult, setActionResult] = useState<string>('');
+  const [smokeResult, setSmokeResult] = useState<unknown>(null);
 
   const isProd = version.stage === 'production';
 
@@ -74,6 +80,56 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
     onActionSuccess();
     // Keep user on details tab to see updated state
     setActiveTab('details');
+  };
+
+  const runAction = async (action: 'build' | 'deploy' | 'health') => {
+    setActionLoading(action);
+    setActionResult('');
+    try {
+      if (action === 'build') {
+        await buildRegistryVersionPackage(version.id);
+        setActionResult('Build package request accepted.');
+        toast.success('Build package started.');
+      } else if (action === 'deploy') {
+        await deployRegistryVersion(version.id);
+        setActionResult('Deploy request accepted. Endpoint health will update after startup.');
+        toast.success('Deploy started.');
+      } else {
+        const result = await checkRegistryVersionHealth(version.id);
+        setActionResult(result.endpoint_status === 'healthy' ? 'Endpoint is healthy.' : (result.endpoint_error || 'Endpoint health check completed.'));
+        toast.success('Health check completed.');
+      }
+      handleSuccess();
+    } catch (error) {
+      const message = getApiErrorMessage(error, `Failed to ${action} version.`);
+      setActionResult(message);
+      toast.error(message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const runSmokeTest = async () => {
+    setActionLoading('smoke');
+    setActionResult('');
+    setSmokeResult(null);
+    try {
+      const parsed = JSON.parse(smokePayload) as { features?: Record<string, unknown> };
+      if (!parsed || typeof parsed !== 'object' || !parsed.features || typeof parsed.features !== 'object') {
+        throw new Error('Smoke test payload must include a features object.');
+      }
+      const result = await smokeTestRegistryVersion(version.id, { features: parsed.features });
+      setSmokeResult(result);
+      toast.success('Smoke test completed.');
+    } catch (error) {
+      const message = error instanceof SyntaxError
+        ? 'Smoke test JSON is invalid.'
+        : getApiErrorMessage(error, error instanceof Error ? error.message : 'Smoke test failed.');
+      setActionResult(message);
+      toast.error(message);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   return (
@@ -241,6 +297,117 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Metrics</p>
                     <p className="text-xl font-bold text-gray-900">{metricEntries.length}</p>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-5 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-gray-100 pb-4">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                    <Rocket className="h-4 w-4 text-blue-500" />
+                    Deployment Actions
+                  </h4>
+                  <p className="mt-2 text-sm text-gray-600 max-w-3xl">
+                    Deployment is available only for versions with a supported serving artifact. Track-only versions can still be reviewed and compared.
+                  </p>
+                </div>
+                <span className={classNames(
+                  "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border self-start",
+                  deployabilityBadge(version.deployability_status)
+                )}>
+                  {version.deployability_status || 'unknown'}
+                </span>
+              </div>
+
+              <div className="grid xl:grid-cols-[1fr_1.3fr] gap-5">
+                <div className="flex flex-col gap-4">
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    <Button
+                      size="md"
+                      variant="secondary"
+                      icon={<Package className="h-4 w-4" />}
+                      disabled={!version.can_build || actionLoading !== null}
+                      onClick={() => void runAction('build')}
+                      title={!version.can_build ? version.build_disabled_reason : 'Build deploy package'}
+                    >
+                      {actionLoading === 'build' ? 'Building...' : 'Build Package'}
+                    </Button>
+                    <Button
+                      size="md"
+                      variant="primary"
+                      icon={<Rocket className="h-4 w-4" />}
+                      disabled={!version.can_deploy || actionLoading !== null}
+                      onClick={() => void runAction('deploy')}
+                      title={!version.can_deploy ? version.deploy_disabled_reason : 'Deploy endpoint'}
+                    >
+                      {actionLoading === 'deploy' ? 'Deploying...' : 'Deploy'}
+                    </Button>
+                    <Button
+                      size="md"
+                      variant="secondary"
+                      icon={<HeartPulse className="h-4 w-4" />}
+                      disabled={!version.endpoint_url || actionLoading !== null}
+                      onClick={() => void runAction('health')}
+                      title={!version.endpoint_url ? 'Deploy this version before checking health.' : 'Check endpoint health'}
+                    >
+                      {actionLoading === 'health' ? 'Checking...' : 'Check Health'}
+                    </Button>
+                  </div>
+
+                  {(!version.can_build || !version.can_deploy) && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      {!version.can_build
+                        ? (version.build_disabled_reason || version.deployability_reason || 'Build is disabled for this version.')
+                        : (version.deploy_disabled_reason || 'Build package before deploying this version.')}
+                    </div>
+                  )}
+
+                  <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Build Status</p>
+                      <p className="font-semibold text-gray-900">{version.build_status || '-'}</p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Endpoint Status</p>
+                      <p className="font-semibold text-gray-900">{version.endpoint_status || version.deployment_status || '-'}</p>
+                    </div>
+                  </div>
+                  {(version.build_error || version.endpoint_error || actionResult) && (
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 break-words">
+                      {actionResult || version.endpoint_error || version.build_error}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Smoke Test</p>
+                      <p className="text-xs text-gray-500 mt-1">Uses the existing predict schema.</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<Play className="h-3.5 w-3.5" />}
+                      disabled={!version.endpoint_url || actionLoading !== null}
+                      onClick={() => void runSmokeTest()}
+                      title={!version.endpoint_url ? 'Deploy this version before smoke testing.' : 'Run smoke test'}
+                    >
+                      {actionLoading === 'smoke' ? 'Running...' : 'Run'}
+                    </Button>
+                  </div>
+                  <textarea
+                    value={smokePayload}
+                    onChange={(event) => setSmokePayload(event.target.value)}
+                    className="min-h-32 w-full rounded-lg border border-gray-200 bg-[#111827] p-3 font-mono text-xs text-emerald-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    spellCheck={false}
+                  />
+                  {smokeResult !== null && (
+                    <pre className="max-h-56 overflow-auto rounded-lg border border-gray-800 bg-[#111827] p-3 text-xs text-gray-100">
+                      {JSON.stringify(smokeResult, null, 2)}
+                    </pre>
+                  )}
                 </div>
               </div>
             </div>

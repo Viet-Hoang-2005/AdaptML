@@ -41,6 +41,8 @@ import type {
   RegistryFamily,
   RegistryHistory,
   RegistryMetric,
+  RegistrySmokeTestRequest,
+  RegistrySmokeTestResponse,
   RegistryVersion,
 } from '../types/modelApi';
 
@@ -511,6 +513,38 @@ export const rollbackRegistryFamily = async (familyId: number, versionId: number
   const { data } = await axiosInstance.post<RegistryVersion>(
     controlPlaneURL(`/registry/families/${familyId}/rollback/`),
     { version_id: versionId },
+  );
+  return data;
+};
+
+export const buildRegistryVersionPackage = async (versionId: number): Promise<RegistryVersion> => {
+  const { data } = await axiosInstance.post<RegistryVersion>(
+    controlPlaneURL(`/registry/versions/${versionId}/build-package/`),
+  );
+  return data;
+};
+
+export const deployRegistryVersion = async (versionId: number): Promise<RegistryVersion> => {
+  const { data } = await axiosInstance.post<RegistryVersion>(
+    controlPlaneURL(`/registry/versions/${versionId}/deploy/`),
+  );
+  return data;
+};
+
+export const checkRegistryVersionHealth = async (versionId: number): Promise<RegistryVersion> => {
+  const { data } = await axiosInstance.post<RegistryVersion>(
+    controlPlaneURL(`/registry/versions/${versionId}/check-health/`),
+  );
+  return data;
+};
+
+export const smokeTestRegistryVersion = async (
+  versionId: number,
+  payload: RegistrySmokeTestRequest,
+): Promise<RegistrySmokeTestResponse> => {
+  const { data } = await axiosInstance.post<RegistrySmokeTestResponse>(
+    controlPlaneURL(`/registry/versions/${versionId}/smoke-test/`),
+    payload,
   );
   return data;
 };

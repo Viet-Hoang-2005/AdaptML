@@ -141,6 +141,16 @@ export interface RegistryVersion {
   deployability_status?: RegistryDeployabilityStatus;
   deployability_reason?: string;
   primary_metrics?: Record<string, number>;
+  can_build?: boolean;
+  can_deploy?: boolean;
+  build_disabled_reason?: string;
+  deploy_disabled_reason?: string;
+  build_status?: string;
+  build_error?: string;
+  deployment_status?: string;
+  endpoint_status?: string;
+  endpoint_error?: string;
+  endpoint_last_checked_at?: string | null;
   mlflow_run_id?: string | null;
   mlflow_experiment_id?: string | null;
   mlflow_run_url?: string | null;
@@ -148,6 +158,21 @@ export interface RegistryVersion {
   mlflow_artifact_uri?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RegistrySmokeTestRequest {
+  features: Record<string, unknown>;
+}
+
+export interface RegistrySmokeTestResponse {
+  success: boolean;
+  endpoint_url: string;
+  prediction?: unknown;
+  confidence?: number | null;
+  latency_ms?: number;
+  status_code?: number;
+  response?: unknown;
+  error?: string;
 }
 
 export interface RegistryFamily {

@@ -1,6 +1,7 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework.test import APIClient
+from unittest.mock import Mock, patch
 
 from authentication.models import CustomUser, ModelFamily, ModelVersion, TrainingJob
 
@@ -131,3 +132,137 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         self.assertEqual(version.tracking_status, "failed")
         self.assertIn("MLflow tracking failed", version.tracking_error)
         self.assertFalse(version.mlflow_run_id)
+
+    @patch("registry.views.get_build_adapter")
+    def test_deployable_version_can_build_package_wrapper(self, mock_get_build_adapter):
+        adapter = Mock()
+        mock_get_build_adapter.return_value = adapter
+        job = self._completed_job()
+        self.client.post(
+            f"/api/training/jobs/{job.id}/register-model/",
+            {"model_name": "nids-xgb", "model_version": "v2", "flavor": "sklearn"},
+            format="json",
+        )
+        version = ModelVersion.objects.get(family__tenant=self.user, family__name="nids-xgb", version="v2")
+
+        response = self.client.post(f"/api/registry/versions/{version.id}/build-package/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        adapter.trigger_build.assert_called_once()
+        version.model_api.refresh_from_db()
+        self.assertEqual(version.model_api.build_status, "building")
+
+    def test_track_only_version_cannot_build_package(self):
+        job = self._completed_job(deployability_status="track_only", deployability_reason="Only checkpoint files were found.")
+        self.client.post(
+            f"/api/training/jobs/{job.id}/register-model/",
+            {"model_name": "nids-xgb", "model_version": "v2", "flavor": "sklearn"},
+            format="json",
+        )
+        version = ModelVersion.objects.get(family__tenant=self.user, family__name="nids-xgb", version="v2")
+
+        response = self.client.post(f"/api/registry/versions/{version.id}/build-package/", {}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["deployability_status"], "track_only")
+
+    def test_invalid_version_cannot_deploy(self):
+        job = self._completed_job(deployability_status="invalid", deployability_reason="Artifact is corrupt.")
+        self.client.post(
+            f"/api/training/jobs/{job.id}/register-model/",
+            {"model_name": "nids-xgb", "model_version": "v2", "flavor": "sklearn"},
+            format="json",
+        )
+        version = ModelVersion.objects.get(family__tenant=self.user, family__name="nids-xgb", version="v2")
+
+        response = self.client.post(f"/api/registry/versions/{version.id}/deploy/", {}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["deployability_status"], "invalid")
+
+    @patch("registry.views.get_deploy_adapter")
+    def test_deployable_version_can_deploy_when_build_ready_without_mlflow_run(self, mock_get_deploy_adapter):
+        adapter = Mock()
+        mock_get_deploy_adapter.return_value = adapter
+        job = self._completed_job(tracking_status="failed", mlflow_run_id="", mlflow_experiment_id="", mlflow_artifact_uri="")
+        self.client.post(
+            f"/api/training/jobs/{job.id}/register-model/",
+            {"model_name": "nids-xgb", "model_version": "v2", "flavor": "sklearn"},
+            format="json",
+        )
+        version = ModelVersion.objects.get(family__tenant=self.user, family__name="nids-xgb", version="v2")
+        version.model_api.build_status = "ready"
+        version.model_api.endpoint_image_name = "tenant-model-id:latest"
+        version.model_api.save(update_fields=["build_status", "endpoint_image_name", "updated_at"])
+
+        response = self.client.post(f"/api/registry/versions/{version.id}/deploy/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        adapter.deploy_model.assert_called_once()
+
+    def test_smoke_test_rejects_missing_endpoint(self):
+        job = self._completed_job()
+        self.client.post(
+            f"/api/training/jobs/{job.id}/register-model/",
+            {"model_name": "nids-xgb", "model_version": "v2", "flavor": "sklearn"},
+            format="json",
+        )
+        version = ModelVersion.objects.get(family__tenant=self.user, family__name="nids-xgb", version="v2")
+        version.model_api.endpoint_url = ""
+        version.model_api.save(update_fields=["endpoint_url", "updated_at"])
+        version.endpoint_url = ""
+        version.save(update_fields=["endpoint_url", "updated_at"])
+
+        response = self.client.post(
+            f"/api/registry/versions/{version.id}/smoke-test/",
+            {"features": {"f1": 1}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("endpoint", response.data["error"].lower())
+
+    @patch("registry.views.requests.post")
+    def test_smoke_test_calls_endpoint_with_current_predict_schema(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"success": True, "prediction": "normal", "confidence": 0.91}
+        mock_post.return_value = mock_response
+        job = self._completed_job()
+        self.client.post(
+            f"/api/training/jobs/{job.id}/register-model/",
+            {"model_name": "nids-xgb", "model_version": "v2", "flavor": "sklearn"},
+            format="json",
+        )
+        version = ModelVersion.objects.get(family__tenant=self.user, family__name="nids-xgb", version="v2")
+        version.model_api.endpoint_url = "http://localhost:5000/T-1/models/m/v2/predict"
+        version.model_api.save(update_fields=["endpoint_url", "updated_at"])
+
+        response = self.client.post(
+            f"/api/registry/versions/{version.id}/smoke-test/",
+            {"features": {"f1": 1}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mock_post.assert_called_once_with(
+            "http://localhost:5000/T-1/models/m/v2/predict",
+            json={"features": {"f1": 1}},
+            timeout=15,
+        )
+        self.assertEqual(response.data["prediction"], "normal")
+
+    def test_cross_tenant_build_denied(self):
+        job = self._completed_job()
+        self.client.post(
+            f"/api/training/jobs/{job.id}/register-model/",
+            {"model_name": "nids-xgb", "model_version": "v2", "flavor": "sklearn"},
+            format="json",
+        )
+        version = ModelVersion.objects.get(family__tenant=self.user, family__name="nids-xgb", version="v2")
+        other_client = APIClient()
+        other_client.force_authenticate(user=self.other_user)
+
+        response = other_client.post(f"/api/registry/versions/{version.id}/build-package/", {}, format="json")
+
+        self.assertEqual(response.status_code, 404)
