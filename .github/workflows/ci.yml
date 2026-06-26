@@ -236,7 +236,7 @@ jobs:
           pylint_fmt = f"{pylint_score}" if pylint_score else fmt(pylint_res)
 
           summary = ["### Unified CI Pipeline Results\n"]
-          summary.append(f"- **Secret Security (GitLeaks)**: {fmt(secret_res)}\n")
+          summary.append(f"**Secret Security (GitLeaks)**: {fmt(secret_res)}\n")
 
           rows = []
           if fe_changed:
