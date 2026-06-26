@@ -11,7 +11,7 @@ data "aws_ami" "ubuntu_22_04" {
 # EC2 Master Node
 resource "aws_instance" "master_node" {
   ami                    = data.aws_ami.ubuntu_22_04.id
-  instance_type          = "t3.small"
+  instance_type          = "t3.medium"
   subnet_id              = var.public_subnet_1a_id
   vpc_security_group_ids = [var.master_sg_id]
   key_name               = "mlops-keypair"
