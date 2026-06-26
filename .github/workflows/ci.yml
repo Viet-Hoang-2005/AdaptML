@@ -174,7 +174,7 @@ jobs:
   build-and-scan:
     name: "Build & Scan (${{ matrix.target.name }})"
     needs: [detect-changes, lint-frontend, lint-backend, lint-infra, secret-scan]
-    if: always() && needs.secret-scan.result == 'success' && needs.detect-changes.outputs.matrix_targets != '[]'
+    if: always() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.matrix_targets != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

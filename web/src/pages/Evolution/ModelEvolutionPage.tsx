@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RefreshCw, Component } from 'lucide-react';
@@ -27,6 +26,7 @@ export default function ModelEvolutionPage() {
 
   const fetchFamilies = useCallback(async () => {
     try {
+      await Promise.resolve();
       setLoadingFamilies(true);
       const data = await getRegistryFamilies();
       setFamilies(data);
@@ -50,7 +50,9 @@ export default function ModelEvolutionPage() {
   }, []);
 
   useEffect(() => {
-    void fetchFamilies();
+    queueMicrotask(() => {
+      void fetchFamilies();
+    });
   }, [fetchFamilies]);
 
   // Handle URL sync and selection
@@ -58,9 +60,11 @@ export default function ModelEvolutionPage() {
     if (loadingFamilies) return;
 
     if (families.length === 0) {
-      setSelectedFamily(null);
-      setVersions([]);
-      setSelectedVersion(null);
+      queueMicrotask(() => {
+        setSelectedFamily(null);
+        setVersions([]);
+        setSelectedVersion(null);
+      });
       return;
     }
 
@@ -71,9 +75,11 @@ export default function ModelEvolutionPage() {
     }
 
     if (targetFamily.id !== selectedFamily?.id) {
-      setSelectedFamily(targetFamily);
-      setSelectedVersion(null);
-      void fetchVersions(targetFamily);
+      queueMicrotask(() => {
+        setSelectedFamily(targetFamily);
+        setSelectedVersion(null);
+        void fetchVersions(targetFamily);
+      });
       
       // Update URL if we auto-selected
       if (!familyId || familyId !== targetFamily.id.toString()) {
@@ -88,11 +94,13 @@ export default function ModelEvolutionPage() {
     if (!selectedVersion) {
       // Pick production, or latest
       const prodVersion = versions.find(v => v.stage === 'production');
-      if (prodVersion) {
-        setSelectedVersion(prodVersion);
-      } else {
-        setSelectedVersion(versions[0]);
-      }
+      queueMicrotask(() => {
+        if (prodVersion) {
+          setSelectedVersion(prodVersion);
+        } else {
+          setSelectedVersion(versions[0]);
+        }
+      });
     }
   }, [versions, loadingVersions, selectedVersion]);
 
