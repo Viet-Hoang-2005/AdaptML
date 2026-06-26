@@ -19,38 +19,37 @@ variable "project_name" {
 variable "enable_batch_training" {
   description = "Enable AWS Batch resources for external training backend"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_compute" {
   description = "Enable legacy K3s EC2 master/worker compute"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_alb" {
   description = "Enable legacy Application Load Balancer and DNS alias"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_dns" {
   description = "Enable Route53 hosted zone and ACM certificate"
   type        = bool
-  default     = false
+  default     = true
 }
-
 
 variable "enable_legacy_sagemaker_pipeline" {
   description = "Enable legacy GitHub Actions and SageMaker IAM resources"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_nat_gateway" {
   description = "Enable NAT Gateway for private subnet outbound access"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "batch_training_runner_image" {
