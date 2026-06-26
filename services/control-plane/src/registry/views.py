@@ -101,6 +101,18 @@ def serialize_registry_metric(metric):
     }
 
 
+def _primary_metrics(metrics_summary):
+    if not isinstance(metrics_summary, dict):
+        return {}
+    primary = {}
+    for key, value in metrics_summary.items():
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            primary[key] = value
+        if len(primary) >= 6:
+            break
+    return primary
+
+
 def serialize_registry_version(version, include_metrics=False):
     source_job = version.source_training_job
     payload = {
@@ -115,12 +127,24 @@ def serialize_registry_version(version, include_metrics=False):
         "source_training_job_id": source_job.id if source_job else None,
         "source_training_job_name": source_job.name if source_job else "",
         "source_training_job_status": source_job.status if source_job else "",
+        "source_training_job_backend": source_job.training_backend if source_job else "",
         "artifact_uri": version.artifact_uri,
         "image_name": version.image_name,
         "endpoint_url": version.endpoint_url,
         "model_api": encode_model_id(version.model_api_id) if version.model_api_id else None,
+        "training_summary": version.training_summary or {},
+        "metrics_summary": version.metrics_summary or {},
+        "params_summary": version.params_summary or {},
+        "artifact_manifest": version.artifact_manifest or [],
+        "tracking_status": version.tracking_status or "",
+        "tracking_error": version.tracking_error or "",
+        "tracking_ingested_at": version.tracking_ingested_at,
+        "deployability_status": version.deployability_status or "unknown",
+        "deployability_reason": version.deployability_reason or "",
+        "primary_metrics": _primary_metrics(version.metrics_summary or {}),
         "mlflow_run_id": version.mlflow_run_id or "",
         "mlflow_experiment_id": version.mlflow_experiment_id or "",
+        "mlflow_run_url": getattr(settings, "MLFLOW_PUBLIC_URL", "").rstrip("/") + f"/#/experiments/{version.mlflow_experiment_id}/runs/{version.mlflow_run_id}" if version.mlflow_experiment_id and version.mlflow_run_id and getattr(settings, "MLFLOW_PUBLIC_URL", "") else "",
         "mlflow_model_uri": version.mlflow_model_uri or "",
         "mlflow_artifact_uri": version.mlflow_artifact_uri or "",
         "created_at": version.created_at,
@@ -129,6 +153,75 @@ def serialize_registry_version(version, include_metrics=False):
     if include_metrics:
         payload["metrics"] = [serialize_registry_metric(metric) for metric in version.metrics.all()]
     return payload
+
+
+def _copy_training_tracking_fields(version, training_job):
+    version.training_summary = training_job.training_summary or {}
+    version.metrics_summary = training_job.metrics_summary or {}
+    version.params_summary = training_job.params_summary or {}
+    version.artifact_manifest = training_job.artifact_manifest or []
+    version.tracking_status = training_job.tracking_status or ""
+    version.tracking_error = training_job.tracking_error or ""
+    version.tracking_ingested_at = training_job.tracking_ingested_at
+    version.deployability_status = training_job.deployability_status or "unknown"
+    version.deployability_reason = training_job.deployability_reason or ""
+
+    for field in ("mlflow_run_id", "mlflow_experiment_id", "mlflow_model_uri", "mlflow_artifact_uri"):
+        value = getattr(training_job, field, None)
+        if value:
+            setattr(version, field, value)
+
+
+def sync_registry_version_from_model_api(model_api, training_job=None):
+    """Create or update the Native Registry version row backing a ModelAPI."""
+    family, _ = ModelFamily.objects.get_or_create(
+        tenant=model_api.tenant,
+        name=model_api.name,
+        defaults={
+            "display_name": model_api.name,
+            "description": model_api.description or model_api.model_info or "",
+        },
+    )
+    changed_family_fields = []
+    if not family.display_name:
+        family.display_name = model_api.name
+        changed_family_fields.append("display_name")
+    if model_api.description and family.description != model_api.description:
+        family.description = model_api.description
+        changed_family_fields.append("description")
+    if changed_family_fields:
+        changed_family_fields.append("updated_at")
+        family.save(update_fields=changed_family_fields)
+
+    version, _ = ModelVersion.objects.get_or_create(
+        tenant=model_api.tenant,
+        family=family,
+        version=model_api.version or "v1",
+        defaults={
+            "model_api": model_api,
+            "source_type": model_api.source_type or "manual_upload",
+            "source_training_job": training_job or model_api.source_training_job,
+            "artifact_uri": model_api.source_artifact_uri or model_api.model_uri or "",
+            "image_name": model_api.endpoint_image_name or "",
+            "endpoint_url": model_api.endpoint_url or "",
+            "stage": "candidate",
+        },
+    )
+
+    version.model_api = model_api
+    version.source_type = model_api.source_type or version.source_type or "manual_upload"
+    version.source_training_job = training_job or model_api.source_training_job or version.source_training_job
+    version.artifact_uri = model_api.source_artifact_uri or model_api.model_uri or version.artifact_uri or ""
+    version.image_name = model_api.endpoint_image_name or version.image_name or ""
+    version.endpoint_url = model_api.endpoint_url or version.endpoint_url or ""
+    if version.stage == "none":
+        version.stage = "candidate"
+
+    if training_job:
+        _copy_training_tracking_fields(version, training_job)
+
+    version.save()
+    return version
 
 
 def serialize_registry_family(family):

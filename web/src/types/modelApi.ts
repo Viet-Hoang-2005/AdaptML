@@ -106,6 +106,14 @@ export interface ModelPredictionResponse {
 export type RegistryStage = 'none' | 'candidate' | 'staging' | 'production' | 'archived';
 export type RegistrySourceType = 'manual_upload' | 'training_job' | 'imported';
 export type RegistryHistoryStatus = 'success' | 'failed' | 'running';
+export type RegistryDeployabilityStatus = 'unknown' | 'deployable' | 'track_only' | 'invalid';
+
+export interface RegistryArtifactManifestItem {
+  path: string;
+  size_bytes?: number;
+  sha256?: string;
+  kind?: 'model' | 'checkpoint' | 'metadata' | 'log' | 'other' | string;
+}
 
 export interface RegistryVersion {
   id: number;
@@ -115,11 +123,24 @@ export interface RegistryVersion {
   model_api?: string | number | null;
   source_training_job?: number | null;
   source_training_job_id?: number | null;
+  source_training_job_name?: string;
+  source_training_job_status?: string;
+  source_training_job_backend?: string;
   source_type: RegistrySourceType;
   artifact_uri: string;
   image_name: string;
   endpoint_url: string;
   stage: RegistryStage;
+  training_summary?: Record<string, unknown>;
+  metrics_summary?: Record<string, unknown>;
+  params_summary?: Record<string, unknown>;
+  artifact_manifest?: RegistryArtifactManifestItem[];
+  tracking_status?: string;
+  tracking_error?: string;
+  tracking_ingested_at?: string | null;
+  deployability_status?: RegistryDeployabilityStatus;
+  deployability_reason?: string;
+  primary_metrics?: Record<string, number>;
   mlflow_run_id?: string | null;
   mlflow_experiment_id?: string | null;
   mlflow_run_url?: string | null;

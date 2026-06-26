@@ -13,7 +13,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from authentication.models import ModelAPI, TrainingJob
-from registry.views import serialize_model_api, validate_unique_model_version, build_endpoint_url
+from registry.views import (
+    build_endpoint_url,
+    serialize_model_api,
+    sync_registry_version_from_model_api,
+    validate_unique_model_version,
+)
 from integrations.hashid_utils import encode_model_id, decode_model_id
 from training.aws_batch_service import (
     cancel_aws_batch_training_job,
@@ -631,33 +636,74 @@ class TrainingJobRegisterModelView(TrainingJobDetailView):
         if flavor and flavor not in {"sklearn", "xgboost"}:
             raise ValidationError({"error": "Flavor must be sklearn or xgboost."})
 
-        duplicate_error = validate_unique_model_version(request.user, model_name, model_version)
-        if duplicate_error:
-            raise ValidationError({"error": duplicate_error})
-
-        model_api = ModelAPI.objects.create(
-            tenant=request.user,
-            name=model_name,
-            version=model_version,
-            description=description,
-            model_info=f"Registered from training job #{training_job.id}",
-            access_mode=access_mode,
-            source_type="training_job",
-            source_training_job=training_job,
-            source_artifact_uri=training_job.model_artifact_uri,
-            flavor=flavor,
-            status="uploading",
-            build_status="not_started",
+        model_api = (
+            ModelAPI.objects.filter(
+                tenant=request.user,
+                name=model_name,
+                version=model_version,
+            )
+            .exclude(status="disabled")
+            .first()
         )
-        model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["endpoint_url", "updated_at"])
+        response_status = status.HTTP_201_CREATED
+        if model_api:
+            if model_api.source_training_job_id != training_job.id:
+                duplicate_error = validate_unique_model_version(request.user, model_name, model_version)
+                raise ValidationError({"error": duplicate_error or "Model name and version already exist."})
+            response_status = status.HTTP_200_OK
+            model_api.description = description or model_api.description
+            model_api.access_mode = access_mode
+            model_api.source_type = "training_job"
+            model_api.source_training_job = training_job
+            model_api.source_artifact_uri = training_job.model_artifact_uri
+            model_api.flavor = flavor or model_api.flavor
+            model_api.endpoint_url = build_endpoint_url(model_api)
+            model_api.save(
+                update_fields=[
+                    "description",
+                    "access_mode",
+                    "source_type",
+                    "source_training_job",
+                    "source_artifact_uri",
+                    "flavor",
+                    "endpoint_url",
+                    "updated_at",
+                ]
+            )
+        else:
+            model_api = ModelAPI.objects.create(
+                tenant=request.user,
+                name=model_name,
+                version=model_version,
+                description=description,
+                model_info=f"Registered from training job #{training_job.id}",
+                access_mode=access_mode,
+                source_type="training_job",
+                source_training_job=training_job,
+                source_artifact_uri=training_job.model_artifact_uri,
+                flavor=flavor,
+                status="uploading",
+                build_status="not_started",
+            )
+            model_api.endpoint_url = build_endpoint_url(model_api)
+            model_api.save(update_fields=["endpoint_url", "updated_at"])
+
+        if training_job.tracking_status in {"", "pending", "skipped"}:
+            try:
+                ingest_training_job_tracking(training_job)
+                training_job.refresh_from_db()
+            except Exception as exc:
+                training_job.tracking_error = str(exc)
+                training_job.save(update_fields=["tracking_error", "updated_at"])
+
+        sync_registry_version_from_model_api(model_api, training_job=training_job)
         create_training_job_event(
             training_job,
             "MODEL_REGISTERED",
             f"Registered model API #{model_api.id} ({model_api.name} {model_api.version}).",
             {"model_api_id": model_api.id, "model_name": model_api.name, "version": model_api.version},
         )
-        return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
+        return Response(serialize_model_api(model_api), status=response_status)
 
 
 class TrainingJobLogsView(TrainingJobDetailView):

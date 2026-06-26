@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { RegistryFamily, RegistryVersion } from '../../types/modelApi';
-import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check } from 'lucide-react';
+import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck } from 'lucide-react';
 import { formatVersion } from '../../lib/formatters';
 import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';
@@ -18,6 +18,37 @@ interface Props {
   onActionSuccess: () => void;
 }
 
+const classNames = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(' ');
+
+function formatValue(value: unknown): string {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? value.toString() : value.toFixed(4);
+  }
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '-';
+  return JSON.stringify(value);
+}
+
+function formatBytes(size?: number): string {
+  if (!size && size !== 0) return '-';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function deployabilityBadge(status?: string) {
+  switch (status) {
+    case 'deployable':
+      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    case 'track_only':
+      return 'bg-amber-100 text-amber-800 border-amber-200';
+    case 'invalid':
+      return 'bg-red-100 text-red-800 border-red-200';
+    default:
+      return 'bg-gray-100 text-gray-700 border-gray-200';
+  }
+}
+
 export function ModelVersionDetail({ family, version, allVersions, onActionSuccess }: Props) {
   const [activeTab, setActiveTab] = useState<'details' | 'metrics' | 'history'>('details');
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
@@ -27,6 +58,9 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const isProd = version.stage === 'production';
 
   const [copied, setCopied] = useState(false);
+  const metricEntries = Object.entries(version.metrics_summary || {});
+  const paramEntries = Object.entries(version.params_summary || {});
+  const artifactEntries = version.artifact_manifest || [];
 
   const copyEndpoint = async () => {
     if (!version.endpoint_url) return;
@@ -149,6 +183,179 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 </div>
               </div>
             )}
+
+            <div className="grid lg:grid-cols-2 gap-6">
+              <div className="flex flex-col gap-4 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">
+                  <span className="inline-flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-blue-500" />
+                    Tracking Status
+                  </span>
+                  <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                    {version.tracking_status || 'not synced'}
+                  </span>
+                </h4>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  Experiment tracking is captured automatically from training artifacts when available.
+                </p>
+                {version.tracking_ingested_at && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ingested At</p>
+                    <p className="text-sm text-gray-800 font-medium">{new Date(version.tracking_ingested_at).toLocaleString()}</p>
+                  </div>
+                )}
+                {version.tracking_error && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    {version.tracking_error}
+                  </div>
+                )}
+                {version.mlflow_run_id && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Internal Lineage Run</p>
+                    <code className="text-xs font-mono text-gray-700 bg-gray-50 border border-gray-200 px-2 py-1 rounded break-all block select-all">
+                      {version.mlflow_run_id}
+                    </code>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-4 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">
+                  Deployability
+                  <span className={classNames(
+                    "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border",
+                    deployabilityBadge(version.deployability_status)
+                  )}>
+                    {version.deployability_status || 'unknown'}
+                  </span>
+                </h4>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {version.deployability_reason || 'Deployability has not been computed for this version yet.'}
+                </p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Artifacts</p>
+                    <p className="text-xl font-bold text-gray-900">{artifactEntries.length}</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Metrics</p>
+                    <p className="text-xl font-bold text-gray-900">{metricEntries.length}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid xl:grid-cols-3 gap-6">
+              <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
+                  <Gauge className="h-4 w-4 text-emerald-500" />
+                  Metrics
+                </h4>
+                {metricEntries.length > 0 ? (
+                  <div className="grid gap-2">
+                    {metricEntries.map(([name, value]) => (
+                      <div key={name} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
+                        <span className="text-sm font-medium text-gray-600 truncate" title={name}>{name}</span>
+                        <span className="text-sm font-mono font-semibold text-gray-900">{formatValue(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    No metrics captured. Training scripts can write SM_OUTPUT_DIR/metrics.json or print METRIC_JSON lines.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
+                  <SlidersHorizontal className="h-4 w-4 text-purple-500" />
+                  Params
+                </h4>
+                {paramEntries.length > 0 ? (
+                  <div className="grid gap-2">
+                    {paramEntries.map(([name, value]) => (
+                      <div key={name} className="flex items-start justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
+                        <span className="text-sm font-medium text-gray-600 break-all">{name}</span>
+                        <span className="text-sm font-mono text-gray-900 text-right break-all">{formatValue(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    No params captured. Training scripts can write SM_OUTPUT_DIR/params.json.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
+                  <FileText className="h-4 w-4 text-slate-500" />
+                  Source Training Job
+                </h4>
+                {version.source_training_job_id ? (
+                  <div className="grid gap-3 text-sm">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Job</p>
+                      <a
+                        href={`/dashboard/model-training/${version.source_training_job_id}`}
+                        className="font-semibold text-blue-600 hover:text-blue-800"
+                      >
+                        #{version.source_training_job_id} {version.source_training_job_name || ''}
+                      </a>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Status</p>
+                        <p className="font-medium text-gray-800">{version.source_training_job_status || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Backend</p>
+                        <p className="font-medium text-gray-800">{version.source_training_job_backend || '-'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">This version was not registered from a training job.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
+                Artifacts / Weights
+              </h4>
+              {artifactEntries.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100 text-sm">
+                    <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">Path</th>
+                        <th className="px-3 py-2 text-left font-semibold">Kind</th>
+                        <th className="px-3 py-2 text-right font-semibold">Size</th>
+                        <th className="px-3 py-2 text-left font-semibold">SHA256</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {artifactEntries.map((item, index) => (
+                        <tr key={`${item.path}-${index}`}>
+                          <td className="px-3 py-2 font-mono text-xs text-gray-800 break-all">{item.path}</td>
+                          <td className="px-3 py-2">
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                              {item.kind || 'other'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-xs text-gray-600">{formatBytes(item.size_bytes)}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-gray-500">{item.sha256 ? `${item.sha256.slice(0, 12)}...` : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No artifact manifest available yet.</p>
+              )}
+            </div>
 
             <div className="grid md:grid-cols-2 gap-6 mt-2">
               {/* D. Deployment Info */}
