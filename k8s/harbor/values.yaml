@@ -12,22 +12,25 @@ persistence:
   resourcePolicy: "keep"
   persistentVolumeClaim:
     registry:
-      storageClass: ebs-gp3
+      storageClass: local-path
       size: 5Gi
     jobservice:
-      storageClass: ebs-gp3
+      storageClass: local-path
       size: 1Gi
     redis:
-      storageClass: ebs-gp3
+      storageClass: local-path
       size: 2Gi
     database:
-      storageClass: ebs-gp3
+      storageClass: local-path
       size: 3Gi
   imageChartStorage:
     type: s3
     s3:
       region: ap-southeast-1
-      bucket: mlops-paas-harbor-storage
+      bucket: mlops-paas-artifacts
+      v4auth: true
+      secure: true
+      rootdirectory: /harbor-registry
 
 trivy:
   enabled: false
