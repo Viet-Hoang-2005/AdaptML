@@ -63,6 +63,53 @@ def resolve_smoke_test_url(endpoint_url):
     return endpoint_url
 
 
+def endpoint_issue_payload(exc, *, endpoint_url="", internal_url="", action="health check"):
+    detail = str(exc)
+    if isinstance(exc, requests.exceptions.Timeout):
+        return {
+            "success": False,
+            "status": "timeout",
+            "reason_code": "ENDPOINT_TIMEOUT",
+            "message": f"The model endpoint did not respond before the {action} timeout.",
+            "endpoint_url": endpoint_url,
+            "internal_url": internal_url,
+            "technical_detail": detail,
+        }
+    if "NameResolutionError" in detail or "Failed to resolve" in detail or "Temporary failure in name resolution" in detail:
+        return {
+            "success": False,
+            "status": "not_running",
+            "reason_code": "ENDPOINT_CONTAINER_NOT_FOUND",
+            "message": (
+                "The model endpoint container is not running in the local Docker network. "
+                "Run deploy again or start the local model server runtime."
+            ),
+            "endpoint_url": endpoint_url,
+            "internal_url": internal_url,
+            "technical_detail": detail,
+        }
+    return {
+        "success": False,
+        "status": "not_reachable",
+        "reason_code": "ENDPOINT_NOT_REACHABLE",
+        "message": "The model endpoint is not reachable from the control-plane container.",
+        "endpoint_url": endpoint_url,
+        "internal_url": internal_url,
+        "technical_detail": detail,
+    }
+
+
+def endpoint_payload_message(payload, fallback):
+    if isinstance(payload, dict):
+        return payload.get("message") or payload.get("error") or fallback
+    return fallback
+
+
+def model_api_auth_headers(model_api):
+    api_key = getattr(getattr(model_api, "tenant", None), "api_key", "") if model_api else ""
+    return {"X-API-Key": api_key} if api_key else {}
+
+
 def serialize_model_api(model_api):
     encoded_id = encode_model_id(model_api.id)
     return {
@@ -536,9 +583,9 @@ class RegistryVersionCheckHealthView(APIView):
         else:
             model_api.status = "unhealthy"
             model_api.endpoint_status = "unhealthy"
-            model_api.endpoint_error = str(payload)
+            model_api.endpoint_error = endpoint_payload_message(payload, "Endpoint health check failed.")
             history_status = "failed"
-            message = "Endpoint health check failed."
+            message = model_api.endpoint_error
         model_api.save(update_fields=["status", "endpoint_status", "endpoint_error", "endpoint_last_checked_at", "updated_at"])
         _sync_version_runtime_fields(version)
         _create_registry_history(
@@ -551,6 +598,10 @@ class RegistryVersionCheckHealthView(APIView):
         )
         response = serialize_registry_version(version)
         response["health"] = payload
+        response["message"] = message
+        if isinstance(payload, dict):
+            response["reason_code"] = payload.get("reason_code", "")
+            response["technical_detail"] = payload.get("technical_detail", "")
         return Response(response, status=status.HTTP_200_OK)
 
 
@@ -575,21 +626,33 @@ class RegistryVersionSmokeTestView(APIView):
         started = time.perf_counter()
         request_url = resolve_smoke_test_url(endpoint_url)
         try:
-            prediction_response = requests.post(request_url, json=request.data, timeout=15)
+            prediction_response = requests.post(
+                request_url,
+                json=request.data,
+                headers=model_api_auth_headers(version.model_api),
+                timeout=15,
+            )
             latency_ms = int((time.perf_counter() - started) * 1000)
             try:
                 payload = prediction_response.json()
             except ValueError:
                 payload = {"raw": prediction_response.text}
-        except Exception as exc:
+        except requests.exceptions.RequestException as exc:
+            payload = endpoint_issue_payload(
+                exc,
+                endpoint_url=endpoint_url,
+                internal_url=request_url,
+                action="smoke-test",
+            )
             _create_registry_history(
                 version,
                 "failed",
                 "failed",
-                f"Smoke test failed: {exc}",
+                payload["message"],
+                {"reason_code": payload.get("reason_code"), "technical_detail": payload.get("technical_detail", "")},
                 actor=request.user.email,
             )
-            return Response({"success": False, "endpoint_url": endpoint_url, "error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+            return Response(payload, status=status.HTTP_200_OK)
 
         success = 200 <= prediction_response.status_code < 300
         result = {
@@ -761,13 +824,38 @@ def _create_registry_history(version, action, status_value="success", message=""
     )
 
 
+def _auto_detect_flavor(model_api):
+    """Infer build flavor from training job artifact_manifest when not explicitly set."""
+    job = model_api.source_training_job
+    if not job:
+        return None
+    manifest = job.artifact_manifest or []
+    paths = [str(m.get("path", "") if isinstance(m, dict) else m).lower() for m in manifest]
+    if any(p.endswith(".pkl") or p.endswith(".joblib") for p in paths):
+        return "sklearn"
+    if any(p.endswith(".xgb") or p.endswith(".bst") or p.endswith(".json") and "xgboost" in p for p in paths):
+        return "xgboost"
+    # Fallback: check training_summary for flavor hint
+    summary = job.training_summary or {}
+    flavor_hint = str(summary.get("flavor", "")).lower()
+    if flavor_hint in SUPPORTED_BUILD_FLAVORS:
+        return flavor_hint
+    return None
+
+
 def _trigger_training_model_build(model_api):
     if model_api.source_type != "training_job":
         raise ValueError("This endpoint only builds models registered from training jobs.")
     if not model_api.source_artifact_uri:
         raise ValueError("Registered training model does not have a source artifact URI.")
+    # Auto-detect flavor from training job manifest if not set
     if model_api.flavor not in SUPPORTED_BUILD_FLAVORS:
-        raise ValueError("Flavor must be sklearn or xgboost.")
+        detected = _auto_detect_flavor(model_api)
+        if detected:
+            model_api.flavor = detected
+            model_api.save(update_fields=["flavor", "updated_at"])
+        else:
+            raise ValueError("Flavor must be sklearn or xgboost.")
 
     safe_name = slugify(model_api.name) or "model"
     package_filename = f"{safe_name}-mlflow-package.zip"

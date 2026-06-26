@@ -51,6 +51,40 @@ function deployabilityBadge(status?: string) {
   }
 }
 
+function endpointFriendlyHint(reasonCode?: string): string {
+  if (!reasonCode) return '';
+  if ([
+    'ENDPOINT_CONTAINER_NOT_FOUND',
+    'ENDPOINT_NOT_REACHABLE',
+    'ENDPOINT_TIMEOUT',
+    'LOCAL_RUNTIME_NOT_STARTED',
+  ].includes(reasonCode)) {
+    return 'The endpoint record exists, but the local model-server container is not running or not reachable.';
+  }
+  return '';
+}
+
+function endpointActionMessage(result: {
+  message?: string;
+  reason_code?: string;
+  endpoint_error?: string;
+  error?: string;
+  success?: boolean;
+}): string {
+  return result.message
+    || endpointFriendlyHint(result.reason_code)
+    || result.endpoint_error
+    || result.error
+    || (result.success === false ? 'Endpoint action failed.' : 'Endpoint action completed.');
+}
+
+function withoutTechnicalDetail(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const rest = { ...(value as Record<string, unknown>) };
+  delete rest.technical_detail;
+  return rest;
+}
+
 export function ModelVersionDetail({ family, version, allVersions, onActionSuccess }: Props) {
   const [activeTab, setActiveTab] = useState<'details' | 'metrics' | 'history'>('details');
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
@@ -60,6 +94,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const [smokePayload, setSmokePayload] = useState('{\n  "features": {}\n}');
   const [actionResult, setActionResult] = useState<string>('');
   const [smokeResult, setSmokeResult] = useState<unknown>(null);
+  const [technicalDetail, setTechnicalDetail] = useState<string>('');
 
   const isProd = version.stage === 'production';
 
@@ -85,6 +120,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const runAction = async (action: 'build' | 'deploy' | 'health') => {
     setActionLoading(action);
     setActionResult('');
+    setTechnicalDetail('');
     try {
       if (action === 'build') {
         await buildRegistryVersionPackage(version.id);
@@ -96,8 +132,18 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
         toast.success('Deploy started.');
       } else {
         const result = await checkRegistryVersionHealth(version.id);
-        setActionResult(result.endpoint_status === 'healthy' ? 'Endpoint is healthy.' : (result.endpoint_error || 'Endpoint health check completed.'));
-        toast.success('Health check completed.');
+        const health = result.health as { message?: string; reason_code?: string; technical_detail?: string } | undefined;
+        const message = result.endpoint_status === 'healthy'
+          ? 'Endpoint is healthy.'
+          : endpointActionMessage({
+              message: result.message || health?.message,
+              reason_code: result.reason_code || health?.reason_code,
+              endpoint_error: result.endpoint_error,
+              success: false,
+            });
+        setActionResult(message);
+        setTechnicalDetail(String(result.technical_detail || health?.technical_detail || ''));
+        toast[result.endpoint_status === 'healthy' ? 'success' : 'warning'](message);
       }
       handleSuccess();
     } catch (error) {
@@ -113,6 +159,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
     setActionLoading('smoke');
     setActionResult('');
     setSmokeResult(null);
+    setTechnicalDetail('');
     try {
       const parsed = JSON.parse(smokePayload) as { features?: Record<string, unknown> };
       if (!parsed || typeof parsed !== 'object' || !parsed.features || typeof parsed.features !== 'object') {
@@ -120,7 +167,14 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
       }
       const result = await smokeTestRegistryVersion(version.id, { features: parsed.features });
       setSmokeResult(result);
-      toast.success('Smoke test completed.');
+      if (result.success === false) {
+        const message = endpointActionMessage(result);
+        setActionResult(message);
+        setTechnicalDetail(result.technical_detail || '');
+        toast.warning(message);
+      } else {
+        toast.success('Smoke test completed.');
+      }
     } catch (error) {
       const message = error instanceof SyntaxError
         ? 'Smoke test JSON is invalid.'
@@ -376,6 +430,14 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   {(version.build_error || version.endpoint_error || actionResult) && (
                     <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 break-words">
                       {actionResult || version.endpoint_error || version.build_error}
+                      {technicalDetail && (
+                        <details className="mt-3 rounded border border-gray-200 bg-white p-2 text-xs text-gray-500">
+                          <summary className="cursor-pointer font-semibold text-gray-600">Technical detail</summary>
+                          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono">
+                            {technicalDetail}
+                          </pre>
+                        </details>
+                      )}
                     </div>
                   )}
                 </div>
@@ -405,7 +467,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   />
                   {smokeResult !== null && (
                     <pre className="max-h-56 overflow-auto rounded-lg border border-gray-800 bg-[#111827] p-3 text-xs text-gray-100">
-                      {JSON.stringify(smokeResult, null, 2)}
+                      {JSON.stringify(withoutTechnicalDetail(smokeResult), null, 2)}
                     </pre>
                   )}
                 </div>

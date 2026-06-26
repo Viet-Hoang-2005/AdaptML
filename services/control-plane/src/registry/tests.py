@@ -1,7 +1,8 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+import requests
 from rest_framework.test import APIClient
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 from authentication.models import CustomUser, ModelFamily, ModelVersion, TrainingJob
 
@@ -267,12 +268,88 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        # resolve_smoke_test_url replaces public base with internal base when
+        # MODEL_SERVER_INTERNAL_URL is configured (http://traefik:5000 in compose).
+        from django.conf import settings
+        internal_base = getattr(settings, "MODEL_SERVER_INTERNAL_URL", "").rstrip("/")
+        public_base = getattr(settings, "MODEL_SERVER_PUBLIC_URL", "http://localhost:5000").rstrip("/")
+        expected_url = "http://localhost:5000/T-1/models/m/v2/predict"
+        if internal_base and expected_url.startswith(public_base):
+            expected_url = expected_url.replace(public_base, internal_base, 1)
         mock_post.assert_called_once_with(
-            "http://localhost:5000/T-1/models/m/v2/predict",
+            expected_url,
             json={"features": {"f1": 1}},
+            headers=ANY,
             timeout=15,
         )
+        self.assertIn("X-API-Key", mock_post.call_args.kwargs["headers"])
         self.assertEqual(response.data["prediction"], "normal")
+
+    @patch("registry.views.get_deploy_adapter")
+    def test_health_check_missing_endpoint_returns_friendly_response(self, mock_get_deploy_adapter):
+        adapter = Mock()
+        adapter.check_health.return_value = (
+            False,
+            {
+                "success": False,
+                "status": "not_running",
+                "reason_code": "ENDPOINT_CONTAINER_NOT_FOUND",
+                "message": "The model endpoint container is not running in the local Docker network.",
+                "endpoint_url": "http://localhost:5000/T-1/models/m/v2/predict",
+                "internal_url": "http://endpoint_t-1_model_m:5000/models/m/health",
+                "technical_detail": "HTTPConnectionPool(host='endpoint_t-1_model_m')",
+            },
+        )
+        mock_get_deploy_adapter.return_value = adapter
+        job = self._completed_job()
+        self.client.post(
+            f"/api/training/jobs/{job.id}/register-model/",
+            {"model_name": "nids-xgb", "model_version": "v2", "flavor": "sklearn"},
+            format="json",
+        )
+        version = ModelVersion.objects.get(family__tenant=self.user, family__name="nids-xgb", version="v2")
+        version.model_api.endpoint_url = "http://localhost:5000/T-1/models/m/v2/predict"
+        version.model_api.save(update_fields=["endpoint_url", "updated_at"])
+
+        response = self.client.post(f"/api/registry/versions/{version.id}/check-health/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["reason_code"], "ENDPOINT_CONTAINER_NOT_FOUND")
+        self.assertIn("not running", response.data["message"])
+        self.assertNotIn("HTTPConnectionPool", response.data["message"])
+        self.assertIn("HTTPConnectionPool", response.data["technical_detail"])
+        version.model_api.refresh_from_db()
+        self.assertEqual(version.model_api.endpoint_status, "unhealthy")
+        self.assertNotIn("HTTPConnectionPool", version.model_api.endpoint_error)
+
+    @patch("registry.views.requests.post")
+    def test_smoke_test_missing_endpoint_returns_friendly_response(self, mock_post):
+        mock_post.side_effect = requests.exceptions.ConnectionError(
+            "HTTPConnectionPool(host='endpoint_t-1_model_m'): Max retries exceeded with url: /predict "
+            "(Caused by NameResolutionError(\"failed to resolve\"))"
+        )
+        job = self._completed_job()
+        self.client.post(
+            f"/api/training/jobs/{job.id}/register-model/",
+            {"model_name": "nids-xgb", "model_version": "v2", "flavor": "sklearn"},
+            format="json",
+        )
+        version = ModelVersion.objects.get(family__tenant=self.user, family__name="nids-xgb", version="v2")
+        version.model_api.endpoint_url = "http://localhost:5000/T-1/models/m/v2/predict"
+        version.model_api.save(update_fields=["endpoint_url", "updated_at"])
+
+        response = self.client.post(
+            f"/api/registry/versions/{version.id}/smoke-test/",
+            {"features": {"f1": 1}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["success"])
+        self.assertEqual(response.data["reason_code"], "ENDPOINT_CONTAINER_NOT_FOUND")
+        self.assertIn("not running", response.data["message"])
+        self.assertNotIn("HTTPConnectionPool", response.data["message"])
+        self.assertIn("HTTPConnectionPool", response.data["technical_detail"])
 
     def test_cross_tenant_build_denied(self):
         job = self._completed_job()

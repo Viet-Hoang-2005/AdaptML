@@ -151,6 +151,10 @@ export interface RegistryVersion {
   endpoint_status?: string;
   endpoint_error?: string;
   endpoint_last_checked_at?: string | null;
+  message?: string;
+  reason_code?: string;
+  technical_detail?: string;
+  health?: Record<string, unknown>;
   mlflow_run_id?: string | null;
   mlflow_experiment_id?: string | null;
   mlflow_run_url?: string | null;
@@ -167,6 +171,10 @@ export interface RegistrySmokeTestRequest {
 export interface RegistrySmokeTestResponse {
   success: boolean;
   endpoint_url: string;
+  status?: string;
+  reason_code?: string;
+  message?: string;
+  technical_detail?: string;
   prediction?: unknown;
   confidence?: number | null;
   latency_ms?: number;
