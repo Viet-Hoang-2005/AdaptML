@@ -79,7 +79,9 @@ INSTALLED_APPS = [
     'storages',
     'channels',
     'authentication',
-    'orchestration',
+    'registry',
+    'training',
+    'drift',
 ]
 
 MIDDLEWARE = [
