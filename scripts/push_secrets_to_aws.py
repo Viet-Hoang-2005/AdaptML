@@ -76,6 +76,8 @@ def main():
     github_keys = [
         "GITHUB_REPO",
         "GITHUB_TOKEN",
+        "HARBOR_USERNAME",
+        "HARBOR_PASSWORD",
     ]
     production_keys = [
         "DB_USER",
