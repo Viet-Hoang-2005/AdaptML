@@ -16,8 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
-      backend: ${{ steps.filter.outputs.backend }}
-      infra: ${{ steps.filter.outputs.infra }}
+      control_plane: ${{ steps.filter.outputs.control_plane }}
+      consumer: ${{ steps.filter.outputs.consumer }}
+      packager: ${{ steps.filter.outputs.packager }}
+      evidently: ${{ steps.filter.outputs.evidently }}
+      matrix_targets: ${{ steps.matrix.outputs.targets }}
     steps:
       - uses: actions/checkout@v4
       - name: Filter changed paths
@@ -27,16 +30,48 @@ jobs:
           filters: |
             frontend:
               - 'web/**'
-            backend:
-              - 'services/**'
-            infra:
-              - 'k8s/**'
-              - '.github/**'
+            control_plane:
+              - 'services/control-plane/**'
+            consumer:
+              - 'services/consumer/**'
+            packager:
+              - 'services/model-packager/**'
+            evidently:
+              - 'services/evidently/**'
+
+      - name: Generate Dynamic Matrix
+        id: matrix
+        run: |
+          python3 -c '
+          import os, json
+          changed = {
+              "frontend": "${{ steps.filter.outputs.frontend }}" == "true",
+              "control_plane": "${{ steps.filter.outputs.control_plane }}" == "true",
+              "consumer": "${{ steps.filter.outputs.consumer }}" == "true",
+              "packager": "${{ steps.filter.outputs.packager }}" == "true",
+              "evidently": "${{ steps.filter.outputs.evidently }}" == "true",
+          }
+          configs = {
+              "frontend": {"name": "Frontend Web", "id": "frontend", "context": "web", "image": "mlops-paas-web"},
+              "control_plane": {"name": "Control Plane", "id": "control_plane", "context": "services/control-plane", "image": "mlops-paas-django"},
+              "consumer": {"name": "Consumer Service", "id": "consumer", "context": "services/consumer", "image": "mlops-paas-consumer"},
+              "packager": {"name": "Model Packager", "id": "packager", "context": "services/model-packager", "image": "mlops-paas-model-packager"},
+              "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"}
+          }
+          targets = [configs[k] for k, v in changed.items() if v]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"targets={json.dumps(targets)}\n")
+          '
 
   build-and-push:
-    name: "Build & Push Docker Images"
+    name: "Build & Push (${{ matrix.target.name }})"
     needs: detect-changes
+    if: needs.detect-changes.outputs.matrix_targets != '[]'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.detect-changes.outputs.matrix_targets) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,76 +98,24 @@ jobs:
           username: ${{ env.SECRETS_HARBOR_USERNAME }}
           password: ${{ env.SECRETS_HARBOR_PASSWORD }}
 
-      - name: Set Image Envs
-        run: |
-          REG="harbor.mlops-nids-nt114.id.vn/mlops-paas"
-          echo "WEB_IMAGE=$REG/mlops-paas-web" >> $GITHUB_ENV
-          echo "API_IMAGE=$REG/mlops-paas-django" >> $GITHUB_ENV
-          echo "CONSUMER_IMAGE=$REG/mlops-paas-consumer" >> $GITHUB_ENV
-          echo "PACKAGER_IMAGE=$REG/mlops-paas-model-packager" >> $GITHUB_ENV
-          echo "EVIDENTLY_IMAGE=$REG/mlops-paas-evidently" >> $GITHUB_ENV
-
-      - name: Build and push Web
-        if: needs.detect-changes.outputs.frontend == 'true'
+      - name: Build and Push Image
         uses: docker/build-push-action@v5
         with:
-          context: web
+          context: ${{ matrix.target.context }}
           push: true
           build-args: |
             VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
             VITE_GITHUB_CLIENT_ID=${{ vars.VITE_GITHUB_CLIENT_ID }}
           tags: |
-            ${{ env.WEB_IMAGE }}:${{ github.sha }}
-            ${{ env.WEB_IMAGE }}:latest
+            harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}
+            harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Build and push Control Plane
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: services/control-plane
-          push: true
-          tags: |
-            ${{ env.API_IMAGE }}:${{ github.sha }}
-            ${{ env.API_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push Consumer
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: services/consumer
-          push: true
-          tags: |
-            ${{ env.CONSUMER_IMAGE }}:${{ github.sha }}
-            ${{ env.CONSUMER_IMAGE }}:latest
-
-      - name: Build and push Packager
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: services/model-packager
-          push: true
-          tags: |
-            ${{ env.PACKAGER_IMAGE }}:${{ github.sha }}
-            ${{ env.PACKAGER_IMAGE }}:latest
-
-      - name: Build and push Evidently
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: services/evidently
-          push: true
-          tags: |
-            ${{ env.EVIDENTLY_IMAGE }}:${{ github.sha }}
-            ${{ env.EVIDENTLY_IMAGE }}:latest
 
   gitops-promotion:
     name: "GitOps: Update Kustomize & Create PR"
     needs: [detect-changes, build-and-push]
-    if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+    if: needs.detect-changes.outputs.matrix_targets != '[]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -160,37 +143,95 @@ jobs:
           REG="harbor.mlops-nids-nt114.id.vn/mlops-paas"
           SHA="${{ github.sha }}"
           
-          # 1. Update kustomization.yaml (cho web, django, consumer)
+          # 1. Update kustomization.yaml (web, django, consumer)
           cd k8s/apps/production
           
           if [ "${{ needs.detect-changes.outputs.frontend }}" == "true" ]; then
             kustomize edit set image mlops-paas-web=$REG/mlops-paas-web:$SHA
           fi
           
-          if [ "${{ needs.detect-changes.outputs.backend }}" == "true" ]; then
+          if [ "${{ needs.detect-changes.outputs.control_plane }}" == "true" ]; then
             kustomize edit set image mlops-paas-django=$REG/mlops-paas-django:$SHA
+          fi
+          
+          if [ "${{ needs.detect-changes.outputs.consumer }}" == "true" ]; then
             kustomize edit set image mlops-paas-consumer=$REG/mlops-paas-consumer:$SHA
           fi
           cd ../../../
           
-          # 2. Update Argo Workflow Templates (cho packager và evidently)
-          if [ "${{ needs.detect-changes.outputs.backend }}" == "true" ]; then
-            # Update build-workflowtemplate
+          # 2. Update Argo Workflow Templates (packager and evidently)
+          if [ "${{ needs.detect-changes.outputs.packager }}" == "true" ]; then
             yq e -i '(.spec.templates[] | select(.name == "build-model") | .container.image) = "'$REG'/mlops-paas-model-packager:'$SHA'"' k8s/argo-workflows/build-workflowtemplate.yaml
-            
-            # Update evidently-workflowtemplate
+          fi
+          
+          if [ "${{ needs.detect-changes.outputs.evidently }}" == "true" ]; then
             yq e -i '(.spec.templates[] | select(.name == "run-evidently") | .container.image) = "'$REG'/mlops-paas-evidently:'$SHA'"' k8s/argo-workflows/evidently-workflowtemplate.yaml
           fi
+
+      - name: Generate Summary Table
+        id: summary
+        run: |
+          SHA="${{ github.sha }}"
+          REG="harbor.mlops-nids-nt114.id.vn/mlops-paas"
+          
+          WEB_TAG="no change"
+          DJANGO_TAG="no change"
+          CONSUMER_TAG="no change"
+          PACKAGER_TAG="no change"
+          EVIDENTLY_TAG="no change"
+          
+          if [ "${{ needs.detect-changes.outputs.frontend }}" == "true" ]; then
+            WEB_TAG="$REG/mlops-paas-web:$SHA"
+          fi
+          
+          if [ "${{ needs.detect-changes.outputs.control_plane }}" == "true" ]; then
+            DJANGO_TAG="$REG/mlops-paas-django:$SHA"
+          fi
+          
+          if [ "${{ needs.detect-changes.outputs.consumer }}" == "true" ]; then
+            CONSUMER_TAG="$REG/mlops-paas-consumer:$SHA"
+          fi
+          
+          if [ "${{ needs.detect-changes.outputs.packager }}" == "true" ]; then
+            PACKAGER_TAG="$REG/mlops-paas-model-packager:$SHA"
+          fi
+          
+          if [ "${{ needs.detect-changes.outputs.evidently }}" == "true" ]; then
+            EVIDENTLY_TAG="$REG/mlops-paas-evidently:$SHA"
+          fi
+          
+          EOF_DELIM=$(openssl rand -hex 8)
+          
+          RAW_SUMMARY="### Production Promotion Summary
+
+          | Service | Image Tag |
+          | :--- | :--- |
+          | **Frontend Web** (\`mlops-paas-web\`) | \`$WEB_TAG\` |
+          | **Control Plane** (\`mlops-paas-django\`) | \`$DJANGO_TAG\` |
+          | **Consumer Service** (\`mlops-paas-consumer\`) | \`$CONSUMER_TAG\` |
+          | **Model Packager** (\`mlops-paas-model-packager\`) | \`$PACKAGER_TAG\` |
+          | **Evidently Drift** (\`mlops-paas-evidently\`) | \`$EVIDENTLY_TAG\` |"
+          
+          SUMMARY_CONTENT=$(echo "$RAW_SUMMARY" | sed 's/^ *//')
+          
+          echo "$SUMMARY_CONTENT" >> $GITHUB_STEP_SUMMARY
+          
+          echo "pr_body<<$EOF_DELIM" >> $GITHUB_OUTPUT
+          echo "$SUMMARY_CONTENT" >> $GITHUB_OUTPUT
+          echo "$EOF_DELIM" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore(gitops): update image tags to ${{ github.sha }}"
-          title: "GitOps: Promote images to Production (${{ github.sha }})"
+          commit-message: "chore(gitops): update image tags to ${{ github.sha }} [skip ci]"
+          title: "GitOps: Promote images to Production (${{ github.sha }}) [skip ci]"
           body: |
             This PR is automatically generated by CD pipeline.
-            It updates the image tags in `kustomization.yaml` and Argo `WorkflowTemplates` to the newly built image version `${{ github.sha }}`.
+            It promotes newly built Docker images to Kubernetes Production manifests.
+
+            ${{ steps.summary.outputs.pr_body }}
+
             Merge this PR to trigger ArgoCD deployment.
           branch: "gitops-promote-${{ github.sha }}"
           base: "main"

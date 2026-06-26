@@ -14,8 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
-      backend: ${{ steps.filter.outputs.backend }}
+      control_plane: ${{ steps.filter.outputs.control_plane }}
+      consumer: ${{ steps.filter.outputs.consumer }}
+      packager: ${{ steps.filter.outputs.packager }}
+      evidently: ${{ steps.filter.outputs.evidently }}
       infra: ${{ steps.filter.outputs.infra }}
+      matrix_targets: ${{ steps.matrix.outputs.targets }}
     steps:
       - uses: actions/checkout@v4
       - name: Filter changed paths
@@ -25,11 +29,41 @@ jobs:
           filters: |
             frontend:
               - 'web/**'
-            backend:
-              - 'services/**'
+            control_plane:
+              - 'services/control-plane/**'
+            consumer:
+              - 'services/consumer/**'
+            packager:
+              - 'services/model-packager/**'
+            evidently:
+              - 'services/evidently/**'
             infra:
               - 'k8s/**'
               - '.github/**'
+
+      - name: Generate Dynamic Matrix
+        id: matrix
+        run: |
+          python3 -c '
+          import os, json
+          changed = {
+              "frontend": "${{ steps.filter.outputs.frontend }}" == "true",
+              "control_plane": "${{ steps.filter.outputs.control_plane }}" == "true",
+              "consumer": "${{ steps.filter.outputs.consumer }}" == "true",
+              "packager": "${{ steps.filter.outputs.packager }}" == "true",
+              "evidently": "${{ steps.filter.outputs.evidently }}" == "true",
+          }
+          configs = {
+              "frontend": {"name": "Frontend Web", "id": "frontend", "context": "web", "image": "mlops-paas-web"},
+              "control_plane": {"name": "Control Plane", "id": "control_plane", "context": "services/control-plane", "image": "mlops-paas-control-plane"},
+              "consumer": {"name": "Consumer Service", "id": "consumer", "context": "services/consumer", "image": "mlops-paas-consumer"},
+              "packager": {"name": "Model Packager", "id": "packager", "context": "services/model-packager", "image": "mlops-paas-model-packager"},
+              "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"}
+          }
+          targets = [configs[k] for k, v in changed.items() if v]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"targets={json.dumps(targets)}\n")
+          '
 
   secret-scan:
     name: "Secret Scan (GitLeaks)"
@@ -74,15 +108,15 @@ jobs:
         if: always()
         run: |
           if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ **ESLint**: Passed." >> $GITHUB_STEP_SUMMARY
+            echo "**ESLint**: Passed." >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ **ESLint**: Failed! Please fix frontend code." >> $GITHUB_STEP_SUMMARY
+            echo "**ESLint**: Failed! Please fix frontend code." >> $GITHUB_STEP_SUMMARY
           fi
 
   lint-backend:
     name: "Backend Code Quality (Pylint)"
     needs: detect-changes
-    if: needs.detect-changes.outputs.backend == 'true'
+    if: needs.detect-changes.outputs.control_plane == 'true' || needs.detect-changes.outputs.consumer == 'true' || needs.detect-changes.outputs.packager == 'true' || needs.detect-changes.outputs.evidently == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +127,6 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install pylint
-          # Install deps to make pylint resolve imports
           for d in services/*/; do
             if [ -f "$d/requirements.txt" ]; then
               pip install -r "$d/requirements.txt" --quiet || true
@@ -101,12 +134,12 @@ jobs:
           done
       - name: Run Pylint (Warnings Only)
         run: |
-          # Dùng || true để đảm bảo luồng CI không bị fail theo ý người dùng
           find services -name "*.py" -not -path "*/migrations/*" -not -path "*/venv/*" > pyfiles.txt
           pylint $(cat pyfiles.txt) --output-format=text > pylint_report.txt || true
           cat pylint_report.txt
           score=$(grep -oP 'Your code has been rated at \K[0-9.]+/10' pylint_report.txt || echo "N/A")
           echo "**Pylint Score**: $score (Warnings Only)" >> $GITHUB_STEP_SUMMARY
+
   lint-infra:
     name: "Infrastructure Validation (Kustomize & Kubeconform)"
     needs: detect-changes
@@ -137,120 +170,32 @@ jobs:
           fi
 
   build-and-scan:
-    name: "Build Images & Trivy Scan"
+    name: "Build & Scan (${{ matrix.target.name }})"
     needs: [detect-changes, lint-frontend, lint-backend, lint-infra, secret-scan]
-    # Chạy kể cả khi linter bị skip, nhưng bắt buộc secret-scan pass
-    if: always() && needs.secret-scan.result == 'success'
+    if: always() && needs.secret-scan.result == 'success' && needs.detect-changes.outputs.matrix_targets != '[]'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.detect-changes.outputs.matrix_targets) }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # === FRONTEND ===
-      - name: Build Web Image
-        if: needs.detect-changes.outputs.frontend == 'true'
+      - name: Build Test Image
         uses: docker/build-push-action@v5
         with:
-          context: web
+          context: ${{ matrix.target.context }}
           push: false
-          tags: mlops-paas-web:test
+          tags: ${{ matrix.target.image }}:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trivy Scan Web
-        if: needs.detect-changes.outputs.frontend == 'true'
+      - name: Trivy Vulnerability Scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'mlops-paas-web:test'
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
-      # === BACKEND (Control Plane) ===
-      - name: Build Control Plane Image
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: services/control-plane
-          push: false
-          tags: mlops-paas-control-plane:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Trivy Scan Control Plane
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'mlops-paas-control-plane:test'
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
-      # === BACKEND (Consumer) ===
-      - name: Build Consumer Image
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: services/consumer
-          push: false
-          tags: mlops-paas-consumer:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Trivy Scan Consumer
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'mlops-paas-consumer:test'
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
-      # === BACKEND (Packager) ===
-      - name: Build Packager Image
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: services/model-packager
-          push: false
-          tags: mlops-paas-model-packager:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Trivy Scan Packager
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'mlops-paas-model-packager:test'
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
-      # === BACKEND (Evidently) ===
-      - name: Build Evidently Image
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: services/evidently
-          push: false
-          tags: mlops-paas-evidently:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Trivy Scan Evidently
-        if: needs.detect-changes.outputs.backend == 'true'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'mlops-paas-evidently:test'
+          image-ref: '${{ matrix.target.image }}:test'
           format: 'table'
           exit-code: '0'
           ignore-unfixed: true
@@ -259,4 +204,4 @@ jobs:
 
       - name: Report Status
         run: |
-          echo "**Trivy Image Scan**: Passed without blocking vulnerabilities." >> $GITHUB_STEP_SUMMARY
+          echo "**Trivy Scan (${{ matrix.target.name }})**: Passed without blocking vulnerabilities." >> $GITHUB_STEP_SUMMARY
