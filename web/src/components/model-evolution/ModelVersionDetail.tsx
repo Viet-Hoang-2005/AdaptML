@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { RegistryFamily, RegistryVersion } from '../../types/modelApi';
-import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck, Package, Rocket, HeartPulse, Play } from 'lucide-react';
+import type { RegistryFamily, RegistryModelInsightItem, RegistryVersion } from '../../types/modelApi';
+import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck, Package, Rocket, HeartPulse, Play, BarChart3 } from 'lucide-react';
 import { formatVersion } from '../../lib/formatters';
 import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';
@@ -36,6 +36,14 @@ function formatBytes(size?: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatInsightValue(value?: number): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '-';
+  const abs = Math.abs(value);
+  if (abs !== 0 && abs < 0.0001) return value.toExponential(3);
+  if (abs >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 function deployabilityBadge(status?: string) {
@@ -86,7 +94,7 @@ function withoutTechnicalDetail(value: unknown): unknown {
 }
 
 export function ModelVersionDetail({ family, version, allVersions, onActionSuccess }: Props) {
-  const [activeTab, setActiveTab] = useState<'details' | 'metrics' | 'history'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'insights' | 'metrics' | 'history'>('details');
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
@@ -102,6 +110,14 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const metricEntries = Object.entries(version.metrics_summary || {});
   const paramEntries = Object.entries(version.params_summary || {});
   const artifactEntries = version.artifact_manifest || [];
+  const modelInsights = version.model_insights_summary || {};
+  const insightItems = (modelInsights.items || [])
+    .filter((item): item is RegistryModelInsightItem => typeof item?.name === 'string' && typeof item?.value === 'number')
+    .slice()
+    .sort((left, right) => (right.abs_value ?? Math.abs(right.value)) - (left.abs_value ?? Math.abs(left.value)));
+  const topInsightItems = insightItems.slice(0, 20);
+  const maxInsightAbs = Math.max(...topInsightItems.map(item => item.abs_value ?? Math.abs(item.value)), 0);
+  const insightKind = modelInsights.kind || 'unknown';
 
   const copyEndpoint = async () => {
     if (!version.endpoint_url) return;
@@ -191,7 +207,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
       
       {/* Tab Navigation */}
       <div className="flex border-b border-gray-200 bg-gray-50 px-4 pt-3">
-        {(['details', 'metrics', 'history'] as const).map(tab => (
+        {(['details', 'insights', 'metrics', 'history'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -695,6 +711,108 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
           </div>
         )}
 
+
+        {activeTab === 'insights' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
+                <BarChart3 className="h-6 w-6 text-blue-500" />
+                Model Insights
+              </h3>
+              <p className="text-sm text-gray-600 max-w-3xl">
+                Feature importance, coefficients, and lightweight model summaries are captured from optional training artifacts and visualized inside Model Evolution.
+              </p>
+            </div>
+
+            {insightItems.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                <BarChart3 className="mx-auto h-10 w-10 text-gray-300" />
+                <h4 className="mt-3 text-base font-bold text-gray-800">No model insights were logged for this version.</h4>
+                <p className="mt-2 text-sm text-gray-500">
+                  Log feature importance or coefficient data as model_insights.json to visualize it here.
+                </p>
+              </div>
+            ) : (
+              <div className="grid xl:grid-cols-[minmax(0,1fr)_minmax(420px,1.15fr)] gap-6">
+                <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-3">
+                    <div>
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-gray-900">
+                        {insightKind === 'coefficients' ? 'Top Coefficients' : 'Top Feature Importance'}
+                      </h4>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Showing top {topInsightItems.length} of {modelInsights.feature_count || insightItems.length} captured items.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700">
+                      {insightKind.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <div className="mt-5 flex flex-col gap-3">
+                    {topInsightItems.map((item) => {
+                      const magnitude = item.abs_value ?? Math.abs(item.value);
+                      const width = maxInsightAbs > 0 ? Math.max(4, (magnitude / maxInsightAbs) * 100) : 0;
+                      const negative = item.value < 0;
+                      return (
+                        <div key={`${item.rank || item.name}-${item.name}-${item.class_name || ''}`} className="grid grid-cols-[minmax(120px,180px)_1fr_72px] items-center gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-gray-700" title={item.name}>{item.name}</p>
+                            {item.class_name && <p className="truncate text-[11px] text-gray-400">{item.class_name}</p>}
+                          </div>
+                          <div className="h-3 rounded-full bg-gray-100">
+                            <div
+                              className={classNames(
+                                "h-3 rounded-full",
+                                negative ? "bg-rose-400" : "bg-blue-500"
+                              )}
+                              style={{ width: `${width}%` }}
+                            />
+                          </div>
+                          <p className="text-right font-mono text-xs font-semibold text-gray-800">
+                            {formatInsightValue(item.value)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                  <h4 className="border-b border-gray-100 pb-3 text-sm font-bold uppercase tracking-wider text-gray-900">
+                    Insight Table
+                  </h4>
+                  <div className="mt-4 max-h-[560px] overflow-auto">
+                    <table className="min-w-full divide-y divide-gray-100 text-sm">
+                      <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="px-3 py-2 text-right font-semibold">Rank</th>
+                          <th className="px-3 py-2 text-left font-semibold">Feature</th>
+                          {insightKind === 'coefficients' && <th className="px-3 py-2 text-left font-semibold">Class</th>}
+                          <th className="px-3 py-2 text-right font-semibold">
+                            {insightKind === 'coefficients' ? 'Coefficient' : 'Importance'}
+                          </th>
+                          <th className="px-3 py-2 text-right font-semibold">Absolute</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {insightItems.slice(0, 500).map((item, index) => (
+                          <tr key={`${item.name}-${item.class_name || ''}-${index}`} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-500">{item.rank || index + 1}</td>
+                            <td className="px-3 py-2 font-medium text-gray-800">{item.name}</td>
+                            {insightKind === 'coefficients' && <td className="px-3 py-2 text-gray-600">{item.class_name || '-'}</td>}
+                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-800">{formatInsightValue(item.value)}</td>
+                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-500">{formatInsightValue(item.abs_value ?? Math.abs(item.value))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {activeTab === 'metrics' && <ModelMetricsPanel familyId={family.id} versionId={version.id} />}
         

@@ -227,6 +227,10 @@ def serialize_registry_version(version, include_metrics=False):
         "training_summary": version.training_summary or {},
         "metrics_summary": version.metrics_summary or {},
         "params_summary": version.params_summary or {},
+        "model_insights_summary": version.model_insights_summary or {},
+        "has_model_insights": bool((version.model_insights_summary or {}).get("items")),
+        "model_insights_kind": (version.model_insights_summary or {}).get("kind", ""),
+        "model_insights_item_count": len((version.model_insights_summary or {}).get("items", [])),
         "artifact_manifest": version.artifact_manifest or [],
         "tracking_status": version.tracking_status or "",
         "tracking_error": version.tracking_error or "",
@@ -252,6 +256,7 @@ def _copy_training_tracking_fields(version, training_job):
     version.training_summary = training_job.training_summary or {}
     version.metrics_summary = training_job.metrics_summary or {}
     version.params_summary = training_job.params_summary or {}
+    version.model_insights_summary = training_job.model_insights_summary or {}
     version.artifact_manifest = training_job.artifact_manifest or []
     version.tracking_status = training_job.tracking_status or ""
     version.tracking_error = training_job.tracking_error or ""

@@ -115,6 +115,22 @@ export interface RegistryArtifactManifestItem {
   kind?: 'model' | 'checkpoint' | 'metadata' | 'log' | 'other' | string;
 }
 
+export interface RegistryModelInsightItem {
+  name: string;
+  value: number;
+  abs_value?: number;
+  class_name?: string;
+  rank?: number;
+}
+
+export interface RegistryModelInsightsSummary {
+  schema_version?: string;
+  kind?: 'feature_importance' | 'coefficients' | string;
+  source?: string;
+  feature_count?: number;
+  items?: RegistryModelInsightItem[];
+}
+
 export interface RegistryVersion {
   id: number;
   tenant?: number | string;
@@ -134,6 +150,10 @@ export interface RegistryVersion {
   training_summary?: Record<string, unknown>;
   metrics_summary?: Record<string, unknown>;
   params_summary?: Record<string, unknown>;
+  model_insights_summary?: RegistryModelInsightsSummary;
+  has_model_insights?: boolean;
+  model_insights_kind?: string;
+  model_insights_item_count?: number;
   artifact_manifest?: RegistryArtifactManifestItem[];
   tracking_status?: string;
   tracking_error?: string;

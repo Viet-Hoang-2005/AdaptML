@@ -360,6 +360,7 @@ class TrainingJob(models.Model):
     training_summary = models.JSONField(default=dict, blank=True)
     metrics_summary = models.JSONField(default=dict, blank=True)
     params_summary = models.JSONField(default=dict, blank=True)
+    model_insights_summary = models.JSONField(default=dict, blank=True)
     artifact_manifest = models.JSONField(default=list, blank=True)
     deployability_status = models.CharField(
         max_length=30,
@@ -496,6 +497,7 @@ class ModelVersion(models.Model):
     training_summary = models.JSONField(default=dict, blank=True)
     metrics_summary = models.JSONField(default=dict, blank=True)
     params_summary = models.JSONField(default=dict, blank=True)
+    model_insights_summary = models.JSONField(default=dict, blank=True)
     artifact_manifest = models.JSONField(default=list, blank=True)
     tracking_status = models.CharField(max_length=30, blank=True, default="")
     tracking_error = models.TextField(blank=True)

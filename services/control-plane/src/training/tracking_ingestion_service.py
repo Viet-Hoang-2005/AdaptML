@@ -16,6 +16,7 @@ MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
 CHECKPOINT_EXTENSIONS = {".pt", ".pth", ".ckpt", ".h5", ".onnx", ".keras"}
 METADATA_EXTENSIONS = {".json", ".yaml", ".yml", ".txt"}
 MAX_MLFLOW_PARAM_VALUE_CHARS = 500
+MAX_MODEL_INSIGHT_ITEMS = 500
 
 
 class TrackingIngestionError(Exception):
@@ -159,6 +160,65 @@ def _safe_params(payload: dict) -> dict:
     return safe
 
 
+def normalize_model_insights(payload: dict, default_kind: str = "") -> dict:
+    if not isinstance(payload, dict):
+        return {}
+
+    kind = str(payload.get("kind") or default_kind or "feature_importance")
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list):
+        feature_importance = payload.get("feature_importance")
+        coefficients = payload.get("coefficients")
+        if isinstance(feature_importance, dict):
+            kind = "feature_importance"
+            raw_items = [{"name": name, "value": value} for name, value in feature_importance.items()]
+        elif isinstance(coefficients, dict):
+            kind = "coefficients"
+            raw_items = [{"name": name, "value": value} for name, value in coefficients.items()]
+        else:
+            raw_items = []
+
+    items = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("feature") or "").strip()
+        if not name:
+            continue
+        value = item.get("value", item.get("importance", item.get("coefficient")))
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            continue
+        normalized = {
+            "name": name,
+            "value": float(value),
+            "abs_value": float(abs(value)),
+        }
+        class_name = item.get("class_name", item.get("class"))
+        if class_name is not None:
+            normalized["class_name"] = str(class_name)
+        items.append(normalized)
+
+    items = sorted(items, key=lambda entry: entry["abs_value"], reverse=True)[:MAX_MODEL_INSIGHT_ITEMS]
+    for rank, item in enumerate(items, start=1):
+        item["rank"] = rank
+
+    if not items:
+        return {}
+
+    try:
+        feature_count = int(payload.get("feature_count") or len(items))
+    except (TypeError, ValueError):
+        feature_count = len(items)
+
+    return {
+        "schema_version": "model-insights-v1",
+        "kind": kind,
+        "source": str(payload.get("source") or "training_artifact"),
+        "feature_count": feature_count,
+        "items": items,
+    }
+
+
 def compute_deployability(manifest: list[dict]) -> tuple[str, str]:
     if not manifest:
         return "invalid", "Training artifact is empty or unreadable."
@@ -202,6 +262,7 @@ def _write_generated_mlops_bundle(mlops_dir: Path, training_job: TrainingJob, ma
     (mlops_dir / "training_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
     (mlops_dir / "metrics.json").write_text("{}", encoding="utf-8")
     (mlops_dir / "params.json").write_text("{}", encoding="utf-8")
+    (mlops_dir / "model_insights.json").write_text("{}", encoding="utf-8")
     (mlops_dir / "artifact_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
     (mlops_dir / "warnings.json").write_text(
         json.dumps([{"code": "missing_mlops_bundle", "message": warning}], indent=2),
@@ -274,6 +335,7 @@ def _summary_response(training_job: TrainingJob) -> dict:
         "training_summary": training_job.training_summary,
         "metrics_summary": training_job.metrics_summary,
         "params_summary": training_job.params_summary,
+        "model_insights_summary": training_job.model_insights_summary,
         "artifact_manifest": training_job.artifact_manifest,
         "deployability_status": training_job.deployability_status,
         "deployability_reason": training_job.deployability_reason,
@@ -354,6 +416,7 @@ def ingest_training_job_tracking(training_job: TrainingJob, force: bool = False)
         training_summary = _read_json_object(mlops_dir / "training_summary.json")
         metrics_summary = _numeric_metrics(_read_json_object(mlops_dir / "metrics.json"))
         params_summary = _read_json_object(mlops_dir / "params.json")
+        model_insights_summary = normalize_model_insights(_read_json_object(mlops_dir / "model_insights.json"))
         if missing_mlops_warning:
             training_summary["warning"] = missing_mlops_warning
 
@@ -362,6 +425,7 @@ def ingest_training_job_tracking(training_job: TrainingJob, force: bool = False)
         training_job.training_summary = training_summary
         training_job.metrics_summary = metrics_summary
         training_job.params_summary = params_summary
+        training_job.model_insights_summary = model_insights_summary
         training_job.artifact_manifest = manifest
         training_job.deployability_status = deployability_status
         training_job.deployability_reason = deployability_reason
@@ -371,6 +435,7 @@ def ingest_training_job_tracking(training_job: TrainingJob, force: bool = False)
                 "training_summary",
                 "metrics_summary",
                 "params_summary",
+                "model_insights_summary",
                 "artifact_manifest",
                 "deployability_status",
                 "deployability_reason",

@@ -24,6 +24,13 @@ RUNNER_VERSION = "mlops-metadata-bundle-v1"
 MODEL_FILE_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
 CHECKPOINT_EXTENSIONS = {".pt", ".pth", ".ckpt", ".h5", ".onnx", ".keras"}
 METADATA_EXTENSIONS = {".json", ".yaml", ".yml", ".txt"}
+INSIGHTS_INPUT_FILES = (
+    ("model_insights.json", ""),
+    ("feature_importance.json", "feature_importance"),
+    ("coefficients.json", "coefficients"),
+    ("weights_summary.json", "weights_summary"),
+)
+MAX_MODEL_INSIGHT_ITEMS = 500
 
 
 def log(message: str) -> None:
@@ -129,6 +136,83 @@ def split_numeric_metrics(payload: dict, warnings: list[dict], source: str) -> d
     return metrics
 
 
+def normalize_model_insights(payload: dict, default_kind: str = "") -> dict:
+    if not isinstance(payload, dict):
+        return {}
+
+    kind = str(payload.get("kind") or default_kind or "feature_importance")
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list):
+        feature_importance = payload.get("feature_importance")
+        coefficients = payload.get("coefficients")
+        if isinstance(feature_importance, dict):
+            kind = "feature_importance"
+            raw_items = [{"name": name, "value": value} for name, value in feature_importance.items()]
+        elif isinstance(coefficients, dict):
+            kind = "coefficients"
+            raw_items = [{"name": name, "value": value} for name, value in coefficients.items()]
+        else:
+            raw_items = []
+
+    items = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("feature") or "").strip()
+        if not name:
+            continue
+        value = item.get("value", item.get("importance", item.get("coefficient")))
+        if not is_number(value):
+            continue
+        normalized = {
+            "name": name,
+            "value": float(value),
+            "abs_value": float(abs(value)),
+        }
+        class_name = item.get("class_name", item.get("class"))
+        if class_name is not None:
+            normalized["class_name"] = str(class_name)
+        items.append(normalized)
+
+    items = sorted(items, key=lambda entry: entry["abs_value"], reverse=True)[:MAX_MODEL_INSIGHT_ITEMS]
+    for rank, item in enumerate(items, start=1):
+        item["rank"] = rank
+
+    if not items:
+        return {}
+
+    try:
+        feature_count = int(payload.get("feature_count") or len(items))
+    except (TypeError, ValueError):
+        feature_count = len(items)
+
+    return {
+        "schema_version": "model-insights-v1",
+        "kind": kind,
+        "source": str(payload.get("source") or "training_artifact"),
+        "feature_count": feature_count,
+        "items": items,
+    }
+
+
+def read_model_insights(output_dir: Path, warnings: list[dict]) -> dict:
+    for filename, default_kind in INSIGHTS_INPUT_FILES:
+        path = output_dir / filename
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            warn(warnings, "invalid_model_insights_json", f"{filename} could not be parsed and was ignored.", error=str(exc))
+            return {}
+        insights = normalize_model_insights(payload, default_kind)
+        if not insights:
+            warn(warnings, "invalid_model_insights_shape", f"{filename} did not contain supported model insight items.")
+            return {}
+        return insights
+    return {}
+
+
 def artifact_kind(relative_path: Path) -> str:
     name = relative_path.name
     suffix = relative_path.suffix.lower()
@@ -198,12 +282,15 @@ def write_mlops_bundle(
     params_payload = read_json_object(OUTPUT_DIR / "params.json", "params", warnings)
     metrics = {**stdout_metrics, **split_numeric_metrics(file_metrics_payload, warnings, "metrics.json")}
     params = safe_json_value(params_payload)
+    model_insights = read_model_insights(OUTPUT_DIR, warnings)
 
     (mlops_dir / "stdout.txt").write_text(stdout_text, encoding="utf-8")
     (mlops_dir / "stderr.txt").write_text(stderr_text, encoding="utf-8")
     write_metric_events(mlops_dir / "metric_events.jsonl", metric_events)
     write_json(mlops_dir / "metrics.json", metrics)
     write_json(mlops_dir / "params.json", params)
+    if model_insights:
+        write_json(mlops_dir / "model_insights.json", model_insights)
     write_json(mlops_dir / "warnings.json", warnings)
 
     manifest = build_artifact_manifest(MODEL_DIR)

@@ -158,6 +158,7 @@ def serialize_training_job(training_job: TrainingJob):
         "training_summary": training_job.training_summary,
         "metrics_summary": training_job.metrics_summary,
         "params_summary": training_job.params_summary,
+        "model_insights_summary": training_job.model_insights_summary,
         "artifact_manifest": training_job.artifact_manifest,
         "deployability_status": training_job.deployability_status,
         "deployability_reason": training_job.deployability_reason,

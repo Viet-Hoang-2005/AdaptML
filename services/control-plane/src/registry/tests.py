@@ -29,6 +29,16 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
             "training_summary": {"entry_point": "train.py", "status": "succeeded"},
             "metrics_summary": {"accuracy": 0.97, "loss": 0.12},
             "params_summary": {"n_estimators": 100},
+            "model_insights_summary": {
+                "schema_version": "model-insights-v1",
+                "kind": "feature_importance",
+                "source": "training_artifact",
+                "feature_count": 2,
+                "items": [
+                    {"name": "packet_rate", "value": 0.7, "abs_value": 0.7, "rank": 1},
+                    {"name": "duration", "value": 0.3, "abs_value": 0.3, "rank": 2},
+                ],
+            },
             "artifact_manifest": [
                 {
                     "path": "model.pkl",
@@ -86,6 +96,8 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         self.assertEqual(version.source_training_job_id, job.id)
         self.assertEqual(version.metrics_summary["accuracy"], 0.97)
         self.assertEqual(version.params_summary["n_estimators"], 100)
+        self.assertEqual(version.model_insights_summary["kind"], "feature_importance")
+        self.assertEqual(version.model_insights_summary["items"][0]["name"], "packet_rate")
         self.assertEqual(version.artifact_manifest[0]["path"], "model.pkl")
         self.assertEqual(version.deployability_status, "deployable")
         self.assertEqual(version.mlflow_run_id, "run-123")
@@ -116,6 +128,10 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["tracking_status"], "completed")
         self.assertEqual(response.data["metrics_summary"]["accuracy"], 0.97)
+        self.assertTrue(response.data["has_model_insights"])
+        self.assertEqual(response.data["model_insights_kind"], "feature_importance")
+        self.assertEqual(response.data["model_insights_item_count"], 2)
+        self.assertEqual(response.data["model_insights_summary"]["items"][0]["name"], "packet_rate")
         self.assertEqual(response.data["deployability_status"], "deployable")
         self.assertEqual(response.data["source_training_job_backend"], "aws_batch")
         self.assertEqual(response.data["mlflow_run_id"], "run-123")
