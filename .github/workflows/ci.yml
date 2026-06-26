@@ -161,7 +161,13 @@ jobs:
       - name: Validate K8s Manifests
         run: |
           echo "Building Kustomize to check syntax..."
-          kustomize build --enable-helm k8s/ > full_manifest.yaml
+          for i in 1 2 3; do
+            kustomize build --enable-helm k8s/ > full_manifest.yaml && break || sleep 10
+          done
+          if [ ! -s full_manifest.yaml ]; then
+            echo "::error::Kustomize build failed after 3 retries due to network timeouts!"
+            exit 1
+          fi
           echo "Validating structure with Kubeconform..."
           kubeconform -ignore-missing-schemas -summary full_manifest.yaml
 

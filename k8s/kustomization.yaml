@@ -3,7 +3,7 @@ kind: Kustomization
 
 # Root Kustomization
 # Gọi tất cả các module hạ tầng (Infrastructure) và ứng dụng (Apps)
-bases:
+resources:
   # 1. Infrastructure & Platform Services
   - cloudflare
   - monitoring
