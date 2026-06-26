@@ -43,7 +43,8 @@ export default function DriftMonitoringPage() {
 
   if (!activeJob) {
     return (
-      <div className="flex w-full flex-1 flex-col">
+      <div className="flex w-full flex-1 flex-col space-y-6">
+        <PageHeader title="Drift Monitoring" />
         <Placeholder
           title="Drift Monitoring"
           description="You haven't configured Drift Monitoring for this model yet."
