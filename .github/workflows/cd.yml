@@ -15,11 +15,11 @@ jobs:
     name: "Detect Changed Components"
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      control_plane: ${{ steps.filter.outputs.control_plane }}
-      consumer: ${{ steps.filter.outputs.consumer }}
-      packager: ${{ steps.filter.outputs.packager }}
-      evidently: ${{ steps.filter.outputs.evidently }}
+      frontend: ${{ steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch' }}
+      control_plane: ${{ steps.filter.outputs.control_plane == 'true' || github.event_name == 'workflow_dispatch' }}
+      consumer: ${{ steps.filter.outputs.consumer == 'true' || github.event_name == 'workflow_dispatch' }}
+      packager: ${{ steps.filter.outputs.packager == 'true' || github.event_name == 'workflow_dispatch' }}
+      evidently: ${{ steps.filter.outputs.evidently == 'true' || github.event_name == 'workflow_dispatch' }}
       matrix_targets: ${{ steps.matrix.outputs.targets }}
     steps:
       - uses: actions/checkout@v4
@@ -44,17 +44,18 @@ jobs:
         run: |
           python3 -c '
           import os, json
+          is_manual = "${{ github.event_name }}" == "workflow_dispatch"
           changed = {
-              "frontend": "${{ steps.filter.outputs.frontend }}" == "true",
-              "control_plane": "${{ steps.filter.outputs.control_plane }}" == "true",
-              "consumer": "${{ steps.filter.outputs.consumer }}" == "true",
-              "packager": "${{ steps.filter.outputs.packager }}" == "true",
-              "evidently": "${{ steps.filter.outputs.evidently }}" == "true",
+              "frontend": "${{ steps.filter.outputs.frontend }}" == "true" or is_manual,
+              "control_plane": "${{ steps.filter.outputs.control_plane }}" == "true" or is_manual,
+              "consumer": "${{ steps.filter.outputs.consumer }}" == "true" or is_manual,
+              "packager": "${{ steps.filter.outputs.packager }}" == "true" or is_manual,
+              "evidently": "${{ steps.filter.outputs.evidently }}" == "true" or is_manual,
           }
           configs = {
               "frontend": {"name": "Frontend Web", "id": "frontend", "context": "web", "image": "mlops-paas-web"},
               "control_plane": {"name": "Control Plane", "id": "control_plane", "context": "services/control-plane", "image": "mlops-paas-django"},
-              "consumer": {"name": "Consumer Service", "id": "consumer", "context": "services/consumer", "image": "mlops-paas-consumer"},
+              "consumer": {"name": "Redpanda Consumer", "id": "consumer", "context": "services/consumer", "image": "mlops-paas-consumer"},
               "packager": {"name": "Model Packager", "id": "packager", "context": "services/model-packager", "image": "mlops-paas-model-packager"},
               "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"}
           }
@@ -208,7 +209,7 @@ jobs:
           | :--- | :--- |
           | **Frontend Web** (\`mlops-paas-web\`) | \`$WEB_TAG\` |
           | **Control Plane** (\`mlops-paas-django\`) | \`$DJANGO_TAG\` |
-          | **Consumer Service** (\`mlops-paas-consumer\`) | \`$CONSUMER_TAG\` |
+          | **Redpanda Consumer** (\`mlops-paas-consumer\`) | \`$CONSUMER_TAG\` |
           | **Model Packager** (\`mlops-paas-model-packager\`) | \`$PACKAGER_TAG\` |
           | **Evidently Drift** (\`mlops-paas-evidently\`) | \`$EVIDENTLY_TAG\` |"
           
