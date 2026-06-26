@@ -7,18 +7,19 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   detect-changes:
     name: "Detect Changed Components"
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      control_plane: ${{ steps.filter.outputs.control_plane }}
-      consumer: ${{ steps.filter.outputs.consumer }}
-      packager: ${{ steps.filter.outputs.packager }}
-      evidently: ${{ steps.filter.outputs.evidently }}
-      infra: ${{ steps.filter.outputs.infra }}
+      frontend: ${{ steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch' }}
+      control_plane: ${{ steps.filter.outputs.control_plane == 'true' || github.event_name == 'workflow_dispatch' }}
+      consumer: ${{ steps.filter.outputs.consumer == 'true' || github.event_name == 'workflow_dispatch' }}
+      packager: ${{ steps.filter.outputs.packager == 'true' || github.event_name == 'workflow_dispatch' }}
+      evidently: ${{ steps.filter.outputs.evidently == 'true' || github.event_name == 'workflow_dispatch' }}
+      infra: ${{ steps.filter.outputs.infra == 'true' || github.event_name == 'workflow_dispatch' }}
       matrix_targets: ${{ steps.matrix.outputs.targets }}
     steps:
       - uses: actions/checkout@v4
@@ -46,17 +47,18 @@ jobs:
         run: |
           python3 -c '
           import os, json
+          is_manual = "${{ github.event_name }}" == "workflow_dispatch"
           changed = {
-              "frontend": "${{ steps.filter.outputs.frontend }}" == "true",
-              "control_plane": "${{ steps.filter.outputs.control_plane }}" == "true",
-              "consumer": "${{ steps.filter.outputs.consumer }}" == "true",
-              "packager": "${{ steps.filter.outputs.packager }}" == "true",
-              "evidently": "${{ steps.filter.outputs.evidently }}" == "true",
+              "frontend": "${{ steps.filter.outputs.frontend }}" == "true" or is_manual,
+              "control_plane": "${{ steps.filter.outputs.control_plane }}" == "true" or is_manual,
+              "consumer": "${{ steps.filter.outputs.consumer }}" == "true" or is_manual,
+              "packager": "${{ steps.filter.outputs.packager }}" == "true" or is_manual,
+              "evidently": "${{ steps.filter.outputs.evidently }}" == "true" or is_manual,
           }
           configs = {
               "frontend": {"name": "Frontend Web", "id": "frontend", "context": "web", "image": "mlops-paas-web"},
               "control_plane": {"name": "Control Plane", "id": "control_plane", "context": "services/control-plane", "image": "mlops-paas-control-plane"},
-              "consumer": {"name": "Consumer Service", "id": "consumer", "context": "services/consumer", "image": "mlops-paas-consumer"},
+              "consumer": {"name": "Redpanda Consumer", "id": "consumer", "context": "services/consumer", "image": "mlops-paas-consumer"},
               "packager": {"name": "Model Packager", "id": "packager", "context": "services/model-packager", "image": "mlops-paas-model-packager"},
               "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"}
           }
@@ -73,44 +75,39 @@ jobs:
         with:
           fetch-depth: 0
       - name: GitLeaks Scan
-        uses: zricethezav/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Report Status
-        if: always()
-        run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "**GitLeaks**: No secrets found." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**GitLeaks**: Secrets found! Please check logs." >> $GITHUB_STEP_SUMMARY
-          fi
-
+          GITLEAKS_LOG_OPTS: ${{ github.event_name != 'pull_request' && '--max-count=1' || '' }}
   lint-frontend:
     name: "Frontend Code Quality (ESLint)"
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      errors: ${{ steps.eslint.outputs.errors }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-      - name: Install Dependencies
+          node-version: '20'
+      - name: Install Dependencies (pnpm)
         working-directory: web
-        run: npm ci
-      - name: Run ESLint
-        working-directory: web
-        run: npm run lint
-      - name: Report Status
-        if: always()
         run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "**ESLint**: Passed." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**ESLint**: Failed! Please fix frontend code." >> $GITHUB_STEP_SUMMARY
+          corepack enable
+          corepack prepare pnpm@latest --activate
+          pnpm install --frozen-lockfile
+      - name: Run ESLint
+        id: eslint
+        working-directory: web
+        run: |
+          pnpm run lint > eslint_out.txt 2>&1 || true
+          cat eslint_out.txt
+          err_count=$(grep -oP '\d+(?= errors?)' eslint_out.txt | tail -1 || echo "0")
+          echo "errors=$err_count" >> $GITHUB_OUTPUT
+          if [ "$err_count" != "0" ]; then
+            exit 1
           fi
 
   lint-backend:
@@ -118,6 +115,8 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.control_plane == 'true' || needs.detect-changes.outputs.consumer == 'true' || needs.detect-changes.outputs.packager == 'true' || needs.detect-changes.outputs.evidently == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      score: ${{ steps.pylint.outputs.score }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
@@ -133,12 +132,13 @@ jobs:
             fi
           done
       - name: Run Pylint (Warnings Only)
+        id: pylint
         run: |
           find services -name "*.py" -not -path "*/migrations/*" -not -path "*/venv/*" > pyfiles.txt
           pylint $(cat pyfiles.txt) --output-format=text > pylint_report.txt || true
           cat pylint_report.txt
           score=$(grep -oP 'Your code has been rated at \K[0-9.]+/10' pylint_report.txt || echo "N/A")
-          echo "**Pylint Score**: $score (Warnings Only)" >> $GITHUB_STEP_SUMMARY
+          echo "score=$score" >> $GITHUB_OUTPUT
 
   lint-infra:
     name: "Infrastructure Validation (Kustomize & Kubeconform)"
@@ -160,14 +160,6 @@ jobs:
           kustomize build --enable-helm k8s/ > full_manifest.yaml
           echo "Validating structure with Kubeconform..."
           kubeconform -ignore-missing-schemas -summary full_manifest.yaml
-      - name: Report Status
-        if: always()
-        run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "**Infra Validation**: Kustomize & Kubeconform passed." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Infra Validation**: Failed! Please check K8s YAML files." >> $GITHUB_STEP_SUMMARY
-          fi
 
   build-and-scan:
     name: "Build & Scan (${{ matrix.target.name }})"
@@ -202,6 +194,78 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
-      - name: Report Status
+  ci-summary:
+    name: "CI Pipeline Summary Table"
+    needs: [detect-changes, secret-scan, lint-frontend, lint-backend, lint-infra, build-and-scan]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Unified CI Summary Table
         run: |
-          echo "**Trivy Scan (${{ matrix.target.name }})**: Passed without blocking vulnerabilities." >> $GITHUB_STEP_SUMMARY
+          python3 -c '
+          import os
+
+          fe_changed = "${{ needs.detect-changes.outputs.frontend }}" == "true"
+          cp_changed = "${{ needs.detect-changes.outputs.control_plane }}" == "true"
+          cs_changed = "${{ needs.detect-changes.outputs.consumer }}" == "true"
+          pk_changed = "${{ needs.detect-changes.outputs.packager }}" == "true"
+          ev_changed = "${{ needs.detect-changes.outputs.evidently }}" == "true"
+          inf_changed = "${{ needs.detect-changes.outputs.infra }}" == "true"
+
+          secret_res = "${{ needs.secret-scan.result }}" == "success"
+          eslint_res = "${{ needs.lint-frontend.result }}" == "success"
+          eslint_errs = "${{ needs.lint-frontend.outputs.errors }}"
+          pylint_res = "${{ needs.lint-backend.result }}" in ["success", "skipped"]
+          pylint_score = "${{ needs.lint-backend.outputs.score }}"
+          trivy_res = "${{ needs.build-and-scan.result }}" == "success"
+          infra_res = "${{ needs.lint-infra.result }}" == "success"
+
+          fmt = lambda ok: "Passed" if ok else "Failed"
+          eslint_fmt = fmt(eslint_res) if eslint_res else f"Failed ({eslint_errs or '?' } errors)"
+          pylint_fmt = f"{pylint_score}" if pylint_score else fmt(pylint_res)
+
+          summary = ["### Unified CI Pipeline Results\n"]
+          summary.append(f"- **Secret Security (GitLeaks)**: {fmt(secret_res)}\n")
+
+          rows = []
+          if fe_changed:
+              rows.append(f"| **Frontend Web** | {eslint_fmt} (ESLint) | {fmt(trivy_res)} |")
+          if cp_changed:
+              rows.append(f"| **Control Plane** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
+          if cs_changed:
+              rows.append(f"| **Redpanda Consumer** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
+          if pk_changed:
+              rows.append(f"| **Model Packager** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
+          if ev_changed:
+              rows.append(f"| **Evidently Drift** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
+
+          if rows:
+              summary.append("#### Application Services (FE & BE)")
+              summary.append("| Services | Lint | Trivy |")
+              summary.append("| :--- | :--- | :--- |")
+              summary.extend(rows)
+              summary.append("\n")
+
+          if inf_changed:
+              summary.append("#### Kubernetes Infrastructure")
+              summary.append("| Services | Validation Status |")
+              summary.append("| :--- | :--- |")
+              summary.append(f"| **K8s Manifests (Kustomize & Kubeconform)** | {fmt(infra_res)} |")
+              summary.append("\n")
+
+          if not rows and not inf_changed:
+              summary.append("*No application or K8s components changed in this run.*")
+
+          content = "\n".join(summary)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(content + "\n")
+          with open("pr_comment.md", "w") as f:
+              f.write(content + "\n")
+          '
+
+      - name: Comment CI Summary on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ci-summary
+          path: pr_comment.md
