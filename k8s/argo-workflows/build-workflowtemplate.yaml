@@ -25,7 +25,7 @@ spec:
           - name: task_type
           - name: control_plane_webhook_url
       container:
-        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:46d08d393e2448cabbbde21471d5a3f56e281eb1
+        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:b5ae40684fb4743c7d8f403ca678f602adf6bdb9
         imagePullPolicy: Always
         command: ["python", "src/cli.py"]
         volumeMounts:
