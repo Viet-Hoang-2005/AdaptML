@@ -14,7 +14,7 @@ from integrations.hashid_utils import encode_model_id
 logger = logging.getLogger(__name__)
 
 def endpoint_container_name(tenant_id: str, model_id: int) -> str:
-    return f"endpoint_{tenant_id.lower()}_model_{encode_model_id(model_id).lower()}"
+    return f"endpoint-{tenant_id.lower()}-model-{encode_model_id(model_id).lower()}"
 
 def endpoint_image_name(tenant_id: str, model_id: int) -> str:
     return f"{tenant_id.lower()}-model-{encode_model_id(model_id).lower()}:latest"
