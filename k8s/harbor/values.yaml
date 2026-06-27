@@ -25,12 +25,18 @@ persistence:
       size: 3Gi
   imageChartStorage:
     type: s3
+    redirect:
+      disable: true
     s3:
       region: ap-southeast-1
       bucket: mlops-paas-artifacts
       v4auth: true
       secure: true
       rootdirectory: /harbor-registry
+
+registry:
+  registry:
+    relativeurls: true
 
 trivy:
   enabled: false
