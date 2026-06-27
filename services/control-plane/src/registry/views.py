@@ -840,7 +840,7 @@ class ModelAPIBuildWebhookView(APIView):
                     else model_api.artifact.url
                 )
             model_api.endpoint_url = build_endpoint_url(model_api)
-            harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "harbor.mlops-nids-nt114.id.vn").strip().rstrip("/")
+            harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
             custom_tag = f"{model_api.tenant.tenant_id.lower()}-model-{encode_model_id(model_api.id).lower()}:latest"
             model_api.endpoint_image_name = f"{harbor_url}/mlops-paas/{custom_tag}"
             logger.info("Model %s build marked ready. Artifact key=%s", model_id, model_api.artifact.name)
