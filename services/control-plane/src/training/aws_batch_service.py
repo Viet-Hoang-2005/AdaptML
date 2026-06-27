@@ -261,7 +261,11 @@ def get_aws_batch_training_log_payload(training_job: TrainingJob, limit: int = 3
             limit=limit,
         )
     except Exception as exc:
-        payload["logs"] = training_job.training_logs or f"Unable to read CloudWatch logs: {exc}"
+        err_msg = str(exc)
+        if "ResourceNotFoundException" in err_msg or "does not exist" in err_msg:
+            payload["logs"] = training_job.training_logs or "CloudWatch log stream is pending. Waiting for container to start..."
+        else:
+            payload["logs"] = training_job.training_logs or f"Unable to read CloudWatch logs: {err_msg}"
         return payload
 
     events = response.get("events") or []

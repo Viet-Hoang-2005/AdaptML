@@ -109,6 +109,10 @@ services:
       AWS_BATCH_GPU_JOB_QUEUE: ${AWS_BATCH_GPU_JOB_QUEUE}
       AWS_BATCH_GPU_JOB_DEFINITION: ${AWS_BATCH_GPU_JOB_DEFINITION}
       TRAINING_MAX_ACTIVE_JOBS_PER_TENANT: ${TRAINING_MAX_ACTIVE_JOBS_PER_TENANT:-1}
+      MLFLOW_TRACKING_REQUIRED: ${MLFLOW_TRACKING_REQUIRED:-false}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-mlops-paas-training}
+      MLFLOW_UI_URL: ${MLFLOW_UI_URL:-http://localhost:5001}
       MODEL_SERVER_PUBLIC_URL: ${MODEL_SERVER_PUBLIC_URL:-http://localhost:5000}
       MODEL_SERVER_INTERNAL_URL: ${MODEL_SERVER_INTERNAL_URL:-http://traefik:5000}
       MODEL_PACKAGER_URL: ${MODEL_PACKAGER_URL:-http://model-packager:7000}
@@ -279,6 +283,24 @@ services:
     networks:
       - mlops_paas_network
 
+  # 9. MLflow Tracking Server
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.1
+    container_name: mlops_paas_mlflow
+    restart: unless-stopped
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+    ports:
+      - "5001:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    networks:
+      - mlops_paas_network
+
 # Mạng nội bộ cho các container
 networks:
   mlops_paas_network:
@@ -291,3 +313,5 @@ volumes:
     name: ${POSTGRES_VOLUME_NAME:-mlops_paas_pgdata}
   redpanda_data:
     name: mlops_paas_redpanda_data
+  mlflow-data:
+    name: mlops_paas_mlflow_data

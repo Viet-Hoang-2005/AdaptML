@@ -27,6 +27,27 @@ class UnsafeTrainingArtifactError(TrackingIngestionError):
     pass
 
 
+def _mlflow_tracking_error_message(exc: Exception) -> str:
+    detail = str(exc)
+    lowered = detail.lower()
+    unavailable_markers = (
+        "nameresolutionerror",
+        "failed to resolve",
+        "temporary failure in name resolution",
+        "connection refused",
+        "connectionerror",
+        "newconnectionerror",
+        "max retries exceeded",
+        "timeout",
+        "timed out",
+    )
+    if any(marker in lowered for marker in unavailable_markers):
+        return "MLFLOW_UNAVAILABLE: Unable to reach MLflow tracking server. Metadata was ingested into Native Registry."
+    if "mlflow_tracking_uri" in lowered:
+        return "MLFLOW_UNAVAILABLE: MLflow tracking URI is not configured. Metadata was ingested into Native Registry."
+    return f"MLflow tracking failed: {detail}"
+
+
 def _s3_client():
     return boto3.client("s3", region_name=getattr(settings, "AWS_DEFAULT_REGION", "ap-southeast-1"))
 
@@ -276,6 +297,10 @@ def _write_generated_mlops_bundle(mlops_dir: Path, training_job: TrainingJob, ma
 def _log_to_mlflow(training_job: TrainingJob, mlops_dir: Path, metrics: dict, params: dict) -> dict:
     import mlflow
 
+    tracking_required = getattr(settings, "MLFLOW_TRACKING_REQUIRED", False)
+    if not tracking_required:
+        return {}
+
     tracking_uri = getattr(settings, "MLFLOW_TRACKING_URI", "http://mlflow:5000").strip()
     experiment_name = getattr(settings, "MLFLOW_EXPERIMENT_NAME", "mlops-paas-training").strip()
     if not tracking_uri:
@@ -343,6 +368,16 @@ def _summary_response(training_job: TrainingJob) -> dict:
         "mlflow_experiment_id": training_job.mlflow_experiment_id or "",
         "mlflow_artifact_uri": training_job.mlflow_artifact_uri or "",
     }
+
+
+def _sync_registered_versions(training_job: TrainingJob) -> None:
+    try:
+        from registry.views import sync_registry_version_from_model_api
+    except ImportError:
+        return
+
+    for model_api in training_job.registered_model_apis.exclude(status="disabled"):
+        sync_registry_version_from_model_api(model_api, training_job=training_job)
 
 
 def ingest_training_job_tracking(training_job: TrainingJob, force: bool = False) -> dict:
@@ -444,20 +479,37 @@ def ingest_training_job_tracking(training_job: TrainingJob, force: bool = False)
             ]
         )
 
+        tracking_required = getattr(settings, "MLFLOW_TRACKING_REQUIRED", False)
+        if not tracking_required:
+            training_job.tracking_status = "skipped"
+            training_job.tracking_error = "MLflow tracking is disabled; metadata was ingested into Native Registry."
+            training_job.tracking_ingested_at = timezone.now()
+            training_job.save(
+                update_fields=[
+                    "tracking_status",
+                    "tracking_error",
+                    "tracking_ingested_at",
+                    "updated_at",
+                ]
+            )
+            _sync_registered_versions(training_job)
+            return _summary_response(training_job)
+
         try:
             mlflow_info = _log_to_mlflow(training_job, mlops_dir, metrics_summary, params_summary)
         except Exception as exc:
             training_job.tracking_status = "failed"
-            training_job.tracking_error = f"MLflow tracking failed: {exc}"
+            training_job.tracking_error = _mlflow_tracking_error_message(exc)
             training_job.save(update_fields=["tracking_status", "tracking_error", "updated_at"])
+            _sync_registered_versions(training_job)
             return _summary_response(training_job)
 
-        training_job.mlflow_run_id = mlflow_info["run_id"]
-        training_job.mlflow_experiment_id = mlflow_info["experiment_id"]
-        training_job.mlflow_artifact_uri = mlflow_info["artifact_uri"]
-        training_job.mlflow_tracking_uri = mlflow_info["tracking_uri"]
+        training_job.mlflow_run_id = mlflow_info.get("run_id", "")
+        training_job.mlflow_experiment_id = mlflow_info.get("experiment_id", "")
+        training_job.mlflow_artifact_uri = mlflow_info.get("artifact_uri", "")
+        training_job.mlflow_tracking_uri = mlflow_info.get("tracking_uri", "")
         training_job.mlflow_experiment_name = getattr(settings, "MLFLOW_EXPERIMENT_NAME", "mlops-paas-training")
-        training_job.mlflow_run_name = mlflow_info["run_name"]
+        training_job.mlflow_run_name = mlflow_info.get("run_name", "")
         training_job.tracking_status = "completed"
         training_job.tracking_error = ""
         training_job.tracking_ingested_at = timezone.now()
@@ -475,6 +527,8 @@ def ingest_training_job_tracking(training_job: TrainingJob, force: bool = False)
                 "updated_at",
             ]
         )
+
+        _sync_registered_versions(training_job)
         return _summary_response(training_job)
 
 

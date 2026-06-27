@@ -546,7 +546,14 @@ def serialize_registry_version(version, include_metrics=False):
         ],
         "mlflow_run_id": version.mlflow_run_id or "",
         "mlflow_experiment_id": version.mlflow_experiment_id or "",
-        "mlflow_run_url": getattr(settings, "MLFLOW_PUBLIC_URL", "").rstrip("/") + f"/#/experiments/{version.mlflow_experiment_id}/runs/{version.mlflow_run_id}" if version.mlflow_experiment_id and version.mlflow_run_id and getattr(settings, "MLFLOW_PUBLIC_URL", "") else "",
+        "mlflow_run_url": (
+            f"{(getattr(settings, 'MLFLOW_UI_URL', '') or getattr(settings, 'MLFLOW_PUBLIC_URL', '')).rstrip('/')}"
+            f"/#/experiments/{version.mlflow_experiment_id}/runs/{version.mlflow_run_id}"
+            if version.mlflow_experiment_id
+            and version.mlflow_run_id
+            and (getattr(settings, "MLFLOW_UI_URL", "") or getattr(settings, "MLFLOW_PUBLIC_URL", ""))
+            else ""
+        ),
         "mlflow_model_uri": version.mlflow_model_uri or "",
         "mlflow_artifact_uri": version.mlflow_artifact_uri or "",
         "created_at": version.created_at,
@@ -1527,6 +1534,9 @@ class ModelAPIBuildView(APIView):
             source_type="manual_upload",
             flavor=flavor,
             requirements_text=requirements_text,
+            metrics_summary=metadata.get("metrics_summary") or {},
+            params_summary=metadata.get("params_summary") or {},
+            model_insights_summary=metadata.get("model_insights_summary") or {},
             status="uploading",
             build_status="building",
         )

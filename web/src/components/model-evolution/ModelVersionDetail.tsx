@@ -83,6 +83,51 @@ function deployabilityBadge(status?: string) {
   }
 }
 
+function trackingBadge(status?: string) {
+  switch (status) {
+    case 'completed':
+      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'skipped':
+      return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'failed':
+      return 'bg-amber-100 text-amber-800 border-amber-200';
+    case 'ingesting':
+      return 'bg-violet-100 text-violet-700 border-violet-200';
+    default:
+      return 'bg-gray-100 text-gray-600 border-gray-200';
+  }
+}
+
+function trackingLabel(status?: string) {
+  switch (status) {
+    case 'completed':
+      return 'MLflow Logged';
+    case 'skipped':
+      return 'Native Registry Ingested';
+    case 'failed':
+      return 'MLflow Logging Failed';
+    case 'ingesting':
+      return 'Ingesting';
+    default:
+      return 'Not Synced';
+  }
+}
+
+function trackingDescription(status?: string) {
+  switch (status) {
+    case 'completed':
+      return 'Training metadata was ingested into Model Evolution and logged to internal MLflow.';
+    case 'skipped':
+      return 'Training metadata was ingested into the Native Registry. MLflow logging is disabled for this environment.';
+    case 'failed':
+      return 'Training metadata was retained in Model Evolution, but MLflow logging failed. Register, build, and deploy can still continue when the artifact is deployable.';
+    case 'ingesting':
+      return 'Training metadata is being extracted from the completed training artifact.';
+    default:
+      return 'Training metadata has not been ingested for this version yet.';
+  }
+}
+
 function endpointFriendlyHint(reasonCode?: string): string {
   if (!reasonCode) return '';
   if ([
@@ -490,13 +535,31 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     <ShieldCheck className="h-4 w-4 text-blue-500" />
                     Tracking Status
                   </span>
-                  <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                    {version.tracking_status || 'not synced'}
+                  <span className={classNames(
+                    'text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border',
+                    trackingBadge(version.tracking_status),
+                  )}>
+                    {trackingLabel(version.tracking_status)}
                   </span>
                 </h4>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  Experiment tracking is captured automatically from training artifacts when available.
+                  {trackingDescription(version.tracking_status)}
                 </p>
+                {version.tracking_status === 'completed' && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                    Completed: metadata is available in Model Evolution and internal MLflow.
+                  </div>
+                )}
+                {version.tracking_status === 'skipped' && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                    MLflow Disabled: Native Registry summaries are still available for metrics, params, insights, compare, and deploy review.
+                  </div>
+                )}
+                {version.tracking_status === 'failed' && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    Native Registry Ingested: MLflow logging failed, but captured metadata was retained.
+                  </div>
+                )}
                 {version.tracking_ingested_at && (
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ingested At</p>

@@ -175,6 +175,10 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         response = self.client.post("/api/models/build/", self._manual_upload_payload(name="manual-artifact-only"), format="multipart")
 
         self.assertEqual(response.status_code, 201)
+        model_api = ModelAPI.objects.get(tenant=self.user, name="manual-artifact-only", version="v1")
+        self.assertEqual(model_api.metrics_summary, {})
+        self.assertEqual(model_api.params_summary, {})
+        self.assertEqual(model_api.model_insights_summary, {})
         version = ModelVersion.objects.get(tenant=self.user, family__name="manual-artifact-only", version="v1")
         self.assertEqual(version.source_type, "manual_upload")
         self.assertEqual(version.metrics_summary, {})
@@ -415,6 +419,24 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         self.assertEqual(response.data["deployability_status"], "deployable")
         self.assertEqual(response.data["source_training_job_backend"], "aws_batch")
         self.assertEqual(response.data["mlflow_run_id"], "run-123")
+
+    @override_settings(MLFLOW_UI_URL="http://localhost:5001")
+    def test_registry_version_detail_uses_mlflow_ui_url_for_run_link(self):
+        family = self._family(name="mlflow-link-family")
+        version = self._version(
+            family,
+            version="v1",
+            mlflow_run_id="run-123",
+            mlflow_experiment_id="exp-1",
+        )
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["mlflow_run_url"],
+            "http://localhost:5001/#/experiments/exp-1/runs/run-123",
+        )
 
     def test_cross_tenant_registry_version_detail_denied(self):
         job = self._completed_job()
