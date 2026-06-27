@@ -640,3 +640,48 @@ class DriftMonitoringResult(models.Model):
     def __str__(self):
         return f"Result {self.id} for {self.job.model_api.name}"
 
+
+class ModelRoutingAlias(models.Model):
+    """Stable API-level alias pointing to a concrete ModelVersion."""
+
+    ALLOWED_ALIASES = ("production", "latest", "champion")
+
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_routing_aliases")
+    family = models.ForeignKey(ModelFamily, on_delete=models.CASCADE, related_name="routing_aliases")
+    alias_name = models.CharField(max_length=32)
+    target_version = models.ForeignKey(
+        ModelVersion,
+        on_delete=models.CASCADE,
+        related_name="routing_alias_targets",
+    )
+    target_model_api = models.ForeignKey(
+        "ModelAPI",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="routing_alias_targets",
+    )
+    endpoint_url = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=32, default="active")
+    promoted_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    promoted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("tenant", "family", "alias_name")]
+        ordering = ["alias_name"]
+        indexes = [
+            models.Index(fields=["tenant", "family", "alias_name"], name="routing_alias_lookup_idx"),
+            models.Index(fields=["target_version", "status"], name="routing_alias_target_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.family.name}:{self.alias_name} -> {self.target_version.version}"
+

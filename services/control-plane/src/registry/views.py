@@ -31,6 +31,7 @@ from authentication.models import (
     ModelDeploymentHistory,
     ModelFamily,
     ModelMetric,
+    ModelRoutingAlias,
     ModelVersion,
     DriftMonitoringJob,
     DriftMonitoringResult,
@@ -112,6 +113,23 @@ def endpoint_payload_message(payload, fallback):
 def model_api_auth_headers(model_api):
     api_key = getattr(getattr(model_api, "tenant", None), "api_key", "") if model_api else ""
     return {"X-API-Key": api_key} if api_key else {}
+
+
+def build_alias_endpoint_url(family_id: int, alias_name: str) -> str:
+    return f"/api/registry/families/{family_id}/aliases/{alias_name}/predict/"
+
+
+def _serialize_routing_alias(alias, version=None):
+    return {
+        "alias_name": alias.alias_name,
+        "is_target": bool(version and alias.target_version_id == version.id),
+        "endpoint_url": alias.endpoint_url or build_alias_endpoint_url(alias.family_id, alias.alias_name),
+        "status": alias.status,
+        "promoted_at": alias.promoted_at,
+        "family_id": alias.family_id,
+        "target_version_id": alias.target_version_id,
+        "target_model_api_id": alias.target_model_api_id,
+    }
 
 
 def serialize_model_api(model_api):
@@ -486,6 +504,8 @@ def _build_drift_summary(version):
 
 def serialize_registry_version(version, include_metrics=False):
     source_job = version.source_training_job
+    model_api = version.model_api
+    endpoint_url = (model_api.endpoint_url if model_api else "") or version.endpoint_url
     payload = {
         "id": version.id,
         "family": version.family_id,
@@ -518,6 +538,12 @@ def serialize_registry_version(version, include_metrics=False):
         "deployability_reason": version.deployability_reason or "",
         "primary_metrics": _primary_metrics(version.metrics_summary or {}),
         **_version_action_state(version),
+        "routing_alias_enabled": True,
+        "can_promote": bool(model_api and endpoint_url),
+        "routing_aliases": [
+            _serialize_routing_alias(alias, version=version)
+            for alias in version.routing_alias_targets.all()
+        ],
         "mlflow_run_id": version.mlflow_run_id or "",
         "mlflow_experiment_id": version.mlflow_experiment_id or "",
         "mlflow_run_url": getattr(settings, "MLFLOW_PUBLIC_URL", "").rstrip("/") + f"/#/experiments/{version.mlflow_experiment_id}/runs/{version.mlflow_run_id}" if version.mlflow_experiment_id and version.mlflow_run_id and getattr(settings, "MLFLOW_PUBLIC_URL", "") else "",
@@ -610,6 +636,10 @@ def serialize_registry_family(family):
     version_count = getattr(family, "version_count", None)
     if version_count is None:
         version_count = family.versions.count()
+    aliases = {
+        alias.alias_name: alias.target_version_id
+        for alias in family.routing_aliases.filter(alias_name__in=ModelRoutingAlias.ALLOWED_ALIASES, status="active")
+    }
 
     return {
         "id": family.id,
@@ -622,6 +652,9 @@ def serialize_registry_family(family):
         "latest_version": serialize_registry_version(latest_version) if latest_version else None,
         "production_version": serialize_registry_version(production_version) if production_version else None,
         "current_production_version": serialize_registry_version(production_version) if production_version else None,
+        "production_alias_version_id": aliases.get("production"),
+        "latest_alias_version_id": aliases.get("latest"),
+        "champion_alias_version_id": aliases.get("champion"),
         "created_at": family.created_at,
         "updated_at": family.updated_at,
     }
@@ -652,6 +685,7 @@ class RegistryFamilyListView(APIView):
         families = (
             ModelFamily.objects.filter(tenant=request.user, is_active=True)
             .select_related("current_production_version", "current_production_version__source_training_job")
+            .prefetch_related("routing_aliases")
             .annotate(version_count=Count("versions"))
             .order_by("-updated_at")
         )
@@ -666,7 +700,7 @@ class RegistryFamilyDetailView(APIView):
             ModelFamily.objects.select_related(
                 "current_production_version",
                 "current_production_version__source_training_job",
-            ).annotate(version_count=Count("versions")),
+            ).prefetch_related("routing_aliases").annotate(version_count=Count("versions")),
             id=family_id,
             tenant=request.user,
         )
@@ -681,6 +715,7 @@ class RegistryFamilyVersionsView(APIView):
         versions = (
             ModelVersion.objects.filter(family=family, tenant=request.user)
             .select_related("family", "model_api", "source_training_job")
+            .prefetch_related("routing_alias_targets")
             .order_by("-created_at")
         )
         return Response([serialize_registry_version(version) for version in versions])
@@ -691,7 +726,7 @@ class RegistryVersionDetailView(APIView):
 
     def get(self, request, version_id):
         version = get_object_or_404(
-            ModelVersion.objects.select_related("family", "model_api", "source_training_job").prefetch_related("metrics"),
+            ModelVersion.objects.select_related("family", "model_api", "source_training_job").prefetch_related("metrics", "routing_alias_targets"),
             id=version_id,
             tenant=request.user,
         )
@@ -971,6 +1006,155 @@ class RegistryVersionSmokeTestView(APIView):
             actor=request.user.email,
         )
         return Response(result, status=status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST)
+
+
+class RegistryVersionPromoteView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request, family_id, version_id):
+        alias_name = (request.data.get("alias") or "production").strip().lower()
+        if alias_name not in ModelRoutingAlias.ALLOWED_ALIASES:
+            return Response(
+                {
+                    "success": False,
+                    "reason_code": "INVALID_ALIAS",
+                    "message": "Alias must be one of: production, latest, champion.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        family = get_object_or_404(ModelFamily, id=family_id, tenant=request.user)
+        version = get_object_or_404(
+            ModelVersion.objects.select_related("family", "model_api"),
+            id=version_id,
+            family=family,
+            tenant=request.user,
+        )
+        model_response = _require_model_api(version)
+        if model_response:
+            return model_response
+
+        model_api = version.model_api
+        endpoint_url = model_api.endpoint_url or version.endpoint_url
+        if not endpoint_url:
+            return Response(
+                {
+                    "success": False,
+                    "reason_code": "VERSION_NOT_DEPLOYED",
+                    "message": "Deploy this version before promoting it to an alias.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        alias_endpoint_url = build_alias_endpoint_url(family.id, alias_name)
+        alias, _ = ModelRoutingAlias.objects.update_or_create(
+            tenant=request.user,
+            family=family,
+            alias_name=alias_name,
+            defaults={
+                "target_version": version,
+                "target_model_api": model_api,
+                "endpoint_url": alias_endpoint_url,
+                "status": "active",
+                "promoted_by": request.user,
+                "promoted_at": timezone.now(),
+            },
+        )
+
+        if alias_name == "production":
+            family.current_production_version = version
+            family.save(update_fields=["current_production_version", "updated_at"])
+
+        warning = ""
+        if getattr(model_api, "endpoint_status", "") != "healthy":
+            warning = "Endpoint has not been confirmed healthy yet. Run health check before production use."
+
+        _create_registry_history(
+            version,
+            "promoted",
+            "success",
+            f"Version promoted to {alias_name} alias.",
+            {
+                "alias": alias_name,
+                "alias_endpoint_url": alias_endpoint_url,
+                "warning": warning,
+            },
+            actor=request.user.email,
+        )
+
+        response = {
+            "success": True,
+            "message": f"Version promoted to {alias_name} alias.",
+            "alias": _serialize_routing_alias(alias, version=version),
+        }
+        if warning:
+            response["warning"] = warning
+        return Response(response, status=status.HTTP_200_OK)
+
+
+class RegistryAliasResolveView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request, family_id, alias_name):
+        alias_name = alias_name.strip().lower()
+        if alias_name not in ModelRoutingAlias.ALLOWED_ALIASES:
+            return Response(
+                {
+                    "success": False,
+                    "reason_code": "INVALID_ALIAS",
+                    "message": "Alias must be one of: production, latest, champion.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        family = get_object_or_404(ModelFamily, id=family_id, tenant=request.user)
+        alias = get_object_or_404(
+            ModelRoutingAlias.objects.select_related("target_version", "target_model_api"),
+            tenant=request.user,
+            family=family,
+            alias_name=alias_name,
+            status="active",
+        )
+        target_version = alias.target_version
+        model_api = alias.target_model_api or target_version.model_api
+        endpoint_url = (model_api.endpoint_url if model_api else "") or target_version.endpoint_url
+        if not endpoint_url:
+            return Response(
+                {
+                    "success": False,
+                    "reason_code": "ALIAS_TARGET_NOT_DEPLOYED",
+                    "message": "Alias target version does not have a deployed endpoint.",
+                    "alias": _serialize_routing_alias(alias),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        target_url = resolve_smoke_test_url(endpoint_url)
+        try:
+            prediction_response = requests.post(
+                target_url,
+                json=request.data,
+                headers=model_api_auth_headers(model_api),
+                timeout=15,
+            )
+            try:
+                payload = prediction_response.json()
+            except ValueError:
+                payload = {"raw": prediction_response.text}
+            return Response(payload, status=prediction_response.status_code)
+        except requests.exceptions.RequestException as exc:
+            payload = endpoint_issue_payload(
+                exc,
+                endpoint_url=endpoint_url,
+                internal_url=target_url,
+                action="alias prediction",
+            )
+            payload["reason_code"] = "ALIAS_TARGET_UNREACHABLE"
+            payload["message"] = "Alias target endpoint is currently unreachable."
+            payload["alias"] = _serialize_routing_alias(alias)
+            return Response(payload, status=status.HTTP_502_BAD_GATEWAY)
 
 
 def validate_model_artifact(artifact_file):

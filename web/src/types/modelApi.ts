@@ -117,6 +117,7 @@ export type RegistryStage = 'none' | 'candidate' | 'staging' | 'production' | 'a
 export type RegistrySourceType = 'manual_upload' | 'training_job' | 'imported';
 export type RegistryHistoryStatus = 'success' | 'failed' | 'running';
 export type RegistryDeployabilityStatus = 'unknown' | 'deployable' | 'track_only' | 'invalid';
+export type RoutingAliasName = 'production' | 'latest' | 'champion';
 
 export interface RegistryArtifactManifestItem {
   path: string;
@@ -169,6 +170,33 @@ export interface DriftSummary {
   message: string;
 }
 
+export interface RoutingAlias {
+  alias_name: RoutingAliasName | string;
+  aliasName?: RoutingAliasName | string;
+  is_target: boolean;
+  isTarget?: boolean;
+  endpoint_url: string;
+  endpointUrl?: string;
+  status: string;
+  promoted_at: string | null;
+  promotedAt?: string | null;
+  family_id?: number;
+  familyId?: number;
+  target_version_id?: number;
+  targetVersionId?: number;
+  target_model_api_id?: number | null;
+  targetModelApiId?: number | null;
+}
+
+export interface PromoteAliasResponse {
+  success: boolean;
+  message: string;
+  alias?: RoutingAlias;
+  reason_code?: string;
+  reasonCode?: string;
+  warning?: string;
+}
+
 export interface RegistryVersion {
   id: number;
   tenant?: number | string;
@@ -208,6 +236,12 @@ export interface RegistryVersion {
   primary_metrics?: Record<string, number>;
   can_build?: boolean;
   can_deploy?: boolean;
+  routing_alias_enabled?: boolean;
+  routingAliasEnabled?: boolean;
+  can_promote?: boolean;
+  canPromote?: boolean;
+  routing_aliases?: RoutingAlias[];
+  routingAliases?: RoutingAlias[];
   build_disabled_reason?: string;
   deploy_disabled_reason?: string;
   build_status?: string;
@@ -319,6 +353,12 @@ export interface RegistryFamily {
   display_name: string;
   description: string;
   current_production_version: RegistryVersion | null;
+  production_alias_version_id?: number | null;
+  productionAliasVersionId?: number | null;
+  latest_alias_version_id?: number | null;
+  latestAliasVersionId?: number | null;
+  champion_alias_version_id?: number | null;
+  championAliasVersionId?: number | null;
   version_count?: number;
   is_active: boolean;
   created_at: string;

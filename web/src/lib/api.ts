@@ -43,6 +43,8 @@ import type {
   RegistryMetric,
   RegistrySmokeTestRequest,
   RegistrySmokeTestResponse,
+  PromoteAliasResponse,
+  RoutingAliasName,
   RegistryVersion,
   RegistryVersionCompareResponse,
 } from '../types/modelApi';
@@ -534,9 +536,26 @@ export const compareRegistryVersions = async (
   return data;
 };
 
-export const promoteRegistryVersion = async (familyId: number, versionId: number): Promise<RegistryVersion> => {
-  const { data } = await axiosInstance.post<RegistryVersion>(
+export const promoteRegistryVersion = async (
+  familyId: number,
+  versionId: number,
+  alias: RoutingAliasName = 'production',
+): Promise<PromoteAliasResponse> => {
+  const { data } = await axiosInstance.post<PromoteAliasResponse>(
     controlPlaneURL(`/registry/families/${familyId}/versions/${versionId}/promote/`),
+    { alias },
+  );
+  return data;
+};
+
+export const predictViaRoutingAlias = async (
+  familyId: number,
+  alias: RoutingAliasName,
+  payload: unknown,
+): Promise<unknown> => {
+  const { data } = await axiosInstance.post(
+    controlPlaneURL(`/registry/families/${familyId}/aliases/${alias}/predict/`),
+    payload,
   );
   return data;
 };

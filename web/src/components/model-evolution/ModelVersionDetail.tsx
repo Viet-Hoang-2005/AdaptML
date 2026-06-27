@@ -282,6 +282,8 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const insightKind = modelInsights.kind || 'unknown';
   const topInsightItem = insightItems[0];
   const insightItemCount = version.model_insights_item_count || version.modelInsightsItemCount || insightItems.length;
+  const routingAliases = version.routing_aliases || version.routingAliases || [];
+  const canPromote = version.can_promote ?? version.canPromote ?? false;
 
   const copyEndpoint = async () => {
     if (!version.endpoint_url) return;
@@ -289,6 +291,11 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
     toast.success('Endpoint URL copied to clipboard.');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyText = async (text: string, message: string) => {
+    await navigator.clipboard.writeText(text);
+    toast.success(message);
   };
 
   const handleSuccess = () => {
@@ -454,9 +461,11 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     size="md" 
                     variant="primary"
                     icon={<ArrowUpCircle className="h-4 w-4" />} 
+                    disabled={!canPromote}
                     onClick={() => setIsPromoteModalOpen(true)}
+                    title={!canPromote ? 'Deploy this version before promoting it to an alias.' : 'Promote to a stable routing alias'}
                   >
-                    Promote to Production
+                    Promote Alias
                   </Button>
                 )}
               </div>
@@ -466,10 +475,10 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
             {isProd && (
               <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-4 flex flex-col gap-1 text-emerald-800">
                 <div className="text-sm">
-                  <strong>Registry production marker is active.</strong> Live traffic routing is not enabled yet.
+                  <strong>Registry production marker is active.</strong> Stable alias routing is available through the production alias endpoint when configured.
                 </div>
                 <div className="text-xs text-emerald-700/80">
-                  Versioned endpoints remain unchanged until Phase 11.
+                  Version-specific endpoints remain unchanged.
                 </div>
               </div>
             )}
@@ -778,6 +787,65 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
 
             {/* F. Drift Summary Card */}
             <DriftSummaryCard driftSummary={version.drift_summary || version.driftSummary} modelApiHashid={typeof version.model_api === 'string' ? version.model_api : undefined} />
+
+            <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">
+                <span className="inline-flex items-center gap-2">
+                  <Terminal className="h-4 w-4 text-indigo-500" />
+                  Routing Aliases
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border bg-indigo-50 text-indigo-700 border-indigo-200">
+                  API Proxy
+                </span>
+              </h4>
+              {routingAliases.length > 0 ? (
+                <div className="grid gap-3">
+                  {routingAliases.map((alias) => {
+                    const aliasName = alias.alias_name || alias.aliasName || 'alias';
+                    const endpointUrl = alias.endpoint_url || alias.endpointUrl || '';
+                    const promotedAt = alias.promoted_at || alias.promotedAt;
+                    return (
+                      <div key={`${aliasName}-${endpointUrl}`} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
+                                {aliasName}
+                              </span>
+                              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-emerald-700">
+                                {alias.status || 'active'}
+                              </span>
+                            </div>
+                            <code className="mt-3 block break-all rounded border border-gray-200 bg-white px-3 py-2 text-xs font-mono text-gray-700">
+                              {endpointUrl || 'Alias endpoint unavailable'}
+                            </code>
+                            {promotedAt && (
+                              <p className="mt-2 text-xs text-gray-500">
+                                Promoted at {new Date(promotedAt).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+                          {endpointUrl && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              icon={<Copy className="h-3.5 w-3.5" />}
+                              onClick={() => void copyText(endpointUrl, 'Alias endpoint copied.')}
+                            >
+                              Copy
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  No alias points to this version yet. Promote this version to production, latest, or champion to create a stable alias endpoint.
+                </p>
+              )}
+            </div>
 
             <div className="grid md:grid-cols-2 gap-6 mt-2">
               {/* D. Deployment Info */}

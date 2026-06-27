@@ -4,7 +4,16 @@ import requests
 from rest_framework.test import APIClient
 from unittest.mock import ANY, Mock, patch
 
-from authentication.models import CustomUser, ModelAPI, ModelFamily, ModelVersion, TrainingJob, DriftMonitoringJob, DriftMonitoringResult
+from authentication.models import (
+    CustomUser,
+    DriftMonitoringJob,
+    DriftMonitoringResult,
+    ModelAPI,
+    ModelFamily,
+    ModelRoutingAlias,
+    ModelVersion,
+    TrainingJob,
+)
 
 
 class ModelEvolutionSummaryMirrorTests(TestCase):
@@ -77,6 +86,22 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         }
         defaults.update(overrides)
         return ModelVersion.objects.create(**defaults)
+
+    def _deployed_model_api(self, name="alias-nids", version="v1", tenant=None, **overrides):
+        tenant = tenant or self.user
+        defaults = {
+            "tenant": tenant,
+            "name": name,
+            "version": version,
+            "source_type": "manual_upload",
+            "status": "deployed",
+            "endpoint_status": "healthy",
+            "endpoint_url": f"http://localhost:5000/{tenant.tenant_id}/models/test/{version}/predict",
+            "build_status": "ready",
+            "flavor": "sklearn",
+        }
+        defaults.update(overrides)
+        return ModelAPI.objects.create(**defaults)
 
     def _manual_upload_payload(self, **overrides):
         payload = {
@@ -180,6 +205,153 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         adapter.trigger_build.assert_called_once()
         model_api.refresh_from_db()
         self.assertEqual(model_api.build_status, "building")
+
+    def test_promote_endpoint_creates_production_alias(self):
+        family = self._family(name="alias-family")
+        model_api = self._deployed_model_api(name="alias-family", version="v1")
+        version = self._version(family, version="v1", source_type="manual_upload", model_api=model_api)
+
+        response = self.client.post(
+            f"/api/registry/families/{family.id}/versions/{version.id}/promote/",
+            {"alias": "production"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["alias"]["alias_name"], "production")
+        alias = ModelRoutingAlias.objects.get(tenant=self.user, family=family, alias_name="production")
+        self.assertEqual(alias.target_version_id, version.id)
+        family.refresh_from_db()
+        self.assertEqual(family.current_production_version_id, version.id)
+
+    def test_promoting_another_version_updates_existing_alias(self):
+        family = self._family(name="alias-update-family")
+        first_api = self._deployed_model_api(name="alias-update-family", version="v1")
+        second_api = self._deployed_model_api(name="alias-update-family", version="v2")
+        first = self._version(family, version="v1", source_type="manual_upload", model_api=first_api)
+        second = self._version(family, version="v2", source_type="manual_upload", model_api=second_api)
+
+        self.client.post(f"/api/registry/families/{family.id}/versions/{first.id}/promote/", {"alias": "production"}, format="json")
+        response = self.client.post(f"/api/registry/families/{family.id}/versions/{second.id}/promote/", {"alias": "production"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ModelRoutingAlias.objects.filter(tenant=self.user, family=family, alias_name="production").count(), 1)
+        alias = ModelRoutingAlias.objects.get(tenant=self.user, family=family, alias_name="production")
+        self.assertEqual(alias.target_version_id, second.id)
+
+    def test_promote_invalid_alias_returns_400(self):
+        family = self._family(name="alias-invalid-family")
+        model_api = self._deployed_model_api(name="alias-invalid-family")
+        version = self._version(family, source_type="manual_upload", model_api=model_api)
+
+        response = self.client.post(
+            f"/api/registry/families/{family.id}/versions/{version.id}/promote/",
+            {"alias": "canary"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["reason_code"], "INVALID_ALIAS")
+
+    def test_promote_version_without_endpoint_returns_409(self):
+        family = self._family(name="alias-not-deployed-family")
+        model_api = self._deployed_model_api(name="alias-not-deployed-family", endpoint_url="", endpoint_status="not_deployed")
+        version = self._version(family, source_type="manual_upload", model_api=model_api, endpoint_url="")
+
+        response = self.client.post(
+            f"/api/registry/families/{family.id}/versions/{version.id}/promote/",
+            {"alias": "production"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["reason_code"], "VERSION_NOT_DEPLOYED")
+
+    def test_cross_tenant_promote_denied(self):
+        family = self._family(name="alias-tenant-family")
+        model_api = self._deployed_model_api(name="alias-tenant-family")
+        version = self._version(family, source_type="manual_upload", model_api=model_api)
+        other_client = APIClient()
+        other_client.force_authenticate(user=self.other_user)
+
+        response = other_client.post(
+            f"/api/registry/families/{family.id}/versions/{version.id}/promote/",
+            {"alias": "production"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_version_outside_family_cannot_be_promoted(self):
+        family = self._family(name="alias-family-a")
+        other_family = self._family(name="alias-family-b")
+        model_api = self._deployed_model_api(name="alias-family-b")
+        version = self._version(other_family, source_type="manual_upload", model_api=model_api)
+
+        response = self.client.post(
+            f"/api/registry/families/{family.id}/versions/{version.id}/promote/",
+            {"alias": "production"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_registry_serializers_include_routing_alias_fields(self):
+        family = self._family(name="alias-serializer-family")
+        model_api = self._deployed_model_api(name="alias-serializer-family")
+        version = self._version(family, source_type="manual_upload", model_api=model_api)
+        self.client.post(f"/api/registry/families/{family.id}/versions/{version.id}/promote/", {"alias": "production"}, format="json")
+
+        detail = self.client.get(f"/api/registry/versions/{version.id}/")
+        family_response = self.client.get(f"/api/registry/families/{family.id}/")
+
+        self.assertEqual(detail.status_code, 200)
+        self.assertTrue(detail.data["routing_alias_enabled"])
+        self.assertTrue(detail.data["can_promote"])
+        self.assertEqual(detail.data["routing_aliases"][0]["alias_name"], "production")
+        self.assertEqual(family_response.status_code, 200)
+        self.assertEqual(family_response.data["production_alias_version_id"], version.id)
+
+    @patch("registry.views.requests.post")
+    def test_alias_predict_endpoint_proxies_to_target(self, mock_post):
+        family = self._family(name="alias-predict-family")
+        model_api = self._deployed_model_api(name="alias-predict-family")
+        version = self._version(family, source_type="manual_upload", model_api=model_api)
+        self.client.post(f"/api/registry/families/{family.id}/versions/{version.id}/promote/", {"alias": "production"}, format="json")
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"prediction": 1, "success": True}
+        mock_post.return_value = mock_response
+
+        response = self.client.post(
+            f"/api/registry/families/{family.id}/aliases/production/predict/",
+            {"features": {"f1": 1}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["prediction"], 1)
+        mock_post.assert_called_once()
+        self.assertEqual(mock_post.call_args.kwargs["json"], {"features": {"f1": 1}})
+
+    @patch("registry.views.requests.post")
+    def test_alias_predict_endpoint_returns_structured_502_when_unreachable(self, mock_post):
+        family = self._family(name="alias-unreachable-family")
+        model_api = self._deployed_model_api(name="alias-unreachable-family")
+        version = self._version(family, source_type="manual_upload", model_api=model_api)
+        self.client.post(f"/api/registry/families/{family.id}/versions/{version.id}/promote/", {"alias": "production"}, format="json")
+        mock_post.side_effect = requests.exceptions.ConnectionError("HTTPConnectionPool raw detail")
+
+        response = self.client.post(
+            f"/api/registry/families/{family.id}/aliases/production/predict/",
+            {"features": {"f1": 1}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.data["reason_code"], "ALIAS_TARGET_UNREACHABLE")
+        self.assertEqual(response.data["message"], "Alias target endpoint is currently unreachable.")
 
     def test_register_training_job_mirrors_tracking_summary_to_model_version(self):
         job = self._completed_job()

@@ -151,6 +151,14 @@ export default function ModelEvolutionPage() {
 
   const totalFamilies = families.length;
   const prodFamilies = families.filter(f => f.current_production_version).length;
+  const aliasFamilies = families.filter(f => (
+    f.production_alias_version_id
+    || f.productionAliasVersionId
+    || f.latest_alias_version_id
+    || f.latestAliasVersionId
+    || f.champion_alias_version_id
+    || f.championAliasVersionId
+  )).length;
 
   return (
     <div className="flex flex-col min-h-full pb-10">
@@ -194,10 +202,10 @@ export default function ModelEvolutionPage() {
             <span className="text-sm font-bold text-emerald-700">Online & Syncing</span>
           </div>
         </div>
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-inner flex flex-col justify-center">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-center">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">Routing Alias</p>
-          <p className="text-lg font-bold text-gray-600">Not Enabled</p>
-          <p className="text-[10px] text-gray-400 mt-0.5 uppercase font-semibold tracking-wider">Phase 11 feature</p>
+          <p className="text-3xl font-extrabold text-indigo-600">{loadingFamilies ? '-' : aliasFamilies}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5 uppercase font-semibold tracking-wider">Families with active aliases</p>
         </div>
       </div>
 
