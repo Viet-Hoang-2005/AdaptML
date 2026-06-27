@@ -954,7 +954,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   <p className="text-sm font-mono text-gray-800 break-all">{version.artifact_uri || 'N/A'}</p>
                 </div>
 
-                {/* Phase 10E.1: MLflow Run Lineage */}
+                {/* Optional internal MLflow lineage. Native Registry remains the primary product flow. */}
                 <div className="border-t border-gray-100 pt-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">MLflow Run</p>
@@ -989,16 +989,16 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                         </div>
                       )}
                       <p className="text-[11px] text-gray-400 leading-relaxed mt-1">
-                        MLflow is used for experiment lineage and artifact deep dives.
-                        The Native Registry remains the source of truth for deployment and promotion.{' '}
-                        <span className="font-medium text-amber-600">MLflow UI is internal/admin only.</span>
+                        Model Evolution displays metrics, params, insights, and deployability from the Native Registry.
+                        MLflow lineage is optional internal metadata for audit and artifact deep dives.{' '}
+                        <span className="font-medium text-amber-600">Opening MLflow is not required for normal review or deployment.</span>
                       </p>
                     </div>
                   ) : (
                     <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-3 flex flex-col gap-1">
                       <p className="text-xs font-semibold text-gray-500">No MLflow run linked</p>
                       <p className="text-[11px] text-gray-400 leading-relaxed">
-                        Experiment tracking is captured automatically when training artifacts are ingested.
+                        Model Evolution still uses Native Registry summaries from the ingested training artifact.
                       </p>
                     </div>
                   )}

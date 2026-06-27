@@ -438,6 +438,34 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
             "http://localhost:5001/#/experiments/exp-1/runs/run-123",
         )
 
+    @override_settings(MLFLOW_UI_URL="", MLFLOW_PUBLIC_URL="")
+    def test_registry_version_detail_does_not_require_mlflow_ui_url(self):
+        family = self._family(name="mlflow-no-link-family")
+        version = self._version(
+            family,
+            version="v1",
+            tracking_status="completed",
+            metrics_summary={"accuracy": 0.99},
+            params_summary={"n_estimators": 10},
+            model_insights_summary={
+                "schema_version": "model-insights-v1",
+                "kind": "feature_importance",
+                "items": [{"name": "f1", "value": 1.0, "abs_value": 1.0, "rank": 1}],
+            },
+            mlflow_run_id="run-123",
+            mlflow_experiment_id="exp-1",
+        )
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["tracking_status"], "completed")
+        self.assertEqual(response.data["mlflow_run_id"], "run-123")
+        self.assertEqual(response.data["mlflow_run_url"], "")
+        self.assertEqual(response.data["metrics_summary"]["accuracy"], 0.99)
+        self.assertEqual(response.data["params_summary"]["n_estimators"], 10)
+        self.assertTrue(response.data["has_model_insights"])
+
     def test_cross_tenant_registry_version_detail_denied(self):
         job = self._completed_job()
         self.client.post(
