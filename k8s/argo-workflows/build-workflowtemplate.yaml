@@ -13,6 +13,8 @@ spec:
         type: Socket
   templates:
     - name: build-model
+      nodeSelector:
+        workload-type: worker
       inputs:
         parameters:
           - name: model_id
@@ -26,8 +28,6 @@ spec:
           - name: control_plane_webhook_url
       container:
         image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:b5ae40684fb4743c7d8f403ca678f602adf6bdb9
-      nodeSelector:
-        workload-type: worker
         imagePullPolicy: Always
         command: ["python", "src/cli.py"]
         volumeMounts:

@@ -8,6 +8,8 @@ spec:
   entrypoint: run-evidently
   templates:
     - name: run-evidently
+      nodeSelector:
+        workload-type: worker
       inputs:
         parameters:
           - name: job_id
@@ -26,8 +28,6 @@ spec:
           - name: control_plane_webhook_url
       container:
         image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-evidently:b5ae40684fb4743c7d8f403ca678f602adf6bdb9
-      nodeSelector:
-        workload-type: worker
         imagePullPolicy: Always
         command: ["python", "/app/detect_drift.py"]
         envFrom:

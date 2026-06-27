@@ -8,6 +8,8 @@ spec:
   entrypoint: deploy-model
   templates:
     - name: deploy-model
+      nodeSelector:
+        workload-type: worker
       inputs:
         parameters:
           - name: tenant_id
@@ -19,34 +21,32 @@ spec:
       script:
         image: bitnami/kubectl:latest
         command: [bash]
-      nodeSelector:
-        workload-type: worker
-      source: |
-        set -e
-        cat <<EOF | kubectl apply -f -
-        apiVersion: apps/v1
-        kind: Deployment
-        metadata:
-          name: {{inputs.parameters.container_name}}
-          namespace: default
-          labels:
-            app: model-endpoint
-            tenant: {{inputs.parameters.tenant_id}}
-            model: {{inputs.parameters.model_id}}
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              app: {{inputs.parameters.container_name}}
-          template:
-            metadata:
-              labels:
+        source: |
+          set -e
+          cat <<EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: {{inputs.parameters.container_name}}
+            namespace: default
+            labels:
+              app: model-endpoint
+              tenant: {{inputs.parameters.tenant_id}}
+              model: {{inputs.parameters.model_id}}
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
                 app: {{inputs.parameters.container_name}}
-            spec:
-              nodeSelector:
-                workload-type: worker
-              containers:
-                - name: model-server
+            template:
+              metadata:
+                labels:
+                  app: {{inputs.parameters.container_name}}
+              spec:
+                nodeSelector:
+                  workload-type: worker
+                containers:
+                  - name: model-server
                     image: {{inputs.parameters.image_name}}
                     imagePullPolicy: Always
                     ports:
