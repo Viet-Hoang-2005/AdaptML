@@ -89,11 +89,6 @@ jobs:
             SECRETS, mlops/github-actions-secrets
           parse-json-secrets: true
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
-
       # Push qua ALB Ingress (registry domain - DNS Only)
       - name: Login to Harbor Registry
         uses: docker/login-action@v3
@@ -102,21 +97,32 @@ jobs:
           username: ${{ env.SECRETS_HARBOR_USERNAME }}
           password: ${{ env.SECRETS_HARBOR_PASSWORD }}
 
-      - name: Build and Push Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ matrix.target.context }}
-          push: true
-          tags: |
-            registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}
-            registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest
-          build-args: |
-            VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
-            VITE_GITHUB_CLIENT_ID=${{ vars.VITE_GITHUB_CLIENT_ID }}
-            VITE_GITHUB_REDIRECT_URI=${{ vars.VITE_GITHUB_REDIRECT_URI }}
-            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
-          cache-from: type=registry,ref=registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:buildcache
-          cache-to: type=registry,ref=registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:buildcache,mode=max
+      - name: Build and Push Image (Native Docker)
+        shell: bash
+        run: |
+          set -euo pipefail
+          REGISTRY_HOST="registry.mlops-nids-nt114.id.vn"
+          IMAGE="${{ matrix.target.image }}"
+          SHA="${{ github.sha }}"
+
+          IMAGE_SHA="$REGISTRY_HOST/mlops-paas/$IMAGE:$SHA"
+          IMAGE_LATEST="$REGISTRY_HOST/mlops-paas/$IMAGE:latest"
+
+          echo "::group::Building ${{ matrix.target.name }}"
+          DOCKER_BUILDKIT=1 docker build \
+            --build-arg VITE_GOOGLE_CLIENT_ID="${{ vars.VITE_GOOGLE_CLIENT_ID }}" \
+            --build-arg VITE_GITHUB_CLIENT_ID="${{ vars.VITE_GITHUB_CLIENT_ID }}" \
+            --build-arg VITE_GITHUB_REDIRECT_URI="${{ vars.VITE_GITHUB_REDIRECT_URI }}" \
+            --build-arg VITE_API_BASE_URL="${{ vars.VITE_API_BASE_URL }}" \
+            -t "$IMAGE_SHA" \
+            -t "$IMAGE_LATEST" \
+            "${{ matrix.target.context }}"
+          echo "::endgroup::"
+
+          echo "::group::Pushing to Harbor via ALB Ingress"
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+          echo "::endgroup::"
 
   gitops-promotion:
     name: "GitOps: Update Kustomize & Create PR"
