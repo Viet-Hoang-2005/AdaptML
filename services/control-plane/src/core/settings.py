@@ -251,6 +251,7 @@ GITHUB_OAUTH_REDIRECT_URI = os.environ.get(
 )
 
 MODEL_SERVER_PUBLIC_URL = os.environ.get('MODEL_SERVER_PUBLIC_URL', 'http://localhost:5000')
+MODEL_SERVER_INTERNAL_URL = os.environ.get('MODEL_SERVER_INTERNAL_URL', '').rstrip('/')
 MODEL_PACKAGER_URL = os.environ.get('MODEL_PACKAGER_URL', 'http://model-packager:7000')
 CONTROL_PLANE_INTERNAL_URL = os.environ.get('CONTROL_PLANE_INTERNAL_URL', 'http://control-plane:8000').rstrip('/')
 DOCKER_NETWORK_NAME = os.environ.get('DOCKER_NETWORK_NAME', 'mlops_paas_network').strip() or 'mlops_paas_network'

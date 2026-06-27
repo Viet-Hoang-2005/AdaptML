@@ -43,6 +43,10 @@ class RunnerMetadataBundleTests(unittest.TestCase):
             json.dumps({"n_estimators": 10, "nested": {"enabled": True}}),
             encoding="utf-8",
         )
+        (runner.OUTPUT_DIR / "feature_importance.json").write_text(
+            json.dumps({"feature_importance": {"duration": 0.25, "packet_rate": 0.75}}),
+            encoding="utf-8",
+        )
         stdout_text = "\n".join(
             [
                 "starting",
@@ -65,6 +69,7 @@ class RunnerMetadataBundleTests(unittest.TestCase):
         self.assertTrue((mlops_dir / "training_summary.json").exists())
         self.assertTrue((mlops_dir / "metrics.json").exists())
         self.assertTrue((mlops_dir / "params.json").exists())
+        self.assertTrue((mlops_dir / "model_insights.json").exists())
         self.assertTrue((mlops_dir / "metric_events.jsonl").exists())
         self.assertEqual((mlops_dir / "stdout.txt").read_text(encoding="utf-8"), stdout_text)
         self.assertEqual((mlops_dir / "stderr.txt").read_text(encoding="utf-8"), stderr_text)
@@ -79,6 +84,12 @@ class RunnerMetadataBundleTests(unittest.TestCase):
         self.assertEqual(params["n_estimators"], 10)
         self.assertEqual(params["nested"]["enabled"], True)
 
+        insights = json.loads((mlops_dir / "model_insights.json").read_text(encoding="utf-8"))
+        self.assertEqual(insights["schema_version"], "model-insights-v1")
+        self.assertEqual(insights["kind"], "feature_importance")
+        self.assertEqual(insights["items"][0]["name"], "packet_rate")
+        self.assertEqual(insights["items"][0]["rank"], 1)
+
         warnings = json.loads((mlops_dir / "warnings.json").read_text(encoding="utf-8"))
         self.assertGreaterEqual(len(warnings), 2)
         self.assertTrue(any(item["code"] == "invalid_metric_json" for item in warnings))
@@ -89,7 +100,9 @@ class RunnerMetadataBundleTests(unittest.TestCase):
 
         manifest = json.loads((mlops_dir / "artifact_manifest.json").read_text(encoding="utf-8"))
         model_entries = [item for item in manifest if item["path"] == "model.pkl"]
+        insight_entries = [item for item in manifest if item["path"] == "_mlops/model_insights.json"]
         self.assertEqual(len(model_entries), 1)
+        self.assertEqual(len(insight_entries), 1)
         self.assertEqual(model_entries[0]["kind"], "model")
         self.assertEqual(model_entries[0]["size_bytes"], len(b"demo-model"))
         self.assertEqual(len(model_entries[0]["sha256"]), 64)

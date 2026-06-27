@@ -243,17 +243,20 @@ class ModelAPI(models.Model):
         null=True,
     )
     source_artifact_uri = models.CharField(max_length=1024, blank=True)
-    source_artifact = models.FileField(upload_to=model_source_artifact_path, blank=True, null=True)
-    source_code_file = models.FileField(upload_to=model_source_code_path, blank=True, null=True)
-    reference_data_file = models.FileField(upload_to=model_reference_data_path, blank=True, null=True)
-    label_mapping_file = models.FileField(upload_to=label_mapping_path, blank=True, null=True)
+    source_artifact = models.FileField(upload_to=model_source_artifact_path, max_length=1024, blank=True, null=True)
+    source_code_file = models.FileField(upload_to=model_source_code_path, max_length=1024, blank=True, null=True)
+    reference_data_file = models.FileField(upload_to=model_reference_data_path, max_length=1024, blank=True, null=True)
+    label_mapping_file = models.FileField(upload_to=label_mapping_path, max_length=1024, blank=True, null=True)
     flavor = models.CharField(max_length=40, blank=True)
     requirements_text = models.TextField(blank=True)
+    metrics_summary = models.JSONField(default=dict, blank=True)
+    params_summary = models.JSONField(default=dict, blank=True)
+    model_insights_summary = models.JSONField(default=dict, blank=True)
     package_manifest = models.JSONField(default=dict, blank=True)
     package_preview_tree = models.JSONField(default=list, blank=True)
     build_status = models.CharField(max_length=20, choices=BUILD_STATUS_CHOICES, default="not_started")
     build_error = models.TextField(blank=True)
-    artifact = models.FileField(upload_to=model_artifact_path, blank=True, null=True)
+    artifact = models.FileField(upload_to=model_artifact_path, max_length=1024, blank=True, null=True)
     model_uri = models.CharField(max_length=1024, blank=True)
     endpoint_url = models.CharField(max_length=1024, blank=True)
     endpoint_status = models.CharField(
@@ -360,6 +363,7 @@ class TrainingJob(models.Model):
     training_summary = models.JSONField(default=dict, blank=True)
     metrics_summary = models.JSONField(default=dict, blank=True)
     params_summary = models.JSONField(default=dict, blank=True)
+    model_insights_summary = models.JSONField(default=dict, blank=True)
     artifact_manifest = models.JSONField(default=list, blank=True)
     deployability_status = models.CharField(
         max_length=30,
@@ -493,6 +497,16 @@ class ModelVersion(models.Model):
     mlflow_experiment_id = models.CharField(max_length=255, blank=True, null=True)
     mlflow_model_uri = models.CharField(max_length=1024, blank=True, null=True)
     mlflow_artifact_uri = models.CharField(max_length=1024, blank=True, null=True)
+    training_summary = models.JSONField(default=dict, blank=True)
+    metrics_summary = models.JSONField(default=dict, blank=True)
+    params_summary = models.JSONField(default=dict, blank=True)
+    model_insights_summary = models.JSONField(default=dict, blank=True)
+    artifact_manifest = models.JSONField(default=list, blank=True)
+    tracking_status = models.CharField(max_length=30, blank=True, default="")
+    tracking_error = models.TextField(blank=True)
+    tracking_ingested_at = models.DateTimeField(null=True, blank=True)
+    deployability_status = models.CharField(max_length=30, blank=True, default="unknown")
+    deployability_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -625,4 +639,49 @@ class DriftMonitoringResult(models.Model):
 
     def __str__(self):
         return f"Result {self.id} for {self.job.model_api.name}"
+
+
+class ModelRoutingAlias(models.Model):
+    """Stable API-level alias pointing to a concrete ModelVersion."""
+
+    ALLOWED_ALIASES = ("production", "latest", "champion")
+
+    tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_routing_aliases")
+    family = models.ForeignKey(ModelFamily, on_delete=models.CASCADE, related_name="routing_aliases")
+    alias_name = models.CharField(max_length=32)
+    target_version = models.ForeignKey(
+        ModelVersion,
+        on_delete=models.CASCADE,
+        related_name="routing_alias_targets",
+    )
+    target_model_api = models.ForeignKey(
+        "ModelAPI",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="routing_alias_targets",
+    )
+    endpoint_url = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=32, default="active")
+    promoted_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    promoted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("tenant", "family", "alias_name")]
+        ordering = ["alias_name"]
+        indexes = [
+            models.Index(fields=["tenant", "family", "alias_name"], name="routing_alias_lookup_idx"),
+            models.Index(fields=["target_version", "status"], name="routing_alias_target_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.family.name}:{self.alias_name} -> {self.target_version.version}"
 

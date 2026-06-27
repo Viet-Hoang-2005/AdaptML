@@ -25,6 +25,12 @@ const emptyBuildForm: ModelBuildFormValues = {
   flavor: 'sklearn',
   requirements_text: '',
   requirements_file: null,
+  label_mapping_file: null,
+  metrics_file: null,
+  params_file: null,
+  model_insights_file: null,
+  feature_importance_file: null,
+  input_schema_file: null,
 };
 
 export default function UploadModelPage() {

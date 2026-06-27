@@ -71,6 +71,14 @@ class TrackingIngestionTests(TestCase):
             ),
             "_mlops/metrics.json": json.dumps({"accuracy": 0.98, "note": "ignored"}),
             "_mlops/params.json": json.dumps({"n_estimators": 10}),
+            "_mlops/model_insights.json": json.dumps(
+                {
+                    "feature_importance": {
+                        "duration": 0.2,
+                        "packet_rate": 0.8,
+                    }
+                }
+            ),
             "_mlops/artifact_manifest.json": json.dumps(
                 [
                     {
@@ -107,8 +115,32 @@ class TrackingIngestionTests(TestCase):
         self.assertEqual(job.tracking_status, "completed")
         self.assertEqual(job.metrics_summary["accuracy"], 0.98)
         self.assertEqual(job.params_summary["n_estimators"], 10)
+        self.assertEqual(job.model_insights_summary["schema_version"], "model-insights-v1")
+        self.assertEqual(job.model_insights_summary["items"][0]["name"], "packet_rate")
+        self.assertEqual(job.model_insights_summary["items"][0]["rank"], 1)
         self.assertEqual(job.deployability_status, "deployable")
         self.assertEqual(job.mlflow_run_id, "run-1")
+
+    @patch("training.tracking_ingestion_service._log_to_mlflow")
+    def test_missing_model_insights_does_not_fail_ingestion(self, mock_mlflow):
+        mock_mlflow.return_value = {
+            "run_id": "run-no-insights",
+            "experiment_id": "exp-1",
+            "artifact_uri": "s3://bucket/mlflow/run-no-insights",
+            "tracking_uri": "http://mlflow:5000",
+            "run_name": "training-job-no-insights-demo",
+        }
+        files = self._valid_mlops_files()
+        files.pop("_mlops/model_insights.json")
+        tar_path = self.workspace / "no-insights.tar.gz"
+        self._write_tar(tar_path, files)
+        job = self._job(tar_path)
+
+        ingest_training_job_tracking(job)
+        job.refresh_from_db()
+
+        self.assertEqual(job.tracking_status, "completed")
+        self.assertEqual(job.model_insights_summary, {})
 
     @patch("training.tracking_ingestion_service._log_to_mlflow")
     def test_missing_mlops_falls_back_to_artifact_scan(self, mock_mlflow):

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RefreshCw, Component } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { getRegistryFamilies, getRegistryVersions } from '../../lib/api';
+import { getRegistryFamilies, getRegistryVersion, getRegistryVersions } from '../../lib/api';
 import type { RegistryFamily, RegistryVersion } from '../../types/modelApi';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
@@ -23,6 +23,7 @@ export default function ModelEvolutionPage() {
   const [loadingVersions, setLoadingVersions] = useState(false);
   
   const [selectedVersion, setSelectedVersion] = useState<RegistryVersion | null>(null);
+  const [loadingVersionDetail, setLoadingVersionDetail] = useState(false);
 
   const fetchFamilies = useCallback(async () => {
     try {
@@ -104,6 +105,33 @@ export default function ModelEvolutionPage() {
     }
   }, [versions, loadingVersions, selectedVersion]);
 
+  useEffect(() => {
+    const versionId = selectedVersion?.id;
+    if (!versionId) return;
+
+    let cancelled = false;
+    const fetchVersionDetail = async () => {
+      try {
+        setLoadingVersionDetail(true);
+        const detail = await getRegistryVersion(versionId);
+        if (cancelled) return;
+        setSelectedVersion(detail);
+        setVersions(current => current.map(item => item.id === detail.id ? { ...item, ...detail } : item));
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(getApiErrorMessage(error, 'Failed to fetch version detail.'));
+        }
+      } finally {
+        if (!cancelled) setLoadingVersionDetail(false);
+      }
+    };
+
+    void fetchVersionDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedVersion?.id]);
+
   const handleRefresh = async () => {
     await fetchFamilies();
     if (selectedFamily) {
@@ -123,6 +151,14 @@ export default function ModelEvolutionPage() {
 
   const totalFamilies = families.length;
   const prodFamilies = families.filter(f => f.current_production_version).length;
+  const aliasFamilies = families.filter(f => (
+    f.production_alias_version_id
+    || f.productionAliasVersionId
+    || f.latest_alias_version_id
+    || f.latestAliasVersionId
+    || f.champion_alias_version_id
+    || f.championAliasVersionId
+  )).length;
 
   return (
     <div className="flex flex-col min-h-full pb-10">
@@ -166,10 +202,10 @@ export default function ModelEvolutionPage() {
             <span className="text-sm font-bold text-emerald-700">Online & Syncing</span>
           </div>
         </div>
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-inner flex flex-col justify-center">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-center">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">Routing Alias</p>
-          <p className="text-lg font-bold text-gray-600">Not Enabled</p>
-          <p className="text-[10px] text-gray-400 mt-0.5 uppercase font-semibold tracking-wider">Phase 11 feature</p>
+          <p className="text-3xl font-extrabold text-indigo-600">{loadingFamilies ? '-' : aliasFamilies}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5 uppercase font-semibold tracking-wider">Families with active aliases</p>
         </div>
       </div>
 
@@ -202,7 +238,7 @@ export default function ModelEvolutionPage() {
               <ModelFamilyDetail 
                 family={selectedFamily} 
                 versions={versions} 
-                loading={loadingVersions} 
+                loading={loadingVersions || loadingVersionDetail} 
                 selectedVersionId={selectedVersion?.id}
                 onSelectVersion={setSelectedVersion}
               />

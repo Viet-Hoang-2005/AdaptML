@@ -74,9 +74,9 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
         <div className="rounded-full bg-white border border-gray-200 p-4 mb-4 shadow-sm">
           <BarChart2 className="h-8 w-8 text-gray-400" />
         </div>
-        <h3 className="text-lg font-bold text-gray-900 mb-2">No Structured Metrics Found</h3>
+        <h3 className="text-lg font-bold text-gray-900 mb-2">No Metric History Found</h3>
         <p className="text-sm text-gray-600 max-w-lg mb-6">
-          Metrics are parsed from training outputs. Emit <code className="bg-white border border-gray-200 text-gray-800 px-1.5 py-0.5 rounded font-mono text-xs">METRIC_JSON</code> lines from your training script; experiment tracking is captured automatically when training artifacts are ingested.
+          Summary metrics are shown above when training artifacts include metrics.json. This panel is reserved for structured metric records across training steps.
         </p>
         
         <div className="text-left bg-[#1e1e1e] rounded-lg overflow-hidden w-full shadow-sm border border-gray-800 mb-4">
