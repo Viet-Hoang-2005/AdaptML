@@ -437,7 +437,7 @@ class ArgoDeployAdapter(DeployAdapter):
         return {"containers": [], "images": []}
 
 def get_deploy_adapter() -> DeployAdapter:
-    strategy = getattr(settings, "BUILD_STRATEGY", "docker").lower()
+    strategy = os.environ.get("BUILD_STRATEGY", "docker").lower()
     if strategy == "argo":
         return ArgoDeployAdapter()
     return DockerDeployAdapter()

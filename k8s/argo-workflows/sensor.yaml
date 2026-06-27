@@ -37,6 +37,10 @@ spec:
                   parameters:
                     - name: model_id
                       value: ""
+                    - name: model_hashid
+                      value: ""
+                    - name: tenant_id
+                      value: ""
                     - name: flavor
                       value: ""
                     - name: requirements_text
@@ -60,36 +64,44 @@ spec:
               dest: spec.arguments.parameters.0.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.flavor
+                dataKey: body.model_hashid
               dest: spec.arguments.parameters.1.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.requirements_text
+                dataKey: body.tenant_id
               dest: spec.arguments.parameters.2.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_key
+                dataKey: body.flavor
               dest: spec.arguments.parameters.3.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_type
+                dataKey: body.requirements_text
               dest: spec.arguments.parameters.4.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.training_artifact_uri
+                dataKey: body.source_key
               dest: spec.arguments.parameters.5.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.output_key
+                dataKey: body.source_type
               dest: spec.arguments.parameters.6.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.task_type
+                dataKey: body.training_artifact_uri
               dest: spec.arguments.parameters.7.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.control_plane_webhook_url
+                dataKey: body.output_key
               dest: spec.arguments.parameters.8.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.task_type
+              dest: spec.arguments.parameters.9.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.control_plane_webhook_url
+              dest: spec.arguments.parameters.10.value
     - template:
         name: deploy-workflow-trigger
         conditions: "deploy-dep"

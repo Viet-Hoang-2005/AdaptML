@@ -18,6 +18,8 @@ spec:
       inputs:
         parameters:
           - name: model_id
+          - name: model_hashid
+          - name: tenant_id
           - name: flavor
           - name: requirements_text
           - name: source_key
@@ -38,6 +40,10 @@ spec:
             value: "{{inputs.parameters.task_type}}"
           - name: MODEL_ID
             value: "{{inputs.parameters.model_id}}"
+          - name: MODEL_HASHID
+            value: "{{inputs.parameters.model_hashid}}"
+          - name: TENANT_ID
+            value: "{{inputs.parameters.tenant_id}}"
           - name: FLAVOR
             value: "{{inputs.parameters.flavor}}"
           - name: REQUIREMENTS_TEXT
