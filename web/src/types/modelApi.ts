@@ -149,7 +149,9 @@ export interface RegistryVersion {
   stage: RegistryStage;
   training_summary?: Record<string, unknown>;
   metrics_summary?: Record<string, unknown>;
+  metricsSummary?: Record<string, unknown>;
   params_summary?: Record<string, unknown>;
+  paramsSummary?: Record<string, unknown>;
   model_insights_summary?: RegistryModelInsightsSummary;
   modelInsightsSummary?: RegistryModelInsightsSummary;
   has_model_insights?: boolean;
@@ -159,6 +161,7 @@ export interface RegistryVersion {
   model_insights_item_count?: number;
   modelInsightsItemCount?: number;
   artifact_manifest?: RegistryArtifactManifestItem[];
+  artifactManifest?: RegistryArtifactManifestItem[];
   tracking_status?: string;
   tracking_error?: string;
   tracking_ingested_at?: string | null;

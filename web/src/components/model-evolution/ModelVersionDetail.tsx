@@ -60,6 +60,15 @@ function numericInsightValue(value: unknown): number | null {
   return null;
 }
 
+function numericMetricValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function deployabilityBadge(status?: string) {
   switch (status) {
     case 'deployable':
@@ -121,9 +130,15 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const isProd = version.stage === 'production';
 
   const [copied, setCopied] = useState(false);
-  const metricEntries = Object.entries(version.metrics_summary || {});
-  const paramEntries = Object.entries(version.params_summary || {});
-  const artifactEntries = version.artifact_manifest || [];
+  const metricsSummary = version.metrics_summary || version.metricsSummary || {};
+  const paramsSummary = version.params_summary || version.paramsSummary || {};
+  const metricEntries = Object.entries(metricsSummary);
+  const numericMetricEntries = metricEntries
+    .map(([name, value]) => ({ name, value, numericValue: numericMetricValue(value) }))
+    .filter((entry): entry is { name: string; value: unknown; numericValue: number } => entry.numericValue !== null);
+  const maxMetricAbs = Math.max(...numericMetricEntries.map(entry => Math.abs(entry.numericValue)), 0);
+  const paramEntries = Object.entries(paramsSummary);
+  const artifactEntries = version.artifact_manifest || version.artifactManifest || [];
   const modelInsights = version.model_insights_summary || version.modelInsightsSummary || {};
   const insightItems = (modelInsights.items || [])
     .reduce<NormalizedInsightItem[]>((items, item) => {
@@ -141,6 +156,8 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const topInsightItems = insightItems.slice(0, 20);
   const maxInsightAbs = Math.max(...topInsightItems.map(item => item.abs_value ?? Math.abs(item.value)), 0);
   const insightKind = modelInsights.kind || 'unknown';
+  const topInsightItem = insightItems[0];
+  const insightItemCount = version.model_insights_item_count || version.modelInsightsItemCount || insightItems.length;
 
   const copyEndpoint = async () => {
     if (!version.endpoint_url) return;
@@ -413,102 +430,112 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 </span>
               </div>
 
-              <div className="grid xl:grid-cols-[1fr_1.3fr] gap-5">
-                <div className="flex flex-col gap-4">
-                  <div className="grid sm:grid-cols-3 gap-3">
-                    <Button
-                      size="md"
-                      variant="secondary"
-                      icon={<Package className="h-4 w-4" />}
-                      disabled={!version.can_build || actionLoading !== null}
-                      onClick={() => void runAction('build')}
-                      title={!version.can_build ? version.build_disabled_reason : 'Build deploy package'}
-                    >
-                      {actionLoading === 'build' ? 'Building...' : 'Build Package'}
-                    </Button>
-                    <Button
-                      size="md"
-                      variant="primary"
-                      icon={<Rocket className="h-4 w-4" />}
-                      disabled={!version.can_deploy || actionLoading !== null}
-                      onClick={() => void runAction('deploy')}
-                      title={!version.can_deploy ? version.deploy_disabled_reason : 'Deploy endpoint'}
-                    >
-                      {actionLoading === 'deploy' ? 'Deploying...' : 'Deploy'}
-                    </Button>
-                    <Button
-                      size="md"
-                      variant="secondary"
-                      icon={<HeartPulse className="h-4 w-4" />}
-                      disabled={!version.endpoint_url || actionLoading !== null}
-                      onClick={() => void runAction('health')}
-                      title={!version.endpoint_url ? 'Deploy this version before checking health.' : 'Check endpoint health'}
-                    >
-                      {actionLoading === 'health' ? 'Checking...' : 'Check Health'}
-                    </Button>
-                  </div>
-
-                  {(!version.can_build || !version.can_deploy) && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                      {!version.can_build
-                        ? (version.build_disabled_reason || version.deployability_reason || 'Build is disabled for this version.')
-                        : (version.deploy_disabled_reason || 'Build package before deploying this version.')}
-                    </div>
-                  )}
-
-                  <div className="grid sm:grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Build Status</p>
-                      <p className="font-semibold text-gray-900">{version.build_status || '-'}</p>
-                    </div>
-                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Endpoint Status</p>
-                      <p className="font-semibold text-gray-900">{version.endpoint_status || version.deployment_status || '-'}</p>
-                    </div>
-                  </div>
-                  {(version.build_error || version.endpoint_error || actionResult) && (
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 break-words">
-                      {actionResult || version.endpoint_error || version.build_error}
-                      {technicalDetail && (
-                        <details className="mt-3 rounded border border-gray-200 bg-white p-2 text-xs text-gray-500">
-                          <summary className="cursor-pointer font-semibold text-gray-600">Technical detail</summary>
-                          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono">
-                            {technicalDetail}
-                          </pre>
-                        </details>
-                      )}
-                    </div>
-                  )}
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    icon={<Package className="h-4 w-4" />}
+                    disabled={!version.can_build || actionLoading !== null}
+                    onClick={() => void runAction('build')}
+                    title={!version.can_build ? version.build_disabled_reason : 'Build deploy package'}
+                  >
+                    {actionLoading === 'build' ? 'Building...' : 'Build Package'}
+                  </Button>
+                  <Button
+                    size="md"
+                    variant="primary"
+                    icon={<Rocket className="h-4 w-4" />}
+                    disabled={!version.can_deploy || actionLoading !== null}
+                    onClick={() => void runAction('deploy')}
+                    title={!version.can_deploy ? version.deploy_disabled_reason : 'Deploy endpoint'}
+                  >
+                    {actionLoading === 'deploy' ? 'Deploying...' : 'Deploy'}
+                  </Button>
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    icon={<HeartPulse className="h-4 w-4" />}
+                    disabled={!version.endpoint_url || actionLoading !== null}
+                    onClick={() => void runAction('health')}
+                    title={!version.endpoint_url ? 'Deploy this version before checking health.' : 'Check endpoint health'}
+                  >
+                    {actionLoading === 'health' ? 'Checking...' : 'Check Health'}
+                  </Button>
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    icon={<Play className="h-4 w-4" />}
+                    disabled={!version.endpoint_url || actionLoading !== null}
+                    onClick={() => void runSmokeTest()}
+                    title={!version.endpoint_url ? 'Deploy this version before smoke testing.' : 'Run smoke test'}
+                  >
+                    {actionLoading === 'smoke' ? 'Running...' : 'Run Smoke Test'}
+                  </Button>
                 </div>
 
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Smoke Test</p>
-                      <p className="text-xs text-gray-500 mt-1">Uses the existing predict schema.</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={<Play className="h-3.5 w-3.5" />}
-                      disabled={!version.endpoint_url || actionLoading !== null}
-                      onClick={() => void runSmokeTest()}
-                      title={!version.endpoint_url ? 'Deploy this version before smoke testing.' : 'Run smoke test'}
-                    >
-                      {actionLoading === 'smoke' ? 'Running...' : 'Run'}
-                    </Button>
+                {(!version.can_build || !version.can_deploy) && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    {!version.can_build
+                      ? (version.build_disabled_reason || version.deployability_reason || 'Build is disabled for this version.')
+                      : (version.deploy_disabled_reason || 'Build package before deploying this version.')}
                   </div>
-                  <textarea
-                    value={smokePayload}
-                    onChange={(event) => setSmokePayload(event.target.value)}
-                    className="min-h-32 w-full rounded-lg border border-gray-200 bg-[#111827] p-3 font-mono text-xs text-emerald-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    spellCheck={false}
-                  />
-                  {smokeResult !== null && (
-                    <pre className="max-h-56 overflow-auto rounded-lg border border-gray-800 bg-[#111827] p-3 text-xs text-gray-100">
-                      {JSON.stringify(withoutTechnicalDetail(smokeResult), null, 2)}
-                    </pre>
-                  )}
+                )}
+
+                <div className="grid gap-3 text-sm md:grid-cols-3">
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Build Status</p>
+                    <p className="font-semibold text-gray-900">{version.build_status || '-'}</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Endpoint Status</p>
+                    <p className="font-semibold text-gray-900">{version.endpoint_status || version.deployment_status || '-'}</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Deployability</p>
+                    <p className="font-semibold text-gray-900">{version.deployability_status || 'unknown'}</p>
+                  </div>
+                </div>
+
+                {(version.build_error || version.endpoint_error || actionResult) && (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 break-words">
+                    <p>{actionResult || version.endpoint_error || version.build_error}</p>
+                    {technicalDetail && (
+                      <details className="mt-3 rounded border border-gray-200 bg-white p-2 text-xs text-gray-500">
+                        <summary className="cursor-pointer font-semibold text-gray-600">Technical detail</summary>
+                        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono">
+                          {technicalDetail}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                  <div className="mb-3">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Smoke Test</p>
+                    <p className="text-xs text-gray-500 mt-1">Uses the existing predict schema.</p>
+                  </div>
+                  <div className="grid gap-4 2xl:grid-cols-2">
+                    <textarea
+                      value={smokePayload}
+                      onChange={(event) => setSmokePayload(event.target.value)}
+                      className="min-h-40 w-full rounded-lg border border-gray-200 bg-[#111827] p-3 font-mono text-xs text-emerald-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      spellCheck={false}
+                    />
+                    <div className="min-h-40 rounded-lg border border-gray-200 bg-white p-3">
+                      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">Response</p>
+                      {smokeResult !== null ? (
+                        <pre className="max-h-72 overflow-auto rounded-lg border border-gray-800 bg-[#111827] p-3 text-xs text-gray-100">
+                          {JSON.stringify(withoutTechnicalDetail(smokeResult), null, 2)}
+                        </pre>
+                      ) : (
+                        <div className="flex min-h-28 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500">
+                          Run a smoke test to see the endpoint response.
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -756,7 +783,26 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 </p>
               </div>
             ) : (
-              <div className="grid xl:grid-cols-[minmax(0,1fr)_minmax(420px,1.15fr)] gap-6">
+              <div className="flex flex-col gap-6">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Kind</p>
+                    <p className="mt-1 text-sm font-bold capitalize text-gray-900">{insightKind.replace('_', ' ')}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Items</p>
+                    <p className="mt-1 text-sm font-bold text-gray-900">{insightItemCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Top Feature</p>
+                    <p className="mt-1 truncate text-sm font-bold text-gray-900" title={topInsightItem?.name}>{topInsightItem?.name || '-'}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Source</p>
+                    <p className="mt-1 truncate text-sm font-bold text-gray-900">{modelInsights.source || 'training_artifact'}</p>
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
                   <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-3">
                     <div>
@@ -772,27 +818,27 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     </span>
                   </div>
 
-                  <div className="mt-5 flex flex-col gap-3">
+                  <div className="mt-5 flex flex-col gap-4">
                     {topInsightItems.map((item) => {
                       const magnitude = item.abs_value ?? Math.abs(item.value);
-                      const width = maxInsightAbs > 0 ? Math.max(4, (magnitude / maxInsightAbs) * 100) : 0;
+                      const width = maxInsightAbs > 0 ? Math.max(3, (magnitude / maxInsightAbs) * 100) : 0;
                       const negative = item.value < 0;
                       return (
-                        <div key={`${item.rank || item.name}-${item.name}-${item.class_name || ''}`} className="grid grid-cols-[minmax(120px,180px)_1fr_72px] items-center gap-3">
+                        <div key={`${item.rank || item.name}-${item.name}-${item.class_name || ''}`} className="grid items-center gap-3 md:grid-cols-[minmax(160px,260px)_1fr_96px]">
                           <div className="min-w-0">
-                            <p className="truncate text-xs font-semibold text-gray-700" title={item.name}>{item.name}</p>
+                            <p className="truncate text-sm font-semibold text-gray-700" title={item.name}>{item.name}</p>
                             {item.class_name && <p className="truncate text-[11px] text-gray-400">{item.class_name}</p>}
                           </div>
-                          <div className="h-3 rounded-full bg-gray-100">
+                          <div className="h-6 overflow-hidden rounded-md bg-gray-100 ring-1 ring-gray-100">
                             <div
                               className={classNames(
-                                "h-3 rounded-full",
-                                negative ? "bg-rose-400" : "bg-blue-500"
+                                "h-6 rounded-md shadow-sm",
+                                negative ? "bg-rose-500" : "bg-blue-600"
                               )}
                               style={{ width: `${width}%` }}
                             />
                           </div>
-                          <p className="text-right font-mono text-xs font-semibold text-gray-800">
+                          <p className="text-right font-mono text-sm font-semibold text-gray-800">
                             {formatInsightValue(item.value)}
                           </p>
                         </div>
@@ -837,7 +883,108 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
           </div>
         )}
 
-        {activeTab === 'metrics' && <ModelMetricsPanel familyId={family.id} versionId={version.id} />}
+        {activeTab === 'metrics' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
+                <Gauge className="h-6 w-6 text-emerald-500" />
+                Metrics
+              </h3>
+              <p className="text-sm text-gray-600 max-w-3xl">
+                Captured metrics from the training artifact summary. Metric history appears below when structured time-series records are available.
+              </p>
+            </div>
+
+            {metricEntries.length > 0 ? (
+              <>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {metricEntries.slice(0, 8).map(([name, value]) => (
+                    <div key={`summary-${name}`} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <p className="truncate text-xs font-bold uppercase tracking-wider text-gray-500" title={name}>
+                        {name.replace(/_/g, ' ')}
+                      </p>
+                      <p className="mt-2 break-all font-mono text-2xl font-extrabold text-gray-900">{formatValue(value)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {numericMetricEntries.length > 0 && (
+                  <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <h4 className="border-b border-gray-100 pb-3 text-sm font-bold uppercase tracking-wider text-gray-900">
+                      Metric Overview
+                    </h4>
+                    <div className="mt-5 flex flex-col gap-3">
+                      {numericMetricEntries.map((entry) => {
+                        const magnitude = Math.abs(entry.numericValue);
+                        const width = maxMetricAbs > 0 ? Math.max(3, (magnitude / maxMetricAbs) * 100) : 0;
+                        const negative = entry.numericValue < 0;
+                        return (
+                          <div key={`metric-bar-${entry.name}`} className="grid items-center gap-3 md:grid-cols-[minmax(160px,260px)_1fr_96px]">
+                            <p className="truncate text-sm font-semibold text-gray-700" title={entry.name}>
+                              {entry.name.replace(/_/g, ' ')}
+                            </p>
+                            <div className="h-5 overflow-hidden rounded-md bg-gray-100 ring-1 ring-gray-100">
+                              <div
+                                className={classNames(
+                                  "h-5 rounded-md shadow-sm",
+                                  negative ? "bg-rose-500" : "bg-emerald-500"
+                                )}
+                                style={{ width: `${width}%` }}
+                              />
+                            </div>
+                            <p className="text-right font-mono text-sm font-semibold text-gray-800">
+                              {formatValue(entry.value)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                  <h4 className="border-b border-gray-100 pb-3 text-sm font-bold uppercase tracking-wider text-gray-900">
+                    Metric Table
+                  </h4>
+                  <div className="mt-4 overflow-auto">
+                    <table className="min-w-full divide-y divide-gray-100 text-sm">
+                      <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold">Metric</th>
+                          <th className="px-3 py-2 text-right font-semibold">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {metricEntries.map(([name, value]) => (
+                          <tr key={`metric-row-${name}`} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 font-medium text-gray-800">{name}</td>
+                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-800">{formatValue(value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                <Gauge className="mx-auto h-10 w-10 text-gray-300" />
+                <h4 className="mt-3 text-base font-bold text-gray-800">No metrics captured for this version.</h4>
+                <p className="mt-2 text-sm text-gray-500">
+                  Training scripts can write SM_OUTPUT_DIR/metrics.json or print METRIC_JSON lines.
+                </p>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+              <div className="mb-4">
+                <h4 className="text-sm font-bold uppercase tracking-wider text-gray-900">Metric History</h4>
+                <p className="mt-1 text-xs text-gray-500">Optional structured metric records across training steps.</p>
+              </div>
+              <ModelMetricsPanel familyId={family.id} versionId={version.id} />
+            </div>
+          </div>
+        )}
         
         {activeTab === 'history' && <ModelHistoryTimeline familyId={family.id} />}
 
