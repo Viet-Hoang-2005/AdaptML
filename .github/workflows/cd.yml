@@ -89,9 +89,6 @@ jobs:
             SECRETS, mlops/github-actions-secrets
           parse-json-secrets: true
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
@@ -99,21 +96,28 @@ jobs:
           username: ${{ env.SECRETS_HARBOR_USERNAME }}
           password: ${{ env.SECRETS_HARBOR_PASSWORD }}
 
-      - name: Build and Push Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ matrix.target.context }}
-          push: true
-          build-args: |
-            VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
-            VITE_GITHUB_CLIENT_ID=${{ vars.VITE_GITHUB_CLIENT_ID }}
-            VITE_GITHUB_REDIRECT_URI=${{ vars.VITE_GITHUB_REDIRECT_URI }}
-            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
-          tags: |
-            harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}
-            harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Build and Push Image sequentially (Cloudflare Tunnel safe)
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_SHA="harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}"
+          IMAGE_LATEST="harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest"
+
+          echo "::group::Building ${{ matrix.target.name }}"
+          docker build \
+            --build-arg VITE_GOOGLE_CLIENT_ID="${{ vars.VITE_GOOGLE_CLIENT_ID }}" \
+            --build-arg VITE_GITHUB_CLIENT_ID="${{ vars.VITE_GITHUB_CLIENT_ID }}" \
+            --build-arg VITE_GITHUB_REDIRECT_URI="${{ vars.VITE_GITHUB_REDIRECT_URI }}" \
+            --build-arg VITE_API_BASE_URL="${{ vars.VITE_API_BASE_URL }}" \
+            -t "$IMAGE_SHA" \
+            -t "$IMAGE_LATEST" \
+            "${{ matrix.target.context }}"
+          echo "::endgroup::"
+
+          echo "::group::Pushing layers sequentially"
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+          echo "::endgroup::"
 
   gitops-promotion:
     name: "GitOps: Update Kustomize & Create PR"
