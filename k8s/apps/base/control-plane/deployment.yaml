@@ -119,6 +119,16 @@ spec:
                 secretKeyRef:
                   name: mlops-paas-secret
                   key: EMAIL_HOST_PASSWORD
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: AWS_SECRET_ACCESS_KEY
           envFrom:
             - configMapRef:
                 name: mlops-paas-control-plane-config
