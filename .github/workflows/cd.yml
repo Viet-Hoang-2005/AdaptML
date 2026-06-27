@@ -91,6 +91,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       # Push qua ALB Ingress (registry domain - DNS Only)
       - name: Login to Harbor Registry
@@ -100,12 +102,11 @@ jobs:
           username: ${{ env.SECRETS_HARBOR_USERNAME }}
           password: ${{ env.SECRETS_HARBOR_PASSWORD }}
 
-      - name: Build Image (with GHA cache)
+      - name: Build and Push Image
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.target.context }}
-          push: false
-          load: true
+          push: true
           tags: |
             registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}
             registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest
@@ -114,14 +115,8 @@ jobs:
             VITE_GITHUB_CLIENT_ID=${{ vars.VITE_GITHUB_CLIENT_ID }}
             VITE_GITHUB_REDIRECT_URI=${{ vars.VITE_GITHUB_REDIRECT_URI }}
             VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: false
-
-      - name: Push Image to Harbor
-        run: |
-          docker push registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}
-          docker push registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest
+          cache-from: type=registry,ref=registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:buildcache
+          cache-to: type=registry,ref=registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:buildcache,mode=max
 
   gitops-promotion:
     name: "GitOps: Update Kustomize & Create PR"
