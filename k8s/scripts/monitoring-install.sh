@@ -30,6 +30,8 @@ helm upgrade --install ${RELEASE_NAME} prometheus-community/kube-prometheus-stac
   --set "prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false" \
   --set "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false" \
   --set "prometheus.prometheusSpec.ruleSelectorNilUsesHelmValues=false" \
+  --set prometheusOperator.admissionWebhooks.enabled=false \
+  --set prometheusOperator.tls.enabled=false \
   --timeout 10m \
   --wait
 
