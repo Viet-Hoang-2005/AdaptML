@@ -55,9 +55,9 @@ DEBUG = env_bool('DJANGO_DEBUG', True)
 
 ALLOWED_HOSTS = env_list_first(
     ('DJANGO_ALLOWED_HOSTS', 'ALLOWED_HOSTS'),
-    'localhost,127.0.0.1,0.0.0.0,control-plane,mlops_paas_django',
+    'localhost,127.0.0.1,0.0.0.0,control-plane,mlops_paas_django, api.mlops-nids-nt114.id.vn',
 )
-for host in ('localhost', '127.0.0.1', '0.0.0.0', 'control-plane', 'mlops_paas_django'):
+for host in ('localhost', '127.0.0.1', '0.0.0.0', 'control-plane', 'mlops_paas_django', 'api.mlops-nids-nt114.id.vn'):
     if host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(host)
 

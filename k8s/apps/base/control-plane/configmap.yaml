@@ -12,6 +12,7 @@ data:
   DB_NAME: "mlops_paas_db"
   CONTROL_PLANE_DB_SCHEMA: "control_plane"
   DJANGO_DEBUG: "True"
+  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,control-plane,mlops_paas_django,api.mlops-nids-nt114.id.vn"
   BUILD_STRATEGY: "argo"
   HARBOR_REGISTRY_URL: "registry.mlops-nids-nt114.id.vn"
   GITHUB_OAUTH_REDIRECT_URI: "https://mlops-nids-nt114.id.vn/oauth/github/callback"
