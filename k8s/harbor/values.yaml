@@ -5,7 +5,7 @@ expose:
   ingress:
     enabled: false
 
-externalURL: http://harbor.mlops-nids-nt114.id.vn
+externalURL: https://harbor.mlops-nids-nt114.id.vn
 
 persistence:
   enabled: true
