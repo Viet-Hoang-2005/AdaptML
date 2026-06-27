@@ -89,19 +89,26 @@ jobs:
             SECRETS, mlops/github-actions-secrets
           parse-json-secrets: true
 
-      - name: Login to Harbor
+      # Push qua NodePort trực tiếp (bỏ qua Cloudflare 413/502 limits)
+      - name: Login to Harbor (NodePort - Cloudflare bypass)
         uses: docker/login-action@v3
         with:
-          registry: harbor.mlops-nids-nt114.id.vn
+          registry: 13.213.154.119:30500
           username: ${{ env.SECRETS_HARBOR_USERNAME }}
           password: ${{ env.SECRETS_HARBOR_PASSWORD }}
 
-      - name: Build and Push Image sequentially (Cloudflare Tunnel safe)
+      - name: Build and Push Image (via NodePort, bypass Cloudflare)
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE_SHA="harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}"
-          IMAGE_LATEST="harbor.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest"
+          PUSH_HOST="13.213.154.119:30500"
+          DOMAIN_HOST="harbor.mlops-nids-nt114.id.vn"
+          IMAGE="${{ matrix.target.image }}"
+          SHA="${{ github.sha }}"
+
+          # Tag với NodePort host để push thẳng, bỏ qua Cloudflare hoàn toàn
+          IMAGE_SHA_PUSH="$PUSH_HOST/mlops-paas/$IMAGE:$SHA"
+          IMAGE_LATEST_PUSH="$PUSH_HOST/mlops-paas/$IMAGE:latest"
 
           echo "::group::Building ${{ matrix.target.name }}"
           docker build \
@@ -109,15 +116,16 @@ jobs:
             --build-arg VITE_GITHUB_CLIENT_ID="${{ vars.VITE_GITHUB_CLIENT_ID }}" \
             --build-arg VITE_GITHUB_REDIRECT_URI="${{ vars.VITE_GITHUB_REDIRECT_URI }}" \
             --build-arg VITE_API_BASE_URL="${{ vars.VITE_API_BASE_URL }}" \
-            -t "$IMAGE_SHA" \
-            -t "$IMAGE_LATEST" \
+            -t "$IMAGE_SHA_PUSH" \
+            -t "$IMAGE_LATEST_PUSH" \
             "${{ matrix.target.context }}"
           echo "::endgroup::"
 
-          echo "::group::Pushing layers sequentially"
-          docker push "$IMAGE_SHA"
-          docker push "$IMAGE_LATEST"
+          echo "::group::Pushing via NodePort (no Cloudflare)"
+          docker push "$IMAGE_SHA_PUSH"
+          docker push "$IMAGE_LATEST_PUSH"
           echo "::endgroup::"
+
 
   gitops-promotion:
     name: "GitOps: Update Kustomize & Create PR"
