@@ -352,7 +352,7 @@ class ArgoDeployAdapter(DeployAdapter):
         
         image_name = model_api.endpoint_image_name
         if not image_name:
-            harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "harbor.mlops-nids-nt114.id.vn").strip().rstrip("/")
+            harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
             image_name = f"{harbor_url}/mlops-paas/{tenant_id.lower()}-model-{hashid_str.lower()}:latest"
 
         payload = {

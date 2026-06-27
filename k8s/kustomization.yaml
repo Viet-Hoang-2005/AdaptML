@@ -6,17 +6,14 @@ kind: Kustomization
 resources:
   # 1. Infrastructure & Platform Services
   - cloudflare
-  - monitoring
   - postgres
   - redis
   - redpanda
   - secrets
-  - security
   - storage
   - health
   - harbor
   - argo-workflows
-  - cronjobs
 
   # 2. Applications (Dùng overlay production)
   - apps/production

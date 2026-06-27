@@ -1,4 +1,3 @@
-# Sử dụng base image Python bản slim (nhẹ và bảo mật hơn)
 FROM python:3.10-slim
 
 # Thiết lập thư mục làm việc trong container

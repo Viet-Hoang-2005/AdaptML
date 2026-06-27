@@ -2,17 +2,17 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../base
-  - ingress.yaml
+- ../base
+- ingress.yaml
 
-images:
   # GitHub Actions CI/CD pipeline will override this tag with the actual SHA/version dynamically
-  - name: mlops-paas-consumer
-    newName: tnvhoang/mlops-paas-consumer
-    newTag: latest
-  - name: mlops-paas-django
-    newName: tnvhoang/mlops-paas-django
-    newTag: latest
-  - name: mlops-paas-web
-    newName: tnvhoang/mlops-paas-web
-    newTag: latest
+images:
+- name: mlops-paas-consumer
+  newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-consumer
+  newTag: abf5359d48983f77ebba5f75119b748c726ded26
+- name: mlops-paas-django
+  newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-django
+  newTag: abf5359d48983f77ebba5f75119b748c726ded26
+- name: mlops-paas-web
+  newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-web
+  newTag: abf5359d48983f77ebba5f75119b748c726ded26
