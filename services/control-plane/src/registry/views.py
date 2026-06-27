@@ -39,6 +39,8 @@ from integrations.s3_zip_utils import upload_single_file_to_s3, get_s3_file_list
 logger = logging.getLogger(__name__)
 
 MAX_MODEL_ARTIFACT_SIZE_BYTES = 512 * 1024 * 1024
+MAX_METADATA_FILE_SIZE_BYTES = 2 * 1024 * 1024
+MAX_MODEL_INSIGHT_ITEMS = 500
 SUPPORTED_BUILD_FLAVORS = {"sklearn", "xgboost"}
 SUPPORTED_SOURCE_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
 
@@ -143,6 +145,10 @@ def serialize_model_api(model_api):
         "package_preview_tree": model_api.package_preview_tree,
         "build_status": model_api.build_status,
         "build_error": model_api.build_error,
+        "metrics_summary": model_api.metrics_summary or {},
+        "params_summary": model_api.params_summary or {},
+        "model_insights_summary": model_api.model_insights_summary or {},
+        "has_model_insights": bool((model_api.model_insights_summary or {}).get("items")),
         "created_at": model_api.created_at,
         "updated_at": model_api.updated_at,
     }
@@ -173,6 +179,180 @@ def _primary_metrics(metrics_summary):
         if len(primary) >= 6:
             break
     return primary
+
+
+def _read_json_upload(file_obj, label, warnings):
+    if not file_obj:
+        return None
+    if getattr(file_obj, "size", 0) and file_obj.size > MAX_METADATA_FILE_SIZE_BYTES:
+        warnings.append(f"{label} ignored: file must be 2MB or smaller.")
+        return None
+    try:
+        file_obj.seek(0)
+        raw = file_obj.read()
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        data = json.loads(raw)
+    except Exception as exc:
+        warnings.append(f"{label} ignored: invalid JSON ({exc}).")
+        return None
+    finally:
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
+    return data
+
+
+def _json_safe(value):
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value[:MAX_MODEL_INSIGHT_ITEMS]]
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    return str(value)
+
+
+def _normalize_summary_map(data, nested_key, label, warnings):
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        warnings.append(f"{label} ignored: expected a JSON object.")
+        return {}
+    candidate = data.get(nested_key) if isinstance(data.get(nested_key), dict) else data
+    return {str(key): _json_safe(value) for key, value in candidate.items()}
+
+
+def _numeric_value(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_model_insights(data, *, kind_hint="feature_importance", source="manual_upload_file", warnings=None):
+    warnings = warnings if warnings is not None else []
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        warnings.append("model insights ignored: expected a JSON object.")
+        return {}
+
+    kind = data.get("kind") or kind_hint
+    raw_items = data.get("items")
+    if raw_items is None and isinstance(data.get("feature_importance"), dict):
+        raw_items = [{"name": key, "value": value} for key, value in data["feature_importance"].items()]
+        kind = "feature_importance"
+    if raw_items is None and isinstance(data.get("coefficients"), dict):
+        raw_items = [{"name": key, "value": value} for key, value in data["coefficients"].items()]
+        kind = "coefficients"
+    if raw_items is None and all(_numeric_value(value) is not None for value in data.values()):
+        raw_items = [{"name": key, "value": value} for key, value in data.items()]
+
+    if not isinstance(raw_items, list):
+        warnings.append("model insights ignored: expected items array or feature_importance object.")
+        return {}
+
+    items = []
+    for raw_item in raw_items:
+        if not isinstance(raw_item, dict):
+            continue
+        name = raw_item.get("name") or raw_item.get("feature")
+        value = _numeric_value(raw_item.get("value"))
+        if not name or value is None:
+            continue
+        abs_value = _numeric_value(raw_item.get("abs_value"))
+        item = {
+            "name": str(name),
+            "value": value,
+            "abs_value": abs_value if abs_value is not None else abs(value),
+        }
+        if raw_item.get("class_name") is not None:
+            item["class_name"] = str(raw_item.get("class_name"))
+        items.append(item)
+
+    items.sort(key=lambda item: item["abs_value"], reverse=True)
+    items = items[:MAX_MODEL_INSIGHT_ITEMS]
+    for index, item in enumerate(items, start=1):
+        item["rank"] = index
+
+    if not items:
+        warnings.append("model insights ignored: no valid numeric insight items found.")
+        return {}
+
+    return {
+        "schema_version": "model-insights-v1",
+        "kind": str(kind or kind_hint),
+        "source": source,
+        "feature_count": int(data.get("feature_count") or len(items)),
+        "items": items,
+    }
+
+
+def parse_manual_upload_metadata(request):
+    warnings = []
+    metrics_summary = _normalize_summary_map(
+        _read_json_upload(request.FILES.get("metrics_file"), "metrics_file", warnings),
+        "metrics",
+        "metrics_file",
+        warnings,
+    )
+    params_summary = _normalize_summary_map(
+        _read_json_upload(request.FILES.get("params_file"), "params_file", warnings),
+        "params",
+        "params_file",
+        warnings,
+    )
+
+    insights_file = request.FILES.get("model_insights_file")
+    insight_kind = "feature_importance"
+    if not insights_file:
+        insights_file = request.FILES.get("feature_importance_file")
+        insight_kind = "feature_importance"
+    insights_summary = _normalize_model_insights(
+        _read_json_upload(insights_file, "model_insights_file", warnings) if insights_file else None,
+        kind_hint=insight_kind,
+        source="manual_upload_file",
+        warnings=warnings,
+    )
+
+    return {
+        "metrics_summary": metrics_summary,
+        "params_summary": params_summary,
+        "model_insights_summary": insights_summary,
+        "warnings": warnings,
+    }
+
+
+def _apply_manual_metadata_to_model_api(model_api, metadata):
+    model_api.metrics_summary = metadata.get("metrics_summary") or {}
+    model_api.params_summary = metadata.get("params_summary") or {}
+    model_api.model_insights_summary = metadata.get("model_insights_summary") or {}
+
+
+def _copy_model_api_metadata_to_version(version, model_api):
+    version.metrics_summary = model_api.metrics_summary or {}
+    version.params_summary = model_api.params_summary or {}
+    version.model_insights_summary = model_api.model_insights_summary or {}
+    version.tracking_status = "skipped"
+    if model_api.source_artifact:
+        version.artifact_manifest = [
+            {
+                "path": os.path.basename(model_api.source_artifact.name),
+                "kind": "model",
+                "size_bytes": getattr(model_api.source_artifact, "size", 0) or 0,
+                "sha256": "",
+            }
+        ]
+    version.deployability_status = "deployable"
+    version.deployability_reason = "Manual upload contains a supported model artifact."
 
 
 def _version_action_state(version):
@@ -317,6 +497,8 @@ def sync_registry_version_from_model_api(model_api, training_job=None):
 
     if training_job:
         _copy_training_tracking_fields(version, training_job)
+    elif version.source_type == "manual_upload":
+        _copy_model_api_metadata_to_version(version, model_api)
 
     version.save()
     return version
@@ -496,7 +678,18 @@ class RegistryVersionBuildPackageView(APIView):
             return model_response
 
         try:
-            _trigger_training_model_build(version.model_api)
+            if version.model_api.build_status == "ready" and (version.model_api.model_uri or version.model_api.artifact):
+                _sync_version_runtime_fields(version)
+                return Response(serialize_registry_version(version), status=status.HTTP_200_OK)
+            if version.source_type == "training_job":
+                _trigger_training_model_build(version.model_api)
+            elif version.source_type == "manual_upload":
+                _trigger_manual_model_build(version.model_api)
+            else:
+                return Response(
+                    {"error": f"Build package is not supported for source_type={version.source_type}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             version.model_api.refresh_from_db()
             _sync_version_runtime_fields(version)
             _create_registry_history(
@@ -884,6 +1077,37 @@ def _trigger_training_model_build(model_api):
     return model_api
 
 
+def _trigger_manual_model_build(model_api):
+    if model_api.source_type != "manual_upload":
+        raise ValueError("This endpoint only builds manually uploaded model artifacts.")
+    if not model_api.source_artifact:
+        raise ValueError("Manual upload model is missing its source artifact.")
+    if model_api.flavor not in SUPPORTED_BUILD_FLAVORS:
+        raise ValueError("Flavor must be sklearn or xgboost.")
+
+    safe_name = slugify(model_api.name) or "model"
+    package_filename = f"{safe_name}-mlflow-package.zip"
+    output_key = model_artifact_path(model_api, package_filename)
+    label_mapping_key = model_api.label_mapping_file.name if model_api.label_mapping_file else None
+
+    model_api.status = "uploading"
+    model_api.build_status = "building"
+    model_api.build_error = ""
+    model_api.error_message = ""
+    model_api.endpoint_url = build_endpoint_url(model_api)
+    model_api.save(update_fields=["status", "build_status", "build_error", "error_message", "endpoint_url", "updated_at"])
+
+    get_build_adapter().trigger_build(
+        model_id=str(model_api.id),
+        flavor=model_api.flavor,
+        requirements_text=model_api.requirements_text,
+        source_key=model_api.source_artifact.name,
+        output_key=output_key,
+        label_mapping_key=label_mapping_key,
+    )
+    return model_api
+
+
 class ModelAPIListCreateView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -983,6 +1207,7 @@ class ModelAPIBuildView(APIView):
         source_artifact = request.FILES.get("source_artifact")
         source_code_file = request.FILES.get("source_code_file")
         reference_data_file = request.FILES.get("reference_data_file")
+        metadata = parse_manual_upload_metadata(request)
 
         if not name:
             return Response({"error": "Model name is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1021,6 +1246,7 @@ class ModelAPIBuildView(APIView):
             status="uploading",
             build_status="building",
         )
+        _apply_manual_metadata_to_model_api(model_api, metadata)
         model_api.source_artifact = source_artifact
 
         user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
@@ -1043,7 +1269,16 @@ class ModelAPIBuildView(APIView):
             model_api.label_mapping_file = label_mapping_file
 
         model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["source_artifact", "label_mapping_file", "endpoint_url", "updated_at"])
+        model_api.save(update_fields=[
+            "source_artifact",
+            "label_mapping_file",
+            "endpoint_url",
+            "metrics_summary",
+            "params_summary",
+            "model_insights_summary",
+            "updated_at",
+        ])
+        sync_registry_version_from_model_api(model_api)
 
         # Gọi adapter chạy ngầm
         safe_name = slugify(name) or "model"
@@ -1069,9 +1304,13 @@ class ModelAPIBuildView(APIView):
             model_api.error_message = "Unable to start build process."
             model_api.build_error = str(exc)
             model_api.save()
-            return Response(serialize_model_api(model_api), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            payload = serialize_model_api(model_api)
+            payload["metadata_warnings"] = metadata["warnings"]
+            return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response(serialize_model_api(model_api), status=status.HTTP_201_CREATED)
+        payload = serialize_model_api(model_api)
+        payload["metadata_warnings"] = metadata["warnings"]
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class ModelAPIPackagePreviewView(APIView):
@@ -1346,6 +1585,10 @@ class ModelAPIBuildWebhookView(APIView):
             logger.warning("Model %s build marked error: %s", model_id, model_api.build_error)
 
         model_api.save()
+        try:
+            sync_registry_version_from_model_api(model_api)
+        except Exception:
+            logger.exception("Failed to sync registry version after build webhook for model %s.", model_id)
         return Response({"message": "Webhook received successfully"}, status=status.HTTP_200_OK)
 
 class ModelAPIDeployView(APIView):

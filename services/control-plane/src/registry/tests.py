@@ -4,7 +4,7 @@ import requests
 from rest_framework.test import APIClient
 from unittest.mock import ANY, Mock, patch
 
-from authentication.models import CustomUser, ModelFamily, ModelVersion, TrainingJob
+from authentication.models import CustomUser, ModelAPI, ModelFamily, ModelVersion, TrainingJob
 
 
 class ModelEvolutionSummaryMirrorTests(TestCase):
@@ -77,6 +77,109 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         }
         defaults.update(overrides)
         return ModelVersion.objects.create(**defaults)
+
+    def _manual_upload_payload(self, **overrides):
+        payload = {
+            "name": "manual-nids",
+            "version": "v1",
+            "description": "Manual upload test",
+            "model_info": "Uploaded artifact",
+            "access_mode": "private",
+            "flavor": "sklearn",
+            "requirements_text": "scikit-learn\n",
+            "source_artifact": SimpleUploadedFile("model.pkl", b"model-bytes", content_type="application/octet-stream"),
+        }
+        payload.update(overrides)
+        return payload
+
+    @patch("registry.views.get_build_adapter")
+    def test_manual_upload_accepts_metadata_files_and_syncs_model_version(self, mock_get_build_adapter):
+        mock_get_build_adapter.return_value = Mock()
+        payload = self._manual_upload_payload(
+            metrics_file=SimpleUploadedFile("metrics.json", b'{"metrics":{"accuracy":0.99,"f1_score":0.98}}', content_type="application/json"),
+            params_file=SimpleUploadedFile("params.json", b'{"params":{"max_depth":7,"n_estimators":101}}', content_type="application/json"),
+            model_insights_file=SimpleUploadedFile(
+                "model_insights.json",
+                b'{"items":[{"name":"packet_rate","value":0.2},{"name":"duration","value":0.7}]}',
+                content_type="application/json",
+            ),
+        )
+
+        response = self.client.post("/api/models/build/", payload, format="multipart")
+
+        self.assertEqual(response.status_code, 201)
+        model_api = ModelAPI.objects.get(tenant=self.user, name="manual-nids", version="v1")
+        self.assertEqual(model_api.metrics_summary["accuracy"], 0.99)
+        self.assertEqual(model_api.params_summary["max_depth"], 7)
+        self.assertEqual(model_api.model_insights_summary["items"][0]["name"], "duration")
+        version = ModelVersion.objects.get(tenant=self.user, family__name="manual-nids", version="v1")
+        self.assertEqual(version.source_type, "manual_upload")
+        self.assertEqual(version.model_api_id, model_api.id)
+        self.assertEqual(version.metrics_summary["f1_score"], 0.98)
+        self.assertEqual(version.params_summary["n_estimators"], 101)
+        self.assertEqual(version.model_insights_summary["kind"], "feature_importance")
+        self.assertEqual(version.model_insights_summary["items"][0]["rank"], 1)
+        self.assertEqual(version.deployability_status, "deployable")
+
+    @patch("registry.views.get_build_adapter")
+    def test_manual_upload_invalid_metadata_warns_without_failing_upload(self, mock_get_build_adapter):
+        mock_get_build_adapter.return_value = Mock()
+        payload = self._manual_upload_payload(
+            name="manual-invalid-metadata",
+            metrics_file=SimpleUploadedFile("metrics.json", b"{not-json", content_type="application/json"),
+            feature_importance_file=SimpleUploadedFile(
+                "feature_importance.json",
+                b'{"feature_importance":{"f1":0.1,"f2":0.3}}',
+                content_type="application/json",
+            ),
+        )
+
+        response = self.client.post("/api/models/build/", payload, format="multipart")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("metadata_warnings", response.data)
+        self.assertTrue(response.data["metadata_warnings"])
+        version = ModelVersion.objects.get(tenant=self.user, family__name="manual-invalid-metadata", version="v1")
+        self.assertEqual(version.metrics_summary, {})
+        self.assertEqual(version.model_insights_summary["items"][0]["name"], "f2")
+
+    @patch("registry.views.get_build_adapter")
+    def test_manual_upload_artifact_only_still_syncs_model_version(self, mock_get_build_adapter):
+        mock_get_build_adapter.return_value = Mock()
+
+        response = self.client.post("/api/models/build/", self._manual_upload_payload(name="manual-artifact-only"), format="multipart")
+
+        self.assertEqual(response.status_code, 201)
+        version = ModelVersion.objects.get(tenant=self.user, family__name="manual-artifact-only", version="v1")
+        self.assertEqual(version.source_type, "manual_upload")
+        self.assertEqual(version.metrics_summary, {})
+        self.assertEqual(version.model_insights_summary, {})
+        self.assertEqual(version.deployability_status, "deployable")
+
+    @patch("registry.views.get_build_adapter")
+    def test_registry_build_package_supports_manual_upload_versions(self, mock_get_build_adapter):
+        adapter = Mock()
+        mock_get_build_adapter.return_value = adapter
+        model_api = ModelAPI.objects.create(
+            tenant=self.user,
+            name="manual-build",
+            version="v1",
+            source_type="manual_upload",
+            flavor="sklearn",
+            source_artifact=SimpleUploadedFile("model.pkl", b"model-bytes"),
+            requirements_text="scikit-learn\n",
+            build_status="not_started",
+            status="ready",
+        )
+        from registry.views import sync_registry_version_from_model_api
+        version = sync_registry_version_from_model_api(model_api)
+
+        response = self.client.post(f"/api/registry/versions/{version.id}/build-package/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        adapter.trigger_build.assert_called_once()
+        model_api.refresh_from_db()
+        self.assertEqual(model_api.build_status, "building")
 
     def test_register_training_job_mirrors_tracking_summary_to_model_version(self):
         job = self._completed_job()

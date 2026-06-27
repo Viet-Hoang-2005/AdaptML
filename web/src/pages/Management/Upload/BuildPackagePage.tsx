@@ -209,6 +209,40 @@ function ArtifactStep({
         subtitle=".pkl or .json (Optional)"
         onChange={(file) => setField('label_mapping_file', file)}
       />
+
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+        <p className="text-sm font-bold text-blue-950">Optional Model Evolution metadata</p>
+        <p className="mt-1 text-sm text-blue-800">
+          Optional metadata improves Model Evolution comparison and insights. Missing or invalid files will not block deployment.
+        </p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <FileDropzone
+          accept=".json,application/json"
+          title={form.metrics_file ? form.metrics_file.name : 'Choose metrics.json'}
+          subtitle="Optional metrics summary"
+          onChange={(file) => setField('metrics_file', file)}
+        />
+        <FileDropzone
+          accept=".json,application/json"
+          title={form.params_file ? form.params_file.name : 'Choose params.json'}
+          subtitle="Optional parameter summary"
+          onChange={(file) => setField('params_file', file)}
+        />
+        <FileDropzone
+          accept=".json,application/json"
+          title={form.model_insights_file ? form.model_insights_file.name : 'Choose model_insights.json'}
+          subtitle="Optional insights or coefficients"
+          onChange={(file) => setField('model_insights_file', file)}
+        />
+        <FileDropzone
+          accept=".json,application/json"
+          title={form.feature_importance_file ? form.feature_importance_file.name : 'Choose feature_importance.json'}
+          subtitle="Optional feature importance map"
+          onChange={(file) => setField('feature_importance_file', file)}
+        />
+      </div>
     </div>
   );
 }
@@ -362,6 +396,8 @@ function DeployStep({
         <SummaryItem label="Access" value={`${form.access_mode} API`} />
         <SummaryItem label="Flavor" value={form.flavor} />
         <SummaryItem label="Artifact" value={form.source_artifact?.name || 'Missing artifact'} />
+        <SummaryItem label="Metrics" value={form.metrics_file?.name || 'Optional'} />
+        <SummaryItem label="Insights" value={form.model_insights_file?.name || form.feature_importance_file?.name || 'Optional'} />
       </div>
 
       <TerminalLogViewer

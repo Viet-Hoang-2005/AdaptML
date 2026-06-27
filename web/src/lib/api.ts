@@ -263,6 +263,21 @@ const modelBuildFormData = (payload: ModelBuildFormValues) => {
   if (payload.label_mapping_file) {
     formData.append('label_mapping_file', payload.label_mapping_file);
   }
+  if (payload.metrics_file) {
+    formData.append('metrics_file', payload.metrics_file);
+  }
+  if (payload.params_file) {
+    formData.append('params_file', payload.params_file);
+  }
+  if (payload.model_insights_file) {
+    formData.append('model_insights_file', payload.model_insights_file);
+  }
+  if (payload.feature_importance_file) {
+    formData.append('feature_importance_file', payload.feature_importance_file);
+  }
+  if (payload.input_schema_file) {
+    formData.append('input_schema_file', payload.input_schema_file);
+  }
   if (payload.requirements_file) {
     formData.append('requirements_file', payload.requirements_file);
   }

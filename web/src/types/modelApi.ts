@@ -45,6 +45,11 @@ export interface ModelAPI {
   package_preview_tree: string[];
   build_status: ModelBuildStatus;
   build_error: string;
+  metrics_summary?: Record<string, unknown>;
+  params_summary?: Record<string, unknown>;
+  model_insights_summary?: RegistryModelInsightsSummary;
+  has_model_insights?: boolean;
+  metadata_warnings?: string[];
   source_code_file?: string | null;
   reference_data_file?: string | null;
   created_at: string;
@@ -74,6 +79,11 @@ export interface ModelBuildFormValues {
   version?: string;
   source_artifact: File | null;
   label_mapping_file?: File | null;
+  metrics_file?: File | null;
+  params_file?: File | null;
+  model_insights_file?: File | null;
+  feature_importance_file?: File | null;
+  input_schema_file?: File | null;
   source_code_file?: File | null;
   reference_data_file?: File | null;
   flavor: ModelFlavor;
