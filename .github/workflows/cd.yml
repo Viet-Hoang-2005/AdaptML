@@ -89,26 +89,24 @@ jobs:
             SECRETS, mlops/github-actions-secrets
           parse-json-secrets: true
 
-      # Push qua NodePort trực tiếp (bỏ qua Cloudflare 413/502 limits)
-      - name: Login to Harbor (NodePort - Cloudflare bypass)
+      # Push qua ALB Ingress (registry domain - DNS Only)
+      - name: Login to Harbor Registry
         uses: docker/login-action@v3
         with:
-          registry: 13.213.154.119:30500
+          registry: registry.mlops-nids-nt114.id.vn
           username: ${{ env.SECRETS_HARBOR_USERNAME }}
           password: ${{ env.SECRETS_HARBOR_PASSWORD }}
 
-      - name: Build and Push Image (via NodePort, bypass Cloudflare)
+      - name: Build and Push Image
         shell: bash
         run: |
           set -euo pipefail
-          PUSH_HOST="13.213.154.119:30500"
-          DOMAIN_HOST="harbor.mlops-nids-nt114.id.vn"
+          REGISTRY_HOST="registry.mlops-nids-nt114.id.vn"
           IMAGE="${{ matrix.target.image }}"
           SHA="${{ github.sha }}"
 
-          # Tag với NodePort host để push thẳng, bỏ qua Cloudflare hoàn toàn
-          IMAGE_SHA_PUSH="$PUSH_HOST/mlops-paas/$IMAGE:$SHA"
-          IMAGE_LATEST_PUSH="$PUSH_HOST/mlops-paas/$IMAGE:latest"
+          IMAGE_SHA="$REGISTRY_HOST/mlops-paas/$IMAGE:$SHA"
+          IMAGE_LATEST="$REGISTRY_HOST/mlops-paas/$IMAGE:latest"
 
           echo "::group::Building ${{ matrix.target.name }}"
           docker build \
@@ -116,15 +114,16 @@ jobs:
             --build-arg VITE_GITHUB_CLIENT_ID="${{ vars.VITE_GITHUB_CLIENT_ID }}" \
             --build-arg VITE_GITHUB_REDIRECT_URI="${{ vars.VITE_GITHUB_REDIRECT_URI }}" \
             --build-arg VITE_API_BASE_URL="${{ vars.VITE_API_BASE_URL }}" \
-            -t "$IMAGE_SHA_PUSH" \
-            -t "$IMAGE_LATEST_PUSH" \
+            -t "$IMAGE_SHA" \
+            -t "$IMAGE_LATEST" \
             "${{ matrix.target.context }}"
           echo "::endgroup::"
 
-          echo "::group::Pushing via NodePort (no Cloudflare)"
-          docker push "$IMAGE_SHA_PUSH"
-          docker push "$IMAGE_LATEST_PUSH"
+          echo "::group::Pushing to Harbor via ALB Ingress"
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
           echo "::endgroup::"
+
 
 
   gitops-promotion:
@@ -155,7 +154,7 @@ jobs:
 
       - name: Update Image Tags in Kustomization & WorkflowTemplates
         run: |
-          REG="harbor.mlops-nids-nt114.id.vn/mlops-paas"
+          REG="registry.mlops-nids-nt114.id.vn/mlops-paas"
           SHA="${{ github.sha }}"
           
           # 1. Update kustomization.yaml (web, django, consumer)
@@ -187,7 +186,7 @@ jobs:
         id: summary
         run: |
           SHA="${{ github.sha }}"
-          REG="harbor.mlops-nids-nt114.id.vn/mlops-paas"
+          REG="registry.mlops-nids-nt114.id.vn/mlops-paas"
           
           WEB_TAG="no change"
           DJANGO_TAG="no change"
