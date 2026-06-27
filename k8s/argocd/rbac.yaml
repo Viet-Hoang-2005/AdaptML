@@ -4,6 +4,9 @@ kind: ConfigMap
 metadata:
   name: argocd-cm
   namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
 data:
   # Bật tính năng biên dịch Helm Chart cho Kustomize toàn hệ thống
   kustomize.buildOptions: --enable-helm
@@ -15,6 +18,9 @@ kind: ConfigMap
 metadata:
   name: argocd-rbac-cm
   namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-rbac-cm
+    app.kubernetes.io/part-of: argocd
 data:
   policy.csv: |
     # Cấu trúc: p, role:<tên_role>, <resource>, <action>, <object>, <allow/deny>
