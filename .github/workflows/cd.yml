@@ -109,7 +109,7 @@ jobs:
           IMAGE_LATEST="$REGISTRY_HOST/mlops-paas/$IMAGE:latest"
 
           echo "::group::Building ${{ matrix.target.name }}"
-          DOCKER_BUILDKIT=1 docker build \
+          DOCKER_BUILDKIT=1 docker build --provenance=false \
             --build-arg VITE_GOOGLE_CLIENT_ID="${{ vars.VITE_GOOGLE_CLIENT_ID }}" \
             --build-arg VITE_GITHUB_CLIENT_ID="${{ vars.VITE_GITHUB_CLIENT_ID }}" \
             --build-arg VITE_GITHUB_REDIRECT_URI="${{ vars.VITE_GITHUB_REDIRECT_URI }}" \
