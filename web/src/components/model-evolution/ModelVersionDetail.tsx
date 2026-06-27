@@ -34,7 +34,16 @@ function formatValue(value: unknown): string {
   }
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '-';
-  return JSON.stringify(value);
+  return JSON.stringify(value, null, 2);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function shortValue(value: unknown, maxLength = 96): string {
+  const formatted = formatValue(value).replace(/\s+/g, ' ').trim();
+  return formatted.length > maxLength ? `${formatted.slice(0, maxLength - 1)}…` : formatted;
 }
 
 function formatBytes(size?: number): string {
@@ -302,6 +311,8 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const metricsSummary = version.metrics_summary || version.metricsSummary || {};
   const paramsSummary = version.params_summary || version.paramsSummary || {};
   const metricEntries = Object.entries(metricsSummary);
+  const scalarMetricEntries = metricEntries.filter(([, value]) => !isPlainRecord(value) && !Array.isArray(value));
+  const objectMetricEntries = metricEntries.filter(([, value]) => isPlainRecord(value) || Array.isArray(value));
   const numericMetricEntries = metricEntries
     .map(([name, value]) => ({ name, value, numericValue: numericMetricValue(value) }))
     .filter((entry): entry is { name: string; value: unknown; numericValue: number } => entry.numericValue !== null);
@@ -1155,16 +1166,23 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
 
             {metricEntries.length > 0 ? (
               <>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  {metricEntries.slice(0, 8).map(([name, value]) => (
-                    <div key={`summary-${name}`} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                      <p className="truncate text-xs font-bold uppercase tracking-wider text-gray-500" title={name}>
-                        {name.replace(/_/g, ' ')}
-                      </p>
-                      <p className="mt-2 break-all font-mono text-2xl font-extrabold text-gray-900">{formatValue(value)}</p>
-                    </div>
-                  ))}
-                </div>
+                {scalarMetricEntries.length > 0 && (
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    {scalarMetricEntries.slice(0, 8).map(([name, value]) => (
+                      <div key={`summary-${name}`} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                        <p className="truncate text-xs font-bold uppercase tracking-wider text-gray-500" title={name}>
+                          {name.replace(/_/g, ' ')}
+                        </p>
+                        <p
+                          className="mt-2 truncate font-mono text-2xl font-extrabold text-gray-900"
+                          title={formatValue(value)}
+                        >
+                          {shortValue(value, 36)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {numericMetricEntries.length > 0 && (
                   <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -1213,16 +1231,47 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {metricEntries.map(([name, value]) => (
+                        {scalarMetricEntries.map(([name, value]) => (
                           <tr key={`metric-row-${name}`} className="hover:bg-gray-50">
                             <td className="px-3 py-2 font-medium text-gray-800">{name}</td>
-                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-800">{formatValue(value)}</td>
+                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-800" title={formatValue(value)}>
+                              {shortValue(value, 120)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 </div>
+
+                {objectMetricEntries.length > 0 && (
+                  <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <h4 className="border-b border-gray-100 pb-3 text-sm font-bold uppercase tracking-wider text-gray-900">
+                      Metric Metadata
+                    </h4>
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      {objectMetricEntries.map(([name, value]) => (
+                        <div key={`metric-object-${name}`} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">{name.replace(/_/g, ' ')}</p>
+                          {isPlainRecord(value) ? (
+                            <dl className="grid gap-2">
+                              {Object.entries(value).slice(0, 20).map(([key, item]) => (
+                                <div key={key} className="grid grid-cols-[minmax(120px,220px)_1fr] gap-3 text-sm">
+                                  <dt className="truncate font-medium text-gray-500" title={key}>{key}</dt>
+                                  <dd className="truncate font-mono text-gray-800" title={formatValue(item)}>{shortValue(item, 90)}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          ) : (
+                            <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-white p-3 text-xs text-gray-700">
+                              {formatValue(value)}
+                            </pre>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">

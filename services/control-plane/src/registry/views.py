@@ -244,6 +244,38 @@ def _normalize_summary_map(data, nested_key, label, warnings):
     return {str(key): _json_safe(value) for key, value in candidate.items()}
 
 
+def _normalize_manual_metrics_file(data, warnings):
+    """Split common uploaded training reports into metric and param summaries."""
+    if data is None:
+        return {}, {}
+    if not isinstance(data, dict):
+        warnings.append("metrics_file ignored: expected a JSON object.")
+        return {}, {}
+
+    metrics_candidate = data.get("evaluation_metrics")
+    if not isinstance(metrics_candidate, dict):
+        metrics_candidate = data.get("metrics") if isinstance(data.get("metrics"), dict) else data
+
+    metrics_summary = {}
+    for key, value in metrics_candidate.items():
+        # Nested objects are useful metadata, but they should not appear as metric
+        # cards or dominate metric compare/recommendation logic.
+        if isinstance(value, dict):
+            continue
+        metrics_summary[str(key)] = _json_safe(value)
+
+    derived_params = {}
+    hyperparams = data.get("best_hyperparameters")
+    if isinstance(hyperparams, dict):
+        derived_params.update({str(key): _json_safe(value) for key, value in hyperparams.items()})
+
+    for key in ("model_version", "timestamp", "num_classes", "objective"):
+        if key in data:
+            derived_params[key] = _json_safe(data.get(key))
+
+    return metrics_summary, derived_params
+
+
 def _numeric_value(value):
     if isinstance(value, bool):
         return None
@@ -318,18 +350,12 @@ def _normalize_model_insights(data, *, kind_hint="feature_importance", source="m
 
 def parse_manual_upload_metadata(request):
     warnings = []
-    metrics_summary = _normalize_summary_map(
-        _read_json_upload(request.FILES.get("metrics_file"), "metrics_file", warnings),
-        "metrics",
-        "metrics_file",
-        warnings,
-    )
-    params_summary = _normalize_summary_map(
-        _read_json_upload(request.FILES.get("params_file"), "params_file", warnings),
-        "params",
-        "params_file",
-        warnings,
-    )
+    metrics_payload = _read_json_upload(request.FILES.get("metrics_file"), "metrics_file", warnings)
+    metrics_summary, params_from_metrics = _normalize_manual_metrics_file(metrics_payload, warnings)
+
+    params_payload = _read_json_upload(request.FILES.get("params_file"), "params_file", warnings)
+    explicit_params = _normalize_summary_map(params_payload, "params", "params_file", warnings)
+    params_summary = explicit_params if explicit_params else params_from_metrics
 
     insights_file = request.FILES.get("model_insights_file")
     insight_kind = "feature_importance"

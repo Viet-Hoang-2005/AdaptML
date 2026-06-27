@@ -1,5 +1,6 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+import json
 import requests
 from rest_framework.test import APIClient
 from unittest.mock import ANY, Mock, patch
@@ -145,6 +146,73 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         self.assertEqual(version.model_insights_summary["kind"], "feature_importance")
         self.assertEqual(version.model_insights_summary["items"][0]["rank"], 1)
         self.assertEqual(version.deployability_status, "deployable")
+
+    @patch("registry.views.get_build_adapter")
+    def test_manual_upload_nested_nids_metrics_flattens_metrics_and_params_for_compare(self, mock_get_build_adapter):
+        mock_get_build_adapter.return_value = Mock()
+
+        def upload(version, accuracy, precision, n_estimators):
+            payload = self._manual_upload_payload(
+                name="manual-nids-nested",
+                version=version,
+                metrics_file=SimpleUploadedFile(
+                    f"metrics_{version}.json",
+                    json.dumps(
+                        {
+                            "model_version": version,
+                            "timestamp": "2026-06-27T00:00:00Z",
+                            "num_classes": 2,
+                            "objective": "binary:logistic",
+                            "evaluation_metrics": {
+                                "accuracy": accuracy,
+                                "precision": precision,
+                                "recall": 0.9997,
+                                "f1_score": 0.9996,
+                            },
+                            "best_hyperparameters": {
+                                "max_depth": 7,
+                                "n_estimators": n_estimators,
+                                "learning_rate": 0.1516,
+                                "subsample": 0.8888,
+                                "colsample_bytree": 0.8404,
+                            },
+                        }
+                    ).encode("utf-8"),
+                    content_type="application/json",
+                ),
+            )
+            response = self.client.post("/api/models/build/", payload, format="multipart")
+            self.assertEqual(response.status_code, 201)
+            return ModelVersion.objects.get(tenant=self.user, family__name="manual-nids-nested", version=version)
+
+        left = upload("v1", 0.9991, 0.9990, 101)
+        right = upload("v2", 0.9999, 0.9998, 151)
+
+        left.refresh_from_db()
+        right.refresh_from_db()
+        self.assertEqual(left.metrics_summary["accuracy"], 0.9991)
+        self.assertEqual(left.metrics_summary["precision"], 0.9990)
+        self.assertEqual(left.metrics_summary["recall"], 0.9997)
+        self.assertEqual(left.metrics_summary["f1_score"], 0.9996)
+        self.assertNotIn("evaluation_metrics", left.metrics_summary)
+        self.assertNotIn("best_hyperparameters", left.metrics_summary)
+        self.assertEqual(left.params_summary["max_depth"], 7)
+        self.assertEqual(left.params_summary["n_estimators"], 101)
+        self.assertEqual(left.params_summary["learning_rate"], 0.1516)
+        self.assertEqual(left.params_summary["subsample"], 0.8888)
+        self.assertEqual(left.params_summary["colsample_bytree"], 0.8404)
+        self.assertEqual(left.params_summary["objective"], "binary:logistic")
+        self.assertEqual(left.deployability_status, "deployable")
+
+        response = self.client.get(f"/api/registry/families/{left.family_id}/compare/?left={left.id}&right={right.id}")
+        self.assertEqual(response.status_code, 200)
+        metrics = {item["name"]: item for item in response.data["metrics_diff"]}
+        self.assertEqual(metrics["accuracy"]["winner"], "right")
+        self.assertAlmostEqual(metrics["accuracy"]["delta"], 0.0008)
+        self.assertEqual(metrics["precision"]["winner"], "right")
+        params = {item["name"]: item for item in response.data["params_diff"]}
+        self.assertTrue(params["n_estimators"]["changed"])
+        self.assertIn("learning_rate", params)
 
     @patch("registry.views.get_build_adapter")
     def test_manual_upload_invalid_metadata_warns_without_failing_upload(self, mock_get_build_adapter):
