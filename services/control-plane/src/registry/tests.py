@@ -4,7 +4,7 @@ import requests
 from rest_framework.test import APIClient
 from unittest.mock import ANY, Mock, patch
 
-from authentication.models import CustomUser, ModelAPI, ModelFamily, ModelVersion, TrainingJob
+from authentication.models import CustomUser, ModelAPI, ModelFamily, ModelVersion, TrainingJob, DriftMonitoringJob, DriftMonitoringResult
 
 
 class ModelEvolutionSummaryMirrorTests(TestCase):
@@ -602,3 +602,201 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         response = self.client.get(f"/api/registry/families/{family.id}/compare/?left={left.id}&right={left.id}")
 
         self.assertEqual(response.status_code, 400)
+
+
+class DriftSummaryInVersionDetailTests(TestCase):
+    """Tests for drift_summary injected into GET /api/registry/versions/<id>/."""
+
+    def setUp(self):
+        self.user = CustomUser.objects.create_user(email="drift-tenant@example.com", password="pass")
+        self.other_user = CustomUser.objects.create_user(email="drift-other@example.com", password="pass")
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _make_model_api(self, user=None, name="nids-drift", version="v1"):
+        return ModelAPI.objects.create(
+            tenant=user or self.user,
+            name=name,
+            version=version,
+            status="ready",
+            build_status="ready",
+            access_mode="private",
+            flavor="xgboost",
+        )
+
+    def _make_family_and_version(self, model_api, user=None):
+        tenant = user or self.user
+        family, _ = ModelFamily.objects.get_or_create(
+            tenant=tenant,
+            name=model_api.name,
+            defaults={"display_name": model_api.name},
+        )
+        version = ModelVersion.objects.create(
+            tenant=tenant,
+            family=family,
+            version=model_api.version or "v1",
+            model_api=model_api,
+            source_type="manual_upload",
+            stage="candidate",
+            deployability_status="deployable",
+        )
+        return family, version
+
+    def _make_drift_job(self, model_api):
+        return DriftMonitoringJob.objects.create(
+            tenant=model_api.tenant,
+            model_api=model_api,
+            trigger_threshold=1000,
+            status="active",
+        )
+
+    def _make_drift_result(self, job, drift_score=0.235, dataset_drift=True, report_url="s3://bucket/report.html"):
+        return DriftMonitoringResult.objects.create(
+            job=job,
+            drift_score=drift_score,
+            dataset_drift=dataset_drift,
+            report_url=report_url,
+            drifted_features_count=12,
+            total_features=52,
+        )
+
+    # ------------------------------------------------------------------
+    # Test: not_configured when no drift job exists
+    # ------------------------------------------------------------------
+    def test_drift_summary_not_configured_when_no_job(self):
+        model_api = self._make_model_api()
+        _family, version = self._make_family_and_version(model_api)
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        ds = response.data["drift_summary"]
+        self.assertFalse(ds["configured"])
+        self.assertEqual(ds["status"], "not_configured")
+        self.assertIsNone(ds["drift_percent"])
+        self.assertIsNone(ds["drift_score"])
+        self.assertIsNone(ds["latest_result_id"])
+
+    # ------------------------------------------------------------------
+    # Test: healthy when dataset_drift=False
+    # ------------------------------------------------------------------
+    def test_drift_summary_healthy_when_dataset_drift_false(self):
+        model_api = self._make_model_api(name="nids-healthy")
+        _family, version = self._make_family_and_version(model_api)
+        job = self._make_drift_job(model_api)
+        self._make_drift_result(job, drift_score=0.05, dataset_drift=False, report_url="s3://bucket/healthy.html")
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        ds = response.data["drift_summary"]
+        self.assertTrue(ds["configured"])
+        self.assertEqual(ds["status"], "healthy")
+        self.assertEqual(ds["drift_percent"], 5.0)
+        self.assertFalse(ds["dataset_drift"])
+
+    # ------------------------------------------------------------------
+    # Test: drift_detected when dataset_drift=True
+    # ------------------------------------------------------------------
+    def test_drift_summary_drift_detected_when_dataset_drift_true(self):
+        model_api = self._make_model_api(name="nids-drifted")
+        _family, version = self._make_family_and_version(model_api)
+        job = self._make_drift_job(model_api)
+        self._make_drift_result(job, drift_score=0.235, dataset_drift=True, report_url="s3://bucket/drifted.html")
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        ds = response.data["drift_summary"]
+        self.assertTrue(ds["configured"])
+        self.assertEqual(ds["status"], "drift_detected")
+        self.assertTrue(ds["dataset_drift"])
+        self.assertEqual(ds["drift_percent"], 23.5)
+
+    # ------------------------------------------------------------------
+    # Test: percent conversion — score 0.235 → 23.5
+    # ------------------------------------------------------------------
+    def test_drift_percent_conversion_score_0_to_1_range(self):
+        model_api = self._make_model_api(name="nids-pct-low")
+        _family, version = self._make_family_and_version(model_api)
+        job = self._make_drift_job(model_api)
+        self._make_drift_result(job, drift_score=0.235, dataset_drift=True, report_url="s3://b/r.html")
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        ds = response.data["drift_summary"]
+        self.assertEqual(ds["drift_percent"], 23.5)
+        self.assertAlmostEqual(ds["drift_score"], 0.235)
+
+    # ------------------------------------------------------------------
+    # Test: percent conversion — score 23.5 stays 23.5
+    # ------------------------------------------------------------------
+    def test_drift_score_already_percent_range(self):
+        model_api = self._make_model_api(name="nids-pct-high")
+        _family, version = self._make_family_and_version(model_api)
+        job = self._make_drift_job(model_api)
+        self._make_drift_result(job, drift_score=23.5, dataset_drift=True, report_url="s3://b/r.html")
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        ds = response.data["drift_summary"]
+        self.assertEqual(ds["drift_percent"], 23.5)
+        self.assertEqual(ds["drift_score"], 23.5)
+
+    # ------------------------------------------------------------------
+    # Test: missing report_url returns report_unavailable
+    # ------------------------------------------------------------------
+    def test_missing_report_url_returns_report_unavailable(self):
+        model_api = self._make_model_api(name="nids-no-report")
+        _family, version = self._make_family_and_version(model_api)
+        job = self._make_drift_job(model_api)
+        self._make_drift_result(job, drift_score=0.3, dataset_drift=True, report_url="")
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        ds = response.data["drift_summary"]
+        self.assertTrue(ds["configured"])
+        self.assertEqual(ds["status"], "report_unavailable")
+        self.assertIsNone(ds["report_url"])
+
+    # ------------------------------------------------------------------
+    # Test: report_page_url is always included
+    # ------------------------------------------------------------------
+    def test_report_page_url_included(self):
+        model_api = self._make_model_api(name="nids-page-url")
+        _family, version = self._make_family_and_version(model_api)
+        job = self._make_drift_job(model_api)
+        self._make_drift_result(job)
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        ds = response.data["drift_summary"]
+        self.assertIn("report_page_url", ds)
+        self.assertIsNotNone(ds["report_page_url"])
+        self.assertIn("/dashboard/drift-monitoring/", ds["report_page_url"])
+
+    # ------------------------------------------------------------------
+    # Test: tenant isolation — other tenant's version returns 404
+    # ------------------------------------------------------------------
+    def test_tenant_isolation_other_tenant_version_not_visible(self):
+        other_model_api = self._make_model_api(user=self.other_user, name="nids-other")
+        other_family, other_version = self._make_family_and_version(other_model_api, user=self.other_user)
+
+        response = self.client.get(f"/api/registry/versions/{other_version.id}/")
+
+        self.assertEqual(response.status_code, 404)
+
+    # ------------------------------------------------------------------
+    # Test: no drift_job → version detail still returns 200 (not 500)
+    # ------------------------------------------------------------------
+    def test_no_drift_job_does_not_500(self):
+        model_api = self._make_model_api(name="nids-no-500")
+        _family, version = self._make_family_and_version(model_api)
+        # Intentionally no DriftMonitoringJob
+
+        response = self.client.get(f"/api/registry/versions/{version.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("drift_summary", response.data)
+        self.assertEqual(response.data["drift_summary"]["status"], "not_configured")

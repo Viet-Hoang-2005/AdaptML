@@ -32,6 +32,8 @@ from authentication.models import (
     ModelFamily,
     ModelMetric,
     ModelVersion,
+    DriftMonitoringJob,
+    DriftMonitoringResult,
     model_artifact_path,
 )
 from integrations.s3_zip_utils import upload_single_file_to_s3, get_s3_file_list, handle_upload_to_s3, delete_s3_path
@@ -385,6 +387,103 @@ def _version_action_state(version):
     }
 
 
+def _build_drift_summary(version):
+    """Return a lightweight drift summary for a ModelVersion.
+
+    Traverses: ModelVersion -> model_api -> drift_job -> latest DriftMonitoringResult.
+    No DB migration needed. Reads existing drift models only.
+    """
+    model_api = version.model_api if version.model_api_id else None
+    model_api_hashid = encode_model_id(version.model_api_id) if version.model_api_id else None
+    drift_page_url = f"/dashboard/drift-monitoring/{model_api_hashid}" if model_api_hashid else "/dashboard/drift-monitoring"
+
+    # Base skeleton — returned when no drift job exists
+    base = {
+        "configured": False,
+        "status": "not_configured",
+        "drift_percent": None,
+        "drift_score": None,
+        "dataset_drift": None,
+        "latest_result_id": None,
+        "drift_job_id": None,
+        "report_url": None,
+        "report_page_url": drift_page_url,
+        "last_checked_at": None,
+        "drifted_features_count": None,
+        "total_features": None,
+        "message": "No drift report is available for this version yet.",
+    }
+
+    if not model_api:
+        return base
+
+    # Resolve drift job — DriftMonitoringJob has OneToOneField on model_api
+    try:
+        drift_job = model_api.drift_job
+    except (DriftMonitoringJob.DoesNotExist, AttributeError):
+        return base
+
+    # Resolve latest result (ordered by -run_at)
+    latest_result = drift_job.results.first()
+    if not latest_result:
+        # Job configured but no results yet
+        return {
+            **base,
+            "configured": True,
+            "drift_job_id": drift_job.id,
+            "message": "Drift monitoring is configured but no report has been run yet.",
+        }
+
+    # Compute drift_percent
+    raw_score = latest_result.drift_score
+    if raw_score is not None:
+        if 0.0 <= raw_score <= 1.0:
+            drift_percent = round(raw_score * 100, 2)
+        elif 1.0 < raw_score <= 100.0:
+            drift_percent = round(raw_score, 2)
+        else:
+            drift_percent = None
+    else:
+        drift_percent = None
+
+    # Determine status
+    if latest_result.dataset_drift is True:
+        drift_status = "drift_detected"
+        message = f"Latest drift check detected {drift_percent}% drift." if drift_percent is not None else "Drift detected."
+    elif latest_result.dataset_drift is False:
+        drift_status = "healthy"
+        message = f"No drift detected. Latest drift score: {drift_percent}%." if drift_percent is not None else "No drift detected."
+    elif drift_percent is not None:
+        # dataset_drift flag missing but score present
+        drift_status = "unknown"
+        message = f"Drift score available ({drift_percent}%) but drift flag is not set."
+    else:
+        drift_status = "unknown"
+        message = "Drift status is unknown."
+
+    # If no report URL, override status (only when dataset_drift is non-null)
+    report_url = latest_result.report_url or None
+    if not report_url and drift_status in ("healthy", "drift_detected"):
+        drift_status = "report_unavailable"
+        message = f"{message} Report link is unavailable."
+
+    return {
+        "configured": True,
+        "status": drift_status,
+        "drift_percent": drift_percent,
+        "drift_score": raw_score,
+        "dataset_drift": latest_result.dataset_drift,
+        "latest_result_id": latest_result.id,
+        "drift_job_id": drift_job.id,
+        "report_url": report_url,
+        "report_page_url": drift_page_url,
+        "last_checked_at": latest_result.run_at,
+        "drifted_features_count": latest_result.drifted_features_count,
+        "total_features": latest_result.total_features,
+        "message": message,
+    }
+
+
 def serialize_registry_version(version, include_metrics=False):
     source_job = version.source_training_job
     payload = {
@@ -426,6 +525,7 @@ def serialize_registry_version(version, include_metrics=False):
         "mlflow_artifact_uri": version.mlflow_artifact_uri or "",
         "created_at": version.created_at,
         "updated_at": version.updated_at,
+        "drift_summary": _build_drift_summary(version),
     }
     if include_metrics:
         payload["metrics"] = [serialize_registry_metric(metric) for metric in version.metrics.all()]

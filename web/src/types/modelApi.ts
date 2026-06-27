@@ -141,6 +141,34 @@ export interface RegistryModelInsightsSummary {
   items?: RegistryModelInsightItem[];
 }
 
+export type DriftSummaryStatus = 'not_configured' | 'healthy' | 'drift_detected' | 'report_unavailable' | 'unknown';
+
+export interface DriftSummary {
+  configured: boolean;
+  status: DriftSummaryStatus;
+  drift_percent: number | null;
+  driftPercent?: number | null;
+  drift_score: number | null;
+  driftScore?: number | null;
+  dataset_drift: boolean | null;
+  datasetDrift?: boolean | null;
+  latest_result_id: number | null;
+  latestResultId?: number | null;
+  drift_job_id: number | null;
+  driftJobId?: number | null;
+  report_url: string | null;
+  reportUrl?: string | null;
+  report_page_url: string;
+  reportPageUrl?: string;
+  last_checked_at: string | null;
+  lastCheckedAt?: string | null;
+  drifted_features_count: number | null;
+  driftedFeaturesCount?: number | null;
+  total_features: number | null;
+  totalFeatures?: number | null;
+  message: string;
+}
+
 export interface RegistryVersion {
   id: number;
   tenant?: number | string;
@@ -199,6 +227,8 @@ export interface RegistryVersion {
   mlflow_artifact_uri?: string | null;
   created_at: string;
   updated_at: string;
+  drift_summary?: DriftSummary;
+  driftSummary?: DriftSummary;
 }
 
 export interface RegistrySmokeTestRequest {

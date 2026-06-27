@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { RegistryFamily, RegistryModelInsightItem, RegistryVersion } from '../../types/modelApi';
-import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck, Package, Rocket, HeartPulse, Play, BarChart3 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import type { DriftSummary, RegistryFamily, RegistryModelInsightItem, RegistryVersion } from '../../types/modelApi';
+import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck, Package, Rocket, HeartPulse, Play, BarChart3, Activity } from 'lucide-react';
 import { formatVersion } from '../../lib/formatters';
 import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';
@@ -116,7 +117,130 @@ function withoutTechnicalDetail(value: unknown): unknown {
   return rest;
 }
 
+// ---------------------------------------------------------------------------
+// DriftSummaryCard — lightweight drift indicator for Model Evolution detail
+// ---------------------------------------------------------------------------
+interface DriftSummaryCardProps {
+  driftSummary?: DriftSummary;
+  modelApiHashid?: string;
+}
+
+function driftStatusBadge(status?: string) {
+  switch (status) {
+    case 'drift_detected':
+      return 'bg-red-100 text-red-700 border-red-200';
+    case 'healthy':
+      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'report_unavailable':
+      return 'bg-amber-100 text-amber-700 border-amber-200';
+    case 'not_configured':
+      return 'bg-gray-100 text-gray-500 border-gray-200';
+    default:
+      return 'bg-gray-100 text-gray-500 border-gray-200';
+  }
+}
+
+function driftStatusLabel(status?: string) {
+  switch (status) {
+    case 'drift_detected': return 'Drift detected';
+    case 'healthy': return 'No drift detected';
+    case 'report_unavailable': return 'Report unavailable';
+    case 'not_configured': return 'Not configured';
+    case 'unknown': return 'Unknown';
+    default: return 'Not configured';
+  }
+}
+
+function DriftSummaryCard({ driftSummary, modelApiHashid }: DriftSummaryCardProps) {
+  const navigate = useNavigate();
+  const ds = driftSummary;
+  const fallbackUrl = modelApiHashid
+    ? `/dashboard/drift-monitoring/${modelApiHashid}`
+    : '/dashboard/drift-monitoring';
+  const reportPageUrl = ds?.report_page_url || ds?.reportPageUrl || fallbackUrl;
+  const driftPercent = ds?.drift_percent ?? ds?.driftPercent ?? null;
+  const lastCheckedAt = ds?.last_checked_at || ds?.lastCheckedAt;
+  const status = ds?.status || 'not_configured';
+
+  return (
+    <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">
+        <span className="inline-flex items-center gap-2">
+          <Activity className="h-4 w-4 text-violet-500" />
+          Drift Summary
+        </span>
+        <span className={classNames(
+          'text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border',
+          driftStatusBadge(status),
+        )}>
+          {driftStatusLabel(status)}
+        </span>
+      </h4>
+
+      {(!ds || status === 'not_configured') && (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-gray-500">No drift report is available for this version yet.</p>
+          <button
+            className="self-start inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 hover:text-violet-900 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-lg transition-colors"
+            onClick={() => navigate(reportPageUrl)}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Open Drift Monitoring
+          </button>
+        </div>
+      )}
+
+      {ds && status !== 'not_configured' && (
+        <div className="flex flex-col gap-3">
+          {driftPercent !== null && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Latest Drift</p>
+              <p className={classNames(
+                'text-2xl font-extrabold',
+                status === 'drift_detected' ? 'text-red-600' : 'text-emerald-600',
+              )}>
+                {driftPercent}%
+              </p>
+              {(ds.drifted_features_count !== null && ds.total_features) && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {ds.drifted_features_count} / {ds.total_features} features drifted
+                </p>
+              )}
+            </div>
+          )}
+
+          {lastCheckedAt && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Last Checked</p>
+              <p className="text-sm text-gray-700">{new Date(lastCheckedAt).toLocaleString()}</p>
+            </div>
+          )}
+
+          {ds.message && (
+            <p className="text-xs text-gray-500 leading-relaxed">{ds.message}</p>
+          )}
+
+          {status === 'report_unavailable' && (
+            <p className="text-xs text-amber-600 font-medium">Report link unavailable</p>
+          )}
+
+          {status !== 'report_unavailable' && (
+            <button
+              className="self-start inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 hover:text-violet-900 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-lg transition-colors"
+              onClick={() => navigate(reportPageUrl)}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              View drift report
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ModelVersionDetail({ family, version, allVersions, onActionSuccess }: Props) {
+
   const [activeTab, setActiveTab] = useState<'details' | 'insights' | 'metrics' | 'history'>('details');
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
@@ -651,6 +775,9 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 <p className="text-sm text-gray-500">No artifact manifest available yet.</p>
               )}
             </div>
+
+            {/* F. Drift Summary Card */}
+            <DriftSummaryCard driftSummary={version.drift_summary || version.driftSummary} modelApiHashid={typeof version.model_api === 'string' ? version.model_api : undefined} />
 
             <div className="grid md:grid-cols-2 gap-6 mt-2">
               {/* D. Deployment Info */}
