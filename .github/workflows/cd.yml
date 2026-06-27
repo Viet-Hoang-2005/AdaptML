@@ -100,11 +100,12 @@ jobs:
           username: ${{ env.SECRETS_HARBOR_USERNAME }}
           password: ${{ env.SECRETS_HARBOR_PASSWORD }}
 
-      - name: Build and Push Image
+      - name: Build Image (with GHA cache)
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.target.context }}
-          push: true
+          push: false
+          load: true
           tags: |
             registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}
             registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest
@@ -116,6 +117,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
+
+      - name: Push Image to Harbor
+        run: |
+          docker push registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:${{ github.sha }}
+          docker push registry.mlops-nids-nt114.id.vn/mlops-paas/${{ matrix.target.image }}:latest
 
   gitops-promotion:
     name: "GitOps: Update Kustomize & Create PR"
