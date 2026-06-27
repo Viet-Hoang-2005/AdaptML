@@ -20,7 +20,6 @@ spec:
       data:
         type: git
         url: https://github.com/Viet-Hoang-2005/MLOps-nids-system.git
-        username: "git"
         password: "{{ .GITHUB_TOKEN }}"
   data:
     - secretKey: GITHUB_TOKEN
