@@ -76,6 +76,8 @@ spec:
           metadata:
             name: {{inputs.parameters.container_name}}-svc
             namespace: default
+            labels:
+              component: model-server
           spec:
             selector:
               app: {{inputs.parameters.container_name}}
