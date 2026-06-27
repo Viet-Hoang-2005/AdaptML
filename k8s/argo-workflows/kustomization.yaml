@@ -5,6 +5,7 @@ resources:
   - rbac.yaml
   - eventbus.yaml
   - eventsource.yaml
+  - webhook-service.yaml
   - build-workflowtemplate.yaml
   - deploy-workflowtemplate.yaml
   - evidently-workflowtemplate.yaml
