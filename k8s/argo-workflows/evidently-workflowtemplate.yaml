@@ -25,7 +25,7 @@ spec:
           - name: summary_json_upload_url
           - name: control_plane_webhook_url
       container:
-        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-evidently:abf5359d48983f77ebba5f75119b748c726ded26
+        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-evidently:46d08d393e2448cabbbde21471d5a3f56e281eb1
         imagePullPolicy: Always
         command: ["python", "/app/detect_drift.py"]
         envFrom:
