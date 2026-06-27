@@ -22,7 +22,17 @@ def parse_env_file(env_path: Path) -> dict:
         print(f"Error: Cannot find .env file at {env_path}")
         sys.exit(1)
 
-    return dotenv_values(env_path)
+    raw_data = dotenv_values(env_path)
+    # Xử lý ký tự newline bị escaped trong literal string (VD: \n -> dấu xuống dòng thật)
+    parsed_data = {}
+    for k, v in raw_data.items():
+        if v is not None:
+            # Khôi phục \n bị thoát thành xuống dòng thực sự cho các loại khóa PEM
+            parsed_data[k] = v.replace("\\n", "\n")
+        else:
+            parsed_data[k] = v
+            
+    return parsed_data
 
 def update_or_create_secret(client, secret_name: str, secret_dict: dict):
     """Cập nhật giá trị JSON vào AWS Secrets Manager, nếu chưa có thì tạo mới."""
@@ -78,6 +88,8 @@ def main():
         "GITHUB_TOKEN",
         "HARBOR_USERNAME",
         "HARBOR_PASSWORD",
+        "COSIGN_PASSWORD",
+        "COSIGN_PRIVATE_KEY",
     ]
     production_keys = [
         "DB_USER",
@@ -120,6 +132,13 @@ def main():
             print(f"Skipping {secret_name} because it does not contain suitable data.")
             continue
         update_or_create_secret(client, secret_name, payload)
+        
+        # In ra 3 ký tự đầu của các secret để kiểm tra
+        print(f"-> Successfully pushed {len(payload)} keys to {secret_name}:")
+        for k, v in payload.items():
+            val_str = str(v) if v is not None else ""
+            preview = val_str[:3] + "..." if len(val_str) > 3 else val_str
+            print(f"     * {k}: {preview}")
 
     print("\nSuccess! All configuration is ready on AWS Secrets Manager.")
 

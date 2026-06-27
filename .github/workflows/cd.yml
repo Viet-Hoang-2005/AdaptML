@@ -131,13 +131,11 @@ jobs:
           IMAGE: "${{ matrix.target.image }}"
           SHA: "${{ github.sha }}"
         run: |
-          # Xử lý chuỗi \n bị thoát (escaped) trong secret thành xuống dòng thật
           printf "%b\n" "${COSIGN_PRIVATE_KEY}" > cosign.key
           
           DIGEST="${{ steps.build-and-push.outputs.digest }}"
           cosign sign --yes --key cosign.key "${REGISTRY_HOST}/mlops-paas/${IMAGE}@${DIGEST}"
           
-          # Dọn dẹp key
           rm -f cosign.key
 
   gitops-promotion:
