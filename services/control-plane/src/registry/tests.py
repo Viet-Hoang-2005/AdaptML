@@ -1,5 +1,5 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 import requests
 from rest_framework.test import APIClient
 from unittest.mock import ANY, Mock, patch
@@ -313,9 +313,12 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         self.assertEqual(family_response.status_code, 200)
         self.assertEqual(family_response.data["production_alias_version_id"], version.id)
 
+    @override_settings(MODEL_SERVER_PUBLIC_URL="http://localhost:5000", MODEL_SERVER_INTERNAL_URL="http://traefik:5000")
     @patch("registry.views.requests.post")
     def test_alias_predict_endpoint_proxies_to_target(self, mock_post):
         family = self._family(name="alias-predict-family")
+        self.user.api_key = "test-api-key"
+        self.user.save(update_fields=["api_key"])
         model_api = self._deployed_model_api(name="alias-predict-family")
         version = self._version(family, source_type="manual_upload", model_api=model_api)
         self.client.post(f"/api/registry/families/{family.id}/versions/{version.id}/promote/", {"alias": "production"}, format="json")
@@ -334,6 +337,8 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         self.assertEqual(response.data["prediction"], 1)
         mock_post.assert_called_once()
         self.assertEqual(mock_post.call_args.kwargs["json"], {"features": {"f1": 1}})
+        self.assertEqual(mock_post.call_args.args[0], model_api.endpoint_url.replace("http://localhost:5000", "http://traefik:5000", 1))
+        self.assertEqual(mock_post.call_args.kwargs["headers"], {"X-API-Key": "test-api-key"})
 
     @patch("registry.views.requests.post")
     def test_alias_predict_endpoint_returns_structured_502_when_unreachable(self, mock_post):
