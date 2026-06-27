@@ -1,19 +1,14 @@
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
 metadata:
-  name: harbor-registry-ingress
+  name: harbor-registry-ingressroute
   namespace: harbor
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
-  rules:
-    - host: registry.mlops-nids-nt114.id.vn
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: harbor
-                port:
-                  number: 80
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`registry.mlops-nids-nt114.id.vn`)
+      kind: Rule
+      services:
+        - name: harbor
+          port: 80
