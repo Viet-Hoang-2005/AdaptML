@@ -13,6 +13,7 @@ resources:
   - storage
   - health
   - monitoring
+  - harbor
   - argo-workflows
 
   # 2. Applications (Dùng overlay production)
