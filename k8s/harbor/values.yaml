@@ -42,3 +42,22 @@ trivy:
   enabled: false
 notary:
   enabled: false
+
+portal:
+  nodeSelector: { workload-type: worker }
+core:
+  nodeSelector: { workload-type: worker }
+jobservice:
+  nodeSelector: { workload-type: worker }
+registry:
+  nodeSelector: { workload-type: worker }
+database:
+  nodeSelector: { workload-type: worker }
+redis:
+  nodeSelector: { workload-type: worker }
+trivy:
+  nodeSelector: { workload-type: worker }
+exporter:
+  nodeSelector: { workload-type: worker }
+metrics:
+  nodeSelector: { workload-type: worker }

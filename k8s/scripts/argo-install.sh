@@ -14,6 +14,13 @@ kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argop
 echo "[3/6] Applying RBAC configuration (Account: github-actions)..."
 kubectl apply -f k8s/argocd/rbac.yaml
 
+# Bước 3.5: Gắn nodeSelector để ArgoCD chạy trên Worker Node
+echo "[3.5/6] Patching ArgoCD deployments to run on worker nodes..."
+for deploy in argocd-server argocd-repo-server argocd-dex-server argocd-redis argocd-applicationset-controller argocd-notifications-controller; do
+  kubectl patch deployment $deploy -n argocd -p '{"spec": {"template": {"spec": {"nodeSelector": {"workload-type": "worker"}}}}}' || true
+done
+kubectl patch statefulset argocd-application-controller -n argocd -p '{"spec": {"template": {"spec": {"nodeSelector": {"workload-type": "worker"}}}}}' || true
+
 # Bước 4: Chờ ArgoCD Server sẵn sàng
 echo "[4/6] Waiting for ArgoCD Server to be ready..."
 kubectl rollout status deployment/argocd-server -n argocd --timeout=300s
