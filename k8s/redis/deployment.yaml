@@ -14,6 +14,8 @@ spec:
       labels:
         app: mlops-paas-redis
     spec:
+      nodeSelector:
+        workload-type: worker
       containers:
         - name: redis
           image: redis:7-alpine

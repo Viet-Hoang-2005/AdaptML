@@ -13,9 +13,13 @@ spec:
         type: Socket
   templates:
     - name: build-model
+      nodeSelector:
+        workload-type: worker
       inputs:
         parameters:
           - name: model_id
+          - name: model_hashid
+          - name: tenant_id
           - name: flavor
           - name: requirements_text
           - name: source_key
@@ -25,7 +29,7 @@ spec:
           - name: task_type
           - name: control_plane_webhook_url
       container:
-        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:b5ae40684fb4743c7d8f403ca678f602adf6bdb9
+        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:0f5ab2fa465b30d1a8bcd0bb5b3c98e2ed12bc3f
         imagePullPolicy: Always
         command: ["python", "src/cli.py"]
         volumeMounts:
@@ -36,6 +40,10 @@ spec:
             value: "{{inputs.parameters.task_type}}"
           - name: MODEL_ID
             value: "{{inputs.parameters.model_id}}"
+          - name: MODEL_HASHID
+            value: "{{inputs.parameters.model_hashid}}"
+          - name: TENANT_ID
+            value: "{{inputs.parameters.tenant_id}}"
           - name: FLAVOR
             value: "{{inputs.parameters.flavor}}"
           - name: REQUIREMENTS_TEXT

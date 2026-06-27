@@ -12,7 +12,7 @@ data:
   DB_NAME: "mlops_paas_db"
   CONTROL_PLANE_DB_SCHEMA: "control_plane"
   DJANGO_DEBUG: "True"
-  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,control-plane,mlops_paas_django,api.mlops-nids-nt114.id.vn"
+  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,control-plane,mlops-paas-control-plane,mlops_paas_django,api.mlops-nids-nt114.id.vn"
   BUILD_STRATEGY: "argo"
   HARBOR_REGISTRY_URL: "registry.mlops-nids-nt114.id.vn"
   GITHUB_OAUTH_REDIRECT_URI: "https://mlops-nids-nt114.id.vn/oauth/github/callback"
@@ -28,4 +28,6 @@ data:
   REDIS_URL: "redis://mlops-paas-redis:6379/1"
   REDIS_HOST: "mlops-paas-redis"
   REDIS_PORT: "6379"
-
+  CONTROL_PLANE_INTERNAL_URL: "http://mlops-paas-control-plane:8000"
+  MODEL_SERVER_PUBLIC_URL: "https://mlops-nids-nt114.id.vn"
+  MODEL_SERVER_INTERNAL_URL: "http://traefik.kube-system.svc.cluster.local:5000"

@@ -11,7 +11,7 @@ metadata:
   namespace: default
 rules:
   - apiGroups: ["argoproj.io"]
-    resources: ["workflows", "workflowtemplates", "cronworkflows", "clusterworkflowtemplates"]
+    resources: ["workflows", "workflowtemplates", "cronworkflows", "clusterworkflowtemplates", "workflowtaskresults"]
     verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["pods", "pods/exec", "pods/log", "secrets", "configmaps", "services"]

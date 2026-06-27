@@ -8,6 +8,8 @@ spec:
   entrypoint: deploy-model
   templates:
     - name: deploy-model
+      nodeSelector:
+        workload-type: worker
       inputs:
         parameters:
           - name: tenant_id
@@ -21,7 +23,7 @@ spec:
         command: [bash]
         source: |
           set -e
-          cat <<EOF | kubectl apply -f -
+          cat <<'EOF' | kubectl apply -f -
           apiVersion: apps/v1
           kind: Deployment
           metadata:
@@ -30,7 +32,7 @@ spec:
             labels:
               app: model-endpoint
               tenant: {{inputs.parameters.tenant_id}}
-              model: {{inputs.parameters.model_id}}
+              model: "{{inputs.parameters.model_id}}"
           spec:
             replicas: 1
             selector:
@@ -41,6 +43,8 @@ spec:
                 labels:
                   app: {{inputs.parameters.container_name}}
               spec:
+                nodeSelector:
+                  workload-type: worker
                 containers:
                   - name: model-server
                     image: {{inputs.parameters.image_name}}
@@ -90,7 +94,7 @@ spec:
           apiVersion: traefik.io/v1alpha1
           kind: Middleware
           metadata:
-            name: rewrite-{{inputs.parameters.hashid}}
+            name: rewrite-{{inputs.parameters.container_name}}
             namespace: default
           spec:
             replacePath:
@@ -108,7 +112,7 @@ spec:
               - match: PathPrefix(`/{{inputs.parameters.tenant_id}}/models/{{inputs.parameters.hashid}}/{{inputs.parameters.version}}/predict`)
                 kind: Rule
                 middlewares:
-                  - name: rewrite-{{inputs.parameters.hashid}}
+                  - name: rewrite-{{inputs.parameters.container_name}}
                 services:
                   - name: {{inputs.parameters.container_name}}-svc
                     port: 5000

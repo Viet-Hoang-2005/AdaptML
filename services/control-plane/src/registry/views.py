@@ -1778,12 +1778,13 @@ class ModelAPIBuildLogsView(APIView):
         limit = int(request.query_params.get("limit", 100))
 
         hashid_str = encode_model_id(model_id)
-        log_key = f"build_logs:{hashid_str}"
-
+        
         try:
-            # Lấy logs từ Redis (lrange là O(N))
-            logs = cache.client.get_client().lrange(log_key, offset, offset + limit - 1)
-            # logs là list of bytes
+            client = cache.client.get_client()
+            logs = client.lrange(f"build_logs:{hashid_str}", offset, offset + limit - 1)
+            if not logs:
+                logs = client.lrange(f"build_logs:{model_id}", offset, offset + limit - 1)
+                
             logs_str = [log.decode('utf-8') for log in logs]
 
             return Response({

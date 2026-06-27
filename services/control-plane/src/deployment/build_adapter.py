@@ -150,8 +150,15 @@ class ArgoBuildAdapter(BuildAdapter):
             logger.error("ARGO_EVENTS_WEBHOOK_URL is not set.")
             return
 
+        from authentication.models import ModelAPI
+        from integrations.hashid_utils import encode_model_id
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
+
         payload = {
             "model_id": str(model_id),
+            "model_hashid": encode_model_id(int(model_id)),
+            "tenant_id": tenant_id,
             "flavor": flavor,
             "requirements_text": requirements_text,
             "source_key": source_key,

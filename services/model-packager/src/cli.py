@@ -110,18 +110,25 @@ def post_webhook(webhook_url: str, payload: dict) -> None:
         raise RuntimeError(f"Build webhook failed with HTTP {response.status_code}: {response.text[:500]}")
 
 def build_custom_image(workspace: Path, model_id: str, tenant_id: str, requirements_text: str) -> None:
-    dockerfile_content = """FROM mlops-paas-model-server:latest
+    docker_client = docker.from_env()
+    harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
+    harbor_user = os.environ.get("HARBOR_USERNAME", "").strip()
+    harbor_pass = os.environ.get("HARBOR_PASSWORD", "").strip()
+
+    # Login to Harbor first so the FROM base image can be pulled
+    if harbor_url and harbor_user and harbor_pass:
+        print(f"Logging into Harbor registry at {harbor_url}...")
+        docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
+
+    # Use fully-qualified base image so Docker can pull it from Harbor
+    base_image = f"{harbor_url}/mlops-paas/mlops-paas-model-server:latest" if harbor_url else "mlops-paas-model-server:latest"
+    dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
 RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
 """
     (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
-
-    docker_client = docker.from_env()
-    harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
-    harbor_user = os.environ.get("HARBOR_USERNAME", "").strip()
-    harbor_pass = os.environ.get("HARBOR_PASSWORD", "").strip()
 
     base_name = f"{tenant_id.lower()}-model-{model_id.lower()}:latest"
     image_tag = f"{harbor_url}/mlops-paas/{base_name}" if harbor_url else base_name
@@ -135,8 +142,6 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
     print(f"Docker image {image_tag} built successfully!")
 
     if harbor_url and harbor_user and harbor_pass:
-        print(f"Logging into Harbor registry at {harbor_url}...")
-        docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
         print(f"Pushing image {image_tag} to Harbor...")
         for line in docker_client.images.push(image_tag, stream=True, decode=True):
             if "status" in line:
