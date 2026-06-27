@@ -1,4 +1,5 @@
 # repo-sync.yaml: Cấu hình đồng bộ thông tin xác thực GitHub Private Repo cho ArgoCD
+# Kéo GITHUB_TOKEN từ AWS Secrets Manager 'mlops/production-secrets' và nặn ra Secret chuẩn ArgoCD
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -21,9 +22,8 @@ spec:
         url: https://github.com/Viet-Hoang-2005/MLOps-nids-system.git
         username: "Viet-Hoang-2005"
         password: "{{ .GITHUB_TOKEN }}"
-      env:
-        - name: GITHUB_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: github-secrets
-              key: GITHUB_TOKEN
+  data:
+    - secretKey: GITHUB_TOKEN
+      remoteRef:
+        key: mlops/production-secrets
+        property: GITHUB_TOKEN
