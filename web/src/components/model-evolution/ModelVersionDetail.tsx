@@ -20,6 +20,11 @@ interface Props {
   onActionSuccess: () => void;
 }
 
+type NormalizedInsightItem = RegistryModelInsightItem & {
+  value: number;
+  abs_value: number;
+};
+
 const classNames = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(' ');
 
 function formatValue(value: unknown): string {
@@ -44,6 +49,15 @@ function formatInsightValue(value?: number): string {
   if (abs !== 0 && abs < 0.0001) return value.toExponential(3);
   if (abs >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function numericInsightValue(value: unknown): number | null {
+  if (typeof value === 'number' && !Number.isNaN(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
 }
 
 function deployabilityBadge(status?: string) {
@@ -110,10 +124,19 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const metricEntries = Object.entries(version.metrics_summary || {});
   const paramEntries = Object.entries(version.params_summary || {});
   const artifactEntries = version.artifact_manifest || [];
-  const modelInsights = version.model_insights_summary || {};
+  const modelInsights = version.model_insights_summary || version.modelInsightsSummary || {};
   const insightItems = (modelInsights.items || [])
-    .filter((item): item is RegistryModelInsightItem => typeof item?.name === 'string' && typeof item?.value === 'number')
-    .slice()
+    .reduce<NormalizedInsightItem[]>((items, item) => {
+      const value = numericInsightValue(item?.value);
+      if (!item || typeof item.name !== 'string' || value === null) return items;
+      const absValue = numericInsightValue(item.abs_value) ?? Math.abs(value);
+      items.push({
+        ...item,
+        value,
+        abs_value: absValue,
+      });
+      return items;
+    }, [])
     .sort((left, right) => (right.abs_value ?? Math.abs(right.value)) - (left.abs_value ?? Math.abs(left.value)));
   const topInsightItems = insightItems.slice(0, 20);
   const maxInsightAbs = Math.max(...topInsightItems.map(item => item.abs_value ?? Math.abs(item.value)), 0);

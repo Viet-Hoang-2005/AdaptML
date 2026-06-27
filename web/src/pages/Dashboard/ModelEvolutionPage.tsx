@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RefreshCw, Component } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { getRegistryFamilies, getRegistryVersions } from '../../lib/api';
+import { getRegistryFamilies, getRegistryVersion, getRegistryVersions } from '../../lib/api';
 import type { RegistryFamily, RegistryVersion } from '../../types/modelApi';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
@@ -24,6 +24,7 @@ export default function ModelEvolutionPage() {
   const [loadingVersions, setLoadingVersions] = useState(false);
   
   const [selectedVersion, setSelectedVersion] = useState<RegistryVersion | null>(null);
+  const [loadingVersionDetail, setLoadingVersionDetail] = useState(false);
 
   const fetchFamilies = useCallback(async () => {
     try {
@@ -95,6 +96,33 @@ export default function ModelEvolutionPage() {
       }
     }
   }, [versions, loadingVersions, selectedVersion]);
+
+  useEffect(() => {
+    const versionId = selectedVersion?.id;
+    if (!versionId) return;
+
+    let cancelled = false;
+    const fetchVersionDetail = async () => {
+      try {
+        setLoadingVersionDetail(true);
+        const detail = await getRegistryVersion(versionId);
+        if (cancelled) return;
+        setSelectedVersion(detail);
+        setVersions(current => current.map(item => item.id === detail.id ? { ...item, ...detail } : item));
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(getApiErrorMessage(error, 'Failed to fetch version detail.'));
+        }
+      } finally {
+        if (!cancelled) setLoadingVersionDetail(false);
+      }
+    };
+
+    void fetchVersionDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedVersion?.id]);
 
   const handleRefresh = async () => {
     await fetchFamilies();
@@ -194,7 +222,7 @@ export default function ModelEvolutionPage() {
               <ModelFamilyDetail 
                 family={selectedFamily} 
                 versions={versions} 
-                loading={loadingVersions} 
+                loading={loadingVersions || loadingVersionDetail} 
                 selectedVersionId={selectedVersion?.id}
                 onSelectVersion={setSelectedVersion}
               />

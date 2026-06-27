@@ -488,6 +488,11 @@ export const getRegistryVersions = async (familyId: number): Promise<RegistryVer
   return data;
 };
 
+export const getRegistryVersion = async (versionId: number): Promise<RegistryVersion> => {
+  const { data } = await axiosInstance.get<RegistryVersion>(controlPlaneURL(`/registry/versions/${versionId}/`));
+  return data;
+};
+
 export const getRegistryMetrics = async (
   familyId: number,
   versionId: number,

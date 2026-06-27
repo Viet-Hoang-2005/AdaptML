@@ -151,9 +151,13 @@ export interface RegistryVersion {
   metrics_summary?: Record<string, unknown>;
   params_summary?: Record<string, unknown>;
   model_insights_summary?: RegistryModelInsightsSummary;
+  modelInsightsSummary?: RegistryModelInsightsSummary;
   has_model_insights?: boolean;
+  hasModelInsights?: boolean;
   model_insights_kind?: string;
+  modelInsightsKind?: string;
   model_insights_item_count?: number;
+  modelInsightsItemCount?: number;
   artifact_manifest?: RegistryArtifactManifestItem[];
   tracking_status?: string;
   tracking_error?: string;
