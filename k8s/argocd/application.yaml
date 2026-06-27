@@ -19,6 +19,7 @@ spec:
   # Đích: K3s Cluster (cùng Cluster với ArgoCD)
   destination:
     server: https://kubernetes.default.svc
+    namespace: default
 
   # Cấu hình đồng bộ tự động
   syncPolicy:
