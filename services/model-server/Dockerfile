@@ -1,30 +1,28 @@
-# === Stage 1: Build - cài đặt compiler và biên dịch các thư viện C ===
-FROM python:3.10-slim AS builder
+FROM python:3.10-slim
 
+# Thiết lập thư mục làm việc trong container
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Cài đặt các system dependencies cơ bản (cần thiết cho psycopg2 và opencv)
+RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy file requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# === Stage 2: Runtime - chỉ chứa thư viện cần thiết, không có build tools ===
-FROM python:3.10-slim
+# Cài đặt các thư viện Python (tắt cache để giảm dung lượng image)
+RUN pip install --no-cache-dir -r requirements.txt
 
-WORKDIR /app
-
-# Chỉ cài runtime lib (libpq5 ~3MB thay vì build-essential ~380MB)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy các gói Python đã được cài đặt từ stage builder
-COPY --from=builder /install /usr/local
+# Copy toàn bộ mã nguồn và thư mục models vào container
 COPY . .
 
+# Tạo sẵn thư mục models (sẽ mount data thật vào đây qua docker-compose)
+RUN mkdir -p /models
+
+# Mở port 5000 để container giao tiếp với bên ngoài
 EXPOSE 5000
 
+# Chạy API bằng Uvicorn (Production Server cho FastAPI)
 CMD ["uvicorn", "src.index:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "2"]

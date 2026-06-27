@@ -1,4 +1,3 @@
-# Sử dụng Python 3.10+ để hỗ trợ cú pháp type hint lowercase tuple[...] trong detect_drift.py
 FROM python:3.10-slim
 
 # Ngăn python ghi log .pyc và bật stdout ngay lập tức

@@ -1,29 +1,25 @@
-# === Stage 1: Build - cài đặt compiler và biên dịch các thư viện C ===
-FROM python:3.10-slim AS builder
-
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
-
-# === Stage 2: Runtime - chỉ chứa thư viện cần thiết, không có build tools ===
+# Sử dụng Python 3.10+ để hỗ trợ cú pháp type hint lowercase tuple[...] trong detect_drift.py
 FROM python:3.10-slim
 
+# Ngăn python ghi log .pyc và bật stdout ngay lập tức
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Tạo thư mục chạy trong container
 WORKDIR /app
 
-# libgomp1 là runtime dependency của scikit-learn / lightgbm
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
+# Cài đặt g++ và python3-dev để có thể compile các thư viện ML của Evidently
+RUN apt-get update \
+    && apt-get install -y gcc g++ python3-dev libpq-dev \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy các gói Python đã được cài đặt từ stage builder
-COPY --from=builder /install /usr/local
-COPY src ./src
+# Copy dependencies và cài đặt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 7000
+# COPY . . đặt file vào /app/ để lệnh python có thể tìm thấy detect_drift.py tại /app/detect_drift.py
+COPY . .
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "7000"]
+# Chạy detect_drift.py từ WORKDIR /app
+CMD ["python", "/app/detect_drift.py"]

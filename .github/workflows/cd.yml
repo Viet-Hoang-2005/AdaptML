@@ -100,7 +100,7 @@ jobs:
           username: ${{ env.SECRETS_HARBOR_USERNAME }}
           password: ${{ env.SECRETS_HARBOR_PASSWORD }}
 
-      - name: Build and Push Image (BuildKit Optimized)
+      - name: Build and Push Image
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.target.context }}
