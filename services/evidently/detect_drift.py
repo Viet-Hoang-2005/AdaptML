@@ -3,19 +3,21 @@ import os
 import sys
 import json
 import mlflow
+import zipfile
+import shutil
+from urllib.parse import urlparse
+
 import requests
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from urllib.parse import urlparse
 from datetime import datetime, timezone
 from evidently.report import Report
 from evidently.metric_preset import DataDriftPreset
 from evidently.pipeline.column_mapping import ColumnMapping
 
-# 1. NẠP CẤU HÌNH TỪ BIẾN MÔI TRƯỜNG
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(dotenv_path=os.path.join(ROOT_DIR, ".env"))
 
@@ -25,7 +27,6 @@ DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "mlops_paas_db")
 DB_HOST_RO = os.getenv("DB_HOST_RO", "postgres")
 
-# PAAS MULTI-TENANT CONFIG
 TENANT_ID = os.getenv("TENANT_ID")
 MODEL_ID = os.getenv("MODEL_ID")
 MODEL_NAME = os.getenv("MODEL_NAME", MODEL_ID)
@@ -54,116 +55,160 @@ if not TENANT_ID or not MODEL_ID:
     print("CRITICAL ERROR: TENANT_ID and MODEL_ID must be set!")
     sys.exit(1)
 
-# 2. TẢI DỮ LIỆU
+# 1. Tải Reference Data
 def load_reference_data():
     if not REFERENCE_DATA_URL:
         raise ValueError("REFERENCE_DATA_URL is not provided")
 
-    # Xác định đường dẫn file tạm
-    reference_path = urlparse(REFERENCE_DATA_URL).path.lower()
-    local_filename = f"/tmp/ref_data_{MODEL_NAME}.csv"
-    if reference_path.endswith('.parquet'):
-        local_filename = f"/tmp/ref_data_{MODEL_NAME}.parquet"
+    ref_path = urlparse(REFERENCE_DATA_URL).path.lower()
+    is_csv = ref_path.endswith(".csv")
+    local_filename = f"/tmp/reference_{MODEL_ID}.csv" if is_csv else f"/tmp/reference_{MODEL_ID}.parquet"
 
     if REFERENCE_DATA_URL.startswith("http"):
-        print(f"[1/4] Downloading from presigned URL to {local_filename}...")
-        try:
-            response = requests.get(REFERENCE_DATA_URL)
-            response.raise_for_status()
-            with open(local_filename, "wb") as f:
-                f.write(response.content)
-        except Exception as e:
-            raise Exception(f"Failed to download reference data from URL: {e}")
+        print(f"[2/4] Downloading reference data from presigned URL...")
+        response = requests.get(REFERENCE_DATA_URL)
+        if response.status_code != 200:
+            raise FileNotFoundError(f"Storage returned HTTP {response.status_code}: {response.text[:150]}")
+        with open(local_filename, "wb") as f:
+            f.write(response.content)
     else:
-        raise ValueError("REFERENCE_DATA_URL must be a valid HTTP URL")
+        local_filename = REFERENCE_DATA_URL
+
+    if local_filename.endswith(".csv"):
+        reference_df = pd.read_csv(local_filename)
+    else:
+        reference_df = pd.read_parquet(local_filename)
+
+    print(f"-> Reference data loaded: {len(reference_df)} rows")
+    return reference_df
+
+# 2. Truy vấn dữ liệu Production Data
+def load_production_data():
+    print(f"[1/4] Fetching Production Logs from Postgres for Model ID: {MODEL_ID}")
     
-    # Đọc file bằng pandas
-    if local_filename.endswith('.csv'):
-        df = pd.read_csv(local_filename)
-    elif local_filename.endswith('.parquet'):
-        df = pd.read_parquet(local_filename)
-    else:
-        # Giả định mặc định là CSV
-        df = pd.read_csv(local_filename)
-        
-    print(f"Reference: {len(df)} rows loaded.")
-    return df
+    # Connect to Read-Only Replica
+    engine = create_engine(f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST_RO}:{DB_PORT}/{DB_NAME}")
+    query = text("""
+        SELECT features, prediction
+        FROM paas_production_logs
+        WHERE model_id = :mid
+        ORDER BY timestamp DESC
+        LIMIT :lim
+    """)
 
-def load_production_data_from_db(engine):
-    print(f"[2/4] Loading production data from PostgreSQL for Tenant {TENANT_ID}, Model {MODEL_ID}...")
-    time_filter = """
-        tenant_id = :tenant_id AND model_id = :model_id
-        AND "timestamp"::timestamptz >= NOW() - INTERVAL '24 hours'
-    """
     with engine.connect() as conn:
-        # Tải dữ liệu thực tế (Production Data) trong 24h gần nhất
-        count_query = text(f"""
-            SELECT COUNT(*) FROM paas_production_logs
-            WHERE {time_filter}
-        """)
-        total_rows = conn.execute(count_query, {"tenant_id": TENANT_ID, "model_id": MODEL_ID}).scalar()
-        print(f"Production (24h): {total_rows} rows (total available)")
+        raw_df = pd.read_sql(query, conn, params={"mid": str(MODEL_ID), "lim": MAX_SAMPLES})
 
-        if total_rows > MAX_SAMPLES:
-            sample_pct = min(100.0, (MAX_SAMPLES / total_rows) * 100 * 1.1)
-            print(f"Exceeds MAX_SAMPLES={MAX_SAMPLES}. Fast sampling at ~{sample_pct:.2f}% at DB level...")
-            
-            # Lưu ý: TABLESAMPLE SYSTEM yêu cầu PostgreSQL. Với JSONB, ta lấy cột features ra.
-            production_query = text(f"""
-                SELECT features FROM paas_production_logs TABLESAMPLE SYSTEM ({sample_pct})
-                WHERE {time_filter}
-                ORDER BY "timestamp"::timestamptz DESC
-                LIMIT :max_samples
-            """)
-            raw_df = pd.read_sql(
-                production_query, conn, 
-                params={"tenant_id": TENANT_ID, "model_id": MODEL_ID, "max_samples": MAX_SAMPLES}
-            )
-        else:
-            raw_df = pd.read_sql(text(f"""
-                SELECT features FROM paas_production_logs
-                WHERE {time_filter}
-                ORDER BY "timestamp"::timestamptz DESC
-            """), conn, params={"tenant_id": TENANT_ID, "model_id": MODEL_ID})
-            
-    # Bung JSONB features
-    if len(raw_df) > 0:
-        features = raw_df['features'].map(lambda item: json.loads(item) if isinstance(item, str) else item)
+    if len(raw_df) < MIN_SAMPLES:
+        print(f"Skipping Drift Analysis: Not enough production samples ({len(raw_df)} < {MIN_SAMPLES})")
+        sys.exit(0)
+
+    # Schema Drift Defense: Flatten JSONB
+    if "features" in raw_df.columns:
+        features = raw_df["features"].tolist()
+        if isinstance(features[0], str):
+            features = [json.loads(x) for x in features]
+
         production_df = pd.json_normalize(features)
+        if "prediction" in raw_df.columns:
+            production_df["prediction"] = raw_df["prediction"].values
         del raw_df
         print(f"-> Production data loaded and JSON normalized: {len(production_df)} rows")
         return production_df
     return pd.DataFrame()
 
-# 3. TRÍCH XUẤT COLUMN MAPPING TỪ MLFLOW
-def get_column_mapping():
+# Hàm hỗ trợ tải model trên S3
+def resolve_model_dir(model_uri):
+    if not model_uri or model_uri.startswith("models:/"):
+        return None
+    if os.path.isdir(model_uri):
+        for root, dirs, files in os.walk(model_uri):
+            if "MLmodel" in files:
+                return root
+        return model_uri
+
+    cache_dir = f"/tmp/model_cache_{MODEL_ID}"
+    os.makedirs(cache_dir, exist_ok=True)
+    zip_path = os.path.join(cache_dir, "model.zip")
+    extract_dir = os.path.join(cache_dir, "extracted")
+
+    parsed = urlparse(model_uri)
+    if parsed.scheme in ("http", "https"):
+        resp = requests.get(model_uri)
+        with open(zip_path, "wb") as f:
+            f.write(resp.content)
+    elif os.path.isfile(model_uri):
+        shutil.copyfile(model_uri, zip_path)
+    else:
+        return model_uri
+
+    if os.path.exists(zip_path) and zipfile.is_zipfile(zip_path):
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(extract_dir)
+        for root, dirs, files in os.walk(extract_dir):
+            if "MLmodel" in files:
+                return root
+        return extract_dir
+
+    return model_uri
+
+# 3. Trích xuất column mapping từ MLFlow
+def get_column_mapping(reference_df, production_df):
     print(f"[3/4] Extracting Model Signature from MLflow: {MODEL_URI}")
     column_mapping = ColumnMapping()
-    if mlflow is None:
-        print("MLflow client is not installed in the Evidently image. Evidently will auto-infer column types.")
-        return column_mapping
+    has_signature = False
 
-    try:
-        model_info = mlflow.models.get_model_info(MODEL_URI)
-        signature = model_info.signature
-        if signature and signature.inputs:
-            num_cols = []
-            cat_cols = []
-            for inp in signature.inputs:
-                if inp.type in ["integer", "long", "float", "double"]:
-                    num_cols.append(inp.name)
-                else:
-                    cat_cols.append(inp.name)
-            column_mapping.numerical_features = num_cols
-            column_mapping.categorical_features = cat_cols
-            print(f"Signature extracted: {len(num_cols)} numerical, {len(cat_cols)} categorical.")
-        else:
-            print("Warning: No signature found in MLflow. Evidently will auto-infer types.")
-    except Exception as e:
-        print(f"Failed to extract signature from MLflow: {e}. Evidently will auto-infer types.")
-    
+    if mlflow is not None:
+        try:
+            resolved_uri = resolve_model_dir(MODEL_URI)
+            if resolved_uri:
+                print(f"Resolved model directory: {resolved_uri}")
+                model_info = mlflow.models.get_model_info(resolved_uri)
+                signature = model_info.signature
+                if signature and signature.inputs:
+                    num_cols = []
+                    cat_cols = []
+                    for inp in signature.inputs:
+                        if inp.type in ["integer", "long", "float", "double"]:
+                            num_cols.append(inp.name)
+                        else:
+                            cat_cols.append(inp.name)
+                    column_mapping.numerical_features = num_cols
+                    column_mapping.categorical_features = cat_cols
+                    has_signature = True
+                    print(f"-> MLflow Signature: {len(num_cols)} numerical, {len(cat_cols)} categorical.")
+        except Exception as e:
+            print(f"MLflow signature extraction note: {e}")
+
+    # Fallback: Auto-infer feature types from actual DataFrame structure
+    if not has_signature:
+        print("-> Fallback: Auto-infer feature types from actual DataFrame structure...")
+        ignore_cols = {"prediction", "target", "Target", "label", "Label", "class", "Class", "timestamp", "model_id", "tenant_id"}
+        feature_cols = [c for c in production_df.columns if c not in ignore_cols]
+        num_cols = production_df[feature_cols].select_dtypes(include=["int64", "float64", "int32", "float32"]).columns.tolist()
+        cat_cols = production_df[feature_cols].select_dtypes(include=["object", "category", "bool"]).columns.tolist()
+        column_mapping.numerical_features = num_cols
+        column_mapping.categorical_features = cat_cols
+        print(f"Column: {len(num_cols)} numerical, {len(cat_cols)} categorical.")
+
+    if "prediction" in production_df.columns:
+        if "prediction" not in reference_df.columns:
+            for cand in ["target", "Target", "label", "Label", "class", "Class"]:
+                if cand in reference_df.columns:
+                    reference_df["prediction"] = reference_df[cand].values
+                    print(f"Mapped column '{cand}' of Reference to 'prediction'.")
+                    break
+        if "prediction" in reference_df.columns:
+            column_mapping.prediction = "prediction"
+
+    for cand in ["target", "Target", "label", "Label", "class", "Class"]:
+        if cand in reference_df.columns and cand in production_df.columns:
+            column_mapping.target = cand
+            break
+
     return column_mapping
 
+# 4. Lọc column mapping
 def filter_column_mapping(column_mapping, common_cols):
     common_set = set(common_cols)
     filtered_mapping = ColumnMapping()
@@ -183,6 +228,70 @@ def filter_column_mapping(column_mapping, common_cols):
 
     return filtered_mapping
 
+# 5. Phân tích Data drift (Evidently 0.4.15)
+def run_drift_analysis(reference_df, production_df, column_mapping):
+    print("[4/4] Running Evidently AI Data Drift analysis...")
+
+    # Đảm bảo chỉ so sánh các cột đặc trưng chung giữa hai dataset
+    common_cols = [col for col in reference_df.columns if col in production_df.columns]
+    if len(common_cols) == 0:
+        raise ValueError("No common columns found between reference and production datasets.")
+        
+    ref_clean = reference_df[common_cols]
+    prod_clean = production_df[common_cols]
+    filtered_mapping = filter_column_mapping(column_mapping, common_cols)
+
+    try:
+        report = Report(metrics=[DataDriftPreset(drift_share=DRIFT_THRESHOLD)])
+    except TypeError:
+        print("Warning: Evidently DataDriftPreset does not accept drift_share. Applying threshold in summary only.")
+        report = Report(metrics=[DataDriftPreset()])
+    report.run(reference_data=ref_clean, current_data=prod_clean, column_mapping=filtered_mapping)
+    
+    result_dict = report.as_dict()
+    dataset_drift_metrics = {}
+    data_drift_table = {}
+
+    for item in result_dict.get('metrics', []):
+        result_data = item.get('result', {})
+        if 'dataset_drift' in result_data and 'share_of_drifted_columns' in result_data:
+            dataset_drift_metrics = result_data
+        if 'drift_by_columns' in result_data:
+            data_drift_table = result_data
+
+    drift_share = dataset_drift_metrics.get('share_of_drifted_columns', 0.0)
+    drifted_count = dataset_drift_metrics.get('number_of_drifted_columns', 0)
+    dataset_drift = drift_share >= DRIFT_THRESHOLD
+    
+    drifted_feature_names = []
+    drift_by_columns = data_drift_table.get('drift_by_columns', {})
+    for col_name, col_data in drift_by_columns.items():
+        if col_data.get('drift_detected', False):
+            drifted_feature_names.append(col_name)
+
+    summary = {
+        "tenant_id": TENANT_ID,
+        "model_id": MODEL_ID,
+        "share_drifted_features": drift_share,
+        "dataset_drift": dataset_drift,
+        "drift_threshold": DRIFT_THRESHOLD,
+        "number_of_drifted_features": drifted_count,
+        "number_of_features": len(common_cols),
+        "drifted_feature_names": drifted_feature_names,
+    }
+    summary["report_artifacts"] = save_drift_report(report, result_dict, summary)
+
+    print("SUMMARY OF DATA DRIFT RESULTS")
+    print("-" * 60)
+    print(f"Total features: {summary['number_of_features']}")
+    print(f"Drifted features: {summary['number_of_drifted_features']}")
+    print(f"Drift rate: {summary['share_drifted_features']:.2%}")
+    drift_status = "DETECTED" if summary["dataset_drift"] else "NOT DETECTED"
+    print(f"Dataset drift: {drift_status}")
+
+    return summary
+
+# 6. Lưu báo cáo drift
 def save_drift_report(report, result_dict, summary):
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     report_dir = f"/tmp/drift_reports/{TENANT_ID}/{MODEL_NAME}/{run_id}"
@@ -248,71 +357,7 @@ def save_drift_report(report, result_dict, summary):
     return artifacts
 
 
-# 4. PHÂN TÍCH DATA DRIFT (EVIDENTLY 0.4.15)
-def run_drift_analysis(reference_df, production_df, column_mapping):
-    print("[4/4] Running Evidently AI Data Drift analysis...")
-
-    # Đảm bảo chỉ so sánh các cột đặc trưng chung giữa hai dataset
-    common_cols = [col for col in reference_df.columns if col in production_df.columns]
-    if len(common_cols) == 0:
-        raise ValueError("No common columns found between reference and production datasets.")
-        
-    ref_clean = reference_df[common_cols]
-    prod_clean = production_df[common_cols]
-    filtered_mapping = filter_column_mapping(column_mapping, common_cols)
-
-    try:
-        report = Report(metrics=[DataDriftPreset(drift_share=DRIFT_THRESHOLD)])
-    except TypeError:
-        print("Warning: Evidently DataDriftPreset does not accept drift_share. Applying threshold in summary only.")
-        report = Report(metrics=[DataDriftPreset()])
-    report.run(reference_data=ref_clean, current_data=prod_clean, column_mapping=filtered_mapping)
-    
-    result_dict = report.as_dict()
-    dataset_drift_metrics = {}
-    data_drift_table = {}
-
-    for item in result_dict.get('metrics', []):
-        result_data = item.get('result', {})
-        if 'dataset_drift' in result_data and 'share_of_drifted_columns' in result_data:
-            dataset_drift_metrics = result_data
-        if 'drift_by_columns' in result_data:
-            data_drift_table = result_data
-
-    drift_share = dataset_drift_metrics.get('share_of_drifted_columns', 0.0)
-    drifted_count = dataset_drift_metrics.get('number_of_drifted_columns', 0)
-    dataset_drift = drift_share >= DRIFT_THRESHOLD
-    
-    drifted_feature_names = []
-    drift_by_columns = data_drift_table.get('drift_by_columns', {})
-    for col_name, col_data in drift_by_columns.items():
-        if col_data.get('drift_detected', False):
-            drifted_feature_names.append(col_name)
-
-    summary = {
-        "tenant_id": TENANT_ID,
-        "model_id": MODEL_ID,
-        "share_drifted_features": drift_share,
-        "dataset_drift": dataset_drift,
-        "drift_threshold": DRIFT_THRESHOLD,
-        "number_of_drifted_features": drifted_count,
-        "number_of_features": len(common_cols),
-        "drifted_feature_names": drifted_feature_names,
-    }
-    summary["report_artifacts"] = save_drift_report(report, result_dict, summary)
-
-    print("SUMMARY OF DATA DRIFT RESULTS")
-    print("-" * 60)
-    print(f"Total features: {summary['number_of_features']}")
-    print(f"Drifted features: {summary['number_of_drifted_features']}")
-    print(f"Drift rate: {summary['share_drifted_features']:.2%}")
-    drift_status = "DETECTED" if summary["dataset_drift"] else "NOT DETECTED"
-    print(f"Dataset drift: {drift_status}")
-
-    return summary
-
-
-# 5. GỬI KẾT QUẢ VỀ DJANGO WEBHOOK
+# 7. Gửi kết quả về Django Webhook
 def trigger_django_webhook(drift_summary):
     print("Triggering Django Webhook...")
 
@@ -349,29 +394,24 @@ def trigger_django_webhook(drift_summary):
 
 if __name__ == "__main__":
     try:
-        reference_df = load_reference_data()
-    except Exception as e:
-        print(f"Failed to load Reference Data: {e}")
-        sys.exit(1)
-
-    db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST_RO}:{DB_PORT}/{DB_NAME}"
-    try:
-        engine = create_engine(db_url, pool_pre_ping=True)
-    except Exception as e:
-        print(f"Failed to connect to DB: {e}")
-        sys.exit(1)
-
-    try:
-        production_df = load_production_data_from_db(engine)
+        production_df = load_production_data()
     except Exception as e:
         print(f"Failed to load Production Data: {e}")
         sys.exit(1)
 
     if len(production_df) < MIN_SAMPLES:
         print(f"Only {len(production_df)} production samples available. Skipping drift analysis.")
-        sys.exit(0)  
+        sys.exit(0)
 
-    column_mapping = get_column_mapping()
+    try:
+        reference_df = load_reference_data()
+    except Exception as e:
+        print(f"Warning: Reference Data unavailable ({e}). Auto-generating reference baseline from oldest 50% of production data...")
+        half_idx = len(production_df) // 2
+        reference_df = production_df.iloc[half_idx:].copy()
+        production_df = production_df.iloc[:half_idx].copy()  
+
+    column_mapping = get_column_mapping(reference_df, production_df)
 
     try:
         drift_summary = run_drift_analysis(reference_df, production_df, column_mapping)

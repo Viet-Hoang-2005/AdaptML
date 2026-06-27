@@ -32,8 +32,7 @@ services:
     command: >
       sh -c "until pg_isready -h postgres -U ${DB_USER} -d ${DB_NAME}; do sleep 2; done;
       psql -h postgres -U ${DB_USER} -d ${DB_NAME} -v ON_ERROR_STOP=1
-      -c 'CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA:-control_plane};'
-      -c 'CREATE SCHEMA IF NOT EXISTS ${MLFLOW_DB_SCHEMA:-mlflow};'"
+      -c 'CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA:-control_plane};'"
     depends_on:
       postgres:
         condition: service_healthy
@@ -201,41 +200,7 @@ services:
       PYTHONUNBUFFERED: 1
     networks:
       - mlops_paas_network
-
-  # 6. MLflow Tracking Server
-  mlflow:
-    image: ghcr.io/mlflow/mlflow:latest
-    container_name: mlops_paas_mlflow
-    restart: unless-stopped
-    ports:
-      - "5001:5000"
-    environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-southeast-1}
-      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME:-mlops-paas-artifacts}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - MLFLOW_DB_SCHEMA=${MLFLOW_DB_SCHEMA:-mlflow}
-      - MLFLOW_ALLOWED_HOSTS=${MLFLOW_ALLOWED_HOSTS:-localhost,127.0.0.1,mlflow,mlflow:5000,mlops_paas_mlflow,mlops_paas_mlflow:5000}
-    command: >
-      sh -c 'ENCODED_DB_PASSWORD=$$(python -c "import os, urllib.parse; print(urllib.parse.quote(os.environ.get(\"DB_PASSWORD\", \"\"), safe=\"\"))");
-      exec mlflow server
-      --host 0.0.0.0
-      --port 5000
-      --allowed-hosts "$${MLFLOW_ALLOWED_HOSTS}"
-      --backend-store-uri "postgresql://$${DB_USER}:$${ENCODED_DB_PASSWORD}@postgres:5432/$${DB_NAME}?options=-csearch_path%3D$${MLFLOW_DB_SCHEMA:-mlflow}%2Cpublic"
-      --default-artifact-root "s3://$${AWS_BUCKET_NAME:-mlops-paas-artifacts}/mlflow-artifacts/"'
-    depends_on:
-      postgres:
-        condition: service_healthy
-      schema-init:
-        condition: service_completed_successfully
-    networks:
-      - mlops_paas_network
-
-  # 7. PaaS Log Consumer (đứng giữa Redpanda và PostgreSQL)
+  # 6. PaaS Log Consumer (đứng giữa Redpanda và PostgreSQL)
   consumer:
     build:
       context: ./services/consumer
@@ -268,7 +233,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 8. Redpanda Kafka Broker
+  # 7. Redpanda Kafka Broker
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: mlops_paas_redpanda
@@ -304,7 +269,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 9. Redis (Cache)
+  # 8. Redis (Cache)
   redis:
     image: redis:7-alpine
     container_name: mlops_paas_redis

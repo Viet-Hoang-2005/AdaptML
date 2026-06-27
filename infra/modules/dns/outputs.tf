@@ -1,6 +1,6 @@
 output "certificate_arn" {
   description = "The ARN of the ACM certificate"
-  value       = aws_acm_certificate.mlops_cert.arn
+  value       = aws_acm_certificate_validation.mlops_cert_val.certificate_arn
 }
 
 output "acm_domain_validation_options" {

@@ -57,7 +57,7 @@ export default function DriftReportPage() {
   };
 
   return (
-    <div className="flex w-full flex-1 flex-col min-h-0">
+    <div className="flex w-full flex-1 flex-col min-h-0 space-y-6">
       <PageHeader 
         title="Evidently AI Report"
         backLink={{ to: `/dashboard/drift-monitoring/${modelId}`, label: "Back to Monitoring" }}
@@ -69,7 +69,7 @@ export default function DriftReportPage() {
         )}
       </PageHeader>
       
-      <PageContent className="mt-4 flex-1 overflow-hidden bg-gray-50 flex items-center justify-center relative p-0 border-t border-gray-200 min-h-0">
+      <PageContent className="flex-1 overflow-hidden bg-gray-50 flex items-center justify-center relative p-0 border-t border-gray-200 min-h-0">
         {loading ? (
           <div className="flex flex-col items-center justify-center text-gray-500">
             <Loader2 className="w-8 h-8 animate-spin mb-2" />

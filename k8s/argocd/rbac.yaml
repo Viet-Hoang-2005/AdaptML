@@ -5,6 +5,8 @@ metadata:
   name: argocd-cm
   namespace: argocd
 data:
+  # Bật tính năng biên dịch Helm Chart cho Kustomize toàn hệ thống
+  kustomize.buildOptions: --enable-helm
   # Tạo tài khoản github-actions với khả năng tạo API Key (apiKey)
   accounts.github-actions: apiKey
 ---

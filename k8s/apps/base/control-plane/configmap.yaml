@@ -13,6 +13,8 @@ data:
   CONTROL_PLANE_DB_SCHEMA: "control_plane"
   DJANGO_DEBUG: "True"
   BUILD_STRATEGY: "argo"
+  HARBOR_REGISTRY_URL: "harbor.mlops-nids-nt114.id.vn"
+  GITHUB_OAUTH_REDIRECT_URI: "https://mlops-nids-nt114.id.vn/oauth/github/callback"
   CORS_ALLOWED_ORIGINS: "https://mlops-nids-nt114.id.vn,http://localhost:5173,http://127.0.0.1:5173"
   ARGO_EVENTS_WEBHOOK_URL: "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/build"
   ARGO_DEPLOY_WEBHOOK_URL: "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/deploy"
@@ -25,3 +27,4 @@ data:
   REDIS_URL: "redis://mlops-paas-redis:6379/1"
   REDIS_HOST: "mlops-paas-redis"
   REDIS_PORT: "6379"
+

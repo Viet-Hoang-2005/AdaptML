@@ -1,21 +1,4 @@
-# Cấu hình IngressRoute cho Web (Frontend)
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: web-ingressroute
-  namespace: default
-spec:
-  entryPoints:
-    - web
-  routes:
-    - match: Host(`mlops-nids-nt114.id.vn`)
-      kind: Rule
-      services:
-        - name: mlops-paas-web
-          port: 80
-
----
-# Cấu hình IngressRoute cho Control Plane (Django API & Admin)
+# Cấu hình IngressRoute cho Control Plane (Django Control Plane)
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:

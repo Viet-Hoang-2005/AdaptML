@@ -174,7 +174,7 @@ jobs:
   build-and-scan:
     name: "Build & Scan (${{ matrix.target.name }})"
     needs: [detect-changes, lint-frontend, lint-backend, lint-infra, secret-scan]
-    if: always() && needs.secret-scan.result == 'success' && needs.detect-changes.outputs.matrix_targets != '[]'
+    if: always() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.matrix_targets != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -236,7 +236,7 @@ jobs:
           pylint_fmt = f"{pylint_score}" if pylint_score else fmt(pylint_res)
 
           summary = ["### Unified CI Pipeline Results\n"]
-          summary.append(f"- **Secret Security (GitLeaks)**: {fmt(secret_res)}\n")
+          summary.append(f"**Secret Security (GitLeaks)**: {fmt(secret_res)}\n")
 
           rows = []
           if fe_changed:

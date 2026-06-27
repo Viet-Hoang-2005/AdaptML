@@ -10,3 +10,7 @@ resource "aws_acm_certificate" "mlops_cert" {
     create_before_destroy = true
   }
 }
+
+resource "aws_acm_certificate_validation" "mlops_cert_val" {
+  certificate_arn = aws_acm_certificate.mlops_cert.arn
+}

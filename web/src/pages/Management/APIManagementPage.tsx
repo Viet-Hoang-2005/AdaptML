@@ -131,7 +131,7 @@ export default function APIManagementPage() {
 
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
-      <PageHeader title="API Management" />
+      <PageHeader title="Management" />
 
       <PageContent>
         <div className="px-6 py-6 space-y-4">
