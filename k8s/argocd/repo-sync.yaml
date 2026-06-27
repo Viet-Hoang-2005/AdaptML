@@ -1,3 +1,4 @@
+# repo-sync.yaml: Cấu hình đồng bộ thông tin xác thực GitHub Private Repo cho ArgoCD
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -10,6 +11,7 @@ spec:
     kind: ClusterSecretStore
   target:
     name: github-repo-creds
+    creationPolicy: Owner
     template:
       metadata:
         labels:
@@ -19,8 +21,9 @@ spec:
         url: https://github.com/Viet-Hoang-2005/MLOps-nids-system.git
         username: "Viet-Hoang-2005"
         password: "{{ .GITHUB_TOKEN }}"
-  data:
-    - secretKey: GITHUB_TOKEN
-      remoteRef:
-        key: mlops/github-secrets
-        property: GITHUB_TOKEN
+      env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-secrets
+              key: GITHUB_TOKEN

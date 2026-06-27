@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Sensor
 metadata:
-  name: build-model-sensor
+  name: model-sensor
   namespace: default
 spec:
   serviceAccountName: argo-events-sa
