@@ -12,6 +12,7 @@ resources:
   - secrets
   - storage
   - health
+  - monitoring
   - harbor
   - argo-workflows
 

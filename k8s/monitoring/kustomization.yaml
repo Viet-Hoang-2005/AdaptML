@@ -3,6 +3,4 @@ kind: Kustomization
 
 resources:
   - grafana-alertrules.yaml
-  - prometheus-rules.yaml
-  - evidently-servicemonitor.yaml
   - model-server-servicemonitor.yaml

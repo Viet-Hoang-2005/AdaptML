@@ -3,7 +3,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: paas-alert-rules
+  name: mlops-paas-alert-rules
   namespace: monitoring
   labels:
     release: monitoring
