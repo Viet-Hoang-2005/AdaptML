@@ -454,6 +454,29 @@ class ArgoDeployAdapter(DeployAdapter):
         except Exception as e:
             logger.error("Failed to trigger Argo Delete Workflow for container %s: %s", container_name, e)
 
+    def wait_for_removal(self, model_id: int, timeout_seconds: int = 45, interval_seconds: int = 3) -> bool:
+        from authentication.models import ModelAPI
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        if not model_api:
+            return True
+            
+        tenant_id = model_api.tenant.tenant_id
+        container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
+        url = f"http://{container_name}-svc:5000/health"
+        
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            try:
+                # If we get a response, the service is still up
+                requests.get(url, timeout=2)
+            except Exception:
+                # Connection refused / DNS failure means the service is gone!
+                return True
+            time.sleep(interval_seconds)
+            
+        logger.warning("Timeout waiting for container %s to be removed.", container_name)
+        return False
+
     def endpoint_logs(self, model_id: int, tail: int = 300) -> str:
         return "Log retrieval not yet implemented for Argo/Kubernetes endpoints."
 
