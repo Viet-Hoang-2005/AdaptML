@@ -306,9 +306,27 @@ export default function TrainingJobDetailPage() {
   });
 
   const deployRegisteredModelMutation = useMutation({
-    mutationFn: (modelId: string) => deployModelAPI(modelId),
-    onSuccess: async (model) => {
-      toast.success(model.endpoint_status === 'healthy' ? 'Endpoint deployed and healthy.' : 'Deployment started.');
+    mutationFn: async (modelId: string) => {
+      const res = await deployModelAPI(modelId);
+      let isDeployed = false;
+      let attempts = 0;
+      while (!isDeployed && attempts < 30) {
+        attempts++;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          const status = await checkModelEndpointHealth(modelId);
+          if (status.status === 'deployed') {
+            isDeployed = true;
+          }
+        } catch (err) {
+          toast.error(getApiErrorMessage(err, "Endpoint is not healthy yet."));
+        }
+      }
+      if (!isDeployed) throw new Error('Deployment is taking longer than expected.');
+      return res;
+    },
+    onSuccess: async () => {
+      toast.success('Model deployed successfully!');
       await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
       await refetchJob();
     },
@@ -330,9 +348,27 @@ export default function TrainingJobDetailPage() {
   });
 
   const redeployMutation = useMutation({
-    mutationFn: (modelId: string) => redeployModelAPI(modelId),
+    mutationFn: async (modelId: string) => {
+      const res = await redeployModelAPI(modelId);
+      let isDeployed = false;
+      let attempts = 0;
+      while (!isDeployed && attempts < 30) {
+        attempts++;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          const status = await checkModelEndpointHealth(modelId);
+          if (status.status === 'deployed') {
+            isDeployed = true;
+          }
+        } catch (err) {
+          toast.error(getApiErrorMessage(err, "Endpoint is not healthy yet."));
+        }
+      }
+      if (!isDeployed) throw new Error('Redeployment is taking longer than expected.');
+      return res;
+    },
     onSuccess: async () => {
-      toast.success('Redeploy started.');
+      toast.success('Model redeployed successfully!');
       await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
       await refetchJob();
     },

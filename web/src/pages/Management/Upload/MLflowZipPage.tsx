@@ -4,7 +4,7 @@ import { Input } from '../../../components/ui/Input';
 import { useState } from 'react';
 import type { ModelAPIFormValues } from '../../../types/modelApi';
 import { useModelAPIMutations } from '../../../hooks/useModelAPIs';
-import { deployModelAPI, deleteModelAPI, cancelBuildAPI, getApiErrorMessage } from '../../../lib/api';
+import { deployModelAPI, deleteModelAPI, cancelBuildAPI, getApiErrorMessage, checkModelEndpointHealth } from '../../../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryKeys';
 import { toast } from '../../../lib/toast';
@@ -84,8 +84,31 @@ export default function MLflowZipPage({
     onSubmitting(true);
     try {
       await deployModelAPI(createdModelId);
+      
+      let isDeployed = false;
+      let attempts = 0;
+      const maxAttempts = 30; // 60 seconds timeout
+      
+      while (!isDeployed && attempts < maxAttempts) {
+        attempts++;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          const status = await checkModelEndpointHealth(createdModelId);
+          if (status.status === 'deployed') {
+            isDeployed = true;
+          }
+        } catch (err) {
+          toast.error(getApiErrorMessage(err, "Endpoint is not healthy yet."));
+        }
+      }
+
+      if (isDeployed) {
+        toast.success("Model deployed successfully!");
+      } else {
+        toast.error("Deployment is taking longer than expected. Please check model status later.");
+      }
+
       await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
-      toast.success("Deployment started!");
       navigate(`/dashboard/api-management`);
     } catch (e) {
       const msg = getApiErrorMessage(e, "Deployment failed.");

@@ -55,6 +55,8 @@ spec:
                       value: ""
                     - name: task_type
                       value: ""
+                    - name: label_mapping_key
+                      value: ""
                     - name: control_plane_webhook_url
                       value: ""
           parameters:
@@ -100,8 +102,12 @@ spec:
               dest: spec.arguments.parameters.9.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.control_plane_webhook_url
+                dataKey: body.label_mapping_key
               dest: spec.arguments.parameters.10.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.control_plane_webhook_url
+              dest: spec.arguments.parameters.11.value
     - template:
         name: deploy-workflow-trigger
         conditions: "deploy-dep"

@@ -166,6 +166,7 @@ class ArgoBuildAdapter(BuildAdapter):
             "training_artifact_uri": training_artifact_uri,
             "output_key": output_key,
             "task_type": task_type,
+            "label_mapping_key": label_mapping_key or "",
             "control_plane_webhook_url": build_webhook_url(model_id),
         }
 
