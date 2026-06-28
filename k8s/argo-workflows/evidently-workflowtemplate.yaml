@@ -27,12 +27,14 @@ spec:
           - name: summary_json_upload_url
           - name: control_plane_webhook_url
       container:
-        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-evidently:0f5ab2fa465b30d1a8bcd0bb5b3c98e2ed12bc3f
+        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-evidently:fe293c42a71b2debf83927a8a756742c34efea42
         imagePullPolicy: Always
         command: ["python", "/app/detect_drift.py"]
         envFrom:
           - secretRef:
               name: mlops-paas-secret
+          - secretRef:
+              name: postgres-secrets
           - configMapRef:
               name: mlops-paas-control-plane-config
         env:

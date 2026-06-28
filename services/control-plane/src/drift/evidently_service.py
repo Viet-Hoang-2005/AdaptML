@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 def run_evidently_job_sync(job_id: int):
     try:
         job = DriftMonitoringJob.objects.get(id=job_id)
-        client = docker.from_env()
         
         db_host = os.environ.get("DB_HOST_RO", "postgres")
         db_user = os.environ.get("DB_USER", "postgres")
@@ -127,7 +126,7 @@ def run_evidently_job_sync(job_id: int):
             "DRIFT_REPORTS_S3_PREFIX": "drift-reports"
         }
 
-        strategy = getattr(settings, "BUILD_STRATEGY", "docker").lower()
+        strategy = os.environ.get("BUILD_STRATEGY", "docker").lower()
         if strategy == "argo":
             import requests
             webhook_url = os.environ.get("ARGO_DRIFT_WEBHOOK_URL", "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/drift")
@@ -152,6 +151,7 @@ def run_evidently_job_sync(job_id: int):
             response.raise_for_status()
             return "Argo Workflow triggered successfully."
         else:
+            client = docker.from_env()
             network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
             
             model_hashid = encode_model_id(job.model_api.id)

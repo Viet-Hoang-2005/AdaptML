@@ -14,7 +14,7 @@ import { AccessModePicker } from '../../../components/ui/Picker';
 import { toast } from '../../../lib/toast';
 import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
 import { LineSteps } from '../../../components/ui/LineSteps';
-import { buildModelAPI, cancelBuildAPI, getApiErrorMessage, deployModelAPI } from '../../../lib/api';
+import { buildModelAPI, cancelBuildAPI, getApiErrorMessage, deployModelAPI, checkModelEndpointHealth } from '../../../lib/api';
 
 const wizardSteps = [
   { id: 1, label: 'Metadata', icon: FileCode2 },
@@ -73,6 +73,30 @@ export default function BuildPackagePage({
       onSubmitting(true);
       try {
         await deployModelAPI(createdModelId);
+        
+        let isDeployed = false;
+        let attempts = 0;
+        const maxAttempts = 30; // 60 seconds
+
+        while (!isDeployed && attempts < maxAttempts) {
+          attempts++;
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          try {
+            const status = await checkModelEndpointHealth(createdModelId);
+            if (status.status === 'deployed') {
+              isDeployed = true;
+            }
+          } catch (err) {
+            toast.error(getApiErrorMessage(err, "Endpoint is not healthy yet."));
+          }
+        }
+
+        if (isDeployed) {
+          toast.success("Model deployed successfully!");
+        } else {
+          toast.error("Deployment is taking longer than expected. Please check model status later.");
+        }
+
         await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
         navigate(`/dashboard/api-management`);
       } catch (e) {

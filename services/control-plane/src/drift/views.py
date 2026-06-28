@@ -188,10 +188,31 @@ class TriggerDriftJobManualView(views.APIView):
     def post(self, request, job_id):
         job = get_object_or_404(DriftMonitoringJob, id=job_id, tenant=request.user)
         
+        from django.utils import timezone
+        import time
+        start_time = timezone.now()
+
         # Spawn docker container synchronously and catch error
         from drift.evidently_service import run_evidently_job_sync
         try:
             run_evidently_job_sync(job.id)
+            
+            # If argo workflow, we poll for completion up to 10 minutes
+            import os
+            strategy = os.environ.get("BUILD_STRATEGY", "docker").lower()
+            if strategy == "argo":
+                from authentication.models import DriftMonitoringResult
+                max_retries = 60
+                success = False
+                for _ in range(max_retries):
+                    if DriftMonitoringResult.objects.filter(job=job, run_at__gte=start_time).exists():
+                        success = True
+                        break
+                    time.sleep(10)
+                
+                if not success:
+                    return Response({"error": "Argo workflow triggered but timed out waiting for result."}, status=status.HTTP_408_REQUEST_TIMEOUT)
+
             return Response({"status": "Drift job manually triggered and completed"})
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

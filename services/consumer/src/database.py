@@ -81,6 +81,7 @@ def init_db():
     # 3. Migrate text columns to JSONB safely
     execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN features TYPE JSONB USING features::JSONB;", ignore_error=True)
     execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN raw_payload TYPE JSONB USING raw_payload::JSONB;", ignore_error=True)
+    execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN prediction TYPE TEXT USING prediction::TEXT;", ignore_error=True)
 
     # 4. Create Indexes
     execute_safe("CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_tenant_model ON paas_production_logs(tenant_id, model_id);")

@@ -37,6 +37,7 @@ persistence:
 registry:
   registry:
     relativeurls: true
+  nodeSelector: { workload-type: worker }
 
 trivy:
   enabled: false
@@ -48,8 +49,6 @@ portal:
 core:
   nodeSelector: { workload-type: worker }
 jobservice:
-  nodeSelector: { workload-type: worker }
-registry:
   nodeSelector: { workload-type: worker }
 database:
   nodeSelector: { workload-type: worker }

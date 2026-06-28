@@ -27,9 +27,10 @@ spec:
           - name: training_artifact_uri
           - name: output_key
           - name: task_type
+          - name: label_mapping_key
           - name: control_plane_webhook_url
       container:
-        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:0f5ab2fa465b30d1a8bcd0bb5b3c98e2ed12bc3f
+        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:fe293c42a71b2debf83927a8a756742c34efea42
         imagePullPolicy: Always
         command: ["python", "src/cli.py"]
         volumeMounts:
@@ -38,6 +39,8 @@ spec:
         env:
           - name: TASK_TYPE
             value: "{{inputs.parameters.task_type}}"
+          - name: LABEL_MAPPING_KEY
+            value: "{{inputs.parameters.label_mapping_key}}"
           - name: MODEL_ID
             value: "{{inputs.parameters.model_id}}"
           - name: MODEL_HASHID

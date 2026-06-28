@@ -69,12 +69,17 @@ def api_test_continuous(samples_per_class=1):
                         # Nhận kết quả dự đoán từ API
                         result = response.json() 
                         predicted_label = result.get('prediction')
-                        confidence = result.get('confidence')
+                        # Tự động ánh xạ (Map) nếu model trả về 0/1 thay vì chữ
+                        label_mapping = {0: "BENIGN", 1: "DDoS"}
+                        if predicted_label in label_mapping:
+                            predicted_label = label_mapping[predicted_label]
+                        elif str(predicted_label) in ["0", "1"]:
+                            predicted_label = label_mapping[int(predicted_label)]
                         
                         # So sánh dự đoán với nhãn thực tế để đánh giá đúng/sai
                         status_icon = "CORRECT" if predicted_label == actual_label else "WRONG"
                         
-                        print(f"{status_icon} | Predicted: {predicted_label} (Confidence: {confidence}%) | Latency: {latency}ms")
+                        print(f"{status_icon} | Predicted: {predicted_label} | Latency: {latency}ms")
                         print(f"Probability details: {result.get('probabilities')}")
                     else:
                         print(f"API Error (Status {response.status_code}): {response.text}")

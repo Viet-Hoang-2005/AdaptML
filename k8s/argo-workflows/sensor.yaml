@@ -17,6 +17,9 @@ spec:
     - name: drift-dep
       eventSourceName: webhook-eventsource
       eventName: drift
+    - name: delete-dep
+      eventSourceName: webhook-eventsource
+      eventName: delete
   triggers:
     - template:
         name: build-workflow-trigger
@@ -54,6 +57,8 @@ spec:
                     - name: output_key
                       value: ""
                     - name: task_type
+                      value: ""
+                    - name: label_mapping_key
                       value: ""
                     - name: control_plane_webhook_url
                       value: ""
@@ -100,8 +105,12 @@ spec:
               dest: spec.arguments.parameters.9.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.control_plane_webhook_url
+                dataKey: body.label_mapping_key
               dest: spec.arguments.parameters.10.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.control_plane_webhook_url
+              dest: spec.arguments.parameters.11.value
     - template:
         name: deploy-workflow-trigger
         conditions: "deploy-dep"
@@ -231,3 +240,28 @@ spec:
               dest: spec.arguments.parameters.12.value
             - src: { dependencyName: drift-dep, dataKey: body.control_plane_webhook_url }
               dest: spec.arguments.parameters.13.value
+
+    - template:
+        name: delete-workflow-trigger
+        conditions: "delete-dep"
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: delete-model-job-
+                namespace: default
+              spec:
+                workflowTemplateRef:
+                  name: mlops-paas-model-server-delete-template
+                arguments:
+                  parameters:
+                    - name: container_name
+                      value: ""
+          parameters:
+            - src:
+                dependencyName: delete-dep
+                dataKey: body.container_name
+              dest: spec.arguments.parameters.0.value
