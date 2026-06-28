@@ -33,6 +33,8 @@ spec:
         envFrom:
           - secretRef:
               name: mlops-paas-secret
+          - secretRef:
+              name: postgres-secrets
           - configMapRef:
               name: mlops-paas-control-plane-config
         env:
