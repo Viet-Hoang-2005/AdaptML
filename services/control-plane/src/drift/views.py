@@ -197,7 +197,7 @@ class TriggerDriftJobManualView(views.APIView):
         try:
             run_evidently_job_sync(job.id)
             
-            # If argo workflow, we poll for completion up to 120 seconds
+            # If argo workflow, we poll for completion up to 10 minutes
             import os
             strategy = os.environ.get("BUILD_STRATEGY", "docker").lower()
             if strategy == "argo":
@@ -208,7 +208,7 @@ class TriggerDriftJobManualView(views.APIView):
                     if DriftMonitoringResult.objects.filter(job=job, run_at__gte=start_time).exists():
                         success = True
                         break
-                    time.sleep(2)
+                    time.sleep(10)
                 
                 if not success:
                     return Response({"error": "Argo workflow triggered but timed out waiting for result."}, status=status.HTTP_408_REQUEST_TIMEOUT)
