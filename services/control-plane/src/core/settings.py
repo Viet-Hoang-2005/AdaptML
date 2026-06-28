@@ -292,7 +292,7 @@ MLFLOW_EXPERIMENT_NAME = os.environ.get('MLFLOW_EXPERIMENT_NAME', 'mlops-paas-tr
 AWS_BATCH_MLFLOW_TRACKING_URI = os.environ.get('AWS_BATCH_MLFLOW_TRACKING_URI', '').strip()
 # false = best-effort (training continues even if MLflow is unreachable)
 # true  = MLflow failure will fail the training job
-MLFLOW_TRACKING_REQUIRED = os.environ.get('MLFLOW_TRACKING_REQUIRED', 'false').strip().lower() == 'true'
+MLFLOW_TRACKING_REQUIRED = env_bool('MLFLOW_TRACKING_REQUIRED', default=False)
 # Timeout in seconds for MLflow HTTP requests inside AWS Batch training containers
 MLFLOW_HTTP_REQUEST_TIMEOUT = int(os.environ.get('MLFLOW_HTTP_REQUEST_TIMEOUT', '10') or '10')
 

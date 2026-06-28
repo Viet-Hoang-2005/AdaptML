@@ -18,6 +18,7 @@ const emptyAdvancedForm: ModelAPIFormValues = {
 
 const emptyBuildForm: ModelBuildFormValues = {
   name: '',
+  version: 'v1',
   description: '',
   model_info: '',
   access_mode: 'public',

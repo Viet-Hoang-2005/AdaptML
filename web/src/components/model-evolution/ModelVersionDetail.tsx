@@ -34,7 +34,16 @@ function formatValue(value: unknown): string {
   }
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '-';
-  return JSON.stringify(value);
+  return JSON.stringify(value, null, 2);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function shortValue(value: unknown, maxLength = 96): string {
+  const formatted = formatValue(value).replace(/\s+/g, ' ').trim();
+  return formatted.length > maxLength ? `${formatted.slice(0, maxLength - 1)}…` : formatted;
 }
 
 function formatBytes(size?: number): string {
@@ -80,6 +89,51 @@ function deployabilityBadge(status?: string) {
       return 'bg-red-100 text-red-800 border-red-200';
     default:
       return 'bg-gray-100 text-gray-700 border-gray-200';
+  }
+}
+
+function trackingBadge(status?: string) {
+  switch (status) {
+    case 'completed':
+      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'skipped':
+      return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'failed':
+      return 'bg-amber-100 text-amber-800 border-amber-200';
+    case 'ingesting':
+      return 'bg-violet-100 text-violet-700 border-violet-200';
+    default:
+      return 'bg-gray-100 text-gray-600 border-gray-200';
+  }
+}
+
+function trackingLabel(status?: string) {
+  switch (status) {
+    case 'completed':
+      return 'MLflow Logged';
+    case 'skipped':
+      return 'Native Registry Ingested';
+    case 'failed':
+      return 'MLflow Logging Failed';
+    case 'ingesting':
+      return 'Ingesting';
+    default:
+      return 'Not Synced';
+  }
+}
+
+function trackingDescription(status?: string) {
+  switch (status) {
+    case 'completed':
+      return 'Training metadata was ingested into Model Evolution and logged to internal MLflow.';
+    case 'skipped':
+      return 'Training metadata was ingested into the Native Registry. MLflow logging is disabled for this environment.';
+    case 'failed':
+      return 'Training metadata was retained in Model Evolution, but MLflow logging failed. Register, build, and deploy can still continue when the artifact is deployable.';
+    case 'ingesting':
+      return 'Training metadata is being extracted from the completed training artifact.';
+    default:
+      return 'Training metadata has not been ingested for this version yet.';
   }
 }
 
@@ -257,6 +311,8 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const metricsSummary = version.metrics_summary || version.metricsSummary || {};
   const paramsSummary = version.params_summary || version.paramsSummary || {};
   const metricEntries = Object.entries(metricsSummary);
+  const scalarMetricEntries = metricEntries.filter(([, value]) => !isPlainRecord(value) && !Array.isArray(value));
+  const objectMetricEntries = metricEntries.filter(([, value]) => isPlainRecord(value) || Array.isArray(value));
   const numericMetricEntries = metricEntries
     .map(([name, value]) => ({ name, value, numericValue: numericMetricValue(value) }))
     .filter((entry): entry is { name: string; value: unknown; numericValue: number } => entry.numericValue !== null);
@@ -490,13 +546,31 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     <ShieldCheck className="h-4 w-4 text-blue-500" />
                     Tracking Status
                   </span>
-                  <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                    {version.tracking_status || 'not synced'}
+                  <span className={classNames(
+                    'text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border',
+                    trackingBadge(version.tracking_status),
+                  )}>
+                    {trackingLabel(version.tracking_status)}
                   </span>
                 </h4>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  Experiment tracking is captured automatically from training artifacts when available.
+                  {trackingDescription(version.tracking_status)}
                 </p>
+                {version.tracking_status === 'completed' && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                    Completed: metadata is available in Model Evolution and internal MLflow.
+                  </div>
+                )}
+                {version.tracking_status === 'skipped' && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                    MLflow Disabled: Native Registry summaries are still available for metrics, params, insights, compare, and deploy review.
+                  </div>
+                )}
+                {version.tracking_status === 'failed' && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    Native Registry Ingested: MLflow logging failed, but captured metadata was retained.
+                  </div>
+                )}
                 {version.tracking_ingested_at && (
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ingested At</p>
@@ -891,7 +965,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   <p className="text-sm font-mono text-gray-800 break-all">{version.artifact_uri || 'N/A'}</p>
                 </div>
 
-                {/* Phase 10E.1: MLflow Run Lineage */}
+                {/* Optional internal MLflow lineage. Native Registry remains the primary product flow. */}
                 <div className="border-t border-gray-100 pt-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">MLflow Run</p>
@@ -926,16 +1000,16 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                         </div>
                       )}
                       <p className="text-[11px] text-gray-400 leading-relaxed mt-1">
-                        MLflow is used for experiment lineage and artifact deep dives.
-                        The Native Registry remains the source of truth for deployment and promotion.{' '}
-                        <span className="font-medium text-amber-600">MLflow UI is internal/admin only.</span>
+                        Model Evolution displays metrics, params, insights, and deployability from the Native Registry.
+                        MLflow lineage is optional internal metadata for audit and artifact deep dives.{' '}
+                        <span className="font-medium text-amber-600">Opening MLflow is not required for normal review or deployment.</span>
                       </p>
                     </div>
                   ) : (
                     <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-3 flex flex-col gap-1">
                       <p className="text-xs font-semibold text-gray-500">No MLflow run linked</p>
                       <p className="text-[11px] text-gray-400 leading-relaxed">
-                        Experiment tracking is captured automatically when training artifacts are ingested.
+                        Model Evolution still uses Native Registry summaries from the ingested training artifact.
                       </p>
                     </div>
                   )}
@@ -1092,16 +1166,23 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
 
             {metricEntries.length > 0 ? (
               <>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  {metricEntries.slice(0, 8).map(([name, value]) => (
-                    <div key={`summary-${name}`} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                      <p className="truncate text-xs font-bold uppercase tracking-wider text-gray-500" title={name}>
-                        {name.replace(/_/g, ' ')}
-                      </p>
-                      <p className="mt-2 break-all font-mono text-2xl font-extrabold text-gray-900">{formatValue(value)}</p>
-                    </div>
-                  ))}
-                </div>
+                {scalarMetricEntries.length > 0 && (
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    {scalarMetricEntries.slice(0, 8).map(([name, value]) => (
+                      <div key={`summary-${name}`} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                        <p className="truncate text-xs font-bold uppercase tracking-wider text-gray-500" title={name}>
+                          {name.replace(/_/g, ' ')}
+                        </p>
+                        <p
+                          className="mt-2 truncate font-mono text-2xl font-extrabold text-gray-900"
+                          title={formatValue(value)}
+                        >
+                          {shortValue(value, 36)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {numericMetricEntries.length > 0 && (
                   <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -1150,16 +1231,47 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {metricEntries.map(([name, value]) => (
+                        {scalarMetricEntries.map(([name, value]) => (
                           <tr key={`metric-row-${name}`} className="hover:bg-gray-50">
                             <td className="px-3 py-2 font-medium text-gray-800">{name}</td>
-                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-800">{formatValue(value)}</td>
+                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-800" title={formatValue(value)}>
+                              {shortValue(value, 120)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 </div>
+
+                {objectMetricEntries.length > 0 && (
+                  <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <h4 className="border-b border-gray-100 pb-3 text-sm font-bold uppercase tracking-wider text-gray-900">
+                      Metric Metadata
+                    </h4>
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      {objectMetricEntries.map(([name, value]) => (
+                        <div key={`metric-object-${name}`} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">{name.replace(/_/g, ' ')}</p>
+                          {isPlainRecord(value) ? (
+                            <dl className="grid gap-2">
+                              {Object.entries(value).slice(0, 20).map(([key, item]) => (
+                                <div key={key} className="grid grid-cols-[minmax(120px,220px)_1fr] gap-3 text-sm">
+                                  <dt className="truncate font-medium text-gray-500" title={key}>{key}</dt>
+                                  <dd className="truncate font-mono text-gray-800" title={formatValue(item)}>{shortValue(item, 90)}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          ) : (
+                            <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-white p-3 text-xs text-gray-700">
+                              {formatValue(value)}
+                            </pre>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">

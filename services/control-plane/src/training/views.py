@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from authentication.models import ModelAPI, TrainingJob
+from integrations.s3_zip_utils import get_s3_file_list
 from registry.views import (
     build_endpoint_url,
     serialize_model_api,
@@ -360,14 +361,60 @@ def validate_create_training_job_request(request):
     entry_point_path = Path(entry_point)
     if entry_point_path.is_absolute() or ".." in entry_point_path.parts:
         raise ValidationError({"error": "entry_point must be a relative path inside source_zip."})
-        
+
+    s3_code_prefix = None
     if base_model:
         if base_model.source_code_file:
+            # Legacy path: source code stored as Django FileField (zip/py)
             _validate_source_zip_entry_point(base_model.source_code_file.file, entry_point)
         else:
-            raise ValidationError({"error": "Base model does not have source code."})
+            # New path: source code stored in S3 via SourceEditor
+            user_name = (
+                base_model.tenant.email.split('@')[0]
+                if getattr(base_model.tenant, 'email', None)
+                else base_model.tenant.tenant_id
+            )
+            safe_model_name = base_model.name.replace(' ', '') if base_model.name else 'UnnamedModel'
+            safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
+            s3_code_prefix = f'{user_name}/models/{safe_model_name}/{safe_version}/code/'
+            s3_files = get_s3_file_list(s3_code_prefix)
+            # Filter out .keep placeholder files
+            real_files = [f for f in s3_files if not f['relative_path'].endswith('.keep')]
+            if not real_files:
+                raise ValidationError(
+                    {"error": "Base model does not have source code. Upload source files in Step 1 (Sources) before starting training."}
+                )
+            # Verify entry_point exists in S3 files
+            s3_paths = [f['relative_path'] for f in real_files]
+            if entry_point not in s3_paths:
+                raise ValidationError(
+                    {
+                        "error": (
+                            f"Entry point '{entry_point}' not found in uploaded source code. "
+                            f"Available files: {', '.join(s3_paths[:5])}."
+                        )
+                    }
+                )
     else:
         _validate_source_zip_entry_point(source_zip, entry_point)
+
+    s3_reference_prefix = None
+    if base_model:
+        if not base_model.reference_data_file:
+            user_name = (
+                base_model.tenant.email.split('@')[0]
+                if getattr(base_model.tenant, 'email', None)
+                else base_model.tenant.tenant_id
+            )
+            safe_model_name = base_model.name.replace(' ', '') if base_model.name else 'UnnamedModel'
+            safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
+            s3_reference_prefix = f'{user_name}/models/{safe_model_name}/{safe_version}/references/'
+            s3_ref_files = get_s3_file_list(s3_reference_prefix)
+            csv_files = [f for f in s3_ref_files if f['relative_path'].lower().endswith('.csv')]
+            if not csv_files:
+                raise ValidationError(
+                    {"error": "Base model does not have reference data. Upload a .csv file in Step 1 (Sources) before starting training."}
+                )
 
     return {
         "name": name,
@@ -381,6 +428,8 @@ def validate_create_training_job_request(request):
         "source_zip": source_zip,
         "training_data": training_data,
         "base_model": base_model,
+        "s3_code_prefix": s3_code_prefix,
+        "s3_reference_prefix": s3_reference_prefix,
     }
 
 
@@ -417,13 +466,28 @@ class TrainingJobListCreateView(APIView):
                 }
             )
 
-        source_zip = payload["base_model"].source_code_file if payload["base_model"] else payload["source_zip"]
-        training_data = payload["base_model"].reference_data_file if payload["base_model"] else payload["training_data"]
+        base_model = payload["base_model"]
+        # When base_model uses S3 source-code-files (SourceEditor path), source_code_file FileField is empty.
+        # Use a blank placeholder so TrainingJob.objects.create() succeeds.
+        # The actual S3 prefix will be stored in s3_source_uri for job execution.
+        if base_model and base_model.source_code_file:
+            source_zip = base_model.source_code_file
+        elif base_model and payload.get("s3_code_prefix"):
+            source_zip = ContentFile(b"", name="source_from_s3.zip")
+        else:
+            source_zip = payload["source_zip"]
+
+        if base_model and base_model.reference_data_file:
+            training_data = base_model.reference_data_file
+        elif base_model and payload.get("s3_reference_prefix"):
+            training_data = ContentFile(b"", name="train_from_s3.csv")
+        else:
+            training_data = payload["training_data"]
 
         # Lấy requirements_text từ base_model nếu có, tạo in-memory file để gán vào training_job
         requirements_file = None
-        if payload["base_model"] and payload["base_model"].requirements_text:
-            req_bytes = payload["base_model"].requirements_text.encode("utf-8")
+        if base_model and base_model.requirements_text:
+            req_bytes = base_model.requirements_text.encode("utf-8")
             requirements_file = ContentFile(req_bytes, name="requirements.txt")
 
         training_job = TrainingJob.objects.create(
@@ -441,6 +505,9 @@ class TrainingJobListCreateView(APIView):
             requirements_file=requirements_file,
             training_data=training_data,
             status="pending",
+            # Store S3 prefixes for job runners that support it
+            s3_source_uri=payload.get("s3_code_prefix") or "",
+            s3_training_data_uri=payload.get("s3_reference_prefix") or "",
         )
         create_training_job_event(training_job, "JOB_CREATED", "Training job created.")
 

@@ -18,7 +18,12 @@ const classNames = (...classes: (string | undefined | null | false)[]) => classe
 function formatValue(value: unknown): string {
   if (typeof value === 'number') return Number.isInteger(value) ? value.toString() : value.toFixed(4);
   if (value === null || value === undefined || value === '') return '-';
-  return String(value);
+  if (typeof value === 'object') {
+    const compact = JSON.stringify(value);
+    return compact.length > 96 ? `${compact.slice(0, 95)}…` : compact;
+  }
+  const text = String(value);
+  return text.length > 96 ? `${text.slice(0, 95)}…` : text;
 }
 
 function formatDelta(value: number | null): string {

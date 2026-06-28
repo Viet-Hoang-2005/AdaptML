@@ -1,3 +1,4 @@
+import io
 import os
 import shutil
 import tempfile
@@ -71,6 +72,22 @@ def _s3_uri(bucket: str, key: str) -> str:
     return f"s3://{bucket}/{key}"
 
 
+def _split_s3_uri(uri: str) -> tuple[str, str]:
+    parsed = urlparse(uri)
+    if parsed.scheme != "s3" or not parsed.netloc:
+        raise ValidationError({"error": "S3 URI must use s3://bucket/key format."})
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def _is_prefix_like_s3_uri(uri: str, marker: str) -> bool:
+    parsed = urlparse(uri)
+    if parsed.scheme != "s3":
+        return False
+    key = parsed.path.lstrip("/")
+    normalized_marker = marker.strip("/") + "/"
+    return uri.endswith("/") or key.endswith(normalized_marker)
+
+
 def get_training_job_prefix(training_job: TrainingJob) -> str:
     output_prefix = settings.SAGEMAKER_OUTPUT_PREFIX.strip("/")
     return f"{output_prefix}/{training_job.tenant.tenant_id}/training-jobs/{training_job.id}"
@@ -79,19 +96,84 @@ def get_training_job_prefix(training_job: TrainingJob) -> str:
 def upload_training_inputs_to_s3(training_job: TrainingJob) -> tuple[str, str, str]:
     bucket_name = settings.AWS_STORAGE_BUCKET_NAME
     prefix = get_training_job_prefix(training_job)
-    source_key = f"{prefix}/source/source.zip"
     data_key = f"{prefix}/data/train.csv"
 
     training_job.status = "uploading"
     training_job.save(update_fields=["status", "updated_at"])
 
-    source_uri = _copy_django_file_to_s3(training_job.source_zip, bucket_name, source_key)
-    data_uri = _copy_django_file_to_s3(training_job.training_data, bucket_name, data_key)
+    # If source was uploaded via SourceEditor to S3 directly, s3_source_uri holds the S3 prefix.
+    # We must zip this prefix into a single source.zip file for the AWS Batch runner.
+    existing_s3_prefix = training_job.s3_source_uri or ""
+    source_key = f"{prefix}/source/source.zip"
+    if existing_s3_prefix and not existing_s3_prefix.startswith("s3://"):
+        source_uri = _zip_s3_prefix_to_s3(bucket_name, existing_s3_prefix.rstrip("/") + "/", source_key)
+    elif existing_s3_prefix.startswith("s3://") and _is_prefix_like_s3_uri(existing_s3_prefix, "code"):
+        source_bucket, source_prefix = _split_s3_uri(existing_s3_prefix)
+        source_uri = _zip_s3_prefix_to_s3(source_bucket, source_prefix.rstrip("/") + "/", source_key, target_bucket=bucket_name)
+    elif existing_s3_prefix.startswith("s3://"):
+        source_uri = existing_s3_prefix
+    else:
+        # Legacy / manual-upload path: upload source_zip Django FileField to S3
+        source_uri = _copy_django_file_to_s3(training_job.source_zip, bucket_name, source_key)
+
+    existing_data_prefix = training_job.s3_training_data_uri or ""
+    data_key = f"{prefix}/data/train.csv"
+    if existing_data_prefix and not existing_data_prefix.startswith("s3://"):
+        data_uri = _copy_s3_prefix_csv_to_s3(bucket_name, existing_data_prefix.rstrip("/") + "/", data_key)
+    elif existing_data_prefix.startswith("s3://") and _is_prefix_like_s3_uri(existing_data_prefix, "references"):
+        source_bucket, source_prefix = _split_s3_uri(existing_data_prefix)
+        data_uri = _copy_s3_prefix_csv_to_s3(source_bucket, source_prefix.rstrip("/") + "/", data_key, target_bucket=bucket_name)
+    elif existing_data_prefix.startswith("s3://"):
+        data_uri = existing_data_prefix
+    else:
+        data_uri = _copy_django_file_to_s3(training_job.training_data, bucket_name, data_key)
 
     training_job.s3_source_uri = source_uri
     training_job.s3_training_data_uri = data_uri
     training_job.save(update_fields=["s3_source_uri", "s3_training_data_uri", "updated_at"])
     return source_uri, data_uri, prefix
+
+
+def _zip_s3_prefix_to_s3(bucket: str, source_prefix: str, target_key: str, target_bucket: str | None = None) -> str:
+    target_bucket = target_bucket or bucket
+    s3_client = _s3_client()
+    paginator = s3_client.get_paginator('list_objects_v2')
+    found_files = False
+    with tempfile.TemporaryFile() as tmp_zip:
+        with zipfile.ZipFile(tmp_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for page in paginator.paginate(Bucket=bucket, Prefix=source_prefix):
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    if key.endswith('/'):
+                        continue
+                    file_obj = io.BytesIO()
+                    s3_client.download_fileobj(bucket, key, file_obj)
+                    rel_path = key[len(source_prefix):].lstrip('/')
+                    if not rel_path:
+                        continue
+                    zf.writestr(rel_path, file_obj.getvalue())
+                    found_files = True
+        if not found_files:
+            raise ValidationError({"error": "No source files found in the S3 code prefix."})
+        tmp_zip.seek(0)
+        s3_client.upload_fileobj(tmp_zip, target_bucket, target_key)
+    return _s3_uri(target_bucket, target_key)
+
+
+def _copy_s3_prefix_csv_to_s3(bucket: str, source_prefix: str, target_key: str, target_bucket: str | None = None) -> str:
+    target_bucket = target_bucket or bucket
+    s3_client = _s3_client()
+    paginator = s3_client.get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=bucket, Prefix=source_prefix):
+        for obj in page.get('Contents', []):
+            if obj['Key'].lower().endswith('.csv'):
+                s3_client.copy_object(
+                    CopySource={'Bucket': bucket, 'Key': obj['Key']},
+                    Bucket=target_bucket,
+                    Key=target_key
+                )
+                return _s3_uri(target_bucket, target_key)
+    raise ValidationError({"error": "No .csv file found in the S3 reference prefix."})
 
 
 def _copy_django_file_to_s3(field_file, bucket: str, key: str, config: SageMakerTrainingConfig | None = None) -> str:

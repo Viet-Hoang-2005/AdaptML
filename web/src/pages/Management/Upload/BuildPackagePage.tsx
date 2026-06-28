@@ -59,7 +59,7 @@ export default function BuildPackagePage({
   const preview = realPreview.length > 0 ? realPreview : expectedPreview;
 
   const canContinue = () => {
-    if (step === 1) return Boolean(form.name.trim());
+    if (step === 1) return Boolean(form.name.trim() && (form.version || '').trim());
     if (step === 2) return Boolean(form.flavor);
     if (step === 3) return Boolean(form.source_artifact);
     if (step === 4) return true; // Optional step
@@ -189,6 +189,12 @@ function MetadataStep({
         value={form.name}
         onChange={(event) => setField('name', event.target.value)}
         placeholder="e.g. CICIDS Classifier"
+      />
+      <Input
+        label="Version"
+        value={form.version || ''}
+        onChange={(event) => setField('version', event.target.value)}
+        placeholder="e.g. v1, v2, v2-upload-20260627"
       />
       <TextArea
         id="build-description"
@@ -417,6 +423,7 @@ function DeployStep({
       
       <div className="grid gap-4 md:grid-cols-2">
         <SummaryItem label="Model" value={form.name || 'Untitled model'} />
+        <SummaryItem label="Version" value={form.version || 'v1'} />
         <SummaryItem label="Access" value={`${form.access_mode} API`} />
         <SummaryItem label="Flavor" value={form.flavor} />
         <SummaryItem label="Artifact" value={form.source_artifact?.name || 'Missing artifact'} />

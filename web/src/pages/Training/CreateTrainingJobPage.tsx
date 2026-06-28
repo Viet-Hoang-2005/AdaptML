@@ -128,7 +128,7 @@ export default function CreateTrainingJobPage() {
   const canContinue = () => {
     if (step === 1) return Boolean(form.entry_point);
     if (step === 2) return true;
-    return true;
+    return Boolean(form.entry_point);
   };
 
   const handleNext = () => {
