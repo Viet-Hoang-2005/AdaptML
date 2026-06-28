@@ -80,14 +80,20 @@ class ProductionDataView(views.APIView):
                     for row in cursor.fetchall()
                 ]
                 
-                # features is stored as a JSON string, parse it back to dict
+                # features may be stored as a (possibly double-encoded) JSON string.
+                # Decode repeatedly until we get a dict/list so the preview works
+                # for both legacy and freshly ingested rows.
                 import json
                 for row in results:
-                    if 'features' in row and isinstance(row['features'], str):
+                    value = row.get('features')
+                    for _ in range(3):
+                        if not isinstance(value, str):
+                            break
                         try:
-                            row['features'] = json.loads(row['features'])
+                            value = json.loads(value)
                         except (json.JSONDecodeError, TypeError):
-                            pass
+                            break
+                    row['features'] = value
                 
                 return Response(results)
         except Exception as e:

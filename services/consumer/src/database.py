@@ -99,7 +99,9 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
         dtypes = {}
         for col in df.columns:
             if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
-                df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x)
+                # Let the JSONB dtype serialize dict/list once; json.dumps here would
+                # double-encode (JSONB then stores a JSON string instead of an object).
+                df[col] = df[col].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
                 dtypes[col] = JSONB
 
         df.to_sql(table_name, engine_rw, if_exists='append', index=False, chunksize=1000, dtype=dtypes)
