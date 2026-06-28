@@ -1747,10 +1747,16 @@ class ModelAPIDetailView(APIView):
                     model_api.label_mapping_file.delete(save=False)
 
             # Physically delete from database
+            try:
+                get_deploy_adapter().cleanup_model(model_api.id, remove_images=True)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to cleanup model image: {e}")
             model_api.delete()
             return Response({"message": "Model API has been completely destroyed."}, status=status.HTTP_200_OK)
 
         get_deploy_adapter().remove_model(model_api.id)
+        get_deploy_adapter().cleanup_model(model_api.id, remove_images=True)
         model_api.status = "disabled"
         model_api.save(update_fields=["status", "updated_at"])
         return Response({"message": "Model API has been disabled."}, status=status.HTTP_200_OK)

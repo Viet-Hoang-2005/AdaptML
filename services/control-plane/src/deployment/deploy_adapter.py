@@ -428,13 +428,70 @@ class ArgoDeployAdapter(DeployAdapter):
             return False, str(exc)
 
     def remove_model(self, model_id: int):
-        pass
+        webhook_url = os.environ.get("ARGO_EVENTS_WEBHOOK_URL")
+        if not webhook_url:
+            logger.error("ARGO_EVENTS_WEBHOOK_URL is not set.")
+            return
+        
+        from authentication.models import ModelAPI
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        if not model_api:
+            return
+            
+        tenant_id = model_api.tenant.tenant_id
+        container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
+        
+        payload = {
+            "task_type": "delete",
+            "container_name": container_name
+        }
+        
+        try:
+            logger.info("Sending delete payload to Argo Events at %s: %s", webhook_url, payload)
+            response = requests.post(webhook_url, json=payload, timeout=10)
+            response.raise_for_status()
+            logger.info("Successfully triggered Argo Delete Workflow for container %s", container_name)
+        except Exception as e:
+            logger.error("Failed to trigger Argo Delete Workflow for container %s: %s", container_name, e)
 
     def endpoint_logs(self, model_id: int, tail: int = 300) -> str:
         return "Log retrieval not yet implemented for Argo/Kubernetes endpoints."
 
     def cleanup_model(self, model_id: int, remove_images: bool = False) -> dict:
-        return {"containers": [], "images": []}
+        results = {"containers": [], "images": []}
+        if not remove_images:
+            return results
+            
+        from authentication.models import ModelAPI
+        model_api = ModelAPI.objects.filter(id=model_id).first()
+        if not model_api:
+            return results
+            
+        tenant_id = model_api.tenant.tenant_id
+        from integrations.hashid_utils import encode_model_id
+        hashid_str = encode_model_id(model_id)
+        repo_name = f"{tenant_id.lower()}-model-{hashid_str.lower()}"
+        
+        harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
+        harbor_username = os.environ.get("HARBOR_USERNAME")
+        harbor_password = os.environ.get("HARBOR_PASSWORD")
+        
+        if harbor_username and harbor_password:
+            api_url = f"https://{harbor_url}/api/v2.0/projects/mlops-paas/repositories/{repo_name}"
+            try:
+                logger.info("Deleting image from Harbor: %s", api_url)
+                response = requests.delete(api_url, auth=(harbor_username, harbor_password), timeout=10)
+                if response.status_code in [200, 202, 204]:
+                    logger.info("Successfully deleted Harbor repository %s", repo_name)
+                    results["images"].append(repo_name)
+                elif response.status_code == 404:
+                    logger.info("Harbor repository %s not found, already deleted.", repo_name)
+                else:
+                    logger.error("Failed to delete Harbor repository %s. Status: %s, Response: %s", repo_name, response.status_code, response.text)
+            except Exception as e:
+                logger.error("Error calling Harbor API to delete repository %s: %s", repo_name, e)
+                
+        return results
 
 def get_deploy_adapter() -> DeployAdapter:
     strategy = os.environ.get("BUILD_STRATEGY", "docker").lower()
