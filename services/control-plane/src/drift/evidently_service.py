@@ -126,7 +126,7 @@ def run_evidently_job_sync(job_id: int):
             "DRIFT_REPORTS_S3_PREFIX": "drift-reports"
         }
 
-        strategy = getattr(settings, "BUILD_STRATEGY", "docker").lower()
+        strategy = os.environ.get("BUILD_STRATEGY", "docker").lower()
         if strategy == "argo":
             import requests
             webhook_url = os.environ.get("ARGO_DRIFT_WEBHOOK_URL", "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/drift")
