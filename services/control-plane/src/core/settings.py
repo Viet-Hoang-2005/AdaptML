@@ -296,7 +296,6 @@ MLFLOW_TRACKING_REQUIRED = os.environ.get('MLFLOW_TRACKING_REQUIRED', 'false').s
 # Timeout in seconds for MLflow HTTP requests inside AWS Batch training containers
 MLFLOW_HTTP_REQUEST_TIMEOUT = int(os.environ.get('MLFLOW_HTTP_REQUEST_TIMEOUT', '10') or '10')
 
-
 # Cấu hình lưu trữ AWS S3 (cho Avatar & File)
 # Lưu ý: Không khai báo AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY
 # boto3 sẽ tự động sử dụng IAM Role được gán cho EC2 instance (cấu hình trong main.tf)
@@ -309,5 +308,7 @@ AWS_DEFAULT_ACL = None
 AWS_QUERYSTRING_AUTH = env_bool('AWS_QUERYSTRING_AUTH', True)
 # Giữ nguyên tên file, tránh ghi đè ngẫu nhiên quá mức nếu cần
 AWS_S3_FILE_OVERWRITE = False
-
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+# Môi trường build trên Docker hoặc Argo
+BUILD_STRATEGY = os.environ.get("BUILD_STRATEGY", "docker").lower()
