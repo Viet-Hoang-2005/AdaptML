@@ -36,7 +36,7 @@ Machine learning systems deployed in production can degrade when data distributi
 
 Machine learning (ML) models are increasingly deployed as continuously running services rather than offline experimental artifacts. In a production setting, a model receives new input samples over time, generates predictions for downstream users or systems, and depends on monitoring mechanisms to remain trustworthy. Unlike traditional software services, an ML service may degrade even when its source code and infrastructure remain unchanged. One major cause is Data Drift, where the production data distribution differs from the reference distribution used during training, validation, or initial deployment.
 
-This problem is especially relevant in Network Intrusion Detection Systems (NIDS). Network traffic is non-stationary: benign usage patterns change, infrastructure evolves, and attack strategies continuously adapt. A classifier trained on historical flow features may therefore become less reliable when deployed in a new environment or under a new attack distribution. A production-grade NIDS should not only expose a prediction API but also record production data, compare it with reference data, and trigger lifecycle actions when the monitored distribution changes.
+This problem is especially relevant in Network Intrusion Detection Systems (NIDS). Network traffic is non-stationary: benign usage patterns change, infrastructure evolves, and attack strategies continuously adapt. A classifier trained on historical flow features may therefore become less reliable when deployed in a new environment or under a new attack distribution. An operational NIDS should not only expose a prediction API but also record production data, compare it with reference data, and trigger lifecycle actions when the monitored distribution changes.
 
 Existing MLOps research provides architectural concepts for automating ML development, deployment, and monitoring \cite{kreuzberger2023mlops}. Other works discuss MLOps maturity, pipeline platforms, data quality, and continual model maintenance \cite{john2021towards,subramanya2022devops,renggli2021data}. However, practical systems often treat monitoring as a passive observability layer. In many prototypes, drift reports are generated after deployment, but the monitoring result is not explicitly modeled as a control signal for model lifecycle decisions.
 
@@ -112,7 +112,7 @@ where $W$ is the monitoring window size. The objective is not only to compute pr
 a_T = \pi(m_{u,i},D_{\mathrm{ref}}^{u,i},D_{\mathrm{cur}}^{u,i}(T),S_T),
 \end{equation}
 
-where $\pi(\cdot)$ is the adaptation policy and $S_T$ is the current lifecycle state of the model. Possible actions include no operation, alert generation, manual review, retraining trigger, model rollback, or model promotion.
+where $\pi(\cdot)$ is the adaptation policy and $S_T$ is the current lifecycle state of the model. Possible actions include no operation, alert generation, manual review, retraining trigger, and review-driven rollback or promotion candidates.
 
 For each feature $j$, the framework computes a drift score:
 
@@ -176,7 +176,7 @@ The monitoring layer compares reference data with recent production data. In the
 
 \subsection{Adaptation Layer}
 
-The adaptation layer maps monitoring outputs to lifecycle actions. In the baseline implementation, the primary action is a drift alert or workflow trigger. The framework can be extended to support retraining jobs, model evaluation gates, model promotion, rollback, and notification. This distinction is important: the current prototype demonstrates a drift-aware control loop, while fully autonomous retraining and deployment remain future work.
+The adaptation layer maps monitoring outputs to lifecycle actions. In the baseline implementation, the primary action is a drift alert or workflow trigger. The framework can be extended to support retraining jobs, model evaluation gates, review-driven promotion, rollback, and notification workflows. This distinction is important: the current prototype demonstrates a drift-aware control loop, while fully autonomous retraining and deployment remain future work.
 
 \section{Drift-Aware Lifecycle Algorithm}
 
@@ -319,7 +319,7 @@ This design avoids requiring user training scripts to import MLflow. It also avo
 
 \subsection{Deployment and Operational Scope}
 
-The repository contains Docker Compose configuration for local integration and Kubernetes-oriented manifests for a K3s-based prototype environment. It also includes CI/CD configuration for validation, container build, image publication, and GitOps-style deployment updates. These assets document deployment-oriented automation but are reported as prototype support rather than production hardening or evidence of the latest workflow success.
+The repository contains Docker Compose configuration for local integration and Kubernetes-oriented manifests for a K3s-based prototype environment. It also includes CI/CD configuration for validation, container build, image publication, and GitOps-style deployment configuration updates. These assets document deployment-oriented automation but are reported as prototype support rather than production hardening or evidence of the latest workflow success.
 
 The AWS-facing boundary supports object storage and externalized training execution where configured. Conceptually, the web frontend calls the Django/DRF control plane for model upload, training, registry, deployment, and drift views; the control plane exchanges artifacts with object storage and submits training jobs; the runner returns artifacts for Native Registry ingestion; the FastAPI server handles inference and emits logs to Redpanda; the consumer stores logs in PostgreSQL; and the drift service writes summaries back to the control plane. Runtime evidence such as workflow logs, Kubernetes status, health checks, Batch traces, and screenshots should be attached separately before stronger operational claims.
 
