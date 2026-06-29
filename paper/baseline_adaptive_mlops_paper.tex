@@ -1,45 +1,36 @@
-\documentclass[conference]{IEEEtran}
-\IEEEoverridecommandlockouts
+\documentclass[runningheads]{llncs}
 
-\usepackage{cite}
+\usepackage[T1]{fontenc}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{algorithmic}
 \usepackage{graphicx}
-\usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{url}
+\usepackage{array}
 
-\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
-    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 
 \begin{document}
 
 \title{A Drift-Aware MLOps Framework for Multi-Model Serving: A Network Intrusion Detection Case Study}
 
-\author{
-\IEEEauthorblockN{Tran Nguyen Viet Hoang}
-\IEEEauthorblockA{\textit{Faculty of Computer Networks and Communications} \\
-\textit{University of Information Technology, VNU-HCM}\\
-Ho Chi Minh City, Vietnam \\
-23520541@gm.uit.edu.vn}
-\and
-\IEEEauthorblockN{Bui Ngoc Thai}
-\IEEEauthorblockA{\textit{Faculty of Computer Networks and Communications} \\
-\textit{University of Information Technology, VNU-HCM}\\
-Ho Chi Minh City, Vietnam \\
-23521412@gm.uit.edu.vn}
-}
+\titlerunning{A Drift-Aware MLOps Framework for Multi-Model Serving}
+
+\author{Tran Nguyen Viet Hoang\inst{1} \and Bui Ngoc Thai\inst{1}}
+\authorrunning{T. N. V. Hoang and B. N. Thai}
+
+\institute{Faculty of Computer Networks and Communications,\\
+University of Information Technology, VNU-HCM, Ho Chi Minh City, Vietnam\\
+\email{\{23520541,23521412\}@gm.uit.edu.vn}}
 
 \maketitle
 
 \begin{abstract}
-Machine learning systems deployed in production are affected not only by source-code changes but also by changes in data distributions. This issue is critical for network intrusion detection, where traffic patterns and attack behaviors evolve over time. However, this paper does not focus on proposing a new intrusion detection model. Instead, it presents a baseline design of a drift-aware MLOps framework that supports user-imported tabular classification models and uses Network Intrusion Detection Systems (NIDS) as a case study. The proposed framework separates model governance from model serving through a control-plane and data-plane architecture. It supports model onboarding, dynamic endpoint generation, tenant-aware access control, asynchronous production logging, reference-production drift detection, and adaptation-trigger generation. We formalize the system as a lifecycle over tenants, models, inference requests, production data windows, drift scores, and lifecycle actions. The prototype is implemented with Django, FastAPI, MLflow, PostgreSQL, Redpanda, and Evidently AI. The baseline demonstrates how a model can be uploaded, served as an API, monitored from production logs, and evaluated for Data Drift.
-\end{abstract}
+Machine learning systems deployed in production can degrade when data distributions change, even if source code remains unchanged. This issue is critical for network intrusion detection, where traffic and attack behavior evolve over time. This paper does not propose a new intrusion detection classifier; instead, it presents a baseline drift-aware MLOps framework for user-imported and training-job-created tabular models, using Network Intrusion Detection Systems (NIDS) as a case study. The framework separates model governance from model serving through a control-plane/data-plane architecture and formalizes the lifecycle over tenants, models, inference requests, production windows, drift scores, and lifecycle actions. The prototype uses Django/FastAPI services, PostgreSQL, Redpanda, AWS Batch, object storage, optional MLflow support, and Evidently AI. It demonstrates how model artifacts can be onboarded, registered in a native model-evolution registry, served as APIs, monitored from production logs, and evaluated for Data Drift.
 
-\begin{IEEEkeywords}
-MLOps, Data Drift, multi-model serving, model monitoring, tabular classification, network intrusion detection.
-\end{IEEEkeywords}
+\keywords{MLOps \and Data Drift \and Multi-model Serving \and Model Monitoring \and Network Intrusion Detection}
+\end{abstract}
 
 \section{Introduction}
 
@@ -49,7 +40,7 @@ This problem is especially relevant in Network Intrusion Detection Systems (NIDS
 
 Existing MLOps research provides architectural concepts for automating ML development, deployment, and monitoring \cite{kreuzberger2023mlops}. Other works discuss MLOps maturity, pipeline platforms, data quality, and continual model maintenance \cite{john2021towards,subramanya2022devops,renggli2021data}. However, practical systems often treat monitoring as a passive observability layer. In many prototypes, drift reports are generated after deployment, but the monitoring result is not explicitly modeled as a control signal for model lifecycle decisions.
 
-This paper presents a baseline framework that connects multi-model serving with drift-aware monitoring. The goal is to describe a reusable MLOps framework, not to claim a new state-of-the-art NIDS classifier. In the proposed design, NIDS is used as a case study because it naturally exposes the need for drift-aware operation. The framework is intentionally scoped to user-imported tabular classification models packaged in a compatible format such as MLflow pyfunc.
+This paper presents a baseline framework that connects multi-model serving with drift-aware monitoring. The goal is to describe a reusable MLOps framework, not to claim a new state-of-the-art NIDS classifier. In the proposed design, NIDS is used as a case study because it naturally exposes the need for drift-aware operation. The framework is intentionally scoped to tabular classification models that are either imported by users or produced by controlled training jobs and then converted into serving-compatible artifacts.
 
 The main contributions of this paper are:
 
@@ -148,21 +139,24 @@ where $\tau_j$ is the threshold for feature $j$. The dataset-level drift ratio i
 The final drift decision is:
 
 \begin{equation}
-\mathrm{Drift}(D_{\mathrm{ref}},D_{\mathrm{cur}})=
-\mathbb{1}[\rho \geq \tau_D],
+\mathrm{Drift}(D_{\mathrm{ref}}, D_{\mathrm{cur}}) =
+\begin{cases}
+1, & \rho \ge \tau_D,\\
+0, & \text{otherwise}.
+\end{cases}
 \end{equation}
 
 where $\tau_D$ is the dataset-level threshold. This formulation separates model prediction from monitoring and makes Data Drift an explicit input to lifecycle decisions.
 
 \section{Proposed Framework}
 
-The logical flow of the proposed framework consists of four stages. First, a user uploads a model artifact through the control plane. Second, the data plane exposes the model as a prediction endpoint. Third, each prediction produces an asynchronous log event. Fourth, the monitoring layer periodically reconstructs the current production window and compares it with the reference data. If drift is detected, the adaptation layer creates an alert or triggers a retraining workflow.
+The logical flow of the proposed framework consists of four stages. First, a user onboards a model artifact or registers an artifact produced by a controlled training job through the control plane. Second, the data plane exposes the model as a prediction endpoint. Third, each prediction produces an asynchronous log event. Fourth, the monitoring layer periodically reconstructs the current production window and compares it with the reference data. If drift is detected, the adaptation layer creates an alert or triggers a retraining workflow.
 
 \subsection{Control Plane}
 
 The control plane manages user-facing and governance operations. It stores tenants, authentication credentials, API keys, model metadata, artifact locations, endpoint URLs, access modes, and model statuses. In the prototype, this layer is implemented using Django. A model record contains the model name, description, owner tenant, artifact URI, access mode, generated endpoint, and lifecycle status.
 
-When a model artifact is uploaded, the control plane validates the package at a structural level and checks for an MLflow \texttt{MLmodel} specification. The model is then registered and assigned an endpoint of the form \texttt{/models/\{model\_id\}/predict}. This design decouples model ownership and metadata management from online inference.
+When a model artifact is uploaded or registered from a completed training job, the control plane validates the available metadata, stores artifact references, and records the model in the native registry. The model can then be assigned an endpoint of the form \texttt{/models/\{model\_id\}/predict}. This design decouples model ownership and metadata management from online inference.
 
 \subsection{Data Plane}
 
@@ -174,7 +168,7 @@ Tenant-aware access control is enforced before inference. Public models can be i
 
 Online inference should not depend synchronously on database writes. Therefore, the framework decouples prediction from logging through a message broker. After producing a prediction, the model server emits a production log event to Redpanda. A consumer service batches log events and persists them to PostgreSQL. Each log stores the tenant identifier, model identifier, timestamp, feature payload, and prediction result.
 
-This design has two advantages. First, it reduces the latency impact of monitoring on the prediction path. Second, it creates a unified production data source that can be queried per tenant and per model for drift detection, audit, and evaluation.
+This design has two advantages. First, it keeps monitoring writes outside the synchronous prediction path. Second, it creates a unified production data source that can be queried per tenant and per model for drift detection, audit, and evaluation.
 
 \subsection{Drift Monitoring Layer}
 
@@ -190,10 +184,12 @@ The model lifecycle can be represented as a state transition system:
 
 \begin{equation}
 \begin{split}
-S \in \{&\mathrm{uploaded},\mathrm{validated},\mathrm{deployed},
+S \in \{&
+\mathrm{uploaded},\ \mathrm{validated},\ \mathrm{deployed},\
 \mathrm{monitored},\\
-&\mathrm{drifted},\mathrm{reviewing},\mathrm{retraining},
-\mathrm{promoted},\mathrm{failed}\}.
+&\mathrm{drifted},\ \mathrm{reviewing},\ \mathrm{retraining},\
+\mathrm{promoted},\ \mathrm{failed}
+\}.
 \end{split}
 \end{equation}
 
@@ -203,29 +199,27 @@ The transition function is:
 S_{T+1}=\Phi(S_T,m_{u,i},\rho,\tau_D,a_T),
 \end{equation}
 
-where $\Phi(\cdot)$ updates the model state according to the drift ratio and the selected action. If $\rho < \tau_D$, the model remains in the monitored state. If $\rho \geq \tau_D$, the model is marked as drifted and the system triggers alerting or retraining.
+where $\Phi(\cdot)$ updates the model state according to the drift ratio and the selected action. If $\rho < \tau_D$, the model remains in the monitored state. If $\rho \geq \tau_D$, the model is marked as drifted and the system can trigger alerting, review, or a workflow handoff.
 
 \begin{figure}[t]
 \small
-\caption{Model onboarding procedure.}
-\label{alg:onboarding}
 \begin{algorithmic}[1]
-\REQUIRE Model package $P$, metadata $H$, tenant $u$
+\REQUIRE Model package or training artifact $A$, metadata $H$, tenant $u$
 \ENSURE Registered model endpoint $e$
 \STATE Validate package extension and archive structure
-\STATE Check whether $P$ contains an \texttt{MLmodel} specification
-\STATE Store $P$ in artifact storage
+\STATE Validate serving metadata or record deployability status
+\STATE Store or reference $A$ in artifact storage
 \STATE Create model record $m_{u,i}$ in the control plane
 \STATE Assign lifecycle state $S \leftarrow \mathrm{validated}$
 \STATE Generate endpoint $e \leftarrow$ \texttt{/models/\{i\}/predict}
 \STATE Return endpoint $e$
 \end{algorithmic}
+\caption{Model onboarding procedure.}
+\label{alg:onboarding}
 \end{figure}
 
 \begin{figure}[t]
 \small
-\caption{Drift-aware inference and monitoring procedure.}
-\label{alg:monitoring}
 \begin{algorithmic}[1]
 \REQUIRE Input $x_t$, model identifier $i$, credential $q$
 \ENSURE Prediction $\hat{y}_t$ and optional lifecycle action $a_T$
@@ -243,99 +237,107 @@ where $\Phi(\cdot)$ updates the model state according to the drift ratio and the
     \STATE Compute drift ratio $\rho$
     \STATE Select action $a_T \leftarrow \pi(m_{u,i},D_{\mathrm{ref}},D_{\mathrm{cur}},S_T)$
     \IF{$\rho \geq \tau_D$}
-        \STATE Trigger alert, review, or retraining workflow
+        \STATE Trigger alert, review, or workflow handoff
     \ENDIF
 \ENDIF
 \STATE Return $\hat{y}_t$
 \end{algorithmic}
+\caption{Drift-aware inference and monitoring procedure.}
+\label{alg:monitoring}
 \end{figure}
 
 \section{Case Study: Network Intrusion Detection}
 
 The NIDS model is used as a case study to instantiate the proposed framework. A network flow is represented as a tabular feature vector $x \in \mathbb{R}^{d}$ containing statistics such as duration, packet counts, byte rates, and protocol-related attributes. The model predicts whether the observed traffic is benign or belongs to an attack class.
 
-In the current prototype, XGBoost is used as the classification algorithm because it is widely used for tabular data and can be packaged as an MLflow-compatible model. The project contains multiple trained model versions, including a binary classifier and an extended classifier that includes additional attack behavior. These models are treated as imported artifacts rather than hard-coded services. This allows the case study to demonstrate the general framework behavior: model registration, endpoint invocation, production logging, and drift monitoring.
+In the current prototype, XGBoost is used as the classification algorithm because it is widely used for tabular data and can be packaged into a serving-compatible model artifact. The project contains multiple trained model versions, including binary-classification artifacts used for upload and model-evolution validation. These models are treated as artifacts and registry versions rather than hard-coded services. This allows the case study to demonstrate the general framework behavior: model registration, endpoint invocation, production logging, and drift monitoring.
 
 NIDS is an appropriate case study for drift-aware MLOps for three reasons. First, network environments change over time, causing benign traffic distributions to shift. Second, attack patterns evolve, making historical training data incomplete. Third, labeled production data are often delayed or unavailable, so input distribution monitoring can provide an early warning signal before supervised performance metrics are available.
 
 \section{Prototype Implementation}
 
-Table~\ref{tab:implementation} summarizes the prototype modules and their roles.
+This section describes the implemented prototype as reflected in the repository. The purpose is to document the system boundary and implementation coverage, not to claim production readiness or performance characteristics.
 
-\begin{table}[htbp]
-\caption{Prototype Implementation Modules}
+\subsection{Prototype Architecture}
+
+The prototype follows a control-plane/data-plane architecture. The control plane is implemented with Django and Django REST Framework and stores users, tenants, training jobs, model API records, registry versions, deployment metadata, and drift monitoring records in PostgreSQL. The data plane is implemented as a FastAPI model server that resolves a model endpoint, loads the serving artifact, performs prediction, and emits production log events. Redpanda is used as the asynchronous log transport, and a consumer service persists prediction records into PostgreSQL for later drift analysis.
+
+The implementation also includes S3-compatible artifact storage, AWS Batch training jobs, a Python training runner, a model packager, MLflow integration, Evidently-based drift monitoring, and a Native Registry/Model Evolution layer. In the user-facing workflow, Native Registry data stored in PostgreSQL is the source of truth for Model Evolution. MLflow is treated as internal experiment lineage and model-format support rather than a required user interface.
+
+\begin{table}
+\caption{Prototype modules and responsibilities.}
 \label{tab:implementation}
 \centering
-\begin{tabular}{ll}
+\small
+\begin{tabular}{@{}L{2.6cm}L{2.8cm}L{6.0cm}@{}}
 \toprule
-\textbf{Module} & \textbf{Role} \\
+\textbf{Module} & \textbf{Implementation} & \textbf{Responsibility} \\
 \midrule
-Django control plane & Users, tenants, API keys, model metadata \\
-FastAPI model server & Dynamic endpoint and MLflow model loading \\
-Redpanda & Asynchronous production log transport \\
-PostgreSQL & Metadata and production log persistence \\
-Evidently AI & Reference-production drift detection \\
-MLflow & Model packaging and pyfunc loading \\
-Kubernetes/K3s & Container orchestration and deployment \\
-Argo CD & GitOps-based synchronization \\
+Control plane & Django/DRF & Manages tenants, jobs, registry, deployment, and drift APIs. \\
+Training execution & AWS Batch + runner & Executes configured entry points and returns artifacts. \\
+Artifact/registry layer & Object storage + PostgreSQL & Stores model artifacts, metadata, and version summaries. \\
+Packaging/serving & Packager + FastAPI & Prepares or loads serving artifacts and exposes prediction endpoints. \\
+Logging/drift & Redpanda + consumer + Evidently & Persists production logs and stores drift summaries. \\
+Deployment configuration & Docker Compose/K8s/Argo files & Supports local integration and prototype/testbed deployment. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The implemented flow is as follows. A user authenticates to the control plane and uploads an MLflow-compatible model package. The control plane creates a model record and returns an endpoint. The user sends prediction requests to the generated endpoint with an API key or token. The model server resolves the model, performs inference, and publishes production logs to Redpanda. A consumer persists the logs to PostgreSQL. The drift service later retrieves production logs for a specific tenant-model pair and compares them with reference data using Evidently AI.
+\subsection{Training Job Execution}
 
-Table~\ref{tab:coverage} describes the current baseline coverage. The framework already supports core platform operations, while several production-hardening features remain future work.
+Training jobs can be created from an uploaded source package or from code stored through the Source Editor workflow. For the AWS Batch path, the backend prepares a single \texttt{source.zip} package and copies reference training data into a standard \texttt{train.csv} location when the source comes from S3 prefixes. The job definition then starts the training runner container with environment variables for the model output directory, training output directory, and training data channel. The user training script is expected to run as \texttt{train.py} or another configured entry point and to write model files under the model directory.
 
-\begin{table}[htbp]
-\caption{Baseline Feature Coverage}
-\label{tab:coverage}
-\centering
-\begin{tabular}{ll}
-\toprule
-\textbf{Capability} & \textbf{Status} \\
-\midrule
-User authentication & Implemented \\
-API key management & Implemented \\
-Model artifact upload & Implemented \\
-Dynamic endpoint generation & Implemented \\
-MLflow pyfunc loading & Implemented \\
-Production logging & Implemented \\
-Reference-production drift report & Partially implemented \\
-Automated retraining and promotion & Future work \\
-Resource quota and billing & Future work \\
-\bottomrule
-\end{tabular}
-\end{table}
+This training path does not require the user script to import MLflow or receive MLflow credentials. Instead, the user script writes normal model artifacts and optional metadata files, and the runner is responsible for packaging the output in a format the control plane can ingest.
+
+\subsection{Training Runner Output Contract}
+
+After training completes, the runner produces a required \texttt{model.tar.gz} archive and, when available, an \texttt{\_mlops} metadata bundle containing training summary, metrics, parameters, model insights, artifact manifest, stdout/stderr logs, and warnings. Only the archive is required; the remaining metadata improves registry display and version comparison but does not invalidate the artifact when absent.
+
+\subsection{Metadata Ingestion and Native Registry}
+
+When a completed job is ingested, the control plane downloads the artifact, extracts metadata, and stores metrics, parameters, insights, manifest, and deployability summaries. These summaries are mirrored into Model Evolution when a model is registered from the job.
+
+The Native Registry groups versions through \texttt{ModelFamily} and \texttt{ModelVersion} records linked to deployable \texttt{ModelAPI} records. Model Evolution displays tracking status, metrics, parameters, artifacts, model insights, deployability state, version comparison, deployment actions, drift summaries, and basic routing aliases.
+
+\subsection{Model Packaging and Serving}
+
+The prototype includes a model packager that prepares serving-compatible packages or images for supported artifacts. Build execution can be triggered through a local Docker path or through an Argo-oriented workflow path, depending on deployment configuration. The FastAPI model server loads the model artifact, including MLflow pyfunc artifacts where available, and exposes generated prediction endpoints. Prediction requests can be public or private depending on model configuration and are logged asynchronously for monitoring.
+
+No latency or throughput claims are made in this paper. The current implementation demonstrates the integration path from registry metadata to serving endpoint and production log generation.
+
+\subsection{Drift Monitoring}
+
+Drift monitoring uses production records stored in PostgreSQL and reference data associated with a model. The Evidently integration computes feature-level and dataset-level drift summaries and stores report locations and drift result metadata in the control plane. The drift result can be exposed as a report link or summarized in Model Evolution.
+
+In this baseline, drift is a monitoring and adaptation signal. It does not automatically redeploy a model, perform rollback, or select traffic weights. Such decisions require evaluation gates and human review policies that are outside the current baseline.
+
+\subsection{MLflow Tracking Integration}
+
+MLflow is used as optional internal tracking. After the control plane ingests the training artifact, it may log metrics, parameters, and metadata artifacts to an MLflow tracking server and store the run identifier. If MLflow tracking is disabled, Model Evolution still displays metrics, parameters, artifacts, model insights, and deployability information from the Native Registry. If MLflow logging fails, the metadata retained in PostgreSQL remains available for review and deployment decisions.
+
+This design avoids requiring user training scripts to import MLflow. It also avoids making the MLflow UI the primary product workflow. The user-facing Model Evolution pages are backed by Native Registry records.
+
+\subsection{Deployment and Operational Scope}
+
+The repository contains Docker Compose configuration for local integration and Kubernetes-oriented manifests for a K3s-based prototype environment. It also includes CI/CD configuration for validation, container build, image publication, and GitOps-style deployment updates. These assets document deployment-oriented automation but are reported as prototype support rather than production hardening or evidence of the latest workflow success.
+
+The AWS-facing boundary supports object storage and externalized training execution where configured. Conceptually, the web frontend calls the Django/DRF control plane for model upload, training, registry, deployment, and drift views; the control plane exchanges artifacts with object storage and submits training jobs; the runner returns artifacts for Native Registry ingestion; the FastAPI server handles inference and emits logs to Redpanda; the consumer stores logs in PostgreSQL; and the drift service writes summaries back to the control plane. Runtime evidence such as workflow logs, Kubernetes status, health checks, Batch traces, and screenshots should be attached separately before stronger operational claims.
+
+The implemented baseline covers authentication, manual model upload, AWS Batch training, metadata ingestion, Model Evolution views, version comparison, build/deploy/smoke-test actions, production logging, drift report generation, and a basic routing alias. Its limitations are intentionally explicit: autonomous retraining, automated promotion, canary or blue-green deployment, weighted traffic routing, resource quota enforcement, billing, and production-grade hardening are outside the completed baseline. K3s/Kubernetes deployment and CI/CD status should be reported with separate runtime evidence.
 
 \section{Evaluation Design}
 
-Because this paper is a baseline, the evaluation focuses on feasibility and system behavior rather than claiming superior NIDS accuracy. The following experimental design is proposed.
-
-\subsection{Model Onboarding Validation}
-
-The first experiment verifies whether the platform can receive a model package, check for the required MLflow metadata, store the artifact, create model metadata, and generate a usable endpoint. The metrics include onboarding success rate, validation failure cases, and time required to register a model.
-
-\subsection{Inference Serving Validation}
-
-The second experiment evaluates whether the generated endpoint can process tabular records and return predictions. JSON records and CSV-derived rows can be used as input. The metrics include request success rate, average latency, and model loading behavior with and without cache reuse.
-
-\subsection{Production Logging Validation}
-
-The third experiment verifies that each inference request creates a production log event and that the event is eventually persisted to PostgreSQL. The expected result is that logs can be queried by tenant and model identifier. This experiment validates the isolation needed for multi-model monitoring.
-
-\subsection{Drift Detection Validation}
-
-The fourth experiment evaluates whether the drift service detects distribution changes between reference data and production data. A synthetic drift scenario can be created by changing the proportion of selected traffic classes or shifting selected numerical features. The reported outputs should include the number of drifted features, the drift ratio $\rho$, the dataset-level drift decision, and the generated drift report.
+Because this paper is a baseline, evaluation focuses on feasibility and system behavior rather than NIDS accuracy. The validation plan covers five aspects: model onboarding, inference serving, production logging, drift detection, and operational workflow reachability. Onboarding checks whether model packages or completed training artifacts can be validated, stored, registered, and assigned endpoint metadata. Serving and logging checks whether tabular requests produce predictions and queryable production logs. Drift validation compares reference and production windows and reports drifted features, drift ratio, dataset-level decision, and report artifacts. Operational validation should use workflow logs, container image references, Kubernetes status, health checks, and end-to-end training or inference traces when runtime evidence is available.
 
 \section{Discussion}
 
 The proposed framework reframes MLOps monitoring as part of an adaptive control loop. The model server does not only return predictions; it also emits production evidence. The monitoring layer does not only generate reports; it produces a signal that can affect model lifecycle decisions. This design is useful for a SaaS or PaaS-style environment where different users upload different models but still need a common operational pipeline.
 
-The current scope is intentionally limited. First, the system supports tabular classification models packaged in an MLflow-compatible format. Image, text, time-series, and large language models require additional schema validation and monitoring metrics. Second, arbitrary user-uploaded model artifacts introduce security risks. A production system must isolate execution, validate dependencies, restrict archive extraction, and enforce resource quotas. Third, fully autonomous retraining and promotion require reliable evaluation gates, rollback policies, and human approval mechanisms. Therefore, this baseline treats drift detection as an adaptation trigger rather than an unconditional automatic redeployment decision.
+The current scope is intentionally limited. First, the system supports tabular classification models that can be represented as serving-compatible artifacts. Image, text, time-series, and large language models require additional schema validation and monitoring metrics. Second, arbitrary user-uploaded model artifacts introduce security risks. A hardened system must isolate execution, validate dependencies, restrict archive extraction, and enforce resource quotas. Third, autonomous retraining and promotion require reliable evaluation gates, rollback policies, and human approval mechanisms. Therefore, this baseline treats drift detection as an adaptation signal rather than an unconditional redeployment decision.
 
 \section{Conclusion}
 
-This paper presented a baseline design for a drift-aware MLOps framework for multi-model serving. The framework integrates tenant-aware model onboarding, dynamic endpoint generation, access control, asynchronous production logging, and reference-production drift monitoring. The system was formalized using tenants, model functions, production data windows, drift indicators, drift ratio, lifecycle states, and adaptation actions. A Network Intrusion Detection model was used as a case study to demonstrate the applicability of the framework to a non-stationary security domain. Future work will focus on hardening artifact execution, storing drift results in the control plane, implementing retraining and model promotion workflows, and extending the framework to additional model types.
+This paper presented a baseline design for a drift-aware MLOps framework for multi-model serving. The framework integrates tenant-aware model onboarding, training-job execution, native model-evolution metadata, dynamic endpoints, asynchronous production logging, and reference-production drift monitoring. The system was formalized using tenants, model functions, production windows, drift indicators, lifecycle states, and adaptation actions. A Network Intrusion Detection model was used as a non-stationary security case study. Future work will focus on artifact-execution hardening, runtime deployment evidence, evaluation gates, and additional model types.
 
 \begin{thebibliography}{00}
 
