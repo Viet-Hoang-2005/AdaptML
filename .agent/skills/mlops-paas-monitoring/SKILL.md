@@ -1,31 +1,31 @@
 ---
 name: mlops-paas-monitoring
-description: Giám sát Data Drift bằng Evidently AI trong môi trường đa người dùng (Multi-tenant), xử lý Schema Drift bằng JSONB, và giám sát hạ tầng.
+description: Giám sát Data Drift bằng Evidently AI qua Argo Workflows, xử lý Schema Drift bằng JSONB, Text Label Mapping, và giám sát hạ tầng.
 ---
 
 # Giám sát Data Drift & Hệ thống (AI PaaS)
 
-## 1. Giải quyết bài toán Dữ liệu Đa hình thái (Schema Drift)
+## 1. Giải quyết bài toán Dữ liệu Đa hình thái (Schema Drift) và Label Mapping
 
-Hệ thống cũ lưu log dự đoán theo các cột Database cố định. Trong nền tảng PaaS, các mô hình của khách hàng khác nhau sẽ có số lượng Features (đặc trưng) khác nhau (Mô hình A có 5 features, Mô hình B có 100 features).
+Hệ thống cũ lưu log dự đoán theo các cột Database cố định. Trong nền tảng PaaS, các mô hình của khách hàng khác nhau sẽ có số lượng Features (đặc trưng) khác nhau (Mô hình A có 5 features, Mô hình B có 100 features). Đồng thời, output dự đoán không còn giới hạn ở số nguyên (0, 1).
 
-- **Giải pháp**: PostgreSQL sử dụng cột định dạng **`JSONB`** (hoặc ClickHouse sử dụng Map/Tuple) để lưu trữ log linh hoạt.
-- Cấu trúc log đẩy từ FastAPI vào Redpanda:
+- **Giải pháp**: PostgreSQL sử dụng cột định dạng **`JSONB`** cho `features` để lưu trữ linh hoạt, và cột **`TEXT`** cho `prediction` để hỗ trợ Label Mapping (ví dụ: "DDoS", "BENIGN").
+- Cấu trúc log đẩy từ FastAPI vào Redpanda và lưu vào Database:
   ```json
   {
     "tenant_id": "T-123",
     "model_id": "M-ABC",
     "timestamp": "2024-05-11...",
     "features": { "age": 25, "income": 50000 },
-    "prediction": 1
+    "prediction": "DDoS"
   }
   ```
 
-## 2. Multi-tenant Drift Detection (Evidently AI)
+## 2. Multi-tenant Drift Detection (Evidently AI qua Argo Workflows)
 
-- Job Evidently không còn chạy chung cho toàn hệ thống mà chạy theo phạm vi từng Mô hình (`model_id`).
-- Khi K8s Job Evidently khởi chạy, nó query CSDL bằng `model_id`, "bung" cột JSONB `features` ra thành DataFrame Pandas tiêu chuẩn và nạp vào thư viện Evidently.
-- Output JSON của Evidently được lưu trữ lại trên CSDL hoặc S3 để Frontend ReactJS lấy hiển thị thành các Dashboard báo cáo chất lượng mô hình.
+- Chức năng Drift Monitoring được kích hoạt tự động qua **Argo Events** và thực thi bởi **Argo Workflows (evidently-job)** để cô lập tài nguyên tính toán.
+- Khi Argo Workflow khởi chạy, nó sử dụng `postgres-secrets` để truy cập Database, query bảng `paas_production_logs` theo `model_id`, bung cột `features` (JSONB) ra thành DataFrame Pandas và so khớp với Reference Data lấy từ S3.
+- Output của Evidently (HTML Report & JSON Summary) được đẩy trực tiếp lên S3 bucket, sau đó Workflow gọi Webhook về Control Plane để Control Plane tạo bản ghi kết quả `DriftMonitoringResult` vào DB. Control Plane sẽ chờ Workflow này chạy xong một cách đồng bộ (polling DB) để cập nhật trạng thái UI.
 
 ## 3. Infrastructure Monitoring (Prometheus & KEDA)
 

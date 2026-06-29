@@ -30,7 +30,7 @@ spec:
           - name: label_mapping_key
           - name: control_plane_webhook_url
       container:
-        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:fe293c42a71b2debf83927a8a756742c34efea42
+        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:b25788620b7bd2ad8d1ece4f27e67da1b54b59ca
         imagePullPolicy: Always
         command: ["python", "src/cli.py"]
         volumeMounts:
