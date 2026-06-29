@@ -1,16 +1,16 @@
 import hashlib
 import json
-import os
+import boto3
+import mlflow
 import tarfile
 import tempfile
+
 from pathlib import Path
 from urllib.parse import urlparse
-
-import boto3
 from django.conf import settings
 from django.utils import timezone
-
 from authentication.models import TrainingJob
+from registry.views import sync_registry_version_from_model_api
 
 MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
 CHECKPOINT_EXTENSIONS = {".pt", ".pth", ".ckpt", ".h5", ".onnx", ".keras"}
@@ -295,8 +295,6 @@ def _write_generated_mlops_bundle(mlops_dir: Path, training_job: TrainingJob, ma
 
 
 def _log_to_mlflow(training_job: TrainingJob, mlops_dir: Path, metrics: dict, params: dict) -> dict:
-    import mlflow
-
     tracking_required = getattr(settings, "MLFLOW_TRACKING_REQUIRED", False)
     if not tracking_required:
         return {}
@@ -371,11 +369,6 @@ def _summary_response(training_job: TrainingJob) -> dict:
 
 
 def _sync_registered_versions(training_job: TrainingJob) -> None:
-    try:
-        from registry.views import sync_registry_version_from_model_api
-    except ImportError:
-        return
-
     for model_api in training_job.registered_model_apis.exclude(status="disabled"):
         sync_registry_version_from_model_api(model_api, training_job=training_job)
 

@@ -57,7 +57,6 @@ class DockerBuildAdapter(BuildAdapter):
     ):
         def _run_container():
             try:
-                from authentication.models import ModelAPI
                 model_api = ModelAPI.objects.filter(id=model_id).first()
                 tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
 
@@ -118,7 +117,6 @@ class DockerBuildAdapter(BuildAdapter):
 
     def cancel_build(self, model_id: str):
         try:
-            from authentication.models import ModelAPI
             model_api = ModelAPI.objects.filter(id=model_id).first()
             tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
 
@@ -150,8 +148,6 @@ class ArgoBuildAdapter(BuildAdapter):
             logger.error("ARGO_EVENTS_WEBHOOK_URL is not set.")
             return
 
-        from authentication.models import ModelAPI
-        from integrations.hashid_utils import encode_model_id
         model_api = ModelAPI.objects.filter(id=model_id).first()
         tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
 

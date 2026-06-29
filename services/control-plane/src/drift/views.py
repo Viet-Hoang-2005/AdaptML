@@ -1,4 +1,10 @@
+import os
 import logging
+import json
+import time
+import boto3
+
+from django.utils import timezone
 from django.db import connection
 from rest_framework import generics, status, views
 from rest_framework.response import Response
@@ -7,10 +13,10 @@ from django.shortcuts import get_object_or_404
 from django.conf import settings
 
 from authentication.models import ModelAPI, DriftMonitoringJob, DriftMonitoringResult
-from integrations.hashid_utils import decode_model_id
-from drift.serializers import DriftMonitoringJobSerializer, DriftMonitoringResultSerializer
+from integrations.hashid_utils import decode_model_id, encode_model_id
 from integrations.s3_zip_utils import get_s3_file_list, upload_single_file_to_s3, delete_s3_path
-from drift.evidently_service import run_evidently_job
+from drift.serializers import DriftMonitoringJobSerializer, DriftMonitoringResultSerializer
+from drift.evidently_service import run_evidently_job, run_evidently_job_sync
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +89,6 @@ class ProductionDataView(views.APIView):
                 # features may be stored as a (possibly double-encoded) JSON string.
                 # Decode repeatedly until we get a dict/list so the preview works
                 # for both legacy and freshly ingested rows.
-                import json
                 for row in results:
                     value = row.get('features')
                     for _ in range(3):
@@ -106,10 +111,10 @@ class ReferenceFileListView(views.APIView):
     def get(self, request, model_id):
         model_api = get_object_or_404(ModelAPI, id=model_id, tenant=request.user)
         
-        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
-        safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+        tenant_id = request.user.tenant_id
+        model_hash_id = encode_model_id(model_api.id)
         safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
-        prefix = f'{user_name}/models/{safe_model_name}/{safe_version}/references/'
+        prefix = f'users/{tenant_id}/models/{model_hash_id}/{safe_version}/references/'
         
         files = get_s3_file_list(prefix)
             
@@ -125,10 +130,10 @@ class ReferenceFileUploadView(views.APIView):
         if not file_obj:
             return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
             
-        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
-        safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+        tenant_id = request.user.tenant_id
+        model_hash_id = encode_model_id(model_api.id)
         safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
-        key = f'{user_name}/models/{safe_model_name}/{safe_version}/references/{file_obj.name}'
+        key = f'users/{tenant_id}/models/{model_hash_id}/{safe_version}/references/{file_obj.name}'
         
         bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'mlops-paas-artifacts')
         
@@ -146,14 +151,14 @@ class ReferenceFileUploadView(views.APIView):
         if not file_path:
             return Response({"error": "path is required"}, status=status.HTTP_400_BAD_REQUEST)
             
-        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
-        safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+        tenant_id = request.user.tenant_id
+        model_hash_id = encode_model_id(model_api.id)
         safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
         
         if file_path.startswith('/'):
             file_path = file_path[1:]
             
-        key = f'{user_name}/models/{safe_model_name}/{safe_version}/references/{file_path}'
+        key = f'users/{tenant_id}/models/{model_hash_id}/{safe_version}/references/{file_path}'
         
         try:
             delete_s3_path(key)
@@ -194,20 +199,15 @@ class TriggerDriftJobManualView(views.APIView):
     def post(self, request, job_id):
         job = get_object_or_404(DriftMonitoringJob, id=job_id, tenant=request.user)
         
-        from django.utils import timezone
-        import time
         start_time = timezone.now()
 
         # Spawn docker container synchronously and catch error
-        from drift.evidently_service import run_evidently_job_sync
         try:
             run_evidently_job_sync(job.id)
             
             # If argo workflow, we poll for completion up to 10 minutes
-            import os
             strategy = os.environ.get("BUILD_STRATEGY", "docker").lower()
             if strategy == "argo":
-                from authentication.models import DriftMonitoringResult
                 max_retries = 60
                 success = False
                 for _ in range(max_retries):
@@ -266,9 +266,6 @@ class PresignedUrlView(views.APIView):
         s3_uri = request.data.get("s3_uri")
         if not s3_uri or not s3_uri.startswith("s3://"):
             return Response({"error": "Invalid s3_uri"}, status=status.HTTP_400_BAD_REQUEST)
-            
-        import boto3
-        from django.conf import settings
         
         aws_region = getattr(settings, "AWS_S3_REGION_NAME", "ap-southeast-1")
         s3_client = boto3.client('s3', region_name=aws_region)

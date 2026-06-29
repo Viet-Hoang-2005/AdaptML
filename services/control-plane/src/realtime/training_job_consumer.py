@@ -7,12 +7,18 @@ Connects to: ws/training-jobs/<job_id>/?token=<access_token>
 import asyncio
 import json
 import logging
-from datetime import datetime
 
+from datetime import datetime
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
+from authentication.models import TrainingJob
+
+from training.aws_batch_service import refresh_aws_batch_training_job
+from training.sagemaker_service import refresh_sagemaker_training_job
+from training.aws_batch_service import get_training_metrics_payload
+from training.views import serialize_training_job_event
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +28,6 @@ SYNC_INTERVAL_SECONDS = 3
 
 @database_sync_to_async
 def _get_job_for_user(job_id: int, user):
-    from authentication.models import TrainingJob
-
     return TrainingJob.objects.filter(id=job_id, tenant=user).first()
 
 
@@ -36,8 +40,6 @@ def _refresh_job(job):
 
 @database_sync_to_async
 def _do_refresh_status(job):
-    from training.aws_batch_service import refresh_aws_batch_training_job
-    from training.sagemaker_service import refresh_sagemaker_training_job
 
     try:
         if job.training_backend == "aws_batch":
@@ -72,8 +74,6 @@ def _get_logs(job):
 
 @database_sync_to_async
 def _get_metrics(job):
-    from training.aws_batch_service import get_training_metrics_payload
-
     try:
         return get_training_metrics_payload(job)
     except Exception as exc:
@@ -83,8 +83,6 @@ def _get_metrics(job):
 
 @database_sync_to_async
 def _get_events(job):
-    from training.views import serialize_training_job_event
-
     try:
         return [serialize_training_job_event(event) for event in job.events.order_by("created_at")]
     except Exception as exc:

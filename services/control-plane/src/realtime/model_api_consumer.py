@@ -11,13 +11,15 @@ Slows to a heartbeat when terminal (ready/healthy/stopped/failed).
 import asyncio
 import json
 import logging
-from datetime import datetime
-from integrations.hashid_utils import encode_model_id
 
-from channels.db import database_sync_to_async
+from datetime import datetime
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
+from integrations.hashid_utils import encode_model_id
+from channels.db import database_sync_to_async
+from deployment.deploy_adapter import get_deploy_adapter
+from registry.views import serialize_model_api
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +67,6 @@ def _get_build_logs(model_id: int) -> list:
 def _get_endpoint_logs(model_id: int) -> str:
     """Read recent Docker logs from the endpoint container."""
     try:
-        from deployment.deploy_adapter import get_deploy_adapter
         return get_deploy_adapter().endpoint_logs(model_id, tail=100)
     except Exception as exc:
         # Container not running / not found — not an error worth spamming
@@ -74,7 +75,6 @@ def _get_endpoint_logs(model_id: int) -> str:
 
 def _serialize_model(model_api) -> dict:
     """Lightweight serializer that avoids importing the whole views module."""
-    from registry.views import serialize_model_api
     try:
         return serialize_model_api(model_api)
     except Exception as exc:

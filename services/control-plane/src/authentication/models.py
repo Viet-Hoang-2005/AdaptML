@@ -10,6 +10,7 @@ from django.core.files.storage import FileSystemStorage
 from django.utils import timezone
 from django_redis import get_redis_connection
 from django.core.cache import cache
+from integrations.hashid_utils import encode_model_id
 
 class TrainingUploadStorage(FileSystemStorage):
     def __init__(self, *args, **kwargs):
@@ -20,54 +21,47 @@ class TrainingUploadStorage(FileSystemStorage):
 training_upload_storage = TrainingUploadStorage()
 
 def user_avatar_path(instance, filename):
-    # Lấy username từ email (phần trước @) để tạo thư mục
-    email_prefix = instance.email.split('@')[0]
-    return f'{email_prefix}/avatars/{filename}'
+    return f'users/{instance.tenant_id}/avatar/{filename}'
 
 def user_avatar_history_path(instance, filename):
-    email_prefix = instance.user.email.split('@')[0]
-    return f'{email_prefix}/avatars/{filename}'
+    return f'users/{instance.user.tenant_id}/avatar/{filename}'
 
 def get_user_prefix(instance):
     if hasattr(instance, 'tenant') and instance.tenant:
-        return instance.tenant.email.split('@')[0] if getattr(instance.tenant, 'email', None) else instance.tenant.tenant_id
+        return instance.tenant.tenant_id
     elif hasattr(instance, 'user') and instance.user:
-        return instance.user.email.split('@')[0] if getattr(instance.user, 'email', None) else instance.user.tenant_id
+        return instance.user.tenant_id
     return 'unknown_user'
 
+def get_model_hash_id(instance):
+    if hasattr(instance, 'model_api_id') and instance.model_api_id:
+        model_id = instance.model_api_id
+    else:
+        model_id = instance.id
+        
+    if not model_id:
+        return 'temp-id'
+    return encode_model_id(model_id)
+
 def model_artifact_path(instance, filename):
-    safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/{filename}'
+    return f'users/{get_user_prefix(instance)}/models/{get_model_hash_id(instance)}/{safe_version}/artifacts/{filename}'
 
 def model_source_artifact_path(instance, filename):
-    safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/source/{filename}'
+    return f'users/{get_user_prefix(instance)}/models/{get_model_hash_id(instance)}/{safe_version}/source/{filename}'
 
 def label_mapping_path(instance, filename):
-    safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/mapping/{filename}'
+    return f'users/{get_user_prefix(instance)}/models/{get_model_hash_id(instance)}/{safe_version}/mapping/{filename}'
 
 def model_source_code_path(instance, filename):
-    safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/code/{filename}'
+    return f'users/{get_user_prefix(instance)}/models/{get_model_hash_id(instance)}/{safe_version}/code/{filename}'
 
 def model_reference_data_path(instance, filename):
-    safe_model_name = instance.name.replace(' ', '') if instance.name else 'UnnamedModel'
     safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'{get_user_prefix(instance)}/models/{safe_model_name}/{safe_version}/references/{filename}'
-
-def training_source_zip_path(instance, filename):
-    return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/source/{filename}'
-
-def training_requirements_path(instance, filename):
-    return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/source/{filename}'
-
-def training_data_path(instance, filename):
-    return f'{instance.tenant.tenant_id}/training-jobs/{instance.id or "new"}/data/{filename}'
+    return f'users/{get_user_prefix(instance)}/models/{get_model_hash_id(instance)}/{safe_version}/references/{filename}'
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -75,7 +69,6 @@ class CustomUserManager(BaseUserManager):
             raise ValueError('Email is required')
         email = self.normalize_email(email)
         
-        # Tự động cấp tenant_id nếu chưa có
         if 'tenant_id' not in extra_fields or not extra_fields['tenant_id']:
             extra_fields['tenant_id'] = f"T-{uuid.uuid4().hex[:8].upper()}"
             
@@ -84,7 +77,7 @@ class CustomUserManager(BaseUserManager):
         if password:
             user.set_password(password)
         else:
-            user.set_unusable_password() # Dành cho luồng OAuth
+            user.set_unusable_password()
             
         user.save(using=self._db)
         return user
@@ -110,20 +103,13 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     field_of_work = models.CharField(max_length=100, blank=True, null=True)
     country = models.CharField(max_length=100, blank=True, null=True)
     
-    # Quan trọng cho AI PaaS Multi-tenant
-    tenant_id = models.CharField(max_length=50, unique=True, db_index=True)
-    
-    # API Key dùng cho FastAPI xác thực từ code Python
+    tenant_id = models.CharField(max_length=50, unique=True, db_index=True)    
     api_key = models.CharField(max_length=64, unique=True, null=True, blank=True, db_index=True)
-    
-    # Provider đăng ký ban đầu
     auth_provider = models.CharField(max_length=20, choices=AUTH_PROVIDER_CHOICES, default='email')
     
-    # Trạng thái tài khoản (Soft Delete sẽ dùng cờ này)
     is_active = models.BooleanField(default=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
-    is_staff = models.BooleanField(default=False)
-    
+    is_staff = models.BooleanField(default=False)    
     date_joined = models.DateTimeField(auto_now_add=True)
 
     objects = CustomUserManager()
@@ -135,25 +121,21 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         if not self.tenant_id:
             self.tenant_id = f"T-{uuid.uuid4().hex[:8].upper()}"
 
-        # Tạo API Key tự động nếu chưa có
         if not self.api_key:
             self.api_key = f"sk_live_{secrets.token_urlsafe(32)}"
             
         super().save(*args, **kwargs)
         
         try:
-            # Đẩy/Cập nhật API Key lên Redis
             if self.is_active and self.api_key:
                 payload = json.dumps({"tenant_id": self.tenant_id, "scope": "all", "allowed_models": []})
                 redis_client = get_redis_connection("default")
                 redis_client.set(f":1:api_key:{self.api_key}", payload)
             elif not self.is_active and self.api_key:
-                # Thu hồi ngay lập tức nếu tài khoản bị khóa
                 redis_client = get_redis_connection("default")
                 redis_client.delete(f":1:api_key:{self.api_key}")
         except Exception as e:
             print(f"Failed to update API key in Redis: {e}")
-            # Dù Redis lỗi thì vẫn lưu user bình thường
 
     def __str__(self):
         return f"{self.email} ({self.tenant_id})"
@@ -332,9 +314,7 @@ class TrainingJob(models.Model):
     accelerator_type = models.CharField(max_length=20, choices=ACCELERATOR_CHOICES, default="none")
     accelerator_count = models.PositiveIntegerField(default=0)
     retry_of = models.ForeignKey("self", on_delete=models.SET_NULL, related_name="retries", blank=True, null=True)
-    source_zip = models.FileField(upload_to=training_source_zip_path, storage=training_upload_storage)
-    requirements_file = models.FileField(upload_to=training_requirements_path, storage=training_upload_storage, blank=True, null=True)
-    training_data = models.FileField(upload_to=training_data_path, storage=training_upload_storage)
+    model_api = models.ForeignKey("ModelAPI", on_delete=models.SET_NULL, related_name="training_jobs", blank=True, null=True)
     s3_source_uri = models.CharField(max_length=1024, blank=True)
     s3_training_data_uri = models.CharField(max_length=1024, blank=True)
     sagemaker_job_name = models.CharField(max_length=160, blank=True)
@@ -349,7 +329,6 @@ class TrainingJob(models.Model):
     runtime_seconds = models.PositiveIntegerField(default=0)
     stop_reason = models.TextField(blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
-    # --- Phase 10E.1: MLflow lineage linking ---
     mlflow_tracking_uri = models.CharField(max_length=512, blank=True, null=True)
     mlflow_experiment_id = models.CharField(max_length=255, blank=True, null=True)
     mlflow_experiment_name = models.CharField(max_length=255, blank=True, null=True)
@@ -424,8 +403,6 @@ class TrainingJobEvent(models.Model):
     def __str__(self):
         return f"{self.event_type} - {self.training_job_id}"
 
-# --- Model Evolution / Registry ---
-
 
 class ModelFamily(models.Model):
     """Groups all versions of a logical model under a single named family."""
@@ -492,7 +469,6 @@ class ModelVersion(models.Model):
     image_name = models.CharField(max_length=200, blank=True)
     endpoint_url = models.CharField(max_length=1024, blank=True)
     stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default="none")
-    # --- Phase 10E.1: MLflow lineage linking ---
     mlflow_run_id = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     mlflow_experiment_id = models.CharField(max_length=255, blank=True, null=True)
     mlflow_model_uri = models.CharField(max_length=1024, blank=True, null=True)
@@ -586,7 +562,6 @@ class ModelMetric(models.Model):
     model_version = models.ForeignKey(ModelVersion, on_delete=models.CASCADE, related_name="metrics")
     metric_name = models.CharField(max_length=80)
     metric_value = models.FloatField()
-    # Normalize None->0 in service layer so unique_together works reliably.
     step = models.IntegerField(default=0)
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="training_log")
     extra = models.JSONField(default=dict, blank=True)
@@ -602,8 +577,6 @@ class ModelMetric(models.Model):
     def __str__(self):
         return f"{self.metric_name}={self.metric_value} step={self.step}"
 
-
-# --- Drift Monitoring ---
 
 class DriftMonitoringJob(models.Model):
     STATUS_CHOICES = (
@@ -627,7 +600,7 @@ class DriftMonitoringJob(models.Model):
 
 class DriftMonitoringResult(models.Model):
     job = models.ForeignKey(DriftMonitoringJob, on_delete=models.CASCADE, related_name="results")
-    report_url = models.CharField(max_length=1024, blank=True) # HTML report S3 URI
+    report_url = models.CharField(max_length=1024, blank=True)
     drift_score = models.FloatField(default=0.0)
     dataset_drift = models.BooleanField(default=False)
     drifted_features_count = models.PositiveIntegerField(default=0)

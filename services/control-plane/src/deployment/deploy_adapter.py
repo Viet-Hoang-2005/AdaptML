@@ -287,7 +287,6 @@ class DockerDeployAdapter(DeployAdapter):
             return False, friendly_request_failure(exc, endpoint_url=endpoint_url, internal_url=url)
 
     def remove_model(self, model_id: int):
-        from authentication.models import ModelAPI
         model_api = ModelAPI.objects.filter(id=model_id).first()
         tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         try:
@@ -433,7 +432,6 @@ class ArgoDeployAdapter(DeployAdapter):
             logger.error("ARGO_EVENTS_WEBHOOK_URL is not set.")
             return
         
-        from authentication.models import ModelAPI
         model_api = ModelAPI.objects.filter(id=model_id).first()
         if not model_api:
             return
@@ -455,7 +453,6 @@ class ArgoDeployAdapter(DeployAdapter):
             logger.error("Failed to trigger Argo Delete Workflow for container %s: %s", container_name, e)
 
     def wait_for_removal(self, model_id: int, timeout_seconds: int = 45, interval_seconds: int = 3) -> bool:
-        from authentication.models import ModelAPI
         model_api = ModelAPI.objects.filter(id=model_id).first()
         if not model_api:
             return True
@@ -485,13 +482,11 @@ class ArgoDeployAdapter(DeployAdapter):
         if not remove_images:
             return results
             
-        from authentication.models import ModelAPI
         model_api = ModelAPI.objects.filter(id=model_id).first()
         if not model_api:
             return results
             
         tenant_id = model_api.tenant.tenant_id
-        from integrations.hashid_utils import encode_model_id
         hashid_str = encode_model_id(model_id)
         repo_name = f"{tenant_id.lower()}-model-{hashid_str.lower()}"
         

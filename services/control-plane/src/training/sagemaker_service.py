@@ -1,19 +1,20 @@
 import io
-import os
+import boto3
 import shutil
 import tempfile
 import zipfile
+
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-import boto3
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
+from authentication.models import TrainingJob
+from integrations.hashid_utils import encode_model_id
 from sagemaker.session import Session  # type: ignore
 from sagemaker.sklearn.estimator import SKLearn  # type: ignore
-
-from authentication.models import TrainingJob
+from training.tracking_ingestion_service import ingest_training_job_tracking
 
 @dataclass(frozen=True)
 class SageMakerTrainingConfig:
@@ -89,8 +90,9 @@ def _is_prefix_like_s3_uri(uri: str, marker: str) -> bool:
 
 
 def get_training_job_prefix(training_job: TrainingJob) -> str:
-    output_prefix = settings.SAGEMAKER_OUTPUT_PREFIX.strip("/")
-    return f"{output_prefix}/{training_job.tenant.tenant_id}/training-jobs/{training_job.id}"
+    model_hash_id = encode_model_id(training_job.model_api_id) if training_job.model_api_id else "temp-id"
+    safe_version = training_job.model_version.replace(' ', '') if training_job.model_version else 'v1'
+    return f"users/{training_job.tenant.tenant_id}/models/{model_hash_id}/{safe_version}/training/{training_job.id}"
 
 
 def upload_training_inputs_to_s3(training_job: TrainingJob) -> tuple[str, str, str]:
@@ -101,8 +103,6 @@ def upload_training_inputs_to_s3(training_job: TrainingJob) -> tuple[str, str, s
     training_job.status = "uploading"
     training_job.save(update_fields=["status", "updated_at"])
 
-    # If source was uploaded via SourceEditor to S3 directly, s3_source_uri holds the S3 prefix.
-    # We must zip this prefix into a single source.zip file for the AWS Batch runner.
     existing_s3_prefix = training_job.s3_source_uri or ""
     source_key = f"{prefix}/source/source.zip"
     if existing_s3_prefix and not existing_s3_prefix.startswith("s3://"):
@@ -113,8 +113,7 @@ def upload_training_inputs_to_s3(training_job: TrainingJob) -> tuple[str, str, s
     elif existing_s3_prefix.startswith("s3://"):
         source_uri = existing_s3_prefix
     else:
-        # Legacy / manual-upload path: upload source_zip Django FileField to S3
-        source_uri = _copy_django_file_to_s3(training_job.source_zip, bucket_name, source_key)
+        raise ValidationError({"error": "No valid S3 source URI provided."})
 
     existing_data_prefix = training_job.s3_training_data_uri or ""
     data_key = f"{prefix}/data/train.csv"
@@ -126,7 +125,7 @@ def upload_training_inputs_to_s3(training_job: TrainingJob) -> tuple[str, str, s
     elif existing_data_prefix.startswith("s3://"):
         data_uri = existing_data_prefix
     else:
-        data_uri = _copy_django_file_to_s3(training_job.training_data, bucket_name, data_key)
+        raise ValidationError({"error": "No valid S3 training data URI provided."})
 
     training_job.s3_source_uri = source_uri
     training_job.s3_training_data_uri = data_uri
@@ -216,11 +215,12 @@ def start_sagemaker_training_job(training_job: TrainingJob) -> tuple[str, str]:
         source_zip_path = workspace / "source.zip"
         source_dir = workspace / "source"
         source_dir.mkdir(parents=True, exist_ok=True)
-        _write_field_file_to_path(training_job.source_zip, source_zip_path)
+        source_bucket, source_key = _split_s3_uri(training_job.s3_source_uri)
+        _s3_client(config).download_file(source_bucket, source_key, str(source_zip_path))
         _safe_extract_zip(source_zip_path, source_dir)
 
-        if training_job.requirements_file:
-            _write_field_file_to_path(training_job.requirements_file, source_dir / "requirements.txt")
+        if training_job.model_api and training_job.model_api.requirements_text:
+            (source_dir / "requirements.txt").write_text(training_job.model_api.requirements_text, encoding="utf-8")
 
         entry_point = training_job.entry_point.strip()
         entry_point_path = source_dir / entry_point
@@ -327,8 +327,6 @@ def refresh_sagemaker_training_job(training_job: TrainingJob) -> TrainingJob:
     )
     if training_job.status == "completed" and training_job.model_artifact_uri:
         try:
-            from training.tracking_ingestion_service import ingest_training_job_tracking
-
             ingest_training_job_tracking(training_job)
         except Exception as exc:
             training_job.tracking_status = "failed"

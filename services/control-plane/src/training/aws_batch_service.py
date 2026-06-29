@@ -8,12 +8,8 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from authentication.models import TrainingJob
-from training.sagemaker_service import (
-    _copy_django_file_to_s3,
-    _s3_uri,
-    get_training_job_prefix,
-    upload_training_inputs_to_s3,
-)
+from training.sagemaker_service import _s3_uri, upload_training_inputs_to_s3
+from training.tracking_ingestion_service import ingest_training_job_tracking
 
 METRIC_LOG_PREFIX = "METRIC_JSON "
 
@@ -91,12 +87,19 @@ def _aws_millis_to_datetime(value):
 
 
 def _upload_requirements_to_s3(training_job: TrainingJob, prefix: str) -> str:
-    if not training_job.requirements_file:
+    if not training_job.model_api or not training_job.model_api.requirements_text:
         return ""
 
     bucket_name = settings.AWS_STORAGE_BUCKET_NAME
     requirements_key = f"{prefix}/source/requirements.txt"
-    return _copy_django_file_to_s3(training_job.requirements_file, bucket_name, requirements_key)
+    
+    s3_client = boto3.client("s3", region_name=settings.AWS_S3_REGION_NAME)
+    s3_client.put_object(
+        Bucket=bucket_name,
+        Key=requirements_key,
+        Body=training_job.model_api.requirements_text.encode("utf-8")
+    )
+    return f"s3://{bucket_name}/{requirements_key}"
 
 
 def start_aws_batch_training_job(training_job: TrainingJob) -> tuple[str, str]:
@@ -395,8 +398,6 @@ def refresh_aws_batch_training_job(training_job: TrainingJob) -> TrainingJob:
     )
     if training_job.status == "completed" and training_job.model_artifact_uri:
         try:
-            from training.tracking_ingestion_service import ingest_training_job_tracking
-
             ingest_training_job_tracking(training_job)
         except Exception as exc:
             training_job.tracking_status = "failed"

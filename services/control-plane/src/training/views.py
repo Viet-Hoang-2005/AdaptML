@@ -312,18 +312,18 @@ def validate_create_training_job_request(request):
     memory = _parse_positive_int(request.data.get("memory"), "memory", 4096)
     accelerator_type = (request.data.get("accelerator_type") or "none").strip().lower()
     accelerator_count = _parse_non_negative_int(request.data.get("accelerator_count"), "accelerator_count", 0)
-    source_zip = request.FILES.get("source_zip")
-    training_data = request.FILES.get("training_data")
     registered_model_id = request.data.get("registered_model_id")
-    base_model = None
 
-    if registered_model_id:
-        model_id_int = decode_model_id(registered_model_id)
-        if not model_id_int:
-            raise ValidationError({"error": "Invalid registered_model_id."})
-        base_model = ModelAPI.objects.filter(id=model_id_int, tenant=request.user).first()
-        if not base_model:
-            raise ValidationError({"error": "Registered model not found."})
+    if not registered_model_id:
+        raise ValidationError({"error": "registered_model_id is required. You must select a model to train."})
+
+    model_id_int = decode_model_id(registered_model_id)
+    if not model_id_int:
+        raise ValidationError({"error": "Invalid registered_model_id."})
+        
+    base_model = ModelAPI.objects.filter(id=model_id_int, tenant=request.user).first()
+    if not base_model:
+        raise ValidationError({"error": "Registered model not found."})
 
     if not name:
         raise ValidationError({"error": "Training job name is required."})
@@ -344,19 +344,6 @@ def validate_create_training_job_request(request):
         )
     training_backend = settings.TRAINING_BACKEND
     _validate_accelerator_config(accelerator_type, accelerator_count, training_backend)
-    if not base_model:
-        if not source_zip:
-            raise ValidationError({"error": "Source code zip is required."})
-        if not training_data:
-            raise ValidationError({"error": "Training data CSV is required."})
-
-        _validate_upload_size(source_zip, "Source code zip")
-        _validate_upload_size(training_data, "Training data CSV")
-
-        if not (source_zip.name.lower().endswith(".zip") or source_zip.name.lower().endswith(".py")):
-            raise ValidationError({"error": "source_zip must be a .zip or .py file."})
-        if not training_data.name.lower().endswith(".csv"):
-            raise ValidationError({"error": "training_data must be a .csv file."})
 
     entry_point_path = Path(entry_point)
     if entry_point_path.is_absolute() or ".." in entry_point_path.parts:
@@ -369,14 +356,8 @@ def validate_create_training_job_request(request):
             _validate_source_zip_entry_point(base_model.source_code_file.file, entry_point)
         else:
             # New path: source code stored in S3 via SourceEditor
-            user_name = (
-                base_model.tenant.email.split('@')[0]
-                if getattr(base_model.tenant, 'email', None)
-                else base_model.tenant.tenant_id
-            )
-            safe_model_name = base_model.name.replace(' ', '') if base_model.name else 'UnnamedModel'
             safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
-            s3_code_prefix = f'{user_name}/models/{safe_model_name}/{safe_version}/code/'
+            s3_code_prefix = f'users/{base_model.tenant.tenant_id}/models/{encode_model_id(base_model.id)}/{safe_version}/code/'
             s3_files = get_s3_file_list(s3_code_prefix)
             # Filter out .keep placeholder files
             real_files = [f for f in s3_files if not f['relative_path'].endswith('.keep')]
@@ -395,11 +376,6 @@ def validate_create_training_job_request(request):
                         )
                     }
                 )
-    else:
-        _validate_source_zip_entry_point(source_zip, entry_point)
-
-    s3_reference_prefix = None
-    if base_model:
         if not base_model.reference_data_file:
             user_name = (
                 base_model.tenant.email.split('@')[0]
@@ -408,7 +384,7 @@ def validate_create_training_job_request(request):
             )
             safe_model_name = base_model.name.replace(' ', '') if base_model.name else 'UnnamedModel'
             safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
-            s3_reference_prefix = f'{user_name}/models/{safe_model_name}/{safe_version}/references/'
+            s3_reference_prefix = f'users/{base_model.tenant.tenant_id}/models/{encode_model_id(base_model.id)}/{safe_version}/references/'
             s3_ref_files = get_s3_file_list(s3_reference_prefix)
             csv_files = [f for f in s3_ref_files if f['relative_path'].lower().endswith('.csv')]
             if not csv_files:
@@ -425,8 +401,6 @@ def validate_create_training_job_request(request):
         "max_runtime_seconds": max_runtime_seconds,
         "accelerator_type": accelerator_type,
         "accelerator_count": accelerator_count,
-        "source_zip": source_zip,
-        "training_data": training_data,
         "base_model": base_model,
         "s3_code_prefix": s3_code_prefix,
         "s3_reference_prefix": s3_reference_prefix,
@@ -467,29 +441,7 @@ class TrainingJobListCreateView(APIView):
             )
 
         base_model = payload["base_model"]
-        # When base_model uses S3 source-code-files (SourceEditor path), source_code_file FileField is empty.
-        # Use a blank placeholder so TrainingJob.objects.create() succeeds.
-        # The actual S3 prefix will be stored in s3_source_uri for job execution.
-        if base_model and base_model.source_code_file:
-            source_zip = base_model.source_code_file
-        elif base_model and payload.get("s3_code_prefix"):
-            source_zip = ContentFile(b"", name="source_from_s3.zip")
-        else:
-            source_zip = payload["source_zip"]
-
-        if base_model and base_model.reference_data_file:
-            training_data = base_model.reference_data_file
-        elif base_model and payload.get("s3_reference_prefix"):
-            training_data = ContentFile(b"", name="train_from_s3.csv")
-        else:
-            training_data = payload["training_data"]
-
-        # Lấy requirements_text từ base_model nếu có, tạo in-memory file để gán vào training_job
-        requirements_file = None
-        if base_model and base_model.requirements_text:
-            req_bytes = base_model.requirements_text.encode("utf-8")
-            requirements_file = ContentFile(req_bytes, name="requirements.txt")
-
+        
         training_job = TrainingJob.objects.create(
             tenant=request.user,
             name=payload["name"],
@@ -501,9 +453,7 @@ class TrainingJobListCreateView(APIView):
             max_runtime_seconds=payload["max_runtime_seconds"],
             accelerator_type=payload["accelerator_type"],
             accelerator_count=payload["accelerator_count"],
-            source_zip=source_zip,
-            requirements_file=requirements_file,
-            training_data=training_data,
+            model_api=base_model,
             status="pending",
             # Store S3 prefixes for job runners that support it
             s3_source_uri=payload.get("s3_code_prefix") or "",

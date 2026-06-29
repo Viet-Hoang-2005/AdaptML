@@ -7,12 +7,11 @@ import sys
 import tarfile
 import threading
 import time
+import boto3
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
-
-import boto3
 
 WORKSPACE = Path("/workspace")
 SOURCE_DIR = WORKSPACE / "source"

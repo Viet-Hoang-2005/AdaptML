@@ -220,11 +220,10 @@ export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
         cancelText="Cancel"
         tone="danger"
         loading={deleting}
-        onConfirm={() => {
-          deleteModelAPI(model.id).then(() => {
-            setShowDeleteConfirm(false);
-            navigate('/dashboard/api-management');
-          });
+        onConfirm={async () => {
+          await deleteModelAPI(model.id);
+          setShowDeleteConfirm(false);
+          // navigate is already handled in useModelAPIs hooks onSuccess
         }}
         onCancel={() => setShowDeleteConfirm(false)}
       />

@@ -1472,16 +1472,16 @@ class ModelAPIListCreateView(APIView):
         )
         model_api.artifact = artifact_file
 
-        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
-        safe_name = name.replace(' ', '') or "UnnamedModel"
+        tenant_id = request.user.tenant_id
+        model_hash_id = encode_model_id(model_api.id)
         safe_version = version.replace(' ', '') or "v1"
 
         try:
             if source_code_file:
-                code_prefix = f"{user_name}/models/{safe_name}/{safe_version}/code/"
+                code_prefix = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/code/"
                 handle_upload_to_s3(source_code_file, code_prefix)
             if reference_data_file:
-                ref_prefix = f"{user_name}/models/{safe_name}/{safe_version}/references/"
+                ref_prefix = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/references/"
                 handle_upload_to_s3(reference_data_file, ref_prefix)
         except Exception as e:
             model_api.delete()
@@ -1569,16 +1569,16 @@ class ModelAPIBuildView(APIView):
         _apply_manual_metadata_to_model_api(model_api, metadata)
         model_api.source_artifact = source_artifact
 
-        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
-        safe_name = name.replace(' ', '') or "UnnamedModel"
+        tenant_id = request.user.tenant_id
+        model_hash_id = encode_model_id(model_api.id)
         safe_version = version.replace(' ', '') or "v1"
 
         try:
             if source_code_file:
-                code_prefix = f"{user_name}/models/{safe_name}/{safe_version}/code/"
+                code_prefix = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/code/"
                 handle_upload_to_s3(source_code_file, code_prefix)
             if reference_data_file:
-                ref_prefix = f"{user_name}/models/{safe_name}/{safe_version}/references/"
+                ref_prefix = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/references/"
                 handle_upload_to_s3(reference_data_file, ref_prefix)
         except Exception as e:
             model_api.delete()
@@ -1695,16 +1695,16 @@ class ModelAPIDetailView(APIView):
                 return Response({"error": artifact_error}, status=status.HTTP_400_BAD_REQUEST)
             model_api.artifact = artifact_file
 
-        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
-        safe_name = name.replace(' ', '') or "UnnamedModel"
+        tenant_id = request.user.tenant_id
+        model_hash_id = encode_model_id(model_api.id)
         safe_version = version.replace(' ', '') or "v1"
 
         try:
             if source_code_file:
-                code_prefix = f"{user_name}/models/{safe_name}/{safe_version}/code/"
+                code_prefix = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/code/"
                 handle_upload_to_s3(source_code_file, code_prefix)
             if reference_data_file:
-                ref_prefix = f"{user_name}/models/{safe_name}/{safe_version}/references/"
+                ref_prefix = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/references/"
                 handle_upload_to_s3(reference_data_file, ref_prefix)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1761,9 +1761,9 @@ class ModelAPIDetailView(APIView):
             get_deploy_adapter().remove_model(model_api.id)
             
             # Delete all files under the model's folder on S3
-            email_prefix = model_api.tenant.email.split('@')[0]
-            safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
-            model_prefix = f'{email_prefix}/models/{safe_model_name}/'
+            tenant_id = model_api.tenant.tenant_id
+            model_hash_id = encode_model_id(model_api.id)
+            model_prefix = f'users/{tenant_id}/models/{model_hash_id}/'
 
             if hasattr(default_storage, 'bucket'):
                 # S3 Storage: Delete all objects with the prefix
@@ -1786,7 +1786,6 @@ class ModelAPIDetailView(APIView):
             try:
                 get_deploy_adapter().cleanup_model(model_api.id, remove_images=True)
             except Exception as e:
-                import logging
                 logging.getLogger(__name__).error(f"Failed to cleanup model image: {e}")
             
             get_deploy_adapter().wait_for_removal(model_api.id)
@@ -2047,10 +2046,10 @@ class SourceCodeFileListView(APIView):
     def get(self, request, model_id):
         model_api = get_object_or_404(ModelAPI, id=model_id, tenant=request.user)
         
-        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
-        safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+        tenant_id = request.user.tenant_id
+        model_hash_id = encode_model_id(model_api.id)
         safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
-        prefix = f'{user_name}/models/{safe_model_name}/{safe_version}/code/'
+        prefix = f'users/{tenant_id}/models/{model_hash_id}/{safe_version}/code/'
         
         files = get_s3_file_list(prefix)
             
@@ -2067,15 +2066,15 @@ class SourceCodeFileUploadView(APIView):
         if not file_obj or not file_path:
             return Response({"error": "file and path are required"}, status=status.HTTP_400_BAD_REQUEST)
             
-        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
-        safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+        tenant_id = request.user.tenant_id
+        model_hash_id = encode_model_id(model_api.id)
         safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
         
         # Ensure file_path doesn't have leading slash
         if file_path.startswith('/'):
             file_path = file_path[1:]
             
-        key = f'{user_name}/models/{safe_model_name}/{safe_version}/code/{file_path}'
+        key = f'users/{tenant_id}/models/{model_hash_id}/{safe_version}/code/{file_path}'
         
         bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'mlops-paas-artifacts')
         
@@ -2092,14 +2091,14 @@ class SourceCodeFileUploadView(APIView):
         if not file_path:
             return Response({"error": "path is required"}, status=status.HTTP_400_BAD_REQUEST)
             
-        user_name = request.user.email.split('@')[0] if getattr(request.user, 'email', None) else request.user.tenant_id
-        safe_model_name = model_api.name.replace(' ', '') if model_api.name else 'UnnamedModel'
+        tenant_id = request.user.tenant_id
+        model_hash_id = encode_model_id(model_api.id)
         safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
         
         if file_path.startswith('/'):
             file_path = file_path[1:]
             
-        key = f'{user_name}/models/{safe_model_name}/{safe_version}/code/{file_path}'
+        key = f'users/{tenant_id}/models/{model_hash_id}/{safe_version}/code/{file_path}'
         try:
             delete_s3_path(key)
             return Response({"message": "Deleted successfully"})
