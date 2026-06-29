@@ -1,350 +1,442 @@
-# train.py: Huấn luyện mô hình ML phân loại tấn công mạng bằng XGBoost và giám sát bằng MLflow
+"""AWS Batch-compatible NIDS training entry point (no MLflow).
+
+Derived from the legacy ``sagemaker/train.py`` XGBoost NIDS trainer. This
+version preserves the useful model-training logic (XGBoost with a
+RandomizedSearch-style configuration, class-imbalance handling, label
+encoding, and a train/val/test split) but removes ALL direct MLflow Tracking
+usage so it can run unmodified inside the AWS Batch training runner
+(``services/training-runner/runner.py``).
+
+Runtime contract (set by the AWS Batch runner):
+  - SM_CHANNEL_TRAIN : directory containing the training CSV (runner mounts
+                       the dataset here as ``train.csv``).
+  - SM_MODEL_DIR     : directory for model artifacts (packaged into
+                       ``model.tar.gz``). Excludes the runner's ``_mlops`` dir.
+  - SM_OUTPUT_DIR    : directory for metadata the runner ingests
+                       (``metrics.json``, ``params.json``,
+                       ``model_insights.json``, ``feature_importance.json``).
+  - MODEL_VERSION    : logical model version label.
+
+Local testing contract (no AWS Batch required):
+  python train.py --train-csv data/train_2_classes.csv \
+      --model-dir /tmp/model --output-dir /tmp/output --model-version v-test
+
+The runner parses a single stdout line of the form::
+
+    METRIC_JSON:{"accuracy":0.99,"precision":0.99,"recall":0.99,"f1_score":0.99}
+
+NO ``import mlflow``. NO MLflow env vars are required or read.
+"""
+
+import argparse
 import json
 import os
 import warnings
-from datetime import datetime
-from time import sleep
+from datetime import datetime, timezone
 
 import joblib
-import mlflow
-import mlflow.xgboost
+import numpy as np
 import pandas as pd
-from xgboost import XGBClassifier
-from mlflow.tracking import MlflowClient 
-from scipy.stats import randint, uniform
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, train_test_split
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+)
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_sample_weight
 
-# Tắt cảnh báo FutureWarning
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-# Lấy cấu hình biến môi trường
-def get_required_env(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
+# Candidate label column names, checked in priority order. If none match we
+# fall back to the last column (a common convention for flat training CSVs).
+LABEL_COLUMN_CANDIDATES = (
+    "label",
+    "Label",
+    "target",
+    "Target",
+    "class",
+    "Class",
+    "y",
+    "attack_cat",
+)
 
-# Đảm bảo đã có MLflow Credentials
-get_required_env("MLFLOW_TRACKING_USERNAME")
-get_required_env("MLFLOW_TRACKING_PASSWORD")
+RANDOM_STATE = 42
 
-# Cấu hình tham số từ biến môi trường
-MODEL_VERSION = get_required_env("MODEL_VERSION")
-TARGET_CSV = get_required_env("TARGET_CSV")
-AWS_BUCKET_NAME = os.environ.get("AWS_BUCKET_NAME", "mlops-paas-artifacts")
-S3_TRAINING_DATA_PREFIX = os.environ.get("S3_TRAINING_DATA_PREFIX", "training-data/")
-MLFLOW_TRACKING_URI = get_required_env("MLFLOW_TRACKING_URI")
-MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "MLOps_NIDS_Training")
-MLFLOW_MODEL_NAME = os.environ.get("MLFLOW_MODEL_NAME", "NIDS-XGBoost")
-STAGING_ALIAS = os.environ.get("MLFLOW_STAGING_ALIAS", "Staging")
-OUTPUT_DIR = os.environ.get("SM_MODEL_DIR", "/opt/ml/model") # SageMaker Model Directory
 
-# Cấu hình MLflow tracking và registry URI
-mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-mlflow.set_registry_uri(MLFLOW_TRACKING_URI)
-mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+def log(message: str) -> None:
+    print(message, flush=True)
 
-print("=" * 60)
-print("SageMaker training configuration")
-print(f"MODEL_VERSION           : {MODEL_VERSION}")
-print(f"TARGET_CSV              : {TARGET_CSV}")
-print(f"AWS_BUCKET_NAME         : {AWS_BUCKET_NAME}")
-print(f"S3_TRAINING_DATA_PREFIX : {S3_TRAINING_DATA_PREFIX}")
-print(f"MLFLOW_TRACKING_URI     : {MLFLOW_TRACKING_URI}")
-print(f"MLFLOW_EXPERIMENT_NAME  : {MLFLOW_EXPERIMENT_NAME}")
-print(f"MLFLOW_MODEL_NAME       : {MLFLOW_MODEL_NAME}")
-print(f"STAGING_ALIAS           : {STAGING_ALIAS}")
-print("=" * 60)
 
-# Hàm tải dữ liệu huấn luyện từ S3 hoặc local path
-def download_training_data(target_csv: str) -> str:
-    # Trong môi trường SageMaker, dữ liệu được mount trực tiếp vào /opt/ml/input/data/train/
-    sagemaker_input_dir = os.environ.get("SM_CHANNEL_TRAIN", "/opt/ml/input/data/train")
-    local_csv_path = os.path.join(sagemaker_input_dir, target_csv)
-    
-    if os.path.exists(local_csv_path):
-        print(f"Found dataset at SageMaker input channel: {local_csv_path}")
-        return local_csv_path
-        
-    raise FileNotFoundError(
-        f"Could not find {target_csv} at {sagemaker_input_dir}. Ensure S3 Data Channel is configured correctly."
+def resolve_config() -> dict:
+    """Resolve runtime config from CLI args, falling back to SM_* env vars.
+
+    CLI args take precedence over environment variables so the script is easy
+    to drive locally while remaining fully compatible with the AWS Batch
+    runner, which only sets environment variables.
+    """
+    parser = argparse.ArgumentParser(
+        description="AWS Batch-compatible NIDS XGBoost trainer (no MLflow)."
     )
-
-# Hàm đệ quy liệt kê artifacts trong MLflow run để hỗ trợ debug khi đăng ký model thất bại
-def list_run_artifacts_for_debug(client: MlflowClient, run_id: str, artifact_path: str = "") -> None:
-    try:
-        artifacts = client.list_artifacts(run_id, artifact_path)
-    except Exception as exc:
-        print(f"Failed to list artifacts under '{artifact_path or '/'}': {exc}")
-        return
-
-    if not artifacts:
-        print(f"No artifacts found under '{artifact_path or '/'}' for run {run_id}.")
-        return
-
-    for item in artifacts:
-        print(f"- {item.path}")
-        if item.is_dir:
-            list_run_artifacts_for_debug(client, run_id, item.path)
-
-# Hàm đăng ký model vào MLflow Model Registry với xử lý trạng thái và gán alias
-def register_model_to_mlflow(run_id: str, artifact_uri: str) -> tuple[str, str]:
-    model_uri = f"runs:/{run_id}/model" # Đường dẫn để trỏ đến model đã log trong MLflow run artifacts
-    client = MlflowClient()
-    safe_model_name = MLFLOW_MODEL_NAME.replace(' ', '') if MLFLOW_MODEL_NAME else 'UnnamedModel'
-    candidate_s3_prefix = f"s3://{AWS_BUCKET_NAME}/model/{safe_model_name}/{MODEL_VERSION}/"
-
-    try:
-        # Đăng ký model vào MLflow Model Registry
-        registration = mlflow.register_model(
-            model_uri=model_uri,
-            name=MLFLOW_MODEL_NAME,
-        )
-
-        # Chờ model version đạt trạng thái READY trước khi gán alias hoặc chuyển stage
-        model_ready = False
-        for _ in range(30):
-            version_info = client.get_model_version(
-                name=MLFLOW_MODEL_NAME,
-                version=registration.version,
-            )
-            if version_info.status == "READY":
-                model_ready = True
-                break
-            sleep(2)
-
-        if not model_ready:
-            raise RuntimeError(
-                "Registered MLflow model version did not reach READY state in time."
-            )
-
-        # Cố gắng gán alias cho model version mới, nếu không thành công thì chuyển stage để đảm bảo backward compatibility
-        try:
-            client.set_registered_model_alias(
-                name=MLFLOW_MODEL_NAME,
-                alias=STAGING_ALIAS,
-                version=registration.version,
-            )
-        except Exception as exc:
-            print(f"Failed to set alias '{STAGING_ALIAS}': {exc}")
-            print("Falling back to stage transition for backward compatibility...")
-            client.transition_model_version_stage(
-                name=MLFLOW_MODEL_NAME,
-                version=registration.version,
-                stage=STAGING_ALIAS,
-                archive_existing_versions=False,
-            )
-
-        # Gán tags cho model version để hỗ trợ quản lý và truy xuất metadata sau này
-        model_version_tags = {
-            "model_version": MODEL_VERSION,
-            "approval_status": "pending",
-            "candidate_s3_prefix": candidate_s3_prefix,
-            "registered_by": "sagemaker_train_py",
-            "training_source": "sagemaker",
-            "mlflow_experiment_name": MLFLOW_EXPERIMENT_NAME,
-            "staging_alias": STAGING_ALIAS,
-        }
-        for key, value in model_version_tags.items():
-            client.set_model_version_tag(
-                name=MLFLOW_MODEL_NAME,
-                version=registration.version,
-                key=key,
-                value=value,
-            )
-
-        print("=" * 60)
-        print("MLflow registration completed successfully.")
-        print(f"run_id: {run_id}")
-        print(f"artifact_uri: {artifact_uri}")
-        print(f"registered_model_name: {MLFLOW_MODEL_NAME}")
-        print(f"registered_model_version: {registration.version}")
-        print(f"alias: {STAGING_ALIAS}")
-        print(f"candidate_s3_prefix: {candidate_s3_prefix}")
-        print("=" * 60)
-        return str(registration.version), candidate_s3_prefix
-    except Exception as exc:
-        print(f"MLflow registration failed: {exc}")
-        print(f"model_uri: {model_uri}")
-        print("Available artifact paths for debugging:")
-        list_run_artifacts_for_debug(client, run_id)
-        raise
-
-# Hàm main thực hiện toàn bộ pipeline huấn luyện, đánh giá, logging và đăng ký model
-def main() -> None:
-    # Bước 1: Tải dữ liệu huấn luyện
-    local_csv_path = download_training_data(TARGET_CSV)
-    df = pd.read_csv(local_csv_path)
-
-    # Bước 2: Huấn luyện model với RandomizedSearchCV để tìm hyperparameters tốt nhất, đánh giá trên tập test, và log toàn bộ thông tin vào MLflow
-    X = df.drop(columns=["Label"])
-    y_raw = df["Label"]
-
-    # Mã hóa nhãn và tính số lượng lớp để cấu hình thuật toán phù hợp
-    label_encoder = LabelEncoder()
-    y = label_encoder.fit_transform(y_raw)
-    num_classes = len(label_encoder.classes_)
-    
-    # Chia dữ liệu thành train, validation và test set
-    X_temp, X_test, y_temp, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+    parser.add_argument("--train-csv", default=None, help="Path to a training CSV file.")
+    parser.add_argument(
+        "--train-dir",
+        default=None,
+        help="Directory containing training CSV(s); first *.csv is used.",
     )
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_temp, y_temp, test_size=0.2, random_state=42, stratify=y_temp
-    )
+    parser.add_argument("--model-dir", default=None, help="Output dir for model artifacts.")
+    parser.add_argument("--output-dir", default=None, help="Output dir for metadata files.")
+    parser.add_argument("--model-version", default=None, help="Logical model version label.")
+    args = parser.parse_args()
 
-    # Cấu hình tham số cơ bản cho XGBoost và thiết lập sample weights nếu cần để xử lý class imbalance
-    xgb_params = {
-        "tree_method": "hist",
-        "verbosity": 0,
-        "random_state": 42,
+    train_dir = args.train_dir or os.environ.get("SM_CHANNEL_TRAIN", "/opt/ml/input/data/train")
+    model_dir = args.model_dir or os.environ.get("SM_MODEL_DIR", "/opt/ml/model")
+    # SM_OUTPUT_DIR is set by the runner; SageMaker also exposes
+    # SM_OUTPUT_DATA_DIR. Fall back to the model dir so metadata is never lost.
+    output_dir = (
+        args.output_dir
+        or os.environ.get("SM_OUTPUT_DIR")
+        or os.environ.get("SM_OUTPUT_DATA_DIR")
+        or model_dir
+    )
+    model_version = args.model_version or os.environ.get("MODEL_VERSION", "v1")
+
+    return {
+        "train_csv": args.train_csv,
+        "train_dir": train_dir,
+        "model_dir": model_dir,
+        "output_dir": output_dir,
+        "model_version": model_version,
     }
 
-    train_sample_weight = None
-    # Đối với bài toán nhị phân, sử dụng scale_pos_weight để xử lý imbalance
-    if num_classes == 2:
-        xgb_params["objective"] = "binary:logistic"
-        xgb_params["eval_metric"] = "logloss"
-        neg_count = int((y_train == 0).sum())
-        pos_count = int((y_train == 1).sum())
-        xgb_params["scale_pos_weight"] = neg_count / max(pos_count, 1)
-    # Đối với bài toán đa lớp, sử dụng balanced sample weights để xử lý imbalance
-    else:
-        xgb_params["objective"] = "multi:softprob"
-        xgb_params["eval_metric"] = "mlogloss"
-        xgb_params["num_class"] = num_classes
-        train_sample_weight = compute_sample_weight(
-            class_weight="balanced",
-            y=y_train,
+
+def find_training_csv(train_csv: str | None, train_dir: str) -> str:
+    """Locate the training CSV from an explicit path or the train channel."""
+    if train_csv:
+        if not os.path.exists(train_csv):
+            raise FileNotFoundError(f"--train-csv path does not exist: {train_csv}")
+        return train_csv
+
+    if not os.path.isdir(train_dir):
+        raise FileNotFoundError(
+            f"Training directory does not exist: {train_dir}. "
+            "Set SM_CHANNEL_TRAIN or pass --train-csv/--train-dir."
         )
 
-    # Thiết lập RandomizedSearchCV để tìm kiếm hyperparameters tốt nhất cho XGBoost
-    search = RandomizedSearchCV(
-        XGBClassifier(**xgb_params),
-        param_distributions={
-            "max_depth": randint(3, 8),
-            "n_estimators": randint(100, 200),
-            "learning_rate": uniform(0.01, 0.2),
-            "subsample": uniform(0.6, 0.4),
-            "colsample_bytree": uniform(0.6, 0.4),
-        },
-        n_iter=15,
-        cv=StratifiedKFold(n_splits=3, shuffle=True, random_state=42),
-        scoring="f1" if num_classes == 2 else "f1_macro",
-        verbose=1,
-        random_state=42,
-        n_jobs=-1,
+    csv_files = sorted(
+        os.path.join(train_dir, name)
+        for name in os.listdir(train_dir)
+        if name.lower().endswith(".csv")
+    )
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV files found in training directory: {train_dir}")
+    # The AWS Batch runner mounts the dataset as ``train.csv``; prefer it.
+    for candidate in csv_files:
+        if os.path.basename(candidate).lower() == "train.csv":
+            return candidate
+    return csv_files[0]
+
+
+def detect_label_column(df: pd.DataFrame) -> str:
+    """Robustly detect the label column, falling back to the last column."""
+    for candidate in LABEL_COLUMN_CANDIDATES:
+        if candidate in df.columns:
+            return candidate
+    # Case-insensitive second pass.
+    lowered = {str(col).lower(): col for col in df.columns}
+    for candidate in LABEL_COLUMN_CANDIDATES:
+        if candidate.lower() in lowered:
+            return lowered[candidate.lower()]
+    return df.columns[-1]
+
+
+def preprocess_features(X: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Safely coerce features to a numeric matrix.
+
+    Network-flow CSVs occasionally contain infinities (e.g. Flow Bytes/s when
+    duration is zero) and stray non-numeric tokens. We coerce everything to
+    numeric, replace +/-inf with NaN, and fill NaN with 0 so XGBoost / the
+    fallback estimator receive a clean matrix. Constant/all-NaN columns are
+    dropped.
+    """
+    warnings_list: list[str] = []
+    X = X.copy()
+
+    object_cols = [col for col in X.columns if X[col].dtype == object]
+    for col in object_cols:
+        coerced = pd.to_numeric(X[col], errors="coerce")
+        # If coercion destroyed (almost) everything, label-encode instead.
+        if coerced.notna().mean() < 0.5:
+            X[col] = LabelEncoder().fit_transform(X[col].astype(str))
+            warnings_list.append(f"Categorical feature '{col}' was label-encoded.")
+        else:
+            X[col] = coerced
+            warnings_list.append(f"Feature '{col}' coerced to numeric.")
+
+    X = X.replace([np.inf, -np.inf], np.nan)
+
+    dropped = [col for col in X.columns if X[col].isna().all()]
+    if dropped:
+        X = X.drop(columns=dropped)
+        warnings_list.append(f"Dropped all-NaN feature columns: {dropped}")
+
+    X = X.fillna(0)
+    return X, warnings_list
+
+
+def _build_random_forest(num_classes: int, fallback_warning: str | None):
+    """Construct the RandomForest fallback estimator.
+
+    Returns a 5-tuple matching ``build_estimator``:
+    ``(model, algorithm, sample_weight, hyperparameters, fallback_warning)``.
+    """
+    from sklearn.ensemble import RandomForestClassifier
+
+    rf_params = {
+        "n_estimators": 200,
+        "max_depth": None,
+        "random_state": RANDOM_STATE,
+        "n_jobs": -1,
+        "class_weight": "balanced",
+    }
+    return (
+        RandomForestClassifier(**rf_params),
+        "random_forest",
+        None,
+        rf_params,
+        fallback_warning,
     )
 
-    # Chuẩn bị fit_params bao gồm sample_weight nếu đã được tính toán
-    fit_params = {}
-    if train_sample_weight is not None:
-        fit_params["sample_weight"] = train_sample_weight
 
-    # Bước 3: Bắt đầu MLflow run để log toàn bộ quá trình huấn luyện, đánh giá và đăng ký model
-    with mlflow.start_run(run_name=f"Train_Run_{MODEL_VERSION}") as run:
-        run_id = run.info.run_id
-        experiment_id = run.info.experiment_id
-        # Phase 10E.1: Emit structured markers so the Control Plane can capture
-        # MLflow lineage without an API call. Format must match mlflow_utils.py patterns.
-        print(f"MLFLOW_RUN_ID:{run_id}")
-        print(f"MLFLOW_EXPERIMENT_ID:{experiment_id}")
-        mlflow.log_param("model_version", MODEL_VERSION)
+def build_estimator(num_classes: int, y_train: np.ndarray):
+    """Build the primary XGBoost estimator, falling back to RandomForest.
 
-        mlflow.log_param("target_csv", TARGET_CSV)
-        mlflow.log_param("num_classes", num_classes)
-        mlflow.log_param("mlflow_model_name", MLFLOW_MODEL_NAME)
-        mlflow.log_param("aws_bucket_name", AWS_BUCKET_NAME)
-        mlflow.log_param("objective", xgb_params["objective"])
-        mlflow.set_tags(
-            {
-                "pipeline": "sagemaker_retrain",
-                "approval_status": "pending",
-                "model_version": MODEL_VERSION,
-                "candidate_s3_prefix": f"s3://{AWS_BUCKET_NAME}/model/{MLFLOW_MODEL_NAME.replace(' ', '') if MLFLOW_MODEL_NAME else 'UnnamedModel'}/{MODEL_VERSION}/",
-                "training_source": "sagemaker",
-            }
+    Mirrors the legacy configuration: binary uses ``binary:logistic`` with
+    ``scale_pos_weight``; multiclass uses ``multi:softprob`` with balanced
+    sample weights.
+
+    The XGBoost path is guarded broadly. In slim AWS Batch images XGBoost can
+    fail not only with ``ImportError`` (package missing) but also with
+    ``OSError`` / ``xgboost.core.XGBoostError`` when the OpenMP runtime
+    (``libgomp``) is absent at import or construction time. Any such failure
+    (or the ``NIDS_FORCE_RF_FALLBACK`` debug override) routes to a
+    ``RandomForestClassifier`` with ``class_weight='balanced'`` so the job
+    still produces a model and the full metadata contract.
+
+    Returns ``(model, algorithm, sample_weight, hyperparameters, fallback_warning)``
+    where ``fallback_warning`` is ``None`` when XGBoost was used, or a
+    human-readable string when RandomForest was substituted.
+    """
+    sample_weight = None
+
+    # Debug/test override: force the fallback path without breaking XGBoost.
+    if os.environ.get("NIDS_FORCE_RF_FALLBACK", "").strip().lower() in {"1", "true", "yes"}:
+        warning = (
+            "XGBoost skipped via NIDS_FORCE_RF_FALLBACK override; "
+            "RandomForestClassifier fallback was used."
         )
+        log(f"WARNING: {warning}")
+        return _build_random_forest(num_classes, warning)
 
-        print("Running hyperparameter search...")
-        # Đảm bảo RandomizedSearchCV sử dụng trọng số mẫu trong quá trình huấn luyện
-        search.fit(X_train, y_train, **fit_params)
-        
-        # Log hyperparameters tốt nhất vào MLflow
-        mlflow.log_params(search.best_params_)
+    try:
+        from xgboost import XGBClassifier
 
-        # Huấn luyện lại model XGBoost với hyperparameters tốt nhất và đánh giá trên tập test
-        best_xgb_params = xgb_params.copy()
-        best_xgb_params.update(search.best_params_)
-        best_xgb_params["early_stopping_rounds"] = 10
-
-        # Huấn luyện model với tập validation để theo dõi quá trình huấn luyện và tránh overfitting
-        best_xgb = XGBClassifier(**best_xgb_params)
-        best_xgb.fit(
-            X_train,
-            y_train,
-            eval_set=[(X_val, y_val)],
-            sample_weight=train_sample_weight,
-            verbose=False,
-        )
-
-        # Đánh giá model trên tập test và log các metrics vào MLflow
-        y_pred = best_xgb.predict(X_test)
-        average_method = "binary" if num_classes == 2 else "macro"
-        metrics_scorecard = {
-            "model_version": MODEL_VERSION,
-            "timestamp": datetime.now().isoformat(),
-            "num_classes": int(num_classes),
-            "objective": xgb_params["objective"],
-            "evaluation_metrics": {
-                "accuracy": round(float(accuracy_score(y_test, y_pred)), 4),
-                "precision": round(
-                    float(
-                        precision_score(y_test, y_pred, average=average_method)
-                    ),
-                    4,
-                ),
-                "recall": round(
-                    float(recall_score(y_test, y_pred, average=average_method)),
-                    4,
-                ),
-                "f1_score": round(
-                    float(f1_score(y_test, y_pred, average=average_method)),
-                    4,
-                ),
-            },
-            "best_hyperparameters": search.best_params_,
+        xgb_params = {
+            "tree_method": "hist",
+            "verbosity": 0,
+            "random_state": RANDOM_STATE,
+            "n_estimators": 150,
+            "max_depth": 6,
+            "learning_rate": 0.1,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
         }
-        mlflow.log_metrics(metrics_scorecard["evaluation_metrics"])
+        if num_classes == 2:
+            xgb_params["objective"] = "binary:logistic"
+            xgb_params["eval_metric"] = "logloss"
+            neg_count = int((y_train == 0).sum())
+            pos_count = int((y_train == 1).sum())
+            xgb_params["scale_pos_weight"] = neg_count / max(pos_count, 1)
+        else:
+            xgb_params["objective"] = "multi:softprob"
+            xgb_params["eval_metric"] = "mlogloss"
+            xgb_params["num_class"] = num_classes
+            sample_weight = compute_sample_weight(class_weight="balanced", y=y_train)
+        # Construct inside the guard: missing libgomp can raise OSError /
+        # XGBoostError at class instantiation, not just at import.
+        model = XGBClassifier(**xgb_params)
+        return model, "xgboost", sample_weight, xgb_params, None
+    except (ImportError, OSError, Exception) as exc:  # noqa: BLE001 - intentional broad guard
+        # ImportError: xgboost not installed.
+        # OSError / xgboost.core.XGBoostError (an Exception subclass): missing
+        # OpenMP runtime (libgomp) or other native init failure in slim images.
+        warning = (
+            f"XGBoost unavailable ({type(exc).__name__}: {exc}); "
+            "RandomForestClassifier fallback was used."
+        )
+        log(f"WARNING: {warning}")
+        return _build_random_forest(num_classes, warning)
 
-        # Lưu model, label encoder classes và metrics scorecard vào thư mục output
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        classes_path = os.path.join(OUTPUT_DIR, f"label_classes_{MODEL_VERSION}.json")
-        model_path = os.path.join(OUTPUT_DIR, f"xgb_nids_model_{MODEL_VERSION}.pkl")
-        metrics_path = os.path.join(OUTPUT_DIR, f"metrics_{MODEL_VERSION}.json")
 
-        with open(classes_path, "w", encoding="utf-8") as file_handle:
-            json.dump(label_encoder.classes_.tolist(), file_handle)
+def compute_feature_importances(model, feature_names: list[str]) -> dict[str, float]:
+    """Extract feature importances from the fitted estimator, if available."""
+    importances = getattr(model, "feature_importances_", None)
+    if importances is None:
+        return {}
+    return {
+        str(name): float(value)
+        for name, value in zip(feature_names, importances)
+    }
 
-        joblib.dump(best_xgb, model_path)
 
-        with open(metrics_path, "w", encoding="utf-8") as file_handle:
-            json.dump(metrics_scorecard, file_handle, indent=4)
+def main() -> None:
+    config = resolve_config()
+    model_version = config["model_version"]
+    model_dir = config["model_dir"]
+    output_dir = config["output_dir"]
 
-        # Log artifacts vào MLflow và đăng ký model vào Model Registry
-        mlflow.log_artifacts(OUTPUT_DIR, artifact_path="deployment_exports")
-        mlflow.xgboost.log_model(best_xgb, artifact_path="model")
-        artifact_uri = mlflow.get_artifact_uri()
-        artifact_paths = [model_path, classes_path, metrics_path]
-        register_model_to_mlflow(run_id, artifact_uri)
+    os.makedirs(model_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
-        # Phase 10E.1: Emit model and artifact URI markers for Control Plane lineage capture.
-        print(f"MLFLOW_MODEL_URI:runs:/{run_id}/model")
-        print(f"MLFLOW_ARTIFACT_URI:{artifact_uri}")
-        print(f"Training completed successfully for {MODEL_VERSION}.")
+    log("=" * 60)
+    log("AWS Batch NIDS training configuration (no MLflow)")
+    log(f"MODEL_VERSION : {model_version}")
+    log(f"MODEL_DIR     : {model_dir}")
+    log(f"OUTPUT_DIR    : {output_dir}")
+    log("=" * 60)
+
+    warnings_list: list[str] = []
+
+    csv_path = find_training_csv(config["train_csv"], config["train_dir"])
+    log(f"Loading training data: {csv_path}")
+    df = pd.read_csv(csv_path)
+
+    label_column = detect_label_column(df)
+    log(f"Detected label column: {label_column}")
+
+    y_raw = df[label_column]
+    X_raw = df.drop(columns=[label_column])
+
+    X, preprocess_warnings = preprocess_features(X_raw)
+    warnings_list.extend(preprocess_warnings)
+    feature_names = list(X.columns)
+
+    label_encoder = LabelEncoder()
+    y = label_encoder.fit_transform(y_raw)
+    num_classes = int(len(label_encoder.classes_))
+    log(f"Classes ({num_classes}): {label_encoder.classes_.tolist()}")
+
+    # Stratified split mirrors the legacy 80/20 holdout; we keep a validation
+    # slice for parity even though the simplified estimator does not early-stop.
+    stratify = y if num_classes > 1 and np.min(np.bincount(y)) >= 2 else None
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify
+    )
+
+    model, algorithm, sample_weight, hyperparameters, fallback_warning = build_estimator(
+        num_classes, y_train
+    )
+    log(f"Training estimator: {algorithm}")
+    if fallback_warning:
+        warnings_list.append(fallback_warning)
+
+    fit_kwargs = {}
+    if sample_weight is not None:
+        fit_kwargs["sample_weight"] = sample_weight
+    model.fit(X_train, y_train, **fit_kwargs)
+
+    y_pred = model.predict(X_test)
+    average_method = "binary" if num_classes == 2 else "macro"
+    metrics = {
+        "accuracy": round(float(accuracy_score(y_test, y_pred)), 4),
+        "precision": round(
+            float(precision_score(y_test, y_pred, average=average_method, zero_division=0)), 4
+        ),
+        "recall": round(
+            float(recall_score(y_test, y_pred, average=average_method, zero_division=0)), 4
+        ),
+        "f1_score": round(
+            float(f1_score(y_test, y_pred, average=average_method, zero_division=0)), 4
+        ),
+    }
+    log(f"Evaluation metrics: {metrics}")
+
+    # --- Save model artifacts to SM_MODEL_DIR ---
+    model_path = os.path.join(model_dir, "model.joblib")
+    joblib.dump(model, model_path)
+
+    label_classes = label_encoder.classes_.tolist()
+    label_classes_path = os.path.join(model_dir, "label_classes.json")
+    with open(label_classes_path, "w", encoding="utf-8") as handle:
+        json.dump(label_classes, handle)
+
+    # --- Write metadata to SM_OUTPUT_DIR (consumed by the runner) ---
+    metrics_path = os.path.join(output_dir, "metrics.json")
+    with open(metrics_path, "w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                **metrics,
+                "samples": int(len(df)),
+                "num_classes": num_classes,
+            },
+            handle,
+            indent=2,
+        )
+
+    params_path = os.path.join(output_dir, "params.json")
+    with open(params_path, "w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "algorithm": algorithm,
+                "model_version": model_version,
+                "hyperparameters": {k: str(v) for k, v in hyperparameters.items()},
+                "random_state": RANDOM_STATE,
+                "label_column": label_column,
+                "feature_count": len(feature_names),
+                "training_backend": "aws_batch",
+                "xgboost_available": fallback_warning is None,
+                "fallback_reason": fallback_warning,
+            },
+            handle,
+            indent=2,
+        )
+
+    feature_importances = compute_feature_importances(model, feature_names)
+    top_importances = sorted(
+        feature_importances.items(), key=lambda kv: abs(kv[1]), reverse=True
+    )[:20]
+
+    model_insights_path = os.path.join(output_dir, "model_insights.json")
+    with open(model_insights_path, "w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "kind": "feature_importance",
+                "source": "nids_xgb_no_mlflow",
+                "feature_count": len(feature_names),
+                "items": [{"name": name, "value": value} for name, value in top_importances],
+                "label_classes": label_classes,
+                "sample_count": int(len(df)),
+                "model_type": algorithm,
+                "warnings": warnings_list,
+            },
+            handle,
+            indent=2,
+        )
+
+    if feature_importances:
+        feature_importance_path = os.path.join(output_dir, "feature_importance.json")
+        with open(feature_importance_path, "w", encoding="utf-8") as handle:
+            json.dump({"feature_importance": feature_importances}, handle, indent=2)
+
+    label_classes_out = os.path.join(output_dir, "label_classes.json")
+    with open(label_classes_out, "w", encoding="utf-8") as handle:
+        json.dump(label_classes, handle)
+
+    # Single machine-parseable metric line for the AWS Batch runner.
+    print("METRIC_JSON:" + json.dumps(metrics, separators=(",", ":")), flush=True)
+
+    log(f"Training completed at {datetime.now(timezone.utc).isoformat()} for {model_version}.")
 
 
 if __name__ == "__main__":
