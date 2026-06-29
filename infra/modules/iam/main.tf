@@ -85,6 +85,64 @@ resource "aws_iam_instance_profile" "worker_profile" {
   role = aws_iam_role.worker_role.name
 }
 
+# Cho phép Worker Node (control-plane pod dùng instance role này) submit/quản lý
+# AWS Batch training jobs và đọc CloudWatch logs của job.
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+data "aws_iam_policy_document" "worker_batch_policy_doc" {
+  statement {
+    sid    = "BatchSubmitAndManage"
+    effect = "Allow"
+    actions = [
+      "batch:SubmitJob",
+      "batch:DescribeJobs",
+      "batch:TerminateJob",
+      "batch:ListJobs",
+      "batch:DescribeJobQueues",
+      "batch:DescribeJobDefinitions",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "BatchTrainingLogsRead"
+    effect = "Allow"
+    actions = [
+      "logs:GetLogEvents",
+      "logs:DescribeLogStreams",
+      "logs:DescribeLogGroups",
+    ]
+    resources = [
+      "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/batch/mlops-training:*",
+    ]
+  }
+
+  # AWS Batch cần PassRole để gán execution/job role vào container của job.
+  statement {
+    sid    = "BatchPassRole"
+    effect = "Allow"
+    actions = [
+      "iam:PassRole",
+    ]
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/mlops-paas-batch-task-execution-role",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/mlops-paas-batch-training-job-role",
+    ]
+  }
+}
+
+resource "aws_iam_policy" "worker_batch_policy" {
+  name        = "mlops-worker-batch-policy"
+  description = "Allow K3s worker nodes (control-plane) to submit and manage AWS Batch training jobs"
+  policy      = data.aws_iam_policy_document.worker_batch_policy_doc.json
+}
+
+resource "aws_iam_role_policy_attachment" "worker_batch_attach" {
+  role       = aws_iam_role.worker_role.name
+  policy_arn = aws_iam_policy.worker_batch_policy.arn
+}
+
 
 # GITHUB ACTIONS OIDC
 # Tạo OIDC Provider cho GitHub
