@@ -120,10 +120,14 @@ services:
       DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME:-mlops_paas_network}
       CONTROL_PLANE_WEBHOOK_SECRET: ${CONTROL_PLANE_WEBHOOK_SECRET:-super-secret-key}
       HASHIDS_SALT: ${HASHIDS_SALT:-mlops_paas_secret_salt}
+      HARBOR_REGISTRY_URL: ${HARBOR_REGISTRY_URL:-registry.mlops-nids-nt114.id.vn}
+      HARBOR_USER_PROJECT: ${HARBOR_USER_PROJECT:-user-images}
+      HARBOR_USERNAME: ${HARBOR_USERNAME}
+      HARBOR_PASSWORD: ${HARBOR_PASSWORD}
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock
-    command: sh -c "python src/manage.py ensure_db_schema && python src/manage.py migrate && cd src && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
+    command: sh -c "python src/manage.py ensure_db_schema && python src/manage.py migrate && python src/manage.py collectstatic --noinput && cd src && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
     depends_on:
       postgres:
         condition: service_healthy
