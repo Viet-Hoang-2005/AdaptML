@@ -14,13 +14,21 @@ Kiến trúc PaaS chuyển từ việc hardcode cho một mô hình NIDS sang m�
 3. **Build Image**: Hệ thống tự động kích hoạt **Argo Workflow (build-model-job)** thông qua Argo Events để đóng gói mô hình thành Docker Image và đẩy lên **Harbor**.
 4. **API Provisioning**: Khi Build xong, Control Plane tiếp tục gọi **Argo Workflow (deploy-model-job)** tạo K8s Deployment và Ingress Controller để cấp phát một Public API Endpoint.
 
-## 2. Reference Data & Data Drift Alert
+## 2. Huấn luyện Mô hình tự động (Model Training Lifecycle)
+
+1. **Submit Training Job**: Người dùng cấu hình tham số, chọn dataset S3 trên Dashboard và gửi yêu cầu huấn luyện.
+2. **Event-driven Orchestration**: Control Plane bắn webhook tới Argo Events. Argo kích hoạt Workflow tải dữ liệu và tạo CRD **`PyTorchJob`** trên K8s.
+3. **Dynamic Infrastructure**: Karpenter phát hiện Pod `PyTorchJob` đang `Pending` và tự động cấp phát node EC2 (CPU/GPU) phục vụ huấn luyện.
+4. **Log Streaming**: Log từ tiến trình train ghi thẳng vào Redis (`training_logs:{job_id}`). React UI sử dụng HTTP Polling để stream log thời gian thực.
+5. **Registration & Cleanup**: Khi hoàn tất, model weights được đẩy lên S3 và đăng ký tự động vào MLflow Registry. Karpenter thu hồi node về 0 nếu không còn job.
+
+## 3. Reference Data & Data Drift Alert
 
 1. **Upload Data**: Người dùng upload tệp dữ liệu huấn luyện chuẩn (Reference Data) lên S3 thông qua UI.
 2. **Production Data**: Khi Endpoint API của người dùng phục vụ dự đoán, log sẽ được đẩy qua Redpanda và consumer lưu vào CSDL Postgres bảng `paas_production_logs` (lưu JSONB cho features và TEXT cho labels).
 3. **Drift Check**: Hệ thống tự động (hoặc người dùng bấm Manual Run) kích hoạt **Argo Workflow (evidently-job)** tải Reference Data từ S3 và Production Logs từ Postgres, chạy Evidently tính toán Drift, và xuất HTML Report lên S3.
 
-## 3. Quản lý Phiên bản và Xóa Mô hình
+## 4. Quản lý Phiên bản và Xóa Mô hình
 
 1. **Versioning**: Toàn bộ các mô hình của người dùng được hiển thị trên UI. API của Django đóng vai trò **Proxy** đứng trước MLflow API để đảm bảo Multi-tenancy.
 2. **Deletion**: Khi người dùng xóa mô hình, hệ thống thực hiện hai việc:
