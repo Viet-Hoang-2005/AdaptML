@@ -86,6 +86,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -199,6 +200,7 @@ CORS_ALLOWED_ORIGINS = env_list(
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
@@ -312,3 +314,7 @@ DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # Môi trường build trên Docker hoặc Argo
 BUILD_STRATEGY = os.environ.get("BUILD_STRATEGY", "docker").lower()
+
+# Harbor Settings
+HARBOR_REGISTRY_URL = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
+HARBOR_USER_PROJECT = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()

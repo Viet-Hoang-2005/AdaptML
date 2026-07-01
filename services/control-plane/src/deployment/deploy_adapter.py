@@ -352,7 +352,8 @@ class ArgoDeployAdapter(DeployAdapter):
         image_name = model_api.endpoint_image_name
         if not image_name:
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
-            image_name = f"{harbor_url}/mlops-paas/{tenant_id.lower()}-model-{hashid_str.lower()}:latest"
+            harbor_project = getattr(settings, "HARBOR_USER_PROJECT", "user-images")
+            image_name = f"{harbor_url}/{harbor_project}/{tenant_id.lower()}-model-{hashid_str.lower()}:latest"
 
         payload = {
             "tenant_id": tenant_id,
@@ -493,9 +494,10 @@ class ArgoDeployAdapter(DeployAdapter):
         harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
         harbor_username = os.environ.get("HARBOR_USERNAME")
         harbor_password = os.environ.get("HARBOR_PASSWORD")
+        harbor_project = getattr(settings, "HARBOR_USER_PROJECT", "user-images")
         
         if harbor_username and harbor_password:
-            api_url = f"https://{harbor_url}/api/v2.0/projects/mlops-paas/repositories/{repo_name}"
+            api_url = f"https://{harbor_url}/api/v2.0/projects/{harbor_project}/repositories/{repo_name}"
             try:
                 logger.info("Deleting image from Harbor: %s", api_url)
                 response = requests.delete(api_url, auth=(harbor_username, harbor_password), timeout=10)

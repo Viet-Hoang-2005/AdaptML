@@ -24,6 +24,9 @@ venv/
 dist/
 build/
 
+# Django static files
+services/control-plane/src/staticfiles/
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb

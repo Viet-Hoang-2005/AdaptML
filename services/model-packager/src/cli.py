@@ -131,7 +131,8 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
 
     base_name = f"{tenant_id.lower()}-model-{model_id.lower()}:latest"
-    image_tag = f"{harbor_url}/mlops-paas/{base_name}" if harbor_url else base_name
+    harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
+    image_tag = f"{harbor_url}/{harbor_project}/{base_name}" if harbor_url else base_name
 
     print(f"Building Docker image {image_tag} from workspace {workspace}...")
     for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):

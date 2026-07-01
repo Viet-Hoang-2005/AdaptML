@@ -86,6 +86,10 @@ class DockerBuildAdapter(BuildAdapter):
                     "AWS_SECRET_ACCESS_KEY": os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
                     "AWS_BUCKET_NAME": getattr(settings, "AWS_STORAGE_BUCKET_NAME", ""),
                     "AWS_DEFAULT_REGION": getattr(settings, "AWS_S3_REGION_NAME", "ap-southeast-1"),
+                    "HARBOR_REGISTRY_URL": getattr(settings, "HARBOR_REGISTRY_URL", ""),
+                    "HARBOR_USER_PROJECT": getattr(settings, "HARBOR_USER_PROJECT", "user-images"),
+                    "HARBOR_USERNAME": os.environ.get("HARBOR_USERNAME", ""),
+                    "HARBOR_PASSWORD": os.environ.get("HARBOR_PASSWORD", ""),
                     "CONTROL_PLANE_WEBHOOK_URL": webhook_url,
                     "CONTROL_PLANE_WEBHOOK_SECRET": getattr(settings, "CONTROL_PLANE_WEBHOOK_SECRET", ""),
                 }
