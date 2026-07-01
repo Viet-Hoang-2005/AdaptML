@@ -11,7 +11,7 @@ from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
 from authentication.models import TrainingJob
-from training.sagemaker_service import (
+from training.s3_storage_service import (
     _safe_extract_zip,
     _s3_client,
     _s3_uri,

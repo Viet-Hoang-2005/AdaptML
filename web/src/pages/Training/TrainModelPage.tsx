@@ -537,7 +537,7 @@ function TrainingJobRow({
 }) {
   const { selectedModel } = useModelSelection();
   const isArchived = job.is_deleted;
-  const backendLabel = job.training_backend || 'sagemaker';
+  const backendLabel = job.training_backend || 'kubeflow';
   const isActive = ACTIVE_STATUSES.includes(job.status);
   const canRetry = job.status === 'failed' || job.status === 'cancelled';
 

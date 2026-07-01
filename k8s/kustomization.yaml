@@ -17,3 +17,7 @@ resources:
 
   # 2. Applications (Dùng overlay production)
   - apps/production
+
+  # 3. MLOps Training Platform
+  - kubeflow
+  - karpenter

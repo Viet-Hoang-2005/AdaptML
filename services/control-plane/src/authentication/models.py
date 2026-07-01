@@ -271,9 +271,8 @@ class ModelAPI(models.Model):
 
 class TrainingJob(models.Model):
     BACKEND_CHOICES = (
-        ("sagemaker", "SageMaker"),
+        ("kubeflow", "Kubeflow (Karpenter Autoscaled)"),
         ("local", "Local"),
-        ("aws_batch", "AWS Batch"),
     )
     ACCELERATOR_CHOICES = (
         ("none", "None"),
@@ -307,7 +306,7 @@ class TrainingJob(models.Model):
     name = models.CharField(max_length=160)
     model_version = models.CharField(max_length=80)
     entry_point = models.CharField(max_length=160, default="train.py")
-    training_backend = models.CharField(max_length=20, choices=BACKEND_CHOICES, default="sagemaker")
+    training_backend = models.CharField(max_length=20, choices=BACKEND_CHOICES, default="kubeflow")
     vcpu = models.PositiveIntegerField(default=2)
     memory = models.PositiveIntegerField(default=4096)
     max_runtime_seconds = models.PositiveIntegerField(default=3600)

@@ -48,7 +48,6 @@ import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { formatDuration, computeElapsed } from '../../lib/formatDuration';
-import { useTrainingJobRealtime } from '../../hooks/useTrainingJobRealtime';
 import type {
   ModelAccessMode,
   ModelFlavor,
@@ -61,7 +60,7 @@ import type {
 import { ModelDeploymentCard } from '../../components/model/ModelDeploymentCard';
 
 // -- Shared formatting helpers --
-const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'sagemaker';
+const backendLabel = (backend?: TrainingJob['training_backend']) => backend || 'kubeflow';
 const formatMetricPercent = (val: number) => `${Math.round(val)}%`;
 const formatMegabytes = (mb: number) => {
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
@@ -78,7 +77,7 @@ const statusLabels: Record<TrainingJobStatus, string> = {
 };
 
 const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
-const AUTO_SYNC_INTERVAL_MS = 5000;
+const AUTO_SYNC_INTERVAL_MS = 3000;
 
 export default function TrainingJobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -101,23 +100,6 @@ export default function TrainingJobDetailPage() {
   const [liveElapsed, setLiveElapsed] = useState<number | null>(null);
   const lastToastedStatus = useRef<string | null>(null);
 
-  // -- WebSocket realtime hook --
-  const { wsStatus } = useTrainingJobRealtime(
-    !isNaN(parsedJobId) ? parsedJobId : null,
-    {
-      onStatusTransition: (prevStatus, nextStatus) => {
-        // Only toast once per status transition to avoid duplicates
-        const key = `${prevStatus}->${nextStatus}`;
-        if (lastToastedStatus.current === key) return;
-        lastToastedStatus.current = key;
-        if (nextStatus === 'completed') toast.success('Training job completed!');
-        else if (nextStatus === 'failed') toast.error('Training job failed.');
-        else if (nextStatus === 'cancelled') toast.warning('Training job cancelled.');
-      },
-    },
-  );
-  const isPollingFallback = wsStatus !== 'connected';
-
   // -- Queries --
   const {
     data: job,
@@ -130,11 +112,22 @@ export default function TrainingJobDetailPage() {
     enabled: !isNaN(parsedJobId),
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (!isPollingFallback) return false;
       if (data && ACTIVE_STATUSES.includes(data.status)) return AUTO_SYNC_INTERVAL_MS;
       return false;
     },
   });
+
+  useEffect(() => {
+    if (!job?.status) return;
+    const nextStatus = job.status;
+    const prevStatus = lastToastedStatus.current;
+    if (prevStatus && prevStatus !== nextStatus) {
+      if (nextStatus === 'completed') toast.success('Training job completed!');
+      else if (nextStatus === 'failed') toast.error('Training job failed.');
+      else if (nextStatus === 'cancelled') toast.warning('Training job cancelled.');
+    }
+    lastToastedStatus.current = nextStatus;
+  }, [job?.status]);
 
   const {
     data: logsResponse,
@@ -145,8 +138,7 @@ export default function TrainingJobDetailPage() {
     queryFn: () => getTrainingJobLogs(parsedJobId),
     enabled: !!job && (activeTab === 'logs' || ACTIVE_STATUSES.includes(job.status)),
     refetchInterval: () => {
-      // Refresh logs actively if on the logs tab and job is active
-      if (isPollingFallback && job && ACTIVE_STATUSES.includes(job.status) && activeTab === 'logs') return AUTO_SYNC_INTERVAL_MS;
+      if (job && ACTIVE_STATUSES.includes(job.status) && activeTab === 'logs') return AUTO_SYNC_INTERVAL_MS;
       return false;
     },
   });
@@ -160,8 +152,7 @@ export default function TrainingJobDetailPage() {
     queryFn: () => getTrainingJobMetrics(parsedJobId),
     enabled: !!job && (activeTab === 'metrics' || ACTIVE_STATUSES.includes(job.status)),
     refetchInterval: () => {
-      // Refresh metrics actively if on the metrics tab and job is active
-      if (isPollingFallback && job && ACTIVE_STATUSES.includes(job.status) && activeTab === 'metrics') return AUTO_SYNC_INTERVAL_MS;
+      if (job && ACTIVE_STATUSES.includes(job.status) && activeTab === 'metrics') return AUTO_SYNC_INTERVAL_MS;
       return false;
     },
   });
@@ -174,7 +165,7 @@ export default function TrainingJobDetailPage() {
     queryFn: () => getTrainingJobEvents(parsedJobId),
     enabled: !!job,
     refetchInterval: () => {
-      if (isPollingFallback && job && ACTIVE_STATUSES.includes(job.status)) return AUTO_SYNC_INTERVAL_MS;
+      if (job && ACTIVE_STATUSES.includes(job.status)) return AUTO_SYNC_INTERVAL_MS;
       return false;
     },
   });
@@ -625,7 +616,7 @@ export default function TrainingJobDetailPage() {
           <div className="flex shrink-0 flex-col items-end gap-3 mt-2 sm:mt-0">
             {ACTIVE_STATUSES.includes(job.status) && (
               <div className="flex shrink-0 mb-1">
-                <WsStatusBadge status={wsStatus} />
+                <LiveStatusBadge />
               </div>
             )}
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1083,29 +1074,11 @@ type MilestoneState = 'pending' | 'active' | 'completed' | 'failed' | 'cancelled
 
 
 
-type WsStatusBadgeProps = { status: 'connecting' | 'connected' | 'disconnected' | 'fallback' };
-function WsStatusBadge({ status }: WsStatusBadgeProps) {
-  if (status === 'connected') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        Live
-      </span>
-    );
-  }
-  if (status === 'connecting' || status === 'disconnected') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
-        Reconnecting...
-      </span>
-    );
-  }
-  // fallback
+function LiveStatusBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-      <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-      Polling fallback
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+      Live Polling
     </span>
   );
 }
