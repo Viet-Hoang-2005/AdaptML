@@ -13,7 +13,7 @@ export type ModelAPIStatus =
   | 'disabled';
 export type ModelBuildStatus = 'not_started' | 'building' | 'ready' | 'error';
 export type ModelEndpointStatus = 'not_deployed' | 'deploying' | 'healthy' | 'unhealthy' | 'deploy_failed' | 'stopped';
-export type ModelFlavor = 'sklearn' | 'xgboost';
+export type ModelFlavor = 'sklearn' | 'xgboost' | 'pytorch' | 'tensorflow';
 export type ModelSourceType = 'manual_upload' | 'training_job';
 
 export interface ModelAPI {
