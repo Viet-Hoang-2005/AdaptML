@@ -16,16 +16,28 @@ variable "project_name" {
   default     = "mlops-paas"
 }
 
-variable "enable_batch_training" {
-  description = "Enable AWS Batch resources for external training backend"
-  type        = bool
-  default     = true
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
 }
 
-variable "enable_compute" {
-  description = "Enable legacy K3s EC2 master/worker compute"
-  type        = bool
-  default     = true
+variable "public_subnet_1a_cidr" {
+  description = "CIDR block for Public Subnet 1a"
+  type        = string
+  default     = "10.0.1.0/24"
+}
+
+variable "private_subnet_1a_cidr" {
+  description = "CIDR block for Private Subnet 1a"
+  type        = string
+  default     = "10.0.2.0/24"
+}
+
+variable "public_subnet_1b_cidr" {
+  description = "CIDR block for Public Subnet 1b"
+  type        = string
+  default     = "10.0.3.0/24"
 }
 
 variable "enable_alb" {
@@ -40,10 +52,10 @@ variable "enable_dns" {
   default     = true
 }
 
-variable "enable_legacy_sagemaker_pipeline" {
-  description = "Enable legacy GitHub Actions and SageMaker IAM resources"
+variable "enable_github_actions_iam" {
+  description = "Enable GitHub Actions OIDC and IAM resources"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_nat_gateway" {
@@ -52,49 +64,44 @@ variable "enable_nat_gateway" {
   default     = true
 }
 
-variable "batch_training_runner_image" {
-  description = "Container image for the AWS Batch training runner. Leave empty to use the module-created ECR repository with the latest tag."
-  type        = string
-  default     = ""
+variable "enable_compute" {
+  description = "Enable legacy K3s EC2 master/worker compute"
+  type        = bool
+  default     = true
 }
 
-variable "batch_training_vcpu" {
-  description = "vCPU assigned to each Batch training job"
+variable "key_name" {
+  description = "EC2 Key Pair name for Master and Worker nodes SSH access"
+  type        = string
+  default     = "mlops-keypair"
+}
+
+variable "master_instance_type" {
+  description = "EC2 instance type for K3s Master node"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "worker_instance_type" {
+  description = "EC2 instance type for K3s Worker nodes"
+  type        = string
+  default     = "t3.large"
+}
+
+variable "master_volume_size" {
+  description = "Root EBS volume size in GB for K3s Master node"
+  type        = number
+  default     = 40
+}
+
+variable "worker_instance_count" {
+  description = "Number of EC2 Worker nodes for K3s cluster"
   type        = number
   default     = 2
 }
 
-variable "batch_training_memory" {
-  description = "Memory in MiB assigned to each Batch training job"
+variable "worker_volume_size" {
+  description = "Root EBS volume size in GB for K3s Worker nodes"
   type        = number
-  default     = 4096
-}
-
-variable "batch_training_job_timeout" {
-  description = "Batch training job timeout in seconds"
-  type        = number
-  default     = 3600
-}
-
-variable "batch_training_compute_environment_type" {
-  description = "AWS Batch compute type: FARGATE, FARGATE_SPOT, or EC2_SPOT"
-  type        = string
-  default     = "FARGATE"
-
-  validation {
-    condition     = contains(["FARGATE", "FARGATE_SPOT", "EC2_SPOT"], var.batch_training_compute_environment_type)
-    error_message = "batch_training_compute_environment_type must be one of FARGATE, FARGATE_SPOT, or EC2_SPOT."
-  }
-}
-
-variable "batch_training_max_vcpus" {
-  description = "Maximum vCPUs AWS Batch can scale to for training jobs"
-  type        = number
-  default     = 16
-}
-
-variable "batch_training_assign_public_ip" {
-  description = "Whether Fargate training jobs should receive a public IP"
-  type        = bool
-  default     = true
+  default     = 40
 }

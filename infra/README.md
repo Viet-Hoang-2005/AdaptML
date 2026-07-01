@@ -42,9 +42,6 @@ Cấu trúc hạ tầng bao gồm các module chính sau:
    - Triển khai **Application Load Balancer (ALB)** để cân bằng tải traffic HTTP/HTTPS vào các Worker nodes.
    - **Route 53**: Cấu hình bản ghi DNS để ánh xạ tên miền gốc và xin chứng chỉ bảo mật (ACM Certificate).
 
-8. **`batch` (Tùy chọn)**:
-   - Triển khai **AWS Batch** (Compute Environment, Job Queue) dùng để offload quá trình huấn luyện mô hình (Retraining) nặng nề khỏi cụm Kubernetes.
-
 ## 🛠️ Hướng dẫn Triển Khai (Deployment)
 
 Yêu cầu chuẩn bị: Cài đặt `terraform`, `aws-cli` và cấu hình tài khoản AWS hợp lệ.
@@ -55,7 +52,7 @@ Yêu cầu chuẩn bị: Cài đặt `terraform`, `aws-cli` và cấu hình tài
    ```
 
 2. Tùy chỉnh tham số (Tùy chọn):
-   Tạo file `terraform.tfvars` và điều chỉnh các cờ bật/tắt tính năng (ví dụ: `enable_compute = true`, `enable_batch_training = false`).
+   Tạo file `terraform.tfvars` và điều chỉnh các cờ bật/tắt tính năng (ví dụ: `enable_compute = true`).
 
 3. Xem trước cấu trúc hạ tầng sẽ thay đổi:
    ```bash

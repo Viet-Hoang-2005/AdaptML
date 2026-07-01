@@ -9,7 +9,4 @@ output "github_actions_role_arn" {
   value       = try(aws_iam_role.github_actions_role[0].arn, null)
 }
 
-output "sagemaker_execution_role_arn" {
-  description = "IAM Role ARN to configure in GitHub Variables for SageMaker"
-  value       = try(aws_iam_role.sagemaker_execution_role[0].arn, null)
-}
+
