@@ -33,10 +33,19 @@ Cấu trúc hạ tầng bao gồm các module chính sau:
      - Cấp quyền cho K8s Worker Nodes được phép đọc/ghi vào S3 Buckets.
      - Cấp quyền lấy dữ liệu nhạy cảm từ AWS Secrets Manager thông qua External Secrets Operator (ESO).
      - Gắn policy `AmazonEBSCSIDriverPolicy` để K3s Worker Nodes có thể tự động cấp phát ổ cứng AWS EBS (ví dụ khi tạo Persistent Volume Claims cho CSDL).
+     - Cấp quyền Karpenter cho cụm K3s self-managed: worker instance profile có quyền controller để tạo EC2 capacity, còn EC2 nodes do Karpenter tạo ra dùng instance profile riêng `mlops-karpenter-node-profile`.
+     - Tạo SQS interruption queue và EventBridge rules để Karpenter nhận Spot interruption/rebalance events.
    - Thiết lập **GitHub Actions OIDC Provider**: Cho phép GitHub Actions tự động xác thực với AWS (Assume Role) để cập nhật Secret và thao tác hạ tầng CI/CD mà không cần cung cấp Access Key tĩnh rủi ro dài hạn.
+
+### Lưu ý khi dùng Karpenter với K3s self-managed
+
+Phần IAM/Terraform chỉ cấp quyền để Karpenter có thể tạo EC2 instances. Với cụm **K3s self-managed**, EC2 mới do Karpenter tạo ra vẫn cần cơ chế bootstrap để tự join vào Kubernetes cluster.
+
+Hiện `EC2NodeClass` trong `k8s/karpenter/nodepool.yaml` đang dùng `amiFamily: AL2`. Trước khi triển khai production, cần bổ sung `userData` hoặc chiến lược AMI riêng để instance mới chạy `k3s agent` và join vào K3s master. Nếu thiếu bước này, Karpenter có thể tạo được máy EC2 nhưng máy đó sẽ không tự trở thành Kubernetes node.
 
 6. **`secrets`**:
    - Khởi tạo AWS Secrets Manager lưu trữ các biến môi trường nhạy cảm (như Database Password, JWT Keys, GitHub Actions Secrets) để Kubernetes tự động đồng bộ xuống cluster.
+   - Mặc định `enable_secrets_manager = true` để tránh Terraform vô tình xóa các secrets đang được External Secrets Operator và CI/CD sử dụng.
 
 7. **`alb` & `dns` (Tùy chọn)**:
    - Triển khai **Application Load Balancer (ALB)** để cân bằng tải traffic HTTP/HTTPS vào các Worker nodes.

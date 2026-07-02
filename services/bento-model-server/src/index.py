@@ -8,8 +8,10 @@ from typing import Any, Dict
 import bentoml
 import mlflow.pyfunc
 from confluent_kafka import Producer
+from fastapi import Body, FastAPI
 
 logger = logging.getLogger("bentoml.paas_service")
+http_app = FastAPI(title="Bento Model Server Runtime")
 
 # Cấu hình Redpanda / Kafka Producer cho Production Logging Layer (Evidently AI Data Drift)
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "redpanda:9092")
@@ -49,6 +51,7 @@ def send_log_to_redpanda(tenant_id: str, model_id: str, features_dict: dict, pre
         logger.error(f"Error sending log to Redpanda: {exc}")
 
 
+@bentoml.asgi_app(http_app, path="/")
 @bentoml.service(
     resources={"cpu": "2"},
     traffic={"timeout": 60},
@@ -67,9 +70,7 @@ class DeepLearningModelService:
             logger.error(f"Error loading model from {model_dir}: {exc}")
             self.model = None
 
-    @bentoml.api
-    def predict(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Endpoint suy luận chính tương thích với Traefik Ingress và Control Plane Django."""
+    def _predict(self, input_data: Dict[str, Any], model_id_str: str | None = None) -> Dict[str, Any]:
         if self.model is None:
             return {"success": False, "error": "Model failed to load at startup"}
 
@@ -92,7 +93,7 @@ class DeepLearningModelService:
 
         # Ghi log bất đồng bộ sang Redpanda/Kafka cho tầng Evidently Drift Monitoring
         tenant_id = os.environ.get("TENANT_ID", "unknown")
-        model_id = os.environ.get("MODEL_ID", "unknown")
+        model_id = os.environ.get("MODEL_ID") or model_id_str or "unknown"
         send_log_to_redpanda(tenant_id, model_id, features if isinstance(features, dict) else {"data": features}, prediction_result)
 
         return {
@@ -101,11 +102,30 @@ class DeepLearningModelService:
             "model_loaded": True,
         }
 
-    @bentoml.api
-    def health(self) -> Dict[str, Any]:
-        """Endpoint kiểm tra sức khỏe tương thích Django Control Plane wait_for_health."""
+    def _health(self, model_id_str: str | None = None) -> Dict[str, Any]:
         return {
             "status": "healthy",
             "model_loaded": self.model is not None,
             "runtime": "bento-model-server-adaptive-batching",
+            "model_id": os.environ.get("MODEL_ID") or model_id_str or "unknown",
         }
+
+    @http_app.post("/models/{model_id_str}/predict")
+    def predict_http(self, model_id_str: str, input_data: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+        """FastAPI-compatible endpoint used by shared Argo deploy routing."""
+        return self._predict(input_data, model_id_str=model_id_str)
+
+    @http_app.get("/models/{model_id_str}/health")
+    def health_http(self, model_id_str: str) -> Dict[str, Any]:
+        """FastAPI-compatible health endpoint used by Control Plane checks."""
+        return self._health(model_id_str=model_id_str)
+
+    @bentoml.api(route="/predict")
+    def predict(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Legacy BentoML prediction endpoint."""
+        return self._predict(input_data)
+
+    @bentoml.api(route="/health")
+    def health(self) -> Dict[str, Any]:
+        """Legacy BentoML health endpoint."""
+        return self._health()

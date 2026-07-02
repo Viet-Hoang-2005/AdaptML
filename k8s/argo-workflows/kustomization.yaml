@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - rbac.yaml
+  - training-namespace.yaml
   - eventbus.yaml
   - eventsource.yaml
   - webhook-service.yaml

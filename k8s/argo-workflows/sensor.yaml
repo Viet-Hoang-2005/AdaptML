@@ -324,7 +324,11 @@ spec:
                       value: ""
                     - name: s3_training_data_uri
                       value: ""
+                    - name: s3_output_uri
+                      value: ""
                     - name: entry_point
+                      value: ""
+                    - name: model_version
                       value: ""
                     - name: control_plane_webhook_url
                       value: ""
@@ -354,14 +358,18 @@ spec:
                   dataKey: body.s3_training_data_uri,
                 }
               dest: spec.arguments.parameters.9.value
-            - src: { dependencyName: train-dep, dataKey: body.entry_point }
+            - src: { dependencyName: train-dep, dataKey: body.s3_output_uri }
               dest: spec.arguments.parameters.10.value
+            - src: { dependencyName: train-dep, dataKey: body.entry_point }
+              dest: spec.arguments.parameters.11.value
+            - src: { dependencyName: train-dep, dataKey: body.model_version }
+              dest: spec.arguments.parameters.12.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.control_plane_webhook_url,
                 }
-              dest: spec.arguments.parameters.11.value
+              dest: spec.arguments.parameters.13.value
 
     - template:
         name: cancel-train-workflow-trigger

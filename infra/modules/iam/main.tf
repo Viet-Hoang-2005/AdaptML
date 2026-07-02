@@ -85,62 +85,255 @@ resource "aws_iam_instance_profile" "worker_profile" {
   role = aws_iam_role.worker_role.name
 }
 
-# Cho phép Worker Node (control-plane pod dùng instance role này) submit/quản lý
-# AWS Batch training jobs và đọc CloudWatch logs của job.
+# Karpenter IAM Role and Policies
 data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
 
-data "aws_iam_policy_document" "worker_batch_policy_doc" {
+resource "aws_iam_role" "karpenter_node_role" {
+  count              = var.enable_karpenter ? 1 : 0
+  name               = "mlops-karpenter-node-role"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+
+  tags = {
+    "karpenter.sh/discovery" = var.karpenter_cluster_name
+  }
+}
+
+resource "aws_iam_instance_profile" "karpenter_node_profile" {
+  count = var.enable_karpenter ? 1 : 0
+  name  = "mlops-karpenter-node-profile"
+  role  = aws_iam_role.karpenter_node_role[0].name
+
+  tags = {
+    "karpenter.sh/discovery" = var.karpenter_cluster_name
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "karpenter_node_s3_attach" {
+  count      = var.enable_karpenter ? 1 : 0
+  role       = aws_iam_role.karpenter_node_role[0].name
+  policy_arn = aws_iam_policy.worker_s3_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "karpenter_node_secrets_attach" {
+  count      = var.enable_karpenter ? 1 : 0
+  role       = aws_iam_role.karpenter_node_role[0].name
+  policy_arn = aws_iam_policy.worker_secrets_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "karpenter_node_ebs_csi_attach" {
+  count      = var.enable_karpenter ? 1 : 0
+  role       = aws_iam_role.karpenter_node_role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
+data "aws_iam_policy_document" "karpenter_controller_policy_doc" {
+  count = var.enable_karpenter ? 1 : 0
+
   statement {
-    sid    = "BatchSubmitAndManage"
+    sid    = "AllowScopedEC2InstanceActions"
     effect = "Allow"
     actions = [
-      "batch:SubmitJob",
-      "batch:DescribeJobs",
-      "batch:TerminateJob",
-      "batch:ListJobs",
-      "batch:DescribeJobQueues",
-      "batch:DescribeJobDefinitions",
+      "ec2:CreateFleet",
+      "ec2:RunInstances"
+    ]
+    resources = [
+      "arn:aws:ec2:*::image/*",
+      "arn:aws:ec2:*::snapshot/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:launch-template/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:security-group/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:subnet/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:spot-instances-request/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:volume/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:network-interface/*"
+    ]
+  }
+
+  statement {
+    sid    = "AllowScopedEC2LaunchTemplateActions"
+    effect = "Allow"
+    actions = [
+      "ec2:CreateLaunchTemplate",
+      "ec2:CreateTags"
+    ]
+    resources = [
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:launch-template/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:fleet/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:volume/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:network-interface/*"
+    ]
+  }
+
+  statement {
+    sid    = "AllowScopedEC2Termination"
+    effect = "Allow"
+    actions = [
+      "ec2:DeleteLaunchTemplate",
+      "ec2:TerminateInstances"
+    ]
+    resources = [
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:launch-template/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*"
+    ]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/karpenter.sh/discovery"
+      values   = [var.karpenter_cluster_name]
+    }
+  }
+
+  statement {
+    sid    = "AllowEC2DescribeAndPricing"
+    effect = "Allow"
+    actions = [
+      "ec2:DescribeAvailabilityZones",
+      "ec2:DescribeImages",
+      "ec2:DescribeInstanceTypeOfferings",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeInstances",
+      "ec2:DescribeLaunchTemplates",
+      "ec2:DescribeSecurityGroups",
+      "ec2:DescribeSpotPriceHistory",
+      "ec2:DescribeSubnets",
+      "iam:GetInstanceProfile",
+      "pricing:GetProducts",
+      "ssm:GetParameter"
     ]
     resources = ["*"]
   }
 
   statement {
-    sid    = "BatchTrainingLogsRead"
-    effect = "Allow"
-    actions = [
-      "logs:GetLogEvents",
-      "logs:DescribeLogStreams",
-      "logs:DescribeLogGroups",
-    ]
+    sid     = "AllowPassingKarpenterNodeRole"
+    effect  = "Allow"
+    actions = ["iam:PassRole"]
     resources = [
-      "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/batch/mlops-training:*",
+      aws_iam_role.karpenter_node_role[0].arn
     ]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ec2.amazonaws.com"]
+    }
   }
 
-  # AWS Batch cần PassRole để gán execution/job role vào container của job.
   statement {
-    sid    = "BatchPassRole"
+    sid     = "AllowSpotServiceLinkedRole"
+    effect  = "Allow"
+    actions = ["iam:CreateServiceLinkedRole"]
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot"
+    ]
+    condition {
+      test     = "StringLike"
+      variable = "iam:AWSServiceName"
+      values   = ["spot.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid    = "AllowInterruptionQueueRead"
     effect = "Allow"
     actions = [
-      "iam:PassRole",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueUrl",
+      "sqs:ReceiveMessage"
     ]
     resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/mlops-paas-batch-task-execution-role",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/mlops-paas-batch-training-job-role",
+      aws_sqs_queue.karpenter_interruption_queue[0].arn
     ]
   }
 }
 
-resource "aws_iam_policy" "worker_batch_policy" {
-  name        = "mlops-worker-batch-policy"
-  description = "Allow K3s worker nodes (control-plane) to submit and manage AWS Batch training jobs"
-  policy      = data.aws_iam_policy_document.worker_batch_policy_doc.json
+resource "aws_iam_policy" "karpenter_controller_policy" {
+  count       = var.enable_karpenter ? 1 : 0
+  name        = "mlops-karpenter-controller-policy"
+  description = "Allow Karpenter running on K3s workers to provision EC2 capacity"
+  policy      = data.aws_iam_policy_document.karpenter_controller_policy_doc[0].json
 }
 
-resource "aws_iam_role_policy_attachment" "worker_batch_attach" {
+resource "aws_iam_role_policy_attachment" "worker_karpenter_controller_attach" {
+  count      = var.enable_karpenter ? 1 : 0
   role       = aws_iam_role.worker_role.name
-  policy_arn = aws_iam_policy.worker_batch_policy.arn
+  policy_arn = aws_iam_policy.karpenter_controller_policy[0].arn
+}
+
+resource "aws_sqs_queue" "karpenter_interruption_queue" {
+  count                     = var.enable_karpenter ? 1 : 0
+  name                      = var.karpenter_cluster_name
+  message_retention_seconds = 300
+
+  tags = {
+    "karpenter.sh/discovery" = var.karpenter_cluster_name
+  }
+}
+
+data "aws_iam_policy_document" "karpenter_interruption_queue_policy_doc" {
+  count = var.enable_karpenter ? 1 : 0
+
+  statement {
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.karpenter_interruption_queue[0].arn]
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com", "sqs.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_sqs_queue_policy" "karpenter_interruption_queue_policy" {
+  count     = var.enable_karpenter ? 1 : 0
+  queue_url = aws_sqs_queue.karpenter_interruption_queue[0].id
+  policy    = data.aws_iam_policy_document.karpenter_interruption_queue_policy_doc[0].json
+}
+
+locals {
+  karpenter_interruption_events = var.enable_karpenter ? {
+    rebalance = {
+      description = "EC2 Instance Rebalance Recommendation for Karpenter"
+      pattern = {
+        source        = ["aws.ec2"]
+        "detail-type" = ["EC2 Instance Rebalance Recommendation"]
+      }
+    }
+    spot_interruption = {
+      description = "EC2 Spot Instance Interruption Warning for Karpenter"
+      pattern = {
+        source        = ["aws.ec2"]
+        "detail-type" = ["EC2 Spot Instance Interruption Warning"]
+      }
+    }
+    instance_state_change = {
+      description = "EC2 Instance State-change Notification for Karpenter"
+      pattern = {
+        source        = ["aws.ec2"]
+        "detail-type" = ["EC2 Instance State-change Notification"]
+      }
+    }
+    health_event = {
+      description = "AWS Health Event for Karpenter"
+      pattern = {
+        source        = ["aws.health"]
+        "detail-type" = ["AWS Health Event"]
+      }
+    }
+  } : {}
+}
+
+resource "aws_cloudwatch_event_rule" "karpenter_interruption" {
+  for_each      = local.karpenter_interruption_events
+  name          = "mlops-karpenter-${each.key}"
+  description   = each.value.description
+  event_pattern = jsonencode(each.value.pattern)
+}
+
+resource "aws_cloudwatch_event_target" "karpenter_interruption_queue" {
+  for_each  = local.karpenter_interruption_events
+  rule      = aws_cloudwatch_event_rule.karpenter_interruption[each.key].name
+  target_id = "KarpenterInterruptionQueue"
+  arn       = aws_sqs_queue.karpenter_interruption_queue[0].arn
 }
 
 

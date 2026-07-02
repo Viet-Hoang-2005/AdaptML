@@ -38,6 +38,25 @@ output "github_actions_role_arn" {
   value       = local.enable_shared_iam ? module.iam[0].github_actions_role_arn : null
 }
 
+output "karpenter_node_role_name" {
+  description = "IAM role name used by EC2 instances provisioned by Karpenter"
+  value       = local.enable_shared_iam ? module.iam[0].karpenter_node_role_name : null
+}
+
+output "karpenter_node_instance_profile_name" {
+  description = "IAM instance profile name to set in EC2NodeClass.spec.instanceProfile"
+  value       = local.enable_shared_iam ? module.iam[0].karpenter_node_instance_profile_name : null
+}
+
+output "karpenter_controller_policy_arn" {
+  description = "IAM policy attached to the K3s worker role for Karpenter controller permissions"
+  value       = local.enable_shared_iam ? module.iam[0].karpenter_controller_policy_arn : null
+}
+
+output "karpenter_interruption_queue_name" {
+  description = "SQS queue name to pass as KARPENTER_INTERRUPTION_QUEUE"
+  value       = local.enable_shared_iam ? module.iam[0].karpenter_interruption_queue_name : null
+}
 
 output "acm_ssl_validation_records" {
   description = "CNAME records to copy to Cloudflare DNS table to validate ACM SSL Certificate"

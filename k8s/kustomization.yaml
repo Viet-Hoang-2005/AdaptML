@@ -19,5 +19,6 @@ resources:
   - apps/production
 
   # 3. MLOps Training Platform
-  - kubeflow
+  # Kubeflow Training Operator CRDs/controller are installed by
+  # k8s/scripts/kubeflow-training-operator-install.sh before GitOps sync.
   - karpenter

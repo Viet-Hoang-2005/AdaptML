@@ -34,9 +34,31 @@ class TrainingJobWebhookView(APIView):
         if status_val == "completed":
             training_job.status = "completed"
             training_job.error_message = ""
+            training_job.model_artifact_uri = data.get("model_artifact_uri") or training_job.model_artifact_uri
+            training_job.output_s3_uri = data.get("output_s3_uri") or training_job.output_s3_uri
+            training_job.mark_finished(save=False)
+            update_fields = [
+                "status",
+                "error_message",
+                "model_artifact_uri",
+                "output_s3_uri",
+                "completed_at",
+                "runtime_seconds",
+                "stop_reason",
+                "updated_at",
+            ]
         else:
             training_job.status = "failed"
             training_job.error_message = data.get("error_message", "Training pipeline failed during execution.")
+            training_job.mark_finished(training_job.error_message, save=False)
+            update_fields = [
+                "status",
+                "error_message",
+                "completed_at",
+                "runtime_seconds",
+                "stop_reason",
+                "updated_at",
+            ]
 
-        training_job.save(update_fields=["status", "error_message"])
+        training_job.save(update_fields=update_fields)
         return Response({"message": f"Training job {training_job_id} updated to {training_job.status}."}, status=status.HTTP_200_OK)

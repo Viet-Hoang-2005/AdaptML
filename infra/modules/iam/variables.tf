@@ -24,3 +24,15 @@ variable "enable_github_actions_iam" {
   type        = bool
   default     = false
 }
+
+variable "enable_karpenter" {
+  description = "Whether to create Karpenter IAM resources for the K3s cluster"
+  type        = bool
+  default     = false
+}
+
+variable "karpenter_cluster_name" {
+  description = "Logical cluster name used by Karpenter discovery tags and IAM conditions"
+  type        = string
+  default     = "mlops-paas-cluster"
+}

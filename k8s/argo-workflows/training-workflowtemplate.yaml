@@ -21,11 +21,14 @@ spec:
           - name: accelerator_count
           - name: s3_source_uri
           - name: s3_training_data_uri
+          - name: s3_output_uri
           - name: entry_point
+          - name: model_version
           - name: control_plane_webhook_url
       steps:
-        - - name: run-pytorch-job
-            template: pytorch-job
+        - - name: run-cpu-pytorch-job
+            template: cpu-pytorch-job
+            when: "'{{inputs.parameters.accelerator_type}}' != 'gpu' || {{inputs.parameters.accelerator_count}} == 0"
             arguments:
               parameters:
                 - name: job_id
@@ -40,18 +43,47 @@ spec:
                   value: "{{inputs.parameters.vcpu}}"
                 - name: memory
                   value: "{{inputs.parameters.memory}}"
-                - name: accelerator_type
-                  value: "{{inputs.parameters.accelerator_type}}"
+                - name: s3_source_uri
+                  value: "{{inputs.parameters.s3_source_uri}}"
+                - name: s3_training_data_uri
+                  value: "{{inputs.parameters.s3_training_data_uri}}"
+                - name: s3_output_uri
+                  value: "{{inputs.parameters.s3_output_uri}}"
+                - name: entry_point
+                  value: "{{inputs.parameters.entry_point}}"
+                - name: model_version
+                  value: "{{inputs.parameters.model_version}}"
+          - name: run-gpu-pytorch-job
+            template: gpu-pytorch-job
+            when: "'{{inputs.parameters.accelerator_type}}' == 'gpu' && {{inputs.parameters.accelerator_count}} > 0"
+            arguments:
+              parameters:
+                - name: job_id
+                  value: "{{inputs.parameters.job_id}}"
+                - name: tenant_id
+                  value: "{{inputs.parameters.tenant_id}}"
+                - name: job_name
+                  value: "{{inputs.parameters.job_name}}"
+                - name: namespace
+                  value: "{{inputs.parameters.namespace}}"
+                - name: vcpu
+                  value: "{{inputs.parameters.vcpu}}"
+                - name: memory
+                  value: "{{inputs.parameters.memory}}"
                 - name: accelerator_count
                   value: "{{inputs.parameters.accelerator_count}}"
                 - name: s3_source_uri
                   value: "{{inputs.parameters.s3_source_uri}}"
                 - name: s3_training_data_uri
                   value: "{{inputs.parameters.s3_training_data_uri}}"
+                - name: s3_output_uri
+                  value: "{{inputs.parameters.s3_output_uri}}"
                 - name: entry_point
                   value: "{{inputs.parameters.entry_point}}"
+                - name: model_version
+                  value: "{{inputs.parameters.model_version}}"
 
-    - name: pytorch-job
+    - name: cpu-pytorch-job
       inputs:
         parameters:
           - name: job_id
@@ -60,11 +92,11 @@ spec:
           - name: namespace
           - name: vcpu
           - name: memory
-          - name: accelerator_type
-          - name: accelerator_count
           - name: s3_source_uri
           - name: s3_training_data_uri
+          - name: s3_output_uri
           - name: entry_point
+          - name: model_version
       resource:
         action: create
         successCondition: status.replicaStatuses.Master.succeeded == 1
@@ -90,54 +122,127 @@ spec:
                       training_job_id: "{{inputs.parameters.job_id}}"
                   spec:
                     nodeSelector:
-                      karpenter.sh/capacity-type: spot
+                      mlops-paas/nodepool: training-cpu
+                    imagePullSecrets:
+                      - name: harbor-registry-pull-secret
                     containers:
                       - name: pytorch
-                        image: mlops-paas-training-runner:latest
-                        command: ["python", "-u", "-c"]
-                        args:
-                          - |
-                            import sys, subprocess, socket, os
-                            def log_redis(msg):
-                                try:
-                                    parts = os.environ.get("REDIS_URL", "redis://redis:6379/1").replace("redis://", "").split("/")
-                                    host_port = parts[0].split(":")
-                                    host = host_port[0]
-                                    port = int(host_port[1]) if len(host_port) > 1 else 6379
-                                    key = f"training_logs:{os.environ['JOB_ID']}"
-                                    s = socket.socket()
-                                    s.settimeout(2)
-                                    s.connect((host, port))
-                                    cmd = f"*3\r\n$5\r\nRPUSH\r\n${len(key)}\r\n{key}\r\n${len(msg.encode('utf-8'))}\r\n{msg}\r\n".encode('utf-8')
-                                    s.sendall(cmd)
-                                    s.close()
-                                except Exception:
-                                    pass
-                            log_redis("--- Training job starting on spot instance ---")
-                            p = subprocess.Popen(["python", "-u", f"/app/{os.environ['ENTRY_POINT']}"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-                            for line in p.stdout:
-                                print(line, end="", flush=True)
-                                log_redis(line.rstrip())
-                            p.wait()
-                            log_redis(f"--- Training job completed with exit code {p.returncode} ---")
-                            sys.exit(p.returncode)
+                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:latest
+                        command: ["python", "-u", "/app/train_runner.py"]
                         resources:
+                          requests:
+                            cpu: "{{inputs.parameters.vcpu}}"
+                            memory: "{{inputs.parameters.memory}}Mi"
                           limits:
                             cpu: "{{inputs.parameters.vcpu}}"
                             memory: "{{inputs.parameters.memory}}Mi"
+                        envFrom:
+                          - secretRef:
+                              name: mlops-paas-secret
+                          - configMapRef:
+                              name: mlops-paas-control-plane-config
                         env:
                           - name: S3_SOURCE_URI
                             value: "{{inputs.parameters.s3_source_uri}}"
-                          - name: S3_DATA_URI
+                          - name: S3_TRAINING_DATA_URI
                             value: "{{inputs.parameters.s3_training_data_uri}}"
+                          - name: S3_OUTPUT_URI
+                            value: "{{inputs.parameters.s3_output_uri}}"
+                          - name: TRAINING_JOB_ID
+                            value: "{{inputs.parameters.job_id}}"
                           - name: TENANT_ID
                             value: "{{inputs.parameters.tenant_id}}"
-                          - name: JOB_ID
-                            value: "{{inputs.parameters.job_id}}"
                           - name: ENTRY_POINT
                             value: "{{inputs.parameters.entry_point}}"
+                          - name: MODEL_VERSION
+                            value: "{{inputs.parameters.model_version}}"
                           - name: REDIS_URL
-                            value: "redis://redis:6379/1"
+                            value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
+                          - name: MLFLOW_TRACKING_URI
+                            value: "http://mlflow:5000"
+
+    - name: gpu-pytorch-job
+      inputs:
+        parameters:
+          - name: job_id
+          - name: tenant_id
+          - name: job_name
+          - name: namespace
+          - name: vcpu
+          - name: memory
+          - name: accelerator_count
+          - name: s3_source_uri
+          - name: s3_training_data_uri
+          - name: s3_output_uri
+          - name: entry_point
+          - name: model_version
+      resource:
+        action: create
+        successCondition: status.replicaStatuses.Master.succeeded == 1
+        failureCondition: status.replicaStatuses.Master.failed > 0
+        manifest: |
+          apiVersion: kubeflow.org/v1
+          kind: PyTorchJob
+          metadata:
+            name: {{inputs.parameters.job_name}}
+            namespace: {{inputs.parameters.namespace}}
+            labels:
+              tenant_id: "{{inputs.parameters.tenant_id}}"
+              training_job_id: "{{inputs.parameters.job_id}}"
+              managed_by: argo-workflows
+          spec:
+            pytorchReplicaSpecs:
+              Master:
+                replicas: 1
+                restartPolicy: Never
+                template:
+                  metadata:
+                    labels:
+                      training_job_id: "{{inputs.parameters.job_id}}"
+                  spec:
+                    nodeSelector:
+                      mlops-paas/nodepool: training-gpu
+                    tolerations:
+                      - key: nvidia.com/gpu
+                        operator: Equal
+                        value: "true"
+                        effect: NoSchedule
+                    imagePullSecrets:
+                      - name: harbor-registry-pull-secret
+                    containers:
+                      - name: pytorch
+                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:latest
+                        command: ["python", "-u", "/app/train_runner.py"]
+                        resources:
+                          requests:
+                            cpu: "{{inputs.parameters.vcpu}}"
+                            memory: "{{inputs.parameters.memory}}Mi"
+                          limits:
+                            cpu: "{{inputs.parameters.vcpu}}"
+                            memory: "{{inputs.parameters.memory}}Mi"
+                            nvidia.com/gpu: "{{inputs.parameters.accelerator_count}}"
+                        envFrom:
+                          - secretRef:
+                              name: mlops-paas-secret
+                          - configMapRef:
+                              name: mlops-paas-control-plane-config
+                        env:
+                          - name: S3_SOURCE_URI
+                            value: "{{inputs.parameters.s3_source_uri}}"
+                          - name: S3_TRAINING_DATA_URI
+                            value: "{{inputs.parameters.s3_training_data_uri}}"
+                          - name: S3_OUTPUT_URI
+                            value: "{{inputs.parameters.s3_output_uri}}"
+                          - name: TRAINING_JOB_ID
+                            value: "{{inputs.parameters.job_id}}"
+                          - name: TENANT_ID
+                            value: "{{inputs.parameters.tenant_id}}"
+                          - name: ENTRY_POINT
+                            value: "{{inputs.parameters.entry_point}}"
+                          - name: MODEL_VERSION
+                            value: "{{inputs.parameters.model_version}}"
+                          - name: REDIS_URL
+                            value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
                           - name: MLFLOW_TRACKING_URI
                             value: "http://mlflow:5000"
 
@@ -151,9 +256,11 @@ spec:
             if [ "{{workflow.status}}" != "Succeeded" ]; then
               STATUS="failed"
             fi
+            MODEL_ARTIFACT_URI="{{workflow.parameters.s3_output_uri}}"
+            OUTPUT_S3_URI="${MODEL_ARTIFACT_URI%/model.tar.gz}/"
             curl -X POST -H "Content-Type: application/json" \
                  -H "X-Training-Webhook-Secret: ${CONTROL_PLANE_WEBHOOK_SECRET}" \
-                 -d "{\"status\": \"${STATUS}\", \"workflow_status\": \"{{workflow.status}}\"}" \
+                 -d "{\"status\": \"${STATUS}\", \"workflow_status\": \"{{workflow.status}}\", \"model_artifact_uri\": \"${MODEL_ARTIFACT_URI}\", \"output_s3_uri\": \"${OUTPUT_S3_URI}\"}" \
                  "{{workflow.parameters.control_plane_webhook_url}}"
         env:
           - name: CONTROL_PLANE_WEBHOOK_SECRET

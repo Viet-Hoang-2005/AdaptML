@@ -21,6 +21,8 @@ jobs:
       packager: ${{ steps.filter.outputs.packager == 'true' || github.event_name == 'workflow_dispatch' }}
       evidently: ${{ steps.filter.outputs.evidently == 'true' || github.event_name == 'workflow_dispatch' }}
       model_server: ${{ steps.filter.outputs.model_server == 'true' || github.event_name == 'workflow_dispatch' }}
+      bento_model_server: ${{ steps.filter.outputs.bento_model_server == 'true' || github.event_name == 'workflow_dispatch' }}
+      training_runner: ${{ steps.filter.outputs.training_runner == 'true' || github.event_name == 'workflow_dispatch' }}
       matrix_targets: ${{ steps.matrix.outputs.targets }}
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +43,10 @@ jobs:
               - 'services/evidently/**'
             model_server:
               - 'services/model-server/**'
+            bento_model_server:
+              - 'services/bento-model-server/**'
+            training_runner:
+              - 'services/training-runner/**'
 
       - name: Generate Dynamic Matrix
         id: matrix
@@ -55,6 +61,8 @@ jobs:
               "packager": "${{ steps.filter.outputs.packager }}" == "true" or is_manual,
               "evidently": "${{ steps.filter.outputs.evidently }}" == "true" or is_manual,
               "model_server": "${{ steps.filter.outputs.model_server }}" == "true" or is_manual,
+              "bento_model_server": "${{ steps.filter.outputs.bento_model_server }}" == "true" or is_manual,
+              "training_runner": "${{ steps.filter.outputs.training_runner }}" == "true" or is_manual,
           }
           configs = {
               "frontend": {"name": "Frontend Web", "id": "frontend", "context": "web", "image": "mlops-paas-web"},
@@ -62,7 +70,9 @@ jobs:
               "consumer": {"name": "Redpanda Consumer", "id": "consumer", "context": "services/consumer", "image": "mlops-paas-consumer"},
               "packager": {"name": "Model Packager", "id": "packager", "context": "services/model-packager", "image": "mlops-paas-model-packager"},
               "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"},
-              "model_server": {"name": "Model Server", "id": "model_server", "context": "services/model-server", "image": "mlops-paas-model-server"}
+              "model_server": {"name": "Model Server", "id": "model_server", "context": "services/model-server", "image": "mlops-paas-model-server"},
+              "bento_model_server": {"name": "Bento Model Server", "id": "bento_model_server", "context": "services/bento-model-server", "image": "bento-model-server"},
+              "training_runner": {"name": "Training Runner", "id": "training_runner", "context": "services/training-runner", "image": "mlops-paas-training-runner"}
           }
           targets = [configs[k] for k, v in changed.items() if v]
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
@@ -199,6 +209,11 @@ jobs:
             yq e -i '(.spec.templates[] | select(.name == "run-evidently") | .container.image) = "'$REG'/mlops-paas-evidently:'$SHA'"' k8s/argo-workflows/evidently-workflowtemplate.yaml
           fi
 
+          if [ "${{ needs.detect-changes.outputs.training_runner }}" == "true" ]; then
+            yq e -i '(.spec.templates[] | select(.name == "cpu-pytorch-job") | .resource.manifest) |= sub("image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:[^\\n]+", "image: '$REG'/mlops-paas-training-runner:'$SHA'")' k8s/argo-workflows/training-workflowtemplate.yaml
+            yq e -i '(.spec.templates[] | select(.name == "gpu-pytorch-job") | .resource.manifest) |= sub("image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:[^\\n]+", "image: '$REG'/mlops-paas-training-runner:'$SHA'")' k8s/argo-workflows/training-workflowtemplate.yaml
+          fi
+
       - name: Generate Summary Table
         id: summary
         run: |
@@ -211,6 +226,8 @@ jobs:
           PACKAGER_TAG="no change"
           EVIDENTLY_TAG="no change"
           MODEL_SERVER_TAG="no change"
+          BENTO_MODEL_SERVER_TAG="no change"
+          TRAINING_RUNNER_TAG="no change"
           
           if [ "${{ needs.detect-changes.outputs.frontend }}" == "true" ]; then
             WEB_TAG="$REG/mlops-paas-web:$SHA"
@@ -235,6 +252,14 @@ jobs:
           if [ "${{ needs.detect-changes.outputs.model_server }}" == "true" ]; then
             MODEL_SERVER_TAG="$REG/mlops-paas-model-server:$SHA"
           fi
+
+          if [ "${{ needs.detect-changes.outputs.bento_model_server }}" == "true" ]; then
+            BENTO_MODEL_SERVER_TAG="$REG/bento-model-server:$SHA"
+          fi
+
+          if [ "${{ needs.detect-changes.outputs.training_runner }}" == "true" ]; then
+            TRAINING_RUNNER_TAG="$REG/mlops-paas-training-runner:$SHA"
+          fi
           
           EOF_DELIM=$(openssl rand -hex 8)
           
@@ -246,7 +271,9 @@ jobs:
           | **Redpanda Consumer** (\`mlops-paas-consumer\`) | \`$CONSUMER_TAG\` |
           | **Model Packager** (\`mlops-paas-model-packager\`) | \`$PACKAGER_TAG\` |
           | **Evidently Drift** (\`mlops-paas-evidently\`) | \`$EVIDENTLY_TAG\` |
-          | **Model Server** (\`mlops-paas-model-server\`) | \`$MODEL_SERVER_TAG\` |"
+          | **Model Server** (\`mlops-paas-model-server\`) | \`$MODEL_SERVER_TAG\` |
+          | **Bento Model Server** (\`bento-model-server\`) | \`$BENTO_MODEL_SERVER_TAG\` |
+          | **Training Runner** (\`mlops-paas-training-runner\`) | \`$TRAINING_RUNNER_TAG\` |"
           
           SUMMARY_CONTENT=$(echo "$RAW_SUMMARY" | sed 's/^ *//')
           

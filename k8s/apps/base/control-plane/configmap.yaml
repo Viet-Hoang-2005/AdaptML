@@ -23,7 +23,7 @@ data:
   ARGO_DRIFT_WEBHOOK_URL: "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/drift"
   AWS_DEFAULT_REGION: "ap-southeast-1"
   AWS_BUCKET_NAME: "mlops-paas-artifacts"
-  TRAINING_BACKEND: "aws_batch"
+  TRAINING_BACKEND: "kubeflow"
   AWS_BATCH_REGION: "ap-southeast-1"
   AWS_BATCH_JOB_QUEUE: "mlops-paas-training-queue"
   AWS_BATCH_JOB_DEFINITION: "mlops-paas-training-job"

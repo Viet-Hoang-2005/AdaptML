@@ -55,7 +55,25 @@ variable "enable_dns" {
 variable "enable_github_actions_iam" {
   description = "Enable GitHub Actions OIDC and IAM resources"
   type        = bool
-  default     = false
+  default     = true
+}
+
+variable "enable_secrets_manager" {
+  description = "Enable AWS Secrets Manager resources consumed by External Secrets and CI/CD"
+  type        = bool
+  default     = true
+}
+
+variable "enable_karpenter" {
+  description = "Enable IAM and discovery tags required by Karpenter on the K3s cluster"
+  type        = bool
+  default     = true
+}
+
+variable "karpenter_cluster_name" {
+  description = "Logical cluster name used by Karpenter discovery tags and IAM conditions"
+  type        = string
+  default     = "mlops-paas-cluster"
 }
 
 variable "enable_nat_gateway" {
