@@ -9,10 +9,10 @@ resources:
 images:
 - name: mlops-paas-consumer
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-consumer
-  newTag: d89b27b56aacc6635e25a2c83c3d65c6e8b950b3
+  newTag: d549e8a29bf4635d4081dd2db952eb0c6d8f266e
 - name: mlops-paas-django
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-django
-  newTag: d89b27b56aacc6635e25a2c83c3d65c6e8b950b3
+  newTag: d549e8a29bf4635d4081dd2db952eb0c6d8f266e
 - name: mlops-paas-web
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-web
-  newTag: d89b27b56aacc6635e25a2c83c3d65c6e8b950b3
+  newTag: d549e8a29bf4635d4081dd2db952eb0c6d8f266e
