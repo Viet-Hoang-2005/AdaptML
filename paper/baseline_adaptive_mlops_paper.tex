@@ -50,25 +50,29 @@ The main contributions of this paper are:
     \item We implement a prototype platform and instantiate it with a Network Intrusion Detection case study to demonstrate the feasibility of the proposed lifecycle.
 \end{itemize}
 
+The remainder of this article is structured as follows. Section~2 reviews related work on MLOps lifecycles, serving platforms, data quality, drift monitoring, and ML-based NIDS. Sections~3--5 define the problem, present the framework, and describe the drift-aware lifecycle algorithm; Sections~6--8 instantiate the framework in the NIDS case study, describe the prototype, and outline the evaluation design. Sections~9 and~10 discuss limitations and conclude the paper.
+
 \section{Related Work}
 
-\subsection{MLOps Architectures}
+\subsection{MLOps Architectures and Lifecycle}
 
-MLOps extends DevOps principles to ML systems by coordinating data engineering, experimentation, training, deployment, monitoring, and governance. Kreuzberger \textit{et al.} define MLOps as a paradigm for reliably and efficiently developing and maintaining ML systems in production \cite{kreuzberger2023mlops}. Their architecture emphasizes components such as data pipelines, training pipelines, model registries, serving infrastructure, and monitoring. This work provides the architectural foundation for our paper, but our focus is narrower: we operationalize monitoring as a drift-aware lifecycle signal in a multi-model serving platform.
+MLOps extends DevOps principles to ML systems by coordinating data engineering, experimentation, training, deployment, monitoring, and governance. Kreuzberger \textit{et al.} define MLOps as a paradigm for reliably and efficiently developing and maintaining ML systems in production \cite{kreuzberger2023mlops}, while John \textit{et al.} propose a maturity model for assessing MLOps adoption \cite{john2021towards}. Sculley \textit{et al.} show that ML systems accumulate technical debt beyond model code, including data dependencies, configuration, monitoring, and feedback loops \cite{sculley2015debt}. Amershi \textit{et al.} further show that software engineering for ML differs from traditional software engineering because data, models, and code evolve together \cite{amershi2019software}. Our work narrows these lifecycle concerns to drift-aware signals for tenant-aware multi-model serving.
 
-John \textit{et al.} propose a framework and maturity model for MLOps adoption \cite{john2021towards}. Their perspective suggests that production ML systems can be evaluated by the degree of automation and integration across the lifecycle. Our framework follows this direction by combining onboarding, serving, logging, and monitoring in a single flow. However, instead of discussing maturity at a general organizational level, we express the lifecycle as a set of model-specific state transitions.
+\subsection{MLOps Platforms, Model Registry, and Model Serving}
 
-\subsection{MLOps Platforms and Case Studies}
+Implementation-oriented MLOps studies show how platform components can connect model development and deployment. Zhou \textit{et al.} discuss a machine learning pipeline platform \cite{zhou2020pipeline}, and Subramanya \textit{et al.} apply an MLOps workflow to electricity market forecasting \cite{subramanya2022devops}. TFX demonstrates how production ML platforms can integrate pipeline stages such as data ingestion, validation, training, and serving \cite{baylor2017tfx}. MLflow provides experiment tracking and model lifecycle support \cite{mlflow}. Separately, Clipper treats online prediction serving as a systems problem involving model abstraction and serving infrastructure \cite{crankshaw2017clipper}. In contrast to systems that focus on a single part of the lifecycle, this baseline combines registry metadata, generated endpoints, production logs, and drift signals in one prototype workflow.
 
-Several studies present MLOps platforms through implementation-oriented case studies. Zhou \textit{et al.} discuss a machine learning pipeline platform that connects different stages of model development and deployment \cite{zhou2020pipeline}. Subramanya \textit{et al.} describe an MLOps workflow and apply it to electricity market forecasting \cite{subramanya2022devops}. These works show that case studies are useful for validating MLOps workflows in a concrete domain. Similarly, this paper uses NIDS as a case study, but the main artifact is the reusable serving and monitoring framework rather than the intrusion detection model itself.
+\subsection{Data Quality, Data Drift, and Concept Drift Monitoring}
 
-\subsection{Data Quality and Drift Monitoring}
+Production ML reliability depends on the data observed after deployment as well as on the pipelines that manage that data. Renggli \textit{et al.} argue that data quality should be treated as a first-class MLOps concern \cite{renggli2021data}, and Polyzotis \textit{et al.} identify data management challenges that arise in production ML pipelines \cite{polyzotis2017data}. Data Drift and concept drift are related but distinct concerns: Gama \textit{et al.} survey adaptation to changing data streams \cite{gama2014survey}, while Webb \textit{et al.} characterize different forms of concept drift \cite{webb2016drift}. In this paper, Data Drift is used as an operational signal. Because production labels may be delayed or unavailable, the system first compares input distributions and then triggers inspection or workflow handoff when drift is detected.
 
-Production ML quality depends on the data observed after deployment. Renggli \textit{et al.} argue that data quality should be treated as a first-class concern in MLOps \cite{renggli2021data}. Data Drift detection is one practical mechanism for identifying when production data no longer resembles the reference data. Gama \textit{et al.} survey concept drift adaptation and show that non-stationarity is a central challenge in learning systems \cite{gama2014survey}. In this paper, Data Drift is used as an operational signal. Because production labels may be delayed or unavailable, the system first compares input distributions and then triggers inspection, retraining, or model replacement workflows when drift is detected.
+\subsection{Cybersecurity/NIDS as a Non-Stationary Case Study}
+
+Network intrusion detection provides a useful non-stationary case study for drift-aware MLOps. CIC-IDS2017 provides labeled intrusion traffic for evaluating intrusion detection models \cite{cicids}, but real deployment environments can differ from dataset conditions. Sommer and Paxson argue that ML-based intrusion detection faces challenges outside closed-world assumptions, including deployment context, generalization, and evolving traffic distributions \cite{sommer2010closedworld}. This paper therefore uses NIDS to illustrate lifecycle and monitoring requirements, not to claim a new state-of-the-art intrusion detection classifier.
 
 \subsection{Research Gap}
 
-The reviewed literature provides three useful foundations: general MLOps architecture, implementation-oriented MLOps case studies, and drift adaptation theory. The gap addressed in this baseline is the integration of these ideas into a concrete multi-model serving framework where drift detection is represented as a model-specific control signal. The proposed framework therefore bridges platform engineering and drift-aware model lifecycle management.
+The reviewed literature covers MLOps architectures, production ML platforms, model serving, data quality, drift adaptation, and NIDS deployment challenges. However, these strands are often treated separately. This paper addresses the gap by presenting a baseline, tenant-aware, multi-model serving framework in which drift monitoring is represented as an explicit lifecycle signal connected to registry metadata, serving endpoints, production logs, and review-driven adaptation actions.
 
 \section{Problem Formulation}
 
@@ -152,6 +156,10 @@ where $\tau_D$ is the dataset-level threshold. This formulation separates model 
 
 The logical flow of the proposed framework consists of four stages. First, a user onboards a model artifact or registers an artifact produced by a controlled training job through the control plane. Second, the data plane exposes the model as a prediction endpoint. Third, each prediction produces an asynchronous log event. Fourth, the monitoring layer periodically reconstructs the current production window and compares it with the reference data. If drift is detected, the adaptation layer creates an alert or triggers a retraining workflow.
 
+% TODO: Add system architecture overview figure showing Web/User, Control Plane, Native Registry/PostgreSQL, Object Storage, AWS Batch/Training Runner, Model Packager, Model Server, Redpanda/Consumer, Drift Monitoring, and deployment boundary.
+% TODO: Add prototype screenshots only if page count remains within the 14-page limit.
+% Candidate screenshots: training job detail, Model Evolution, drift report, CI/CD run, K3s status, AWS Batch job status.
+
 \subsection{Control Plane}
 
 The control plane manages user-facing and governance operations. It stores tenants, authentication credentials, API keys, model metadata, artifact locations, endpoint URLs, access modes, and model statuses. In the prototype, this layer is implemented using Django. A model record contains the model name, description, owner tenant, artifact URI, access mode, generated endpoint, and lifecycle status.
@@ -160,7 +168,7 @@ When a model artifact is uploaded or registered from a completed training job, t
 
 \subsection{Data Plane}
 
-The data plane is implemented as a generic FastAPI model server. Instead of deploying one service per model, the server resolves the model through the path parameter \texttt{model\_id}. It reads the corresponding model metadata, loads the model artifact through MLflow pyfunc, validates the request payload against the expected input format when possible, and returns the prediction result.
+The data plane is implemented as a generic FastAPI model server. The logical serving path resolves models through a shared API, while deployment adapters may create dedicated runtime resources when configured. The server reads the corresponding model metadata, loads the model artifact through MLflow pyfunc, validates the request payload against the expected input format when possible, and returns the prediction result.
 
 Tenant-aware access control is enforced before inference. Public models can be invoked directly, while private models require a valid API key or bearer token. The resolved tenant identifier must match the model owner. This mechanism supports a platform setting where multiple users upload and serve independent models through a shared serving layer.
 
@@ -344,11 +352,30 @@ This paper presented a baseline design for a drift-aware MLOps framework for mul
 \bibitem{kreuzberger2023mlops}
 M. Kreuzberger, N. Kuhl, and S. Hirschl, ``Machine Learning Operations (MLOps): Overview, Definition, and Architecture,'' \textit{IEEE Access}, vol. 11, pp. 31866--31879, 2023.
 
+\bibitem{sculley2015debt}
+D. Sculley, G. Holt, D. Golovin, E. Davydov, T. Phillips, D. Ebner,
+V. Chaudhary, M. Young, J.-F. Crespo, and D. Dennison,
+``Hidden Technical Debt in Machine Learning Systems,''
+in \textit{Advances in Neural Information Processing Systems}, vol. 28, 2015.
+
+\bibitem{amershi2019software}
+S. Amershi, A. Begel, C. Bird, R. DeLine, H. Gall, E. Kamar,
+N. Nagappan, B. Nushi, and T. Zimmermann,
+``Software Engineering for Machine Learning: A Case Study,''
+in \textit{Proc. IEEE/ACM 41st International Conference on Software Engineering:
+Software Engineering in Practice}, 2019, pp. 291--300.
+
 \bibitem{john2021towards}
 M. M. John, H. H. Olsson, and J. Bosch, ``Towards MLOps: A Framework and Maturity Model,'' in \textit{Proc. 47th Euromicro Conference on Software Engineering and Advanced Applications}, 2021, pp. 1--8.
 
 \bibitem{zhou2020pipeline}
 Y. Zhou, Y. Yu, and B. Ding, ``Towards MLOps: A Case Study of ML Pipeline Platform,'' in \textit{Proc. International Conference on Artificial Intelligence and Computer Engineering}, 2020, pp. 494--500.
+
+\bibitem{baylor2017tfx}
+D. Baylor et al.,
+``TFX: A TensorFlow-Based Production-Scale Machine Learning Platform,''
+in \textit{Proc. 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+2017, pp. 1387--1395.
 
 \bibitem{subramanya2022devops}
 S. G. Subramanya, S. Shetty, V. Patil, S. K. Gad, and S. N. Bhat, ``From DevOps to MLOps: Overview and Application to Electricity Market Forecasting,'' \textit{Applied Sciences}, vol. 12, no. 19, 2022.
@@ -356,17 +383,40 @@ S. G. Subramanya, S. Shetty, V. Patil, S. K. Gad, and S. N. Bhat, ``From DevOps 
 \bibitem{renggli2021data}
 C. Renggli, B. Karlaš, B. Ding, F. Liu, K. Schawinski, W. Wu, and C. Zhang, ``A Data Quality-Driven View of MLOps,'' \textit{arXiv preprint arXiv:2102.07750}, 2021.
 
+\bibitem{polyzotis2017data}
+N. Polyzotis, S. Roy, S. E. Whang, and M. Zinkevich,
+``Data Management Challenges in Production Machine Learning,''
+in \textit{Proc. ACM International Conference on Management of Data}, 2017,
+pp. 1723--1726.
+
 \bibitem{gama2014survey}
 J. Gama, I. Zliobaite, A. Bifet, M. Pechenizkiy, and A. Bouchachia, ``A Survey on Concept Drift Adaptation,'' \textit{ACM Computing Surveys}, vol. 46, no. 4, pp. 1--37, 2014.
 
+\bibitem{webb2016drift}
+G. I. Webb, R. Hyde, H. Cao, H.-L. Nguyen, and F. Petitjean,
+``Characterizing Concept Drift,''
+\textit{Data Mining and Knowledge Discovery}, vol. 30, no. 4,
+pp. 964--994, 2016.
+
 \bibitem{mlflow}
 M. Zaharia et al., ``Accelerating the Machine Learning Lifecycle with MLflow,'' \textit{IEEE Data Engineering Bulletin}, vol. 41, no. 4, pp. 39--45, 2018.
+
+\bibitem{crankshaw2017clipper}
+D. Crankshaw, X. Wang, G. Zhou, M. J. Franklin, J. E. Gonzalez, and I. Stoica,
+``Clipper: A Low-Latency Online Prediction Serving System,''
+in \textit{Proc. 14th USENIX Symposium on Networked Systems Design and Implementation},
+2017, pp. 613--627.
 
 \bibitem{xgboost}
 T. Chen and C. Guestrin, ``XGBoost: A Scalable Tree Boosting System,'' in \textit{Proc. 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining}, 2016, pp. 785--794.
 
 \bibitem{cicids}
 I. Sharafaldin, A. H. Lashkari, and A. A. Ghorbani, ``Toward Generating a New Intrusion Detection Dataset and Intrusion Traffic Characterization,'' in \textit{Proc. 4th International Conference on Information Systems Security and Privacy}, 2018, pp. 108--116.
+
+\bibitem{sommer2010closedworld}
+R. Sommer and V. Paxson,
+``Outside the Closed World: On Using Machine Learning for Network Intrusion Detection,''
+in \textit{Proc. IEEE Symposium on Security and Privacy}, 2010, pp. 305--316.
 
 \bibitem{kubernetes}
 B. Burns, B. Grant, D. Oppenheimer, E. Brewer, and J. Wilkes, ``Borg, Omega, and Kubernetes,'' \textit{Communications of the ACM}, vol. 59, no. 5, pp. 50--57, 2016.
