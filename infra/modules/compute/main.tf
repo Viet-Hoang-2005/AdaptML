@@ -20,6 +20,11 @@ resource "aws_instance" "master_node" {
     volume_size = var.master_volume_size
     volume_type = "gp3"
   }
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
   tags = { Name = "mlops-master-node" }
 }
 
@@ -45,4 +50,8 @@ resource "aws_instance" "worker_nodes" {
   }
   iam_instance_profile = var.worker_profile_name
   tags                 = { Name = "mlops-worker-${count.index + 1}" }
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }

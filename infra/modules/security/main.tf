@@ -81,5 +81,8 @@ resource "aws_security_group" "worker_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "mlops-worker-sg" }
+  tags = merge(
+    { Name = "mlops-worker-sg" },
+    var.enable_karpenter ? { "karpenter.sh/discovery" = var.karpenter_cluster_name } : {}
+  )
 }

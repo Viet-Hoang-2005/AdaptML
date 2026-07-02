@@ -1,12 +1,14 @@
 locals {
-  enable_shared_iam     = var.enable_compute || var.enable_github_actions_iam
-  enable_shared_secrets = var.enable_github_actions_iam
+  enable_shared_iam     = var.enable_compute || var.enable_github_actions_iam || var.enable_karpenter
+  enable_shared_secrets = var.enable_secrets_manager
   enable_lb_stack       = var.enable_alb && var.enable_compute && var.enable_dns
 }
 
 module "network" {
   source                 = "./modules/network"
   enable_nat_gateway     = var.enable_nat_gateway
+  enable_karpenter       = var.enable_karpenter
+  karpenter_cluster_name = var.karpenter_cluster_name
   vpc_cidr               = var.vpc_cidr
   public_subnet_1a_cidr  = var.public_subnet_1a_cidr
   public_subnet_1b_cidr  = var.public_subnet_1b_cidr
@@ -17,6 +19,8 @@ module "security" {
   source                        = "./modules/security"
   vpc_id                        = module.network.vpc_id
   enable_legacy_security_groups = var.enable_compute || local.enable_lb_stack
+  enable_karpenter              = var.enable_karpenter
+  karpenter_cluster_name        = var.karpenter_cluster_name
 }
 
 module "storage" {
@@ -37,6 +41,8 @@ module "iam" {
   mlflow_basic_auth_arn      = local.enable_shared_secrets ? module.secrets[0].production_secrets_arn : "*"
 
   enable_github_actions_iam = var.enable_github_actions_iam
+  enable_karpenter          = var.enable_karpenter
+  karpenter_cluster_name    = var.karpenter_cluster_name
 }
 
 module "compute" {
