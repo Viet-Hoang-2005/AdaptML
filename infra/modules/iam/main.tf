@@ -85,7 +85,7 @@ resource "aws_iam_instance_profile" "worker_profile" {
   role = aws_iam_role.worker_role.name
 }
 
-# KARPENTER FOR SELF-MANAGED K3S ON EC2
+# Karpenter IAM Role and Policies
 data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role" "karpenter_node_role" {

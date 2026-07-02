@@ -1,6 +1,6 @@
 <div align="center">
 
-# MLOps NIDS System
+# MLOps PaaS System
 
 ### Nền tảng AI PaaS End-to-End với Kiến trúc Event-Driven, Multi-Tenant và Tự động Hóa Hoàn Toàn cho Phát hiện Tấn công Mạng (NIDS)
 

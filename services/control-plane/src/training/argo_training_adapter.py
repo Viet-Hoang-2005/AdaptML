@@ -15,11 +15,15 @@ def training_webhook_url(training_job_id: int) -> str:
 
 class ArgoTrainingAdapter:
     def start_training_job(self, training_job) -> None:
-        upload_training_inputs_to_s3(training_job)
+        _, _, s3_prefix = upload_training_inputs_to_s3(training_job)
         job_name = f"tjob-{training_job.tenant.tenant_id.lower()}-{training_job.id}"
+        bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "")
+        output_prefix = f"{s3_prefix}/output/kubeflow"
+        model_artifact_uri = f"s3://{bucket_name}/{output_prefix}/model.tar.gz"
         training_job.external_job_id = job_name
         training_job.status = "pending"
-        training_job.save(update_fields=["external_job_id", "status"])
+        training_job.output_s3_uri = f"s3://{bucket_name}/{output_prefix}/"
+        training_job.save(update_fields=["external_job_id", "status", "output_s3_uri"])
 
         # Clear previous logs in Redis
         try:
@@ -43,7 +47,9 @@ class ArgoTrainingAdapter:
             "accelerator_count": str(training_job.accelerator_count),
             "s3_source_uri": str(training_job.s3_source_uri),
             "s3_training_data_uri": str(training_job.s3_training_data_uri),
+            "s3_output_uri": model_artifact_uri,
             "entry_point": str(training_job.entry_point),
+            "model_version": str(training_job.model_version),
             "control_plane_webhook_url": training_webhook_url(training_job.id),
         }
 
