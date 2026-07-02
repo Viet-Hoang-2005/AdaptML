@@ -1,4 +1,5 @@
 bentoml>=1.2.0
+fastapi>=0.110.0
 mlflow==3.11.1
 confluent-kafka==2.3.0
 pandas==2.2.1
