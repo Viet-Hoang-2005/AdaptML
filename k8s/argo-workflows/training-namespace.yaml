@@ -29,6 +29,7 @@ spec:
   target:
     name: harbor-registry-pull-secret
     creationPolicy: Owner
+    deletionPolicy: Retain
     template:
       engineVersion: v2
       type: kubernetes.io/dockerconfigjson
@@ -58,19 +59,12 @@ spec:
   target:
     name: mlops-paas-secret
     creationPolicy: Owner
+    deletionPolicy: Retain
   data:
     - secretKey: CONTROL_PLANE_WEBHOOK_SECRET
       remoteRef:
         key: mlops/production-secrets
         property: CONTROL_PLANE_WEBHOOK_SECRET
-    - secretKey: AWS_ACCESS_KEY_ID
-      remoteRef:
-        key: mlops/production-secrets
-        property: AWS_ACCESS_KEY_ID
-    - secretKey: AWS_SECRET_ACCESS_KEY
-      remoteRef:
-        key: mlops/production-secrets
-        property: AWS_SECRET_ACCESS_KEY
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
