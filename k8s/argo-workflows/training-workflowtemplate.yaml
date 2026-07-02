@@ -82,7 +82,6 @@ spec:
                   value: "{{inputs.parameters.entry_point}}"
                 - name: model_version
                   value: "{{inputs.parameters.model_version}}"
-
     - name: cpu-pytorch-job
       inputs:
         parameters:
@@ -127,7 +126,7 @@ spec:
                       - name: harbor-registry-pull-secret
                     containers:
                       - name: pytorch
-                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:latest
+                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:d549e8a29bf4635d4081dd2db952eb0c6d8f266e
                         command: ["python", "-u", "/app/train_runner.py"]
                         resources:
                           requests:
@@ -160,7 +159,6 @@ spec:
                             value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
                           - name: MLFLOW_TRACKING_URI
                             value: "http://mlflow:5000"
-
     - name: gpu-pytorch-job
       inputs:
         parameters:
@@ -211,7 +209,7 @@ spec:
                       - name: harbor-registry-pull-secret
                     containers:
                       - name: pytorch
-                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:latest
+                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:d549e8a29bf4635d4081dd2db952eb0c6d8f266e
                         command: ["python", "-u", "/app/train_runner.py"]
                         resources:
                           requests:
@@ -245,7 +243,6 @@ spec:
                             value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
                           - name: MLFLOW_TRACKING_URI
                             value: "http://mlflow:5000"
-
     - name: report-status
       container:
         image: curlimages/curl:latest
