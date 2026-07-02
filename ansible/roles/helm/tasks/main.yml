@@ -1,0 +1,15 @@
+---
+- name: Check if Helm is installed
+  command: which helm
+  register: helm_installed
+  failed_when: false
+  changed_when: false
+
+- name: Download and install Helm 3
+  become: true
+  shell: |
+    curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    chmod 700 get_helm.sh
+    ./get_helm.sh
+    rm -f get_helm.sh
+  when: helm_installed.rc != 0

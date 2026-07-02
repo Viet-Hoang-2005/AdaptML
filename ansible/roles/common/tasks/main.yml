@@ -1,0 +1,20 @@
+---
+- name: Wait for automatic system updates (cloud-init/unattended-upgrades) to complete
+  raw: systemd-run --property="After=apt-daily.service apt-daily-upgrade.service" --wait /bin/true
+  changed_when: false
+  failed_when: false
+
+- name: Update apt cache and install common utilities
+  become: true
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+    name:
+      - curl
+      - git
+      - jq
+      - ca-certificates
+      - apt-transport-https
+      - software-properties-common
+      - nfs-common
+    state: present

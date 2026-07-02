@@ -3,6 +3,16 @@ output "master_public_ip" {
   value       = var.enable_compute ? module.compute[0].master_public_ip : null
 }
 
+output "master_private_ip" {
+  description = "Private IP of Master Node inside VPC"
+  value       = var.enable_compute ? module.compute[0].master_private_ip : null
+}
+
+output "worker_private_ips" {
+  description = "List of Private IPs of Worker Nodes inside VPC"
+  value       = var.enable_compute ? module.compute[0].worker_private_ips : []
+}
+
 output "alb_dns" {
   description = "Application Load Balancer AWS Domain"
   value       = local.enable_lb_stack ? module.alb[0].lb_dns_name : null
