@@ -57,6 +57,14 @@ spec:
                       - configMapRef:
                           name: mlops-paas-control-plane-config
                     env:
+                      - name: TENANT_ID
+                        value: "{{inputs.parameters.tenant_id}}"
+                      - name: MODEL_ID
+                        value: "{{inputs.parameters.model_id}}"
+                      - name: MODEL_HASHID
+                        value: "{{inputs.parameters.hashid}}"
+                      - name: MODEL_VERSION
+                        value: "{{inputs.parameters.version}}"
                       - name: DB_USER
                         valueFrom:
                           secretKeyRef:
