@@ -142,6 +142,7 @@ data "aws_iam_policy_document" "karpenter_controller_policy_doc" {
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:launch-template/*",
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:security-group/*",
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:subnet/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:fleet/*",
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:spot-instances-request/*",
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*",
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:volume/*",
@@ -178,8 +179,14 @@ data "aws_iam_policy_document" "karpenter_controller_policy_doc" {
     ]
     condition {
       test     = "StringEquals"
-      variable = "aws:ResourceTag/karpenter.sh/discovery"
-      values   = [var.karpenter_cluster_name]
+      variable = "aws:ResourceTag/kubernetes.io/cluster/${var.karpenter_cluster_name}"
+      values   = ["owned"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "aws:ResourceTag/karpenter.sh/nodepool"
+      values   = ["*"]
     }
   }
 
@@ -197,6 +204,7 @@ data "aws_iam_policy_document" "karpenter_controller_policy_doc" {
       "ec2:DescribeSpotPriceHistory",
       "ec2:DescribeSubnets",
       "iam:GetInstanceProfile",
+      "iam:ListInstanceProfiles",
       "pricing:GetProducts",
       "ssm:GetParameter"
     ]

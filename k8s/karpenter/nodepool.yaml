@@ -1,4 +1,4 @@
-apiVersion: karpenter.sh/v1beta1
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: mlops-paas-training-cpu
@@ -25,12 +25,14 @@ spec:
             - "c6i.2xlarge"
             - "c6i.4xlarge"
       nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
         name: default
   disruption:
     consolidationPolicy: WhenEmpty
     consolidateAfter: 30s
 ---
-apiVersion: karpenter.sh/v1beta1
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: mlops-paas-training-gpu
@@ -59,6 +61,8 @@ spec:
             - "g5.xlarge"
             - "g5.12xlarge"
       nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
         name: default
       taints:
         - key: nvidia.com/gpu
@@ -68,7 +72,7 @@ spec:
     consolidationPolicy: WhenEmpty
     consolidateAfter: 30s
 ---
-apiVersion: karpenter.k8s.aws/v1beta1
+apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: default
@@ -76,7 +80,12 @@ spec:
   # K3s self-managed note: IAM lets Karpenter create EC2 instances, but
   # those instances still need userData or a custom AMI that runs k3s agent
   # and joins them to the existing K3s master.
-  amiFamily: AL2
+  # Keep the AMI selection independent from EKS optimized AMI paths because
+  # this cluster is self-managed K3s, not EKS.
+  amiFamily: Custom
+  amiSelectorTerms:
+    - name: ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*
+      owner: "099720109477"
   instanceProfile: mlops-karpenter-node-profile
   subnetSelectorTerms:
     - tags:
