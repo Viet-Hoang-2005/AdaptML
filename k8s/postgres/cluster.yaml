@@ -34,6 +34,7 @@ spec:
     nodeSelector:
       workload-type: worker
     enablePodAntiAffinity: true
+    podAntiAffinityType: preferred
     topologyKey: kubernetes.io/hostname
 
   # Tuning PostgreSQL parameters cho MLflow workload
@@ -50,5 +51,5 @@ spec:
       cpu: "250m"
       memory: "512Mi"
     limits:
-      cpu: "1000m"
+      cpu: "1"
       memory: "1Gi"
