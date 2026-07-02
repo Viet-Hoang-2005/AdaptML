@@ -458,8 +458,8 @@ export const registerTrainingJobModel = async (
   return data;
 };
 
-export const getTrainingJobLogs = async (jobId: number): Promise<TrainingJobLogsResponse> => {
-  const { data } = await axiosInstance.get<TrainingJobLogsResponse>(controlPlaneURL(`/training/jobs/${jobId}/logs/`));
+export const getTrainingJobLogs = async (jobId: number, offset: number = 0): Promise<TrainingJobLogsResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobLogsResponse>(controlPlaneURL(`/training/jobs/${jobId}/logs/?offset=${offset}`));
   return data;
 };
 

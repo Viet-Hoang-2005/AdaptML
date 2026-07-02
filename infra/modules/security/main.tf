@@ -83,18 +83,3 @@ resource "aws_security_group" "worker_sg" {
   }
   tags = { Name = "mlops-worker-sg" }
 }
-
-resource "aws_security_group" "batch_training_sg" {
-  name        = "mlops-batch-training-sg"
-  description = "Security group for AWS Batch training jobs"
-  vpc_id      = var.vpc_id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = { Name = "mlops-batch-training-sg" }
-}

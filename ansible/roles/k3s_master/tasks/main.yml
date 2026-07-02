@@ -1,0 +1,60 @@
+---
+- name: Check if K3s service exists
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_bin
+
+- name: Install K3s Server
+  become: true
+  shell: |
+    curl -sfL https://get.k3s.io | sh -s - server {{ k3s_server_args }}
+  when: not k3s_bin.stat.exists
+
+- name: Wait for K3s node-token file to be generated
+  become: true
+  wait_for:
+    path: /var/lib/rancher/k3s/server/node-token
+    state: present
+    timeout: 120
+
+- name: Read K3s node token
+  become: true
+  slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: node_token_b64
+
+- name: Set k3s_node_token fact
+  set_fact:
+    k3s_node_token: "{{ node_token_b64['content'] | b64decode | trim }}"
+
+- name: Ensure .kube directory exists for ubuntu user
+  file:
+    path: /home/ubuntu/.kube
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Copy kubeconfig to ubuntu user directory
+  become: true
+  copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /home/ubuntu/.kube/config
+    remote_src: true
+    owner: ubuntu
+    group: ubuntu
+    mode: '0600'
+
+- name: Add KUBECONFIG environment variable to .bashrc
+  lineinfile:
+    path: /home/ubuntu/.bashrc
+    line: 'export KUBECONFIG=/home/ubuntu/.kube/config'
+    state: present
+
+- name: Wait for Kubernetes master node to be Ready
+  shell: kubectl get nodes | grep master-node | grep Ready
+  register: k3s_ready
+  until: k3s_ready.rc == 0
+  retries: 20
+  delay: 10
+  failed_when: false

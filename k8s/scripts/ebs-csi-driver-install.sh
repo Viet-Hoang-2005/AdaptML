@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # install-ebs-csi-driver.sh: Cài đặt AWS EBS CSI Driver vào K3s Cluster
-# Giải quyết lỗi PVC ebs-gp3 bị Pending do thiếu Provisioner 'ebs.csi.aws.com'
 set -euo pipefail
 
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
@@ -10,7 +9,7 @@ echo "[1/3] Add Helm repository 'aws-ebs-csi-driver'..."
 helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
 helm repo update aws-ebs-csi-driver
 
-# 2. Cài đặt hoặc cập nhật AWS EBS CSI Driver vào namespace 'kube-system'
+# 2. Cài đặt hoặc cập nhật AWS EBS CSI Driver vào namespace kube-system
 echo "[2/3] Installing AWS EBS CSI Driver Controller & DaemonSet..."
 helm upgrade --install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver \
   --namespace kube-system \
@@ -31,4 +30,4 @@ kubectl wait --namespace kube-system \
   --selector=app.kubernetes.io/name=aws-ebs-csi-driver \
   --timeout=120s
 
-echo "INSTALLATION COMPLETED! AWS EBS CSI DRIVER IS READY"
+echo "AWS EBS CSI Driver Installation Complete!"

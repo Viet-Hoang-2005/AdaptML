@@ -1,0 +1,87 @@
+import logging
+import os
+import threading
+import requests
+from django.conf import settings
+from django.core.cache import cache
+from training.s3_storage_service import upload_training_inputs_to_s3
+
+logger = logging.getLogger("paas.training.argo")
+
+def training_webhook_url(training_job_id: int) -> str:
+    internal_base_url = getattr(settings, "CONTROL_PLANE_INTERNAL_URL", "http://control-plane:8000").rstrip("/")
+    return f"{internal_base_url}/api/training-jobs/{training_job_id}/training-webhook"
+
+
+class ArgoTrainingAdapter:
+    def start_training_job(self, training_job) -> None:
+        upload_training_inputs_to_s3(training_job)
+        job_name = f"tjob-{training_job.tenant.tenant_id.lower()}-{training_job.id}"
+        training_job.external_job_id = job_name
+        training_job.status = "pending"
+        training_job.save(update_fields=["external_job_id", "status"])
+
+        # Clear previous logs in Redis
+        try:
+            client = cache.client.get_client()
+            client.delete(f"training_logs:{training_job.id}")
+        except Exception as exc:
+            logger.warning(f"Could not clear old training logs in Redis: {exc}")
+
+        webhook_url = os.environ.get(
+            "ARGO_TRAINING_WEBHOOK_URL",
+            "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/train"
+        )
+        payload = {
+            "job_id": str(training_job.id),
+            "tenant_id": str(training_job.tenant.tenant_id),
+            "job_name": job_name,
+            "namespace": os.environ.get("TRAINING_NAMESPACE", "user-jobs"),
+            "vcpu": str(training_job.vcpu),
+            "memory": str(training_job.memory),
+            "accelerator_type": str(training_job.accelerator_type),
+            "accelerator_count": str(training_job.accelerator_count),
+            "s3_source_uri": str(training_job.s3_source_uri),
+            "s3_training_data_uri": str(training_job.s3_training_data_uri),
+            "entry_point": str(training_job.entry_point),
+            "control_plane_webhook_url": training_webhook_url(training_job.id),
+        }
+
+        def _send_webhook():
+            try:
+                logger.info(f"Sending train payload to Argo Events at {webhook_url}: {payload}")
+                response = requests.post(webhook_url, json=payload, timeout=10)
+                if response.status_code >= 400:
+                    logger.error(f"Argo Events returned status {response.status_code}: {response.text}")
+                    training_job.status = "failed"
+                    training_job.error_message = f"Argo Events submission failed ({response.status_code})"
+                    training_job.save(update_fields=["status", "error_message"])
+            except Exception as exc:
+                logger.error(f"Error sending train webhook to Argo Events: {exc}")
+                training_job.status = "failed"
+                training_job.error_message = f"Argo Events submission error: {exc}"
+                training_job.save(update_fields=["status", "error_message"])
+
+        threading.Thread(target=_send_webhook, daemon=True).start()
+
+    def cancel_training_job(self, training_job) -> None:
+        job_name = training_job.external_job_id or f"tjob-{training_job.tenant.tenant_id.lower()}-{training_job.id}"
+        webhook_url = os.environ.get(
+            "ARGO_CANCEL_TRAINING_WEBHOOK_URL",
+            "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/cancel-train"
+        )
+        payload = {
+            "job_name": job_name,
+            "namespace": os.environ.get("TRAINING_NAMESPACE", "user-jobs"),
+        }
+
+        def _send_cancel_webhook():
+            try:
+                logger.info(f"Sending cancel-train payload to Argo Events at {webhook_url}: {payload}")
+                requests.post(webhook_url, json=payload, timeout=10)
+            except Exception as exc:
+                logger.error(f"Error sending cancel-train webhook to Argo Events: {exc}")
+
+        threading.Thread(target=_send_cancel_webhook, daemon=True).start()
+        training_job.status = "cancelled"
+        training_job.save(update_fields=["status"])

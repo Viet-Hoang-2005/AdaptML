@@ -1,0 +1,2 @@
+---
+k3s_server_args: "--write-kubeconfig-mode=644 --node-label workload-type=control-plane"

@@ -11,16 +11,27 @@ metadata:
   namespace: default
 rules:
   - apiGroups: ["argoproj.io"]
-    resources: ["workflows", "workflowtemplates", "cronworkflows", "clusterworkflowtemplates", "workflowtaskresults"]
+    resources:
+      [
+        "workflows",
+        "workflowtemplates",
+        "cronworkflows",
+        "clusterworkflowtemplates",
+        "workflowtaskresults",
+      ]
     verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
   - apiGroups: [""]
-    resources: ["pods", "pods/exec", "pods/log", "secrets", "configmaps", "services"]
+    resources:
+      ["pods", "pods/exec", "pods/log", "secrets", "configmaps", "services"]
     verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
   - apiGroups: ["traefik.io"]
     resources: ["ingressroutes", "middlewares"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+  - apiGroups: ["kubeflow.org"]
+    resources: ["pytorchjobs"]
     verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

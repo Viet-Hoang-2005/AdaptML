@@ -19,7 +19,7 @@ const features = [
   {
     icon: RefreshCw,
     title: 'Model Training',
-    description: 'Automated model retraining pipelines powered by AWS SageMaker.',
+    description: 'Automated distributed training pipelines powered by Kubeflow & Karpenter.',
     color: 'text-amber-400',
     bg: 'bg-amber-500/10',
   },

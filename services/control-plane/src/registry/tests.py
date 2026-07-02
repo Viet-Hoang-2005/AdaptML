@@ -1,9 +1,12 @@
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
 import json
 import requests
+
 from rest_framework.test import APIClient
 from unittest.mock import ANY, Mock, patch
+from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from registry.views import sync_registry_version_from_model_api
 
 from authentication.models import (
     CustomUser,
@@ -15,7 +18,6 @@ from authentication.models import (
     ModelVersion,
     TrainingJob,
 )
-
 
 class ModelEvolutionSummaryMirrorTests(TestCase):
     def setUp(self):
@@ -268,7 +270,6 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
             build_status="not_started",
             status="ready",
         )
-        from registry.views import sync_registry_version_from_model_api
         version = sync_registry_version_from_model_api(model_api)
 
         response = self.client.post(f"/api/registry/versions/{version.id}/build-package/", {}, format="json")
@@ -684,7 +685,6 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # resolve_smoke_test_url replaces public base with internal base when
         # MODEL_SERVER_INTERNAL_URL is configured (http://traefik:5000 in compose).
-        from django.conf import settings
         internal_base = getattr(settings, "MODEL_SERVER_INTERNAL_URL", "").rstrip("/")
         public_base = getattr(settings, "MODEL_SERVER_PUBLIC_URL", "http://localhost:5000").rstrip("/")
         expected_url = "http://localhost:5000/T-1/models/m/v2/predict"

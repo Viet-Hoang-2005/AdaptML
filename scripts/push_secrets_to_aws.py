@@ -86,8 +86,8 @@ def main():
     github_keys = [
         "GITHUB_REPO",
         "GITHUB_TOKEN",
-        "HARBOR_USERNAME",
-        "HARBOR_PASSWORD",
+        "HARBOR_GITHUB_USERNAME",
+        "HARBOR_GITHUB_PASSWORD",
         "COSIGN_PASSWORD",
         "COSIGN_PRIVATE_KEY",
     ]

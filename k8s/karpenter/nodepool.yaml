@@ -1,0 +1,53 @@
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: mlops-paas-training-nodepool
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: 
+            - "g4dn.xlarge"   # 1x NVIDIA T4 GPU, 4 vCPU, 16GB RAM (Spot cost optimal for PyTorch)
+            - "g5.xlarge"     # 1x NVIDIA A10G GPU, 4 vCPU, 16GB RAM
+            - "c6i.2xlarge"   # 8 vCPU, 16GB RAM (High performance CPU training fallback)
+            - "c6i.4xlarge"   # 16 vCPU, 32GB RAM
+      nodeClassRef:
+        name: default
+      taints:
+        - key: nvidia.com/gpu
+          value: "true"
+          effect: NoSchedule
+  # Chính sách Scale-to-Zero tự động dọn dẹp node sau khi trống job 30 giây
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 30s
+---
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "mlops-paas-cluster"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "mlops-paas-cluster"
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 100Gi
+        volumeType: gp3
+        deleteOnTermination: true

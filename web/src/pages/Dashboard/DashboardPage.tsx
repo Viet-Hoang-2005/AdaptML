@@ -36,7 +36,7 @@ export const dashboardPlaceholders = {
   modelTraining: (
     <Placeholder
       title="Model Training"
-      description="Submit new training data and Python source code for SageMaker retraining jobs when model quality drops."
+      description="Submit new training data and Python source code for Kubeflow distributed training jobs with Karpenter autoscaling when model quality drops."
       icon={<Cpu className="h-6 w-6" />}
     />
   ),

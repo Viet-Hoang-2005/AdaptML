@@ -17,6 +17,7 @@ from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 from django.contrib.auth.models import AnonymousUser
+from authentication.models import CustomUser
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 
@@ -32,7 +33,6 @@ def get_user_from_token(raw_token: str):
         user_id = validated.get('user_id')
         if not user_id:
             return None
-        from authentication.models import CustomUser
         return CustomUser.objects.filter(pk=user_id, is_active=True).first()
     except (TokenError, InvalidToken):
         return None

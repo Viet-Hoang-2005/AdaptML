@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
                     "source_zip",
                     models.FileField(
                         storage=authentication.models.training_upload_storage,
-                        upload_to=authentication.models.training_source_zip_path,
+                        upload_to="",
                     ),
                 ),
                 (
@@ -31,14 +31,14 @@ class Migration(migrations.Migration):
                         blank=True,
                         null=True,
                         storage=authentication.models.training_upload_storage,
-                        upload_to=authentication.models.training_requirements_path,
+                        upload_to="",
                     ),
                 ),
                 (
                     "training_data",
                     models.FileField(
                         storage=authentication.models.training_upload_storage,
-                        upload_to=authentication.models.training_data_path,
+                        upload_to="",
                     ),
                 ),
                 ("s3_source_uri", models.CharField(blank=True, max_length=1024)),

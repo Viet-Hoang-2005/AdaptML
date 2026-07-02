@@ -12,8 +12,3 @@ output "worker_sg_id" {
   description = "ID of the worker node security group"
   value       = try(aws_security_group.worker_sg[0].id, null)
 }
-
-output "batch_training_sg_id" {
-  description = "ID of the AWS Batch training security group"
-  value       = aws_security_group.batch_training_sg.id
-}

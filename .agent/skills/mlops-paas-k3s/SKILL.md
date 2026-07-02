@@ -44,3 +44,9 @@ Hệ thống PaaS phục vụ nhiều khách hàng (Multi-tenant) dễ gặp r�
 
 - Xây dựng các Docker **Runtime Templates** nhẹ nhàng (Ví dụ: Image chỉ chứa `onnxruntime` siêu mỏng thay vì cài cả PyTorch).
 - K3s DaemonSet tải sẵn (pre-pull) các Runtime Templates base này lên mọi Node, giúp thời gian tạo Container giảm xuống chỉ còn 1-3 giây.
+
+## 6. Karpenter Dynamic Node Autoscaling cho Workload Huấn luyện (AI Training)
+
+- Thay thế cho AWS Batch/SageMaker, hạ tầng K8s sử dụng **Karpenter** làm Node Autoscaler chuyên dụng cho các job huấn luyện AI.
+- Karpenter lắng nghe sự kiện Pod `Pending` từ CRD `PyTorchJob`, tự động khởi tạo node EC2 có cấu hình GPU/CPU phù hợp (`NodePool` / `EC2NodeClass`) trong vài giây.
+- Khi tác vụ huấn luyện hoàn thành hoặc bị hủy, Karpenter thực hiện Consolidation/Deprovisioning để thu hồi node ngay lập tức, tối ưu chi phí hạ tầng.

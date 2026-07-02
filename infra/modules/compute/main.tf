@@ -11,13 +11,13 @@ data "aws_ami" "ubuntu_22_04" {
 # EC2 Master Node
 resource "aws_instance" "master_node" {
   ami                    = data.aws_ami.ubuntu_22_04.id
-  instance_type          = "t3.medium"
+  instance_type          = var.master_instance_type
   subnet_id              = var.public_subnet_1a_id
   vpc_security_group_ids = [var.master_sg_id]
-  key_name               = "mlops-keypair"
+  key_name               = var.key_name
 
   root_block_device {
-    volume_size = 40
+    volume_size = var.master_volume_size
     volume_type = "gp3"
   }
   tags = { Name = "mlops-master-node" }
@@ -32,15 +32,15 @@ resource "aws_eip" "master_eip" {
 
 # EC2 Worker Node
 resource "aws_instance" "worker_nodes" {
-  count                  = 2
+  count                  = var.worker_instance_count
   ami                    = data.aws_ami.ubuntu_22_04.id
-  instance_type          = "t3.large"
+  instance_type          = var.worker_instance_type
   subnet_id              = var.private_subnet_1a_id
   vpc_security_group_ids = [var.worker_sg_id]
-  key_name               = "mlops-keypair"
+  key_name               = var.key_name
 
   root_block_device {
-    volume_size = 40
+    volume_size = var.worker_volume_size
     volume_type = "gp3"
   }
   iam_instance_profile = var.worker_profile_name

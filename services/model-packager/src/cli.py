@@ -14,6 +14,7 @@ import boto3
 import docker
 import redis
 import requests
+import mlflow.pyfunc
 
 from core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
 
@@ -131,7 +132,8 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
 
     base_name = f"{tenant_id.lower()}-model-{model_id.lower()}:latest"
-    image_tag = f"{harbor_url}/mlops-paas/{base_name}" if harbor_url else base_name
+    harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
+    image_tag = f"{harbor_url}/{harbor_project}/{base_name}" if harbor_url else base_name
 
     print(f"Building Docker image {image_tag} from workspace {workspace}...")
     for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
@@ -149,6 +151,48 @@ RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some req
             elif "errorDetail" in line:
                 raise RuntimeError(line["errorDetail"].get("message", "Failed to push image to Harbor"))
         print("Image successfully pushed to Harbor!")
+
+def build_bento_image(workspace: Path, model_id: str, tenant_id: str, requirements_text: str) -> None:
+    docker_client = docker.from_env()
+    harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
+    harbor_user = os.environ.get("HARBOR_USERNAME", "").strip()
+    harbor_pass = os.environ.get("HARBOR_PASSWORD", "").strip()
+
+    if harbor_url and harbor_user and harbor_pass:
+        print(f"Logging into Harbor registry at {harbor_url}...")
+        docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
+
+    base_image = f"{harbor_url}/mlops-paas/bento-model-server:latest" if harbor_url else "bento-model-server:latest"
+    dockerfile_content = f"""FROM {base_image}
+USER root
+COPY requirements.txt /tmp/custom_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+COPY model /app/model_artifact
+"""
+    (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
+    (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
+
+    base_name = f"{tenant_id.lower()}-model-{model_id.lower()}:latest"
+    harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
+    image_tag = f"{harbor_url}/{harbor_project}/{base_name}" if harbor_url else base_name
+
+    print(f"Building BentoML Docker image {image_tag} from workspace {workspace}...")
+    for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
+        if "stream" in line:
+            print(line["stream"].strip())
+        elif "errorDetail" in line:
+            raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
+    print(f"BentoML Docker image {image_tag} built successfully!")
+
+    if harbor_url and harbor_user and harbor_pass:
+        print(f"Pushing BentoML image {image_tag} to Harbor...")
+        for line in docker_client.images.push(image_tag, stream=True, decode=True):
+            if "status" in line:
+                print(line.get("status", ""))
+            elif "errorDetail" in line:
+                raise RuntimeError(line["errorDetail"].get("message", "Failed to push image to Harbor"))
+        print("BentoML image successfully pushed to Harbor!")
+
 
 def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
     try:
@@ -249,8 +293,12 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
         s3.upload_file(str(zip_path), bucket_name, output_key)
         print("Upload completed.")
 
-        print("Building custom Docker image...")
-        build_custom_image(workspace, model_id, tenant_id, requirements_text)
+        if flavor in ["pytorch", "tensorflow", "keras"]:
+            print("Detected Deep Learning flavor. Building BentoML container image...")
+            build_bento_image(workspace, model_id, tenant_id, requirements_text)
+        else:
+            print("Building custom lightweight Docker image...")
+            build_custom_image(workspace, model_id, tenant_id, requirements_text)
         print("Build completed successfully!")
 
         post_webhook(
@@ -314,7 +362,6 @@ def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> 
             subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(temp_req)], check=True)
 
         print("Validating model load via mlflow.pyfunc...")
-        import mlflow.pyfunc
 
         mlflow.pyfunc.load_model(str(package_dir))
         print("Model loaded successfully!")

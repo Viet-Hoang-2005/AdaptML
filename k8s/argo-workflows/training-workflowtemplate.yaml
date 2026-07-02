@@ -1,0 +1,164 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: mlops-paas-training-pipeline-template
+  namespace: default
+spec:
+  serviceAccountName: argo-workflow-sa
+  entrypoint: training-pipeline
+  onExit: report-status
+  templates:
+    - name: training-pipeline
+      inputs:
+        parameters:
+          - name: job_id
+          - name: tenant_id
+          - name: job_name
+          - name: namespace
+          - name: vcpu
+          - name: memory
+          - name: accelerator_type
+          - name: accelerator_count
+          - name: s3_source_uri
+          - name: s3_training_data_uri
+          - name: entry_point
+          - name: control_plane_webhook_url
+      steps:
+        - - name: run-pytorch-job
+            template: pytorch-job
+            arguments:
+              parameters:
+                - name: job_id
+                  value: "{{inputs.parameters.job_id}}"
+                - name: tenant_id
+                  value: "{{inputs.parameters.tenant_id}}"
+                - name: job_name
+                  value: "{{inputs.parameters.job_name}}"
+                - name: namespace
+                  value: "{{inputs.parameters.namespace}}"
+                - name: vcpu
+                  value: "{{inputs.parameters.vcpu}}"
+                - name: memory
+                  value: "{{inputs.parameters.memory}}"
+                - name: accelerator_type
+                  value: "{{inputs.parameters.accelerator_type}}"
+                - name: accelerator_count
+                  value: "{{inputs.parameters.accelerator_count}}"
+                - name: s3_source_uri
+                  value: "{{inputs.parameters.s3_source_uri}}"
+                - name: s3_training_data_uri
+                  value: "{{inputs.parameters.s3_training_data_uri}}"
+                - name: entry_point
+                  value: "{{inputs.parameters.entry_point}}"
+
+    - name: pytorch-job
+      inputs:
+        parameters:
+          - name: job_id
+          - name: tenant_id
+          - name: job_name
+          - name: namespace
+          - name: vcpu
+          - name: memory
+          - name: accelerator_type
+          - name: accelerator_count
+          - name: s3_source_uri
+          - name: s3_training_data_uri
+          - name: entry_point
+      resource:
+        action: create
+        successCondition: status.replicaStatuses.Master.succeeded == 1
+        failureCondition: status.replicaStatuses.Master.failed > 0
+        manifest: |
+          apiVersion: kubeflow.org/v1
+          kind: PyTorchJob
+          metadata:
+            name: {{inputs.parameters.job_name}}
+            namespace: {{inputs.parameters.namespace}}
+            labels:
+              tenant_id: "{{inputs.parameters.tenant_id}}"
+              training_job_id: "{{inputs.parameters.job_id}}"
+              managed_by: argo-workflows
+          spec:
+            pytorchReplicaSpecs:
+              Master:
+                replicas: 1
+                restartPolicy: Never
+                template:
+                  metadata:
+                    labels:
+                      training_job_id: "{{inputs.parameters.job_id}}"
+                  spec:
+                    nodeSelector:
+                      karpenter.sh/capacity-type: spot
+                    containers:
+                      - name: pytorch
+                        image: mlops-paas-training-runner:latest
+                        command: ["python", "-u", "-c"]
+                        args:
+                          - |
+                            import sys, subprocess, socket, os
+                            def log_redis(msg):
+                                try:
+                                    parts = os.environ.get("REDIS_URL", "redis://redis:6379/1").replace("redis://", "").split("/")
+                                    host_port = parts[0].split(":")
+                                    host = host_port[0]
+                                    port = int(host_port[1]) if len(host_port) > 1 else 6379
+                                    key = f"training_logs:{os.environ['JOB_ID']}"
+                                    s = socket.socket()
+                                    s.settimeout(2)
+                                    s.connect((host, port))
+                                    cmd = f"*3\r\n$5\r\nRPUSH\r\n${len(key)}\r\n{key}\r\n${len(msg.encode('utf-8'))}\r\n{msg}\r\n".encode('utf-8')
+                                    s.sendall(cmd)
+                                    s.close()
+                                except Exception:
+                                    pass
+                            log_redis("--- Training job starting on spot instance ---")
+                            p = subprocess.Popen(["python", "-u", f"/app/{os.environ['ENTRY_POINT']}"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                            for line in p.stdout:
+                                print(line, end="", flush=True)
+                                log_redis(line.rstrip())
+                            p.wait()
+                            log_redis(f"--- Training job completed with exit code {p.returncode} ---")
+                            sys.exit(p.returncode)
+                        resources:
+                          limits:
+                            cpu: "{{inputs.parameters.vcpu}}"
+                            memory: "{{inputs.parameters.memory}}Mi"
+                        env:
+                          - name: S3_SOURCE_URI
+                            value: "{{inputs.parameters.s3_source_uri}}"
+                          - name: S3_DATA_URI
+                            value: "{{inputs.parameters.s3_training_data_uri}}"
+                          - name: TENANT_ID
+                            value: "{{inputs.parameters.tenant_id}}"
+                          - name: JOB_ID
+                            value: "{{inputs.parameters.job_id}}"
+                          - name: ENTRY_POINT
+                            value: "{{inputs.parameters.entry_point}}"
+                          - name: REDIS_URL
+                            value: "redis://redis:6379/1"
+                          - name: MLFLOW_TRACKING_URI
+                            value: "http://mlflow:5000"
+
+    - name: report-status
+      container:
+        image: curlimages/curl:latest
+        command: [sh, -c]
+        args:
+          - |
+            STATUS="completed"
+            if [ "{{workflow.status}}" != "Succeeded" ]; then
+              STATUS="failed"
+            fi
+            curl -X POST -H "Content-Type: application/json" \
+                 -H "X-Training-Webhook-Secret: ${CONTROL_PLANE_WEBHOOK_SECRET}" \
+                 -d "{\"status\": \"${STATUS}\", \"workflow_status\": \"{{workflow.status}}\"}" \
+                 "{{workflow.parameters.control_plane_webhook_url}}"
+        env:
+          - name: CONTROL_PLANE_WEBHOOK_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: mlops-paas-secret
+                key: CONTROL_PLANE_WEBHOOK_SECRET
+                optional: true

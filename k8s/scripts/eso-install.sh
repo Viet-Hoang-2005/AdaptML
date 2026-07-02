@@ -3,12 +3,14 @@
 
 set -e
 
-echo "[1/2] Start installing External Secrets Operator (ESO)..."
+echo "[1/2] Add Helm repository for ESO..."
 
 # Thêm kho chứa Helm của ESO
 helm repo add external-secrets https://charts.external-secrets.io
 helm repo update
 
+
+echo "[2/2] Installing External Secrets Operator (ESO)..."
 # Cài đặt ESO vào namespace external-secrets
 helm install external-secrets \
    external-secrets/external-secrets \
@@ -16,5 +18,5 @@ helm install external-secrets \
     --create-namespace \
     --set installCRDs=true
 
-echo "[2/2] ESO installation complete!"
+echo "ESO installation complete!"
 kubectl get pods -n external-secrets

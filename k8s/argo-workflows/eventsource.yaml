@@ -22,6 +22,14 @@ spec:
       port: "12000"
       endpoint: /drift
       method: POST
+    train:
+      port: "12000"
+      endpoint: /train
+      method: POST
+    cancel-train:
+      port: "12000"
+      endpoint: /cancel-train
+      method: POST
       # Uncomment to restrict to internal cluster calls
       # authSecret:
       #   name: webhook-auth

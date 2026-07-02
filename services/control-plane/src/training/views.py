@@ -21,20 +21,13 @@ from registry.views import (
     validate_unique_model_version,
 )
 from integrations.hashid_utils import encode_model_id, decode_model_id
-from training.aws_batch_service import (
-    cancel_aws_batch_training_job,
-    get_aws_batch_training_log_payload,
+from django.core.cache import cache
+from training.argo_training_adapter import ArgoTrainingAdapter
+from training.kubeflow_service import (
+    create_model_artifact_presigned_url,
     get_training_metrics_payload,
-    refresh_aws_batch_training_job,
-    start_aws_batch_training_job,
-    strip_training_metric_lines,
 )
 from training.local_service import run_local_training_job
-from training.sagemaker_service import (
-    create_model_artifact_presigned_url,
-    refresh_sagemaker_training_job,
-    start_sagemaker_training_job,
-)
 from training.tracking_ingestion_service import (
     ingest_training_job_tracking,
     serialize_training_tracking_summary,
@@ -210,25 +203,6 @@ def _validate_accelerator_config(accelerator_type, accelerator_count, training_b
     if accelerator_type == "gpu":
         if accelerator_count not in GPU_ACCELERATOR_COUNTS:
             raise ValidationError({"error": "GPU accelerator_count must be one of: 1, 2, 4."})
-        if training_backend == "aws_batch" and not settings.ENABLE_GPU_TRAINING:
-            raise ValidationError(
-                {
-                    "error": (
-                        "GPU training is not enabled. Configure AWS Batch EC2 GPU queue/job definition first."
-                    )
-                }
-            )
-        if training_backend == "aws_batch" and (
-            not settings.AWS_BATCH_GPU_JOB_QUEUE or not settings.AWS_BATCH_GPU_JOB_DEFINITION
-        ):
-            raise ValidationError(
-                {
-                    "error": (
-                        "Missing AWS Batch GPU configuration: AWS_BATCH_GPU_JOB_QUEUE, "
-                        "AWS_BATCH_GPU_JOB_DEFINITION."
-                    )
-                }
-            )
 
 
 def _validate_source_zip_entry_point(source_zip, entry_point):
@@ -296,11 +270,9 @@ def _ensure_active_job_capacity(user):
 def _submit_training_job(training_job, training_backend):
     if training_backend == "local":
         run_local_training_job(training_job)
-    elif training_backend == "aws_batch":
-        start_aws_batch_training_job(training_job)
     else:
-        start_sagemaker_training_job(training_job)
-    create_training_job_event(training_job, "JOB_SUBMITTED", "Training job submitted to backend.")
+        ArgoTrainingAdapter().start_training_job(training_job)
+    create_training_job_event(training_job, "JOB_SUBMITTED", f"Training job submitted to backend: {training_backend}.")
 
 
 def validate_create_training_job_request(request):
@@ -312,18 +284,18 @@ def validate_create_training_job_request(request):
     memory = _parse_positive_int(request.data.get("memory"), "memory", 4096)
     accelerator_type = (request.data.get("accelerator_type") or "none").strip().lower()
     accelerator_count = _parse_non_negative_int(request.data.get("accelerator_count"), "accelerator_count", 0)
-    source_zip = request.FILES.get("source_zip")
-    training_data = request.FILES.get("training_data")
     registered_model_id = request.data.get("registered_model_id")
-    base_model = None
 
-    if registered_model_id:
-        model_id_int = decode_model_id(registered_model_id)
-        if not model_id_int:
-            raise ValidationError({"error": "Invalid registered_model_id."})
-        base_model = ModelAPI.objects.filter(id=model_id_int, tenant=request.user).first()
-        if not base_model:
-            raise ValidationError({"error": "Registered model not found."})
+    if not registered_model_id:
+        raise ValidationError({"error": "registered_model_id is required. You must select a model to train."})
+
+    model_id_int = decode_model_id(registered_model_id)
+    if not model_id_int:
+        raise ValidationError({"error": "Invalid registered_model_id."})
+        
+    base_model = ModelAPI.objects.filter(id=model_id_int, tenant=request.user).first()
+    if not base_model:
+        raise ValidationError({"error": "Registered model not found."})
 
     if not name:
         raise ValidationError({"error": "Training job name is required."})
@@ -344,19 +316,6 @@ def validate_create_training_job_request(request):
         )
     training_backend = settings.TRAINING_BACKEND
     _validate_accelerator_config(accelerator_type, accelerator_count, training_backend)
-    if not base_model:
-        if not source_zip:
-            raise ValidationError({"error": "Source code zip is required."})
-        if not training_data:
-            raise ValidationError({"error": "Training data CSV is required."})
-
-        _validate_upload_size(source_zip, "Source code zip")
-        _validate_upload_size(training_data, "Training data CSV")
-
-        if not (source_zip.name.lower().endswith(".zip") or source_zip.name.lower().endswith(".py")):
-            raise ValidationError({"error": "source_zip must be a .zip or .py file."})
-        if not training_data.name.lower().endswith(".csv"):
-            raise ValidationError({"error": "training_data must be a .csv file."})
 
     entry_point_path = Path(entry_point)
     if entry_point_path.is_absolute() or ".." in entry_point_path.parts:
@@ -369,14 +328,8 @@ def validate_create_training_job_request(request):
             _validate_source_zip_entry_point(base_model.source_code_file.file, entry_point)
         else:
             # New path: source code stored in S3 via SourceEditor
-            user_name = (
-                base_model.tenant.email.split('@')[0]
-                if getattr(base_model.tenant, 'email', None)
-                else base_model.tenant.tenant_id
-            )
-            safe_model_name = base_model.name.replace(' ', '') if base_model.name else 'UnnamedModel'
             safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
-            s3_code_prefix = f'{user_name}/models/{safe_model_name}/{safe_version}/code/'
+            s3_code_prefix = f'users/{base_model.tenant.tenant_id}/models/{encode_model_id(base_model.id)}/{safe_version}/code/'
             s3_files = get_s3_file_list(s3_code_prefix)
             # Filter out .keep placeholder files
             real_files = [f for f in s3_files if not f['relative_path'].endswith('.keep')]
@@ -395,11 +348,6 @@ def validate_create_training_job_request(request):
                         )
                     }
                 )
-    else:
-        _validate_source_zip_entry_point(source_zip, entry_point)
-
-    s3_reference_prefix = None
-    if base_model:
         if not base_model.reference_data_file:
             user_name = (
                 base_model.tenant.email.split('@')[0]
@@ -408,7 +356,7 @@ def validate_create_training_job_request(request):
             )
             safe_model_name = base_model.name.replace(' ', '') if base_model.name else 'UnnamedModel'
             safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
-            s3_reference_prefix = f'{user_name}/models/{safe_model_name}/{safe_version}/references/'
+            s3_reference_prefix = f'users/{base_model.tenant.tenant_id}/models/{encode_model_id(base_model.id)}/{safe_version}/references/'
             s3_ref_files = get_s3_file_list(s3_reference_prefix)
             csv_files = [f for f in s3_ref_files if f['relative_path'].lower().endswith('.csv')]
             if not csv_files:
@@ -425,8 +373,6 @@ def validate_create_training_job_request(request):
         "max_runtime_seconds": max_runtime_seconds,
         "accelerator_type": accelerator_type,
         "accelerator_count": accelerator_count,
-        "source_zip": source_zip,
-        "training_data": training_data,
         "base_model": base_model,
         "s3_code_prefix": s3_code_prefix,
         "s3_reference_prefix": s3_reference_prefix,
@@ -449,9 +395,9 @@ class TrainingJobListCreateView(APIView):
 
     def post(self, request):
         payload = validate_create_training_job_request(request)
-        training_backend = settings.TRAINING_BACKEND
-        if training_backend not in {"sagemaker", "local", "aws_batch"}:
-            raise ValidationError({"error": "TRAINING_BACKEND must be 'sagemaker', 'local', or 'aws_batch'."})
+        training_backend = getattr(settings, "TRAINING_BACKEND", "kubeflow")
+        if training_backend not in {"kubeflow", "local"}:
+            raise ValidationError({"error": "TRAINING_BACKEND must be 'kubeflow' or 'local'."})
         _ensure_active_job_capacity(request.user)
 
         usage = _training_usage_for_user(request.user)
@@ -467,29 +413,7 @@ class TrainingJobListCreateView(APIView):
             )
 
         base_model = payload["base_model"]
-        # When base_model uses S3 source-code-files (SourceEditor path), source_code_file FileField is empty.
-        # Use a blank placeholder so TrainingJob.objects.create() succeeds.
-        # The actual S3 prefix will be stored in s3_source_uri for job execution.
-        if base_model and base_model.source_code_file:
-            source_zip = base_model.source_code_file
-        elif base_model and payload.get("s3_code_prefix"):
-            source_zip = ContentFile(b"", name="source_from_s3.zip")
-        else:
-            source_zip = payload["source_zip"]
-
-        if base_model and base_model.reference_data_file:
-            training_data = base_model.reference_data_file
-        elif base_model and payload.get("s3_reference_prefix"):
-            training_data = ContentFile(b"", name="train_from_s3.csv")
-        else:
-            training_data = payload["training_data"]
-
-        # Lấy requirements_text từ base_model nếu có, tạo in-memory file để gán vào training_job
-        requirements_file = None
-        if base_model and base_model.requirements_text:
-            req_bytes = base_model.requirements_text.encode("utf-8")
-            requirements_file = ContentFile(req_bytes, name="requirements.txt")
-
+        
         training_job = TrainingJob.objects.create(
             tenant=request.user,
             name=payload["name"],
@@ -501,9 +425,7 @@ class TrainingJobListCreateView(APIView):
             max_runtime_seconds=payload["max_runtime_seconds"],
             accelerator_type=payload["accelerator_type"],
             accelerator_count=payload["accelerator_count"],
-            source_zip=source_zip,
-            requirements_file=requirements_file,
-            training_data=training_data,
+            model_api=base_model,
             status="pending",
             # Store S3 prefixes for job runners that support it
             s3_source_uri=payload.get("s3_code_prefix") or "",
@@ -557,10 +479,6 @@ class TrainingJobRefreshStatusView(TrainingJobDetailView):
             return Response(serialize_training_job(training_job), status=status.HTTP_200_OK)
 
         try:
-            if training_job.training_backend == "aws_batch":
-                refresh_aws_batch_training_job(training_job)
-            else:
-                refresh_sagemaker_training_job(training_job)
             if previous_status != training_job.status:
                 event_type = {
                     "running": "JOB_RUNNING",
@@ -597,8 +515,8 @@ class TrainingJobCancelView(TrainingJobDetailView):
             raise ValidationError({"error": "Only pending, uploading, or running jobs can be cancelled."})
 
         reason = "User cancelled training job"
-        if training_job.training_backend == "aws_batch":
-            cancel_aws_batch_training_job(training_job, reason)
+        if training_job.training_backend != "local":
+            ArgoTrainingAdapter().cancel_training_job(training_job)
         elif training_job.training_backend == "local":
             raise ValidationError({"error": "Cancel is not supported for local training jobs in this demo backend."})
 
@@ -778,35 +696,35 @@ class TrainingJobLogsView(TrainingJobDetailView):
     def get(self, request, training_job_id):
         training_job = self.get_training_job(request, training_job_id)
 
-        logs = training_job.training_logs
-        log_stream_name = ""
-        next_token = ""
-        if training_job.training_backend == "aws_batch":
-            log_payload = get_aws_batch_training_log_payload(training_job)
-            logs = log_payload["logs"]
-            log_stream_name = log_payload["log_stream_name"]
-            next_token = log_payload["next_token"]
-            if logs != training_job.training_logs:
-                training_job.training_logs = logs
+        offset = int(request.query_params.get("offset", 0))
+        limit = int(request.query_params.get("limit", 100))
+
+        try:
+            client = cache.client.get_client()
+            logs = client.lrange(f"training_logs:{training_job.id}", offset, offset + limit - 1)
+            logs_str = [log.decode('utf-8') if isinstance(log, bytes) else str(log) for log in logs]
+
+            # Store to db fallback if finished and logs present
+            if logs_str and training_job.status in {"completed", "failed"} and not training_job.training_logs:
+                training_job.training_logs = "\n".join(logs_str)
                 training_job.save(update_fields=["training_logs", "updated_at"])
 
-        if not logs and training_job.error_message:
-            logs = training_job.error_message
-        display_logs = strip_training_metric_lines(logs)
+            display_text = "\n".join(logs_str)
+            if not display_text and training_job.training_logs:
+                display_text = training_job.training_logs
 
-        return Response(
-            {
+            return Response({
                 "job_id": training_job.id,
                 "training_job_id": training_job.id,
+                "logs": logs_str,
+                "text": display_text or (training_job.error_message if training_job.error_message else "No training logs are available yet."),
+                "next_offset": offset + len(logs),
                 "status": training_job.status,
-                "logs": display_logs or "No training logs are available yet.",
-                "text": display_logs or "No training logs are available yet.",
-                "log_stream_name": log_stream_name,
-                "next_token": next_token,
+                "error_message": training_job.error_message or "",
                 "updated_at": training_job.updated_at,
-            },
-            status=status.HTTP_200_OK,
-        )
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": f"Failed to fetch training logs: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class TrainingJobMetricsView(TrainingJobDetailView):

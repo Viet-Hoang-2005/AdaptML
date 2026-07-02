@@ -20,6 +20,12 @@ spec:
     - name: delete-dep
       eventSourceName: webhook-eventsource
       eventName: delete
+    - name: train-dep
+      eventSourceName: webhook-eventsource
+      eventName: train
+    - name: cancel-train-dep
+      eventSourceName: webhook-eventsource
+      eventName: cancel-train
   triggers:
     - template:
         name: build-workflow-trigger
@@ -222,23 +228,38 @@ spec:
               dest: spec.arguments.parameters.3.value
             - src: { dependencyName: drift-dep, dataKey: body.model_uri }
               dest: spec.arguments.parameters.4.value
-            - src: { dependencyName: drift-dep, dataKey: body.reference_data_url }
+            - src:
+                { dependencyName: drift-dep, dataKey: body.reference_data_url }
               dest: spec.arguments.parameters.5.value
             - src: { dependencyName: drift-dep, dataKey: body.html_s3_uri }
               dest: spec.arguments.parameters.6.value
-            - src: { dependencyName: drift-dep, dataKey: body.report_json_s3_uri }
+            - src:
+                { dependencyName: drift-dep, dataKey: body.report_json_s3_uri }
               dest: spec.arguments.parameters.7.value
-            - src: { dependencyName: drift-dep, dataKey: body.summary_json_s3_uri }
+            - src:
+                { dependencyName: drift-dep, dataKey: body.summary_json_s3_uri }
               dest: spec.arguments.parameters.8.value
             - src: { dependencyName: drift-dep, dataKey: body.html_public_url }
               dest: spec.arguments.parameters.9.value
             - src: { dependencyName: drift-dep, dataKey: body.html_upload_url }
               dest: spec.arguments.parameters.10.value
-            - src: { dependencyName: drift-dep, dataKey: body.report_json_upload_url }
+            - src:
+                {
+                  dependencyName: drift-dep,
+                  dataKey: body.report_json_upload_url,
+                }
               dest: spec.arguments.parameters.11.value
-            - src: { dependencyName: drift-dep, dataKey: body.summary_json_upload_url }
+            - src:
+                {
+                  dependencyName: drift-dep,
+                  dataKey: body.summary_json_upload_url,
+                }
               dest: spec.arguments.parameters.12.value
-            - src: { dependencyName: drift-dep, dataKey: body.control_plane_webhook_url }
+            - src:
+                {
+                  dependencyName: drift-dep,
+                  dataKey: body.control_plane_webhook_url,
+                }
               dest: spec.arguments.parameters.13.value
 
     - template:
@@ -265,3 +286,106 @@ spec:
                 dependencyName: delete-dep
                 dataKey: body.container_name
               dest: spec.arguments.parameters.0.value
+
+    - template:
+        name: train-workflow-trigger
+        conditions: "train-dep"
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: train-model-job-
+                namespace: default
+              spec:
+                workflowTemplateRef:
+                  name: mlops-paas-training-pipeline-template
+                arguments:
+                  parameters:
+                    - name: job_id
+                      value: ""
+                    - name: tenant_id
+                      value: ""
+                    - name: job_name
+                      value: ""
+                    - name: namespace
+                      value: ""
+                    - name: vcpu
+                      value: ""
+                    - name: memory
+                      value: ""
+                    - name: accelerator_type
+                      value: ""
+                    - name: accelerator_count
+                      value: ""
+                    - name: s3_source_uri
+                      value: ""
+                    - name: s3_training_data_uri
+                      value: ""
+                    - name: entry_point
+                      value: ""
+                    - name: control_plane_webhook_url
+                      value: ""
+          parameters:
+            - src: { dependencyName: train-dep, dataKey: body.job_id }
+              dest: spec.arguments.parameters.0.value
+            - src: { dependencyName: train-dep, dataKey: body.tenant_id }
+              dest: spec.arguments.parameters.1.value
+            - src: { dependencyName: train-dep, dataKey: body.job_name }
+              dest: spec.arguments.parameters.2.value
+            - src: { dependencyName: train-dep, dataKey: body.namespace }
+              dest: spec.arguments.parameters.3.value
+            - src: { dependencyName: train-dep, dataKey: body.vcpu }
+              dest: spec.arguments.parameters.4.value
+            - src: { dependencyName: train-dep, dataKey: body.memory }
+              dest: spec.arguments.parameters.5.value
+            - src: { dependencyName: train-dep, dataKey: body.accelerator_type }
+              dest: spec.arguments.parameters.6.value
+            - src:
+                { dependencyName: train-dep, dataKey: body.accelerator_count }
+              dest: spec.arguments.parameters.7.value
+            - src: { dependencyName: train-dep, dataKey: body.s3_source_uri }
+              dest: spec.arguments.parameters.8.value
+            - src:
+                {
+                  dependencyName: train-dep,
+                  dataKey: body.s3_training_data_uri,
+                }
+              dest: spec.arguments.parameters.9.value
+            - src: { dependencyName: train-dep, dataKey: body.entry_point }
+              dest: spec.arguments.parameters.10.value
+            - src:
+                {
+                  dependencyName: train-dep,
+                  dataKey: body.control_plane_webhook_url,
+                }
+              dest: spec.arguments.parameters.11.value
+
+    - template:
+        name: cancel-train-workflow-trigger
+        conditions: "cancel-train-dep"
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: cancel-train-job-
+                namespace: default
+              spec:
+                workflowTemplateRef:
+                  name: mlops-paas-training-cancel-template
+                arguments:
+                  parameters:
+                    - name: job_name
+                      value: ""
+                    - name: namespace
+                      value: ""
+          parameters:
+            - src: { dependencyName: cancel-train-dep, dataKey: body.job_name }
+              dest: spec.arguments.parameters.0.value
+            - src: { dependencyName: cancel-train-dep, dataKey: body.namespace }
+              dest: spec.arguments.parameters.1.value
