@@ -22,8 +22,9 @@ class ArgoTrainingAdapter:
         _, _, s3_prefix = upload_training_inputs_to_s3(training_job)
         job_name = f"tjob-{training_job.tenant.tenant_id.lower()}-{training_job.id}"
         bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "")
-        output_prefix = f"{s3_prefix}/output/kubeflow"
+        output_prefix = f"{s3_prefix}/output"
         model_artifact_uri = f"s3://{bucket_name}/{output_prefix}/model.tar.gz"
+        job_bundle_uri = f"s3://{bucket_name}/{s3_prefix}/source/source.zip"
         training_job.external_job_id = job_name
         training_job.status = "pending"
         training_job.model_artifact_uri = model_artifact_uri
@@ -37,9 +38,12 @@ class ArgoTrainingAdapter:
         except Exception as exc:
             logger.warning(f"Could not clear old training logs in Redis: {exc}")
 
+        requirements_text = training_job.model_api.requirements_text if getattr(training_job, "model_api", None) else ""
+
         source_presigned = generate_presigned_download_url(str(training_job.s3_source_uri), expiry_seconds=14400)
         data_presigned = generate_presigned_download_url(str(training_job.s3_training_data_uri), expiry_seconds=14400)
         output_presigned = generate_presigned_upload_url(model_artifact_uri, expiry_seconds=14400)
+        bundle_presigned = generate_presigned_upload_url(job_bundle_uri, expiry_seconds=14400)
 
         webhook_url = os.environ.get(
             "ARGO_TRAINING_WEBHOOK_URL",
@@ -57,6 +61,8 @@ class ArgoTrainingAdapter:
             "s3_source_uri": source_presigned,
             "s3_training_data_uri": data_presigned,
             "s3_output_uri": output_presigned,
+            "s3_job_source_bundle_uri": bundle_presigned,
+            "requirements_text": requirements_text,
             "entry_point": str(training_job.entry_point),
             "model_version": str(training_job.model_version),
             "control_plane_webhook_url": training_webhook_url(training_job.id),

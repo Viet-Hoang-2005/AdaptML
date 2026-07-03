@@ -25,6 +25,10 @@ spec:
           - name: entry_point
           - name: model_version
           - name: control_plane_webhook_url
+          - name: s3_job_source_bundle_uri
+            value: ""
+          - name: requirements_text
+            value: ""
       steps:
         - - name: run-cpu-pytorch-job
             template: cpu-pytorch-job
@@ -53,6 +57,10 @@ spec:
                   value: "{{inputs.parameters.entry_point}}"
                 - name: model_version
                   value: "{{inputs.parameters.model_version}}"
+                - name: s3_job_source_bundle_uri
+                  value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
+                - name: requirements_text
+                  value: "{{inputs.parameters.requirements_text}}"
           - name: run-gpu-pytorch-job
             template: gpu-pytorch-job
             when: "'{{inputs.parameters.accelerator_type}}' == 'gpu' && {{inputs.parameters.accelerator_count}} > 0"
@@ -82,6 +90,10 @@ spec:
                   value: "{{inputs.parameters.entry_point}}"
                 - name: model_version
                   value: "{{inputs.parameters.model_version}}"
+                - name: s3_job_source_bundle_uri
+                  value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
+                - name: requirements_text
+                  value: "{{inputs.parameters.requirements_text}}"
     - name: cpu-pytorch-job
       inputs:
         parameters:
@@ -96,6 +108,8 @@ spec:
           - name: s3_output_uri
           - name: entry_point
           - name: model_version
+          - name: s3_job_source_bundle_uri
+          - name: requirements_text
       resource:
         action: create
         successCondition: status.replicaStatuses.Master.succeeded == 1
@@ -147,6 +161,10 @@ spec:
                             value: "{{inputs.parameters.s3_training_data_uri}}"
                           - name: S3_OUTPUT_URI
                             value: "{{inputs.parameters.s3_output_uri}}"
+                          - name: S3_JOB_SOURCE_BUNDLE_URI
+                            value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
+                          - name: REQUIREMENTS_TEXT
+                            value: "{{inputs.parameters.requirements_text}}"
                           - name: TRAINING_JOB_ID
                             value: "{{inputs.parameters.job_id}}"
                           - name: TENANT_ID
@@ -174,6 +192,8 @@ spec:
           - name: s3_output_uri
           - name: entry_point
           - name: model_version
+          - name: s3_job_source_bundle_uri
+          - name: requirements_text
       resource:
         action: create
         successCondition: status.replicaStatuses.Master.succeeded == 1
@@ -195,6 +215,8 @@ spec:
                 restartPolicy: Never
                 template:
                   metadata:
+                    annotations:
+                      sidecar.istio.io/inject: "false"
                     labels:
                       training_job_id: "{{inputs.parameters.job_id}}"
                   spec:
@@ -210,11 +232,13 @@ spec:
                     containers:
                       - name: pytorch
                         image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:b0aa8f756cbfe12b546744bb58a865d0b58ec2cb
+                        imagePullPolicy: Always
                         command: ["python", "-u", "/app/train_runner.py"]
                         resources:
                           requests:
                             cpu: "{{inputs.parameters.vcpu}}"
                             memory: "{{inputs.parameters.memory}}Mi"
+                            nvidia.com/gpu: "{{inputs.parameters.accelerator_count}}"
                           limits:
                             cpu: "{{inputs.parameters.vcpu}}"
                             memory: "{{inputs.parameters.memory}}Mi"
@@ -231,6 +255,10 @@ spec:
                             value: "{{inputs.parameters.s3_training_data_uri}}"
                           - name: S3_OUTPUT_URI
                             value: "{{inputs.parameters.s3_output_uri}}"
+                          - name: S3_JOB_SOURCE_BUNDLE_URI
+                            value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
+                          - name: REQUIREMENTS_TEXT
+                            value: "{{inputs.parameters.requirements_text}}"
                           - name: TRAINING_JOB_ID
                             value: "{{inputs.parameters.job_id}}"
                           - name: TENANT_ID
