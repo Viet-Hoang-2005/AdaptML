@@ -69,6 +69,7 @@ class ArgoTrainingAdapter:
             "entry_point": str(training_job.entry_point),
             "model_version": str(training_job.model_version),
             "control_plane_webhook_url": training_webhook_url(training_job.id),
+            "mlflow_tracking_uri": os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server.mlflow-server.svc.cluster.local:5000"),
         }
 
         def _send_webhook():

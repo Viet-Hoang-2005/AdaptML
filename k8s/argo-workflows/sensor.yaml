@@ -336,6 +336,8 @@ spec:
                       value: ""
                     - name: requirements_text
                       value: ""
+                    - name: mlflow_tracking_uri
+                      value: ""
           parameters:
             - src: { dependencyName: train-dep, dataKey: body.job_id }
               dest: spec.arguments.parameters.0.value
@@ -386,6 +388,12 @@ spec:
                   dataKey: body.requirements_text,
                 }
               dest: spec.arguments.parameters.15.value
+            - src:
+                {
+                  dependencyName: train-dep,
+                  dataKey: body.mlflow_tracking_uri,
+                }
+              dest: spec.arguments.parameters.16.value
 
     - template:
         name: cancel-train-workflow-trigger
