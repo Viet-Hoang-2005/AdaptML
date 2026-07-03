@@ -12,6 +12,8 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
+from urllib import request as urlrequest
+from urllib.error import URLError
 
 WORKSPACE = Path("/workspace")
 SOURCE_DIR = WORKSPACE / "source"
@@ -327,6 +329,52 @@ def s3_client():
     return boto3.client("s3", region_name=os.environ.get("AWS_DEFAULT_REGION"))
 
 
+def _imds_request(path: str, token: str | None = None, method: str = "GET", timeout: float = 1.0) -> str:
+    headers = {}
+    if token:
+        headers["X-aws-ec2-metadata-token"] = token
+    if method == "PUT" and path.lstrip("/") == "api/token":
+        headers["X-aws-ec2-metadata-token-ttl-seconds"] = "21600"
+    req = urlrequest.Request(
+        f"http://169.254.169.254/latest/{path.lstrip('/')}",
+        headers=headers,
+        method=method,
+    )
+    with urlrequest.urlopen(req, timeout=timeout) as response:
+        return response.read().decode("utf-8").strip()
+
+
+def tag_current_ec2_instance(training_job_id: str) -> None:
+    if not training_job_id:
+        return
+    try:
+        token = _imds_request(
+            "api/token",
+            method="PUT",
+            timeout=1.0,
+        )
+    except (OSError, URLError):
+        token = None
+
+    try:
+        instance_id = _imds_request("meta-data/instance-id", token=token)
+        availability_zone = _imds_request("meta-data/placement/availability-zone", token=token)
+    except (OSError, URLError) as exc:
+        log(f"Skipping EC2 Name tag update because instance metadata is unavailable: {exc}")
+        return
+
+    region = availability_zone[:-1]
+    instance_name = f"mlops-training-{training_job_id}"
+    try:
+        boto3.client("ec2", region_name=region).create_tags(
+            Resources=[instance_id],
+            Tags=[{"Key": "Name", "Value": instance_name}],
+        )
+        log(f"Tagged EC2 instance {instance_id} as {instance_name}")
+    except Exception as exc:
+        log(f"Skipping EC2 Name tag update for {instance_id}: {exc}")
+
+
 def download_s3(uri: str, destination: Path) -> None:
     bucket, key = parse_s3_uri(uri)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -589,6 +637,8 @@ def main() -> None:
     model_version = os.environ.get("MODEL_VERSION", "").strip()
     training_job_id = os.environ.get("TRAINING_JOB_ID", "").strip()
     requirements_uri = os.environ.get("S3_REQUIREMENTS_URI", "").strip()
+
+    tag_current_ec2_instance(training_job_id)
 
     log("Preparing workspace")
     if WORKSPACE.exists():

@@ -39,9 +39,11 @@ Cấu trúc hạ tầng bao gồm các module chính sau:
 
 ### Lưu ý khi dùng Karpenter với K3s self-managed
 
-Phần IAM/Terraform chỉ cấp quyền để Karpenter có thể tạo EC2 instances. Với cụm **K3s self-managed**, EC2 mới do Karpenter tạo ra vẫn cần cơ chế bootstrap để tự join vào Kubernetes cluster.
+Phần IAM/Terraform cấp quyền để Karpenter có thể tạo EC2 instances. Với cụm **K3s self-managed**, các `EC2NodeClass` trong `k8s/karpenter/nodepool.yaml` dùng Ubuntu Custom AMI kèm `userData` để cài `k3s agent` và join vào K3s master.
 
-Hiện `EC2NodeClass` trong `k8s/karpenter/nodepool.yaml` đang dùng `amiFamily: AL2`. Trước khi triển khai production, cần bổ sung `userData` hoặc chiến lược AMI riêng để instance mới chạy `k3s agent` và join vào K3s master. Nếu thiếu bước này, Karpenter có thể tạo được máy EC2 nhưng máy đó sẽ không tự trở thành Kubernetes node.
+K3s node token không được lưu trong Git. Bootstrap script lấy token từ AWS Secrets Manager secret `mlops/k3s-agent-token`, nên cần đảm bảo secret này tồn tại và instance profile `mlops-karpenter-node-profile` có quyền `secretsmanager:GetSecretValue`.
+
+Khi training container bắt đầu chạy, `services/training-runner` dùng `TRAINING_JOB_ID` để đặt EC2 `Name` tag thành `mlops-training-<training-job-id>`. Instance profile `mlops-karpenter-node-profile` chỉ được phép cập nhật tag `Name` trên EC2 instances thuộc training nodepool.
 
 6. **`secrets`**:
    - Khởi tạo AWS Secrets Manager lưu trữ các biến môi trường nhạy cảm (như Database Password, JWT Keys, GitHub Actions Secrets) để Kubernetes tự động đồng bộ xuống cluster.

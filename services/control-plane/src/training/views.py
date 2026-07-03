@@ -126,9 +126,9 @@ def serialize_training_job(training_job: TrainingJob):
         "accelerator_type": training_job.accelerator_type,
         "accelerator_count": training_job.accelerator_count,
         "retry_of": training_job.retry_of_id,
-        "source_zip": training_job.source_zip.url if training_job.source_zip else "",
-        "requirements_file": training_job.requirements_file.url if training_job.requirements_file else "",
-        "training_data": training_job.training_data.url if training_job.training_data else "",
+        "source_zip": "",
+        "requirements_file": "",
+        "training_data": "",
         "s3_source_uri": training_job.s3_source_uri,
         "s3_training_data_uri": training_job.s3_training_data_uri,
         "sagemaker_job_name": training_job.sagemaker_job_name,
@@ -542,7 +542,7 @@ class TrainingJobRetryView(TrainingJobDetailView):
         original = self.get_training_job(request, training_job_id)
         if original.status not in {"failed", "cancelled"}:
             raise ValidationError({"error": "Only failed or cancelled jobs can be retried."})
-        if not original.source_zip or not original.training_data:
+        if not original.s3_source_uri or not original.s3_training_data_uri:
             raise ValidationError({"error": "Retry from existing artifacts is not available for this job."})
 
         _ensure_active_job_capacity(request.user)
@@ -569,9 +569,8 @@ class TrainingJobRetryView(TrainingJobDetailView):
             max_runtime_seconds=original.max_runtime_seconds,
             accelerator_type=original.accelerator_type,
             accelerator_count=original.accelerator_count,
-            source_zip=original.source_zip.name,
-            requirements_file=original.requirements_file.name if original.requirements_file else None,
-            training_data=original.training_data.name,
+            s3_source_uri=original.s3_source_uri,
+            s3_training_data_uri=original.s3_training_data_uri,
             retry_of=original,
             status="pending",
         )
