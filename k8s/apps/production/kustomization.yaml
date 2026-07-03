@@ -12,7 +12,7 @@ images:
   newTag: d549e8a29bf4635d4081dd2db952eb0c6d8f266e
 - name: mlops-paas-django
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-django
-  newTag: a5f3014ddf2070ee4364733d40654ead2ff430b8
+  newTag: 5f6119f060717c3c5a4b35111f8b75eefdbcff6f
 - name: mlops-paas-web
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-web
   newTag: f9bc7bbfa61d50bc4d4d2cb40a4748c0e9152b23
