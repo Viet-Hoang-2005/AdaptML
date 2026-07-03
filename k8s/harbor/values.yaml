@@ -41,6 +41,7 @@ registry:
 
 trivy:
   enabled: false
+  nodeSelector: { workload-type: worker }
 notary:
   enabled: false
 
@@ -53,8 +54,6 @@ jobservice:
 database:
   nodeSelector: { workload-type: worker }
 redis:
-  nodeSelector: { workload-type: worker }
-trivy:
   nodeSelector: { workload-type: worker }
 exporter:
   nodeSelector: { workload-type: worker }

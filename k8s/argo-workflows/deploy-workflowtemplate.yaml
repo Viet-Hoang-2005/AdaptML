@@ -57,6 +57,14 @@ spec:
                       - configMapRef:
                           name: mlops-paas-control-plane-config
                     env:
+                      - name: TENANT_ID
+                        value: "{{inputs.parameters.tenant_id}}"
+                      - name: MODEL_ID
+                        value: "{{inputs.parameters.model_id}}"
+                      - name: MODEL_HASHID
+                        value: "{{inputs.parameters.hashid}}"
+                      - name: MODEL_VERSION
+                        value: "{{inputs.parameters.version}}"
                       - name: DB_USER
                         valueFrom:
                           secretKeyRef:
@@ -117,4 +125,4 @@ spec:
                   - name: {{inputs.parameters.container_name}}-svc
                     port: 5000
           EOF
-          echo "Deployment successfully created for model {{inputs.parameters.model_id}}"
+          echo "Deployment successfully created: {{inputs.parameters.container_name}} using image {{inputs.parameters.image_name}}"

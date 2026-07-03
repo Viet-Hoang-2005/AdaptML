@@ -1,0 +1,4 @@
+---
+domain_name: "mlops-nids-nt114.id.vn"
+aws_region: "ap-southeast-1"
+k3s_channel: "stable"

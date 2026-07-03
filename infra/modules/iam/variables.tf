@@ -19,8 +19,20 @@ variable "mlflow_basic_auth_arn" {
 }
 
 
-variable "enable_legacy_sagemaker_pipeline" {
-  description = "Whether to create legacy GitHub Actions and SageMaker IAM resources"
+variable "enable_github_actions_iam" {
+  description = "Whether to create GitHub Actions OIDC and IAM resources"
   type        = bool
   default     = false
+}
+
+variable "enable_karpenter" {
+  description = "Whether to create Karpenter IAM resources for the K3s cluster"
+  type        = bool
+  default     = false
+}
+
+variable "karpenter_cluster_name" {
+  description = "Logical cluster name used by Karpenter discovery tags and IAM conditions"
+  type        = string
+  default     = "mlops-paas-cluster"
 }

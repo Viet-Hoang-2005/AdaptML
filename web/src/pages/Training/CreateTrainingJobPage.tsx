@@ -11,6 +11,7 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { LineSteps } from '../../components/ui/LineSteps';
 import { StepTitle } from '../../components/ui/StepTitle';
 import { createTrainingJob, getTrainingJobLogs } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
 import { useModelSelection } from '../../hooks/useModelSelection';
 import { SourceEditor } from '../../components/ui/SourceEditor';
@@ -45,10 +46,10 @@ const acceleratorOptions: Array<{
   disabled?: boolean;
   helper: string;
 }> = [
-  { label: 'No accelerator', type: 'none', count: 0, helper: 'CPU/Fargate queue' },
-  { label: 'GPU x1', type: 'gpu', count: 1, disabled: true, helper: 'Requires AWS Batch EC2 GPU queue' },
-  { label: 'GPU x2', type: 'gpu', count: 2, disabled: true, helper: 'Requires AWS Batch EC2 GPU queue' },
-  { label: 'GPU x4', type: 'gpu', count: 4, disabled: true, helper: 'Requires AWS Batch EC2 GPU queue' },
+  { label: 'No accelerator', type: 'none', count: 0, helper: 'Kubeflow CPU job' },
+  { label: 'GPU x1', type: 'gpu', count: 1, disabled: true, helper: 'Requires GPU Karpenter capacity' },
+  { label: 'GPU x2', type: 'gpu', count: 2, disabled: true, helper: 'Requires GPU Karpenter capacity' },
+  { label: 'GPU x4', type: 'gpu', count: 4, disabled: true, helper: 'Requires GPU Karpenter capacity' },
   { label: 'TPU', type: 'tpu', count: 1, disabled: true, helper: 'Coming soon' },
   { label: 'Trainium', type: 'trainium', count: 1, disabled: true, helper: 'Coming soon' },
 ];
@@ -162,7 +163,7 @@ export default function CreateTrainingJobPage() {
       toast.success('Training job started!');
       startLogPolling(response.id);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String(err.message) : 'Unknown error';
+      const message = getApiErrorMessage(err, 'Unable to start training job.');
       toast.error(`Failed to start training: ${message}`);
     } finally {
       setSubmitting(false);
@@ -365,8 +366,8 @@ export default function CreateTrainingJobPage() {
             </div>
             <div className="mt-4 flex-1">
               <TerminalLogViewer 
-                title="Training Logs (AWS Batch)"
-                placeholder="Click 'Run Training' to provision an AWS Batch EC2 instance and execute your code."
+                title="Training Logs (Kubeflow)"
+                placeholder="Click 'Run Training' to submit a Kubeflow training job and execute your code."
                 logsOverride={trainingLogs}
                 isRunningOverride={isTraining}
                 startLabel="Run Training"

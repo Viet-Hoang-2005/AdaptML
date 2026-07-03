@@ -287,7 +287,6 @@ class DockerDeployAdapter(DeployAdapter):
             return False, friendly_request_failure(exc, endpoint_url=endpoint_url, internal_url=url)
 
     def remove_model(self, model_id: int):
-        from authentication.models import ModelAPI
         model_api = ModelAPI.objects.filter(id=model_id).first()
         tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         try:
@@ -353,7 +352,8 @@ class ArgoDeployAdapter(DeployAdapter):
         image_name = model_api.endpoint_image_name
         if not image_name:
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
-            image_name = f"{harbor_url}/mlops-paas/{tenant_id.lower()}-model-{hashid_str.lower()}:latest"
+            harbor_project = getattr(settings, "HARBOR_USER_PROJECT", "user-images")
+            image_name = f"{harbor_url}/{harbor_project}/{tenant_id.lower()}-model-{hashid_str.lower()}:latest"
 
         payload = {
             "tenant_id": tenant_id,
@@ -433,7 +433,6 @@ class ArgoDeployAdapter(DeployAdapter):
             logger.error("ARGO_EVENTS_WEBHOOK_URL is not set.")
             return
         
-        from authentication.models import ModelAPI
         model_api = ModelAPI.objects.filter(id=model_id).first()
         if not model_api:
             return
@@ -455,7 +454,6 @@ class ArgoDeployAdapter(DeployAdapter):
             logger.error("Failed to trigger Argo Delete Workflow for container %s: %s", container_name, e)
 
     def wait_for_removal(self, model_id: int, timeout_seconds: int = 45, interval_seconds: int = 3) -> bool:
-        from authentication.models import ModelAPI
         model_api = ModelAPI.objects.filter(id=model_id).first()
         if not model_api:
             return True
@@ -485,22 +483,21 @@ class ArgoDeployAdapter(DeployAdapter):
         if not remove_images:
             return results
             
-        from authentication.models import ModelAPI
         model_api = ModelAPI.objects.filter(id=model_id).first()
         if not model_api:
             return results
             
         tenant_id = model_api.tenant.tenant_id
-        from integrations.hashid_utils import encode_model_id
         hashid_str = encode_model_id(model_id)
         repo_name = f"{tenant_id.lower()}-model-{hashid_str.lower()}"
         
         harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
         harbor_username = os.environ.get("HARBOR_USERNAME")
         harbor_password = os.environ.get("HARBOR_PASSWORD")
+        harbor_project = getattr(settings, "HARBOR_USER_PROJECT", "user-images")
         
         if harbor_username and harbor_password:
-            api_url = f"https://{harbor_url}/api/v2.0/projects/mlops-paas/repositories/{repo_name}"
+            api_url = f"https://{harbor_url}/api/v2.0/projects/{harbor_project}/repositories/{repo_name}"
             try:
                 logger.info("Deleting image from Harbor: %s", api_url)
                 response = requests.delete(api_url, auth=(harbor_username, harbor_password), timeout=10)

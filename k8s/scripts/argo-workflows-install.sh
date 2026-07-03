@@ -21,9 +21,6 @@ helm upgrade --install argo-events argo/argo-events \
   --set crds.install=true \
   --wait
 
-echo "=========================================================="
 echo "Argo Workflows & Argo Events Controllers installed successfully!"
-echo "ArgoCD will now reconcile k8s/argo-workflows/ CRs automatically."
-echo "=========================================================="
 kubectl get pods -n argo
 kubectl get pods -n argo-events

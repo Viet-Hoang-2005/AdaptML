@@ -17,3 +17,8 @@ resources:
 
   # 2. Applications (Dùng overlay production)
   - apps/production
+
+  # 3. MLOps Training Platform
+  # Kubeflow Training Operator CRDs/controller are installed by
+  # k8s/scripts/kubeflow-training-operator-install.sh before GitOps sync.
+  - karpenter

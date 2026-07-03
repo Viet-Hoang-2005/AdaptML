@@ -6,6 +6,11 @@ metadata:
     app: mlops-paas-control-plane
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: mlops-paas-control-plane
@@ -34,7 +39,7 @@ spec:
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
-            - "python src/manage.py ensure_db_schema && python src/manage.py migrate"
+            - "python src/manage.py ensure_db_schema && python src/manage.py migrate && python src/manage.py collectstatic --noinput"
           env:
             - name: DB_USER
               valueFrom:

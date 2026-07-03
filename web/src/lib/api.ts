@@ -349,8 +349,12 @@ export const triggerModelAPIBuild = async (modelId: string): Promise<ModelAPI> =
 };
 
 export const updateModelAPI = async (modelId: string, payload: ModelAPIFormValues): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.put<ModelAPI>(controlPlaneURL(`/models/${modelId}/`), modelFormData(payload), {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  const { data } = await axiosInstance.put<ModelAPI>(controlPlaneURL(`/models/${modelId}/`), {
+    name: payload.name,
+    description: payload.description,
+    model_info: payload.model_info,
+    access_mode: payload.access_mode,
+    ...(payload.version ? { version: payload.version } : {}),
   });
   return data;
 };
@@ -458,8 +462,8 @@ export const registerTrainingJobModel = async (
   return data;
 };
 
-export const getTrainingJobLogs = async (jobId: number): Promise<TrainingJobLogsResponse> => {
-  const { data } = await axiosInstance.get<TrainingJobLogsResponse>(controlPlaneURL(`/training/jobs/${jobId}/logs/`));
+export const getTrainingJobLogs = async (jobId: number, offset: number = 0): Promise<TrainingJobLogsResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobLogsResponse>(controlPlaneURL(`/training/jobs/${jobId}/logs/?offset=${offset}`));
   return data;
 };
 

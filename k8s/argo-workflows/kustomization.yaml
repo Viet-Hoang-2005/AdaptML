@@ -3,10 +3,13 @@ kind: Kustomization
 
 resources:
   - rbac.yaml
+  - training-namespace.yaml
   - eventbus.yaml
   - eventsource.yaml
   - webhook-service.yaml
   - build-workflowtemplate.yaml
   - deploy-workflowtemplate.yaml
   - evidently-workflowtemplate.yaml
+  - training-workflowtemplate.yaml
+  - training-cancel-workflowtemplate.yaml
   - sensor.yaml

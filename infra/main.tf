@@ -1,18 +1,26 @@
 locals {
-  enable_shared_iam     = var.enable_compute || var.enable_legacy_sagemaker_pipeline
-  enable_shared_secrets = var.enable_legacy_sagemaker_pipeline
+  enable_shared_iam     = var.enable_compute || var.enable_github_actions_iam || var.enable_karpenter
+  enable_shared_secrets = var.enable_secrets_manager
   enable_lb_stack       = var.enable_alb && var.enable_compute && var.enable_dns
 }
 
 module "network" {
-  source             = "./modules/network"
-  enable_nat_gateway = var.enable_nat_gateway
+  source                 = "./modules/network"
+  enable_nat_gateway     = var.enable_nat_gateway
+  enable_karpenter       = var.enable_karpenter
+  karpenter_cluster_name = var.karpenter_cluster_name
+  vpc_cidr               = var.vpc_cidr
+  public_subnet_1a_cidr  = var.public_subnet_1a_cidr
+  public_subnet_1b_cidr  = var.public_subnet_1b_cidr
+  private_subnet_1a_cidr = var.private_subnet_1a_cidr
 }
 
 module "security" {
   source                        = "./modules/security"
   vpc_id                        = module.network.vpc_id
   enable_legacy_security_groups = var.enable_compute || local.enable_lb_stack
+  enable_karpenter              = var.enable_karpenter
+  karpenter_cluster_name        = var.karpenter_cluster_name
 }
 
 module "storage" {
@@ -32,7 +40,9 @@ module "iam" {
   github_actions_secrets_arn = local.enable_shared_secrets ? module.secrets[0].github_actions_secrets_arn : "*"
   mlflow_basic_auth_arn      = local.enable_shared_secrets ? module.secrets[0].production_secrets_arn : "*"
 
-  enable_legacy_sagemaker_pipeline = var.enable_legacy_sagemaker_pipeline
+  enable_github_actions_iam = var.enable_github_actions_iam
+  enable_karpenter          = var.enable_karpenter
+  karpenter_cluster_name    = var.karpenter_cluster_name
 }
 
 module "compute" {
@@ -43,6 +53,13 @@ module "compute" {
   master_sg_id         = module.security.master_sg_id
   worker_sg_id         = module.security.worker_sg_id
   worker_profile_name  = module.iam[0].worker_profile_name
+
+  key_name              = var.key_name
+  master_instance_type  = var.master_instance_type
+  master_volume_size    = var.master_volume_size
+  worker_instance_count = var.worker_instance_count
+  worker_instance_type  = var.worker_instance_type
+  worker_volume_size    = var.worker_volume_size
 }
 
 module "dns" {
@@ -59,24 +76,4 @@ module "alb" {
   lb_sg_id            = module.security.lb_sg_id
   worker_instance_ids = module.compute[0].worker_instance_ids
   certificate_arn     = module.dns[0].certificate_arn
-}
-
-module "batch_training" {
-  count  = var.enable_batch_training ? 1 : 0
-  source = "./modules/batch"
-
-  project_name          = var.project_name
-  aws_region            = var.aws_region
-  vpc_id                = module.network.vpc_id
-  subnet_ids            = var.enable_nat_gateway ? [module.network.private_subnet_1a_id] : [module.network.public_subnet_1a_id, module.network.public_subnet_1b_id]
-  security_group_ids    = [module.security.batch_training_sg_id]
-  artifacts_bucket_name = module.storage.bucket_id
-  training_runner_image = var.batch_training_runner_image
-  vcpu                  = var.batch_training_vcpu
-  memory                = var.batch_training_memory
-  job_timeout           = var.batch_training_job_timeout
-
-  compute_environment_type = var.batch_training_compute_environment_type
-  max_vcpus                = var.batch_training_max_vcpus
-  assign_public_ip         = var.enable_nat_gateway ? var.batch_training_assign_public_ip : true
 }

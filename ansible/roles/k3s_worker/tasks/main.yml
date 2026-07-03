@@ -1,0 +1,21 @@
+---
+- name: Check if K3s agent service exists
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_bin
+
+- name: Install K3s Agent
+  become: true
+  environment:
+    K3S_URL: "https://{{ hostvars[groups['master'][0]]['private_ip'] }}:6443"
+    K3S_TOKEN: "{{ hostvars[groups['master'][0]]['k3s_node_token'] }}"
+  shell: |
+    curl -sfL https://get.k3s.io | sh -s - agent {{ k3s_agent_args }}
+  when: not k3s_bin.stat.exists
+
+- name: Ensure k3s-agent service is running and enabled
+  become: true
+  systemd:
+    name: k3s-agent
+    state: started
+    enabled: true

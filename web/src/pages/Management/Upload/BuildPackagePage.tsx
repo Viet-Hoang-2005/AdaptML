@@ -40,22 +40,32 @@ export default function BuildPackagePage({
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  
+
   const [step, setStep] = useState(1);
   const [createdModelId, setCreatedModelId] = useState<string | null>(null);
   const [realPreview, setRealPreview] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const expectedPreview = [
-    'model/',
-    'model/MLmodel',
-    'model/requirements.txt',
-    'model/conda.yaml',
-    'model/python_env.yaml',
-    `model/${form.label_mapping_file?.name ?? 'label_encoder.json'}`,
-    `model/${form.source_artifact?.name ?? 'model.pkl'}`,
-  ];
-  
+  const isBento = form.flavor === 'pytorch' || form.flavor === 'tensorflow';
+  const expectedPreview = isBento
+    ? [
+      'bentofile.yaml',
+      'service.py',
+      'requirements.txt',
+      'model/',
+      'model/MLmodel',
+      `model/${form.source_artifact?.name ?? 'model.pt'}`,
+    ]
+    : [
+      'model/',
+      'model/MLmodel',
+      'model/requirements.txt',
+      'model/conda.yaml',
+      'model/python_env.yaml',
+      `model/${form.label_mapping_file?.name ?? 'label_encoder.json'}`,
+      `model/${form.source_artifact?.name ?? 'model.pkl'}`,
+    ];
+
   const preview = realPreview.length > 0 ? realPreview : expectedPreview;
 
   const canContinue = () => {
@@ -73,7 +83,7 @@ export default function BuildPackagePage({
       onSubmitting(true);
       try {
         await deployModelAPI(createdModelId);
-        
+
         let isDeployed = false;
         let attempts = 0;
         const maxAttempts = 30; // 60 seconds
@@ -224,11 +234,11 @@ function ArtifactStep({
 }) {
   return (
     <div className="space-y-5">
-      <StepTitle title="Upload raw artifact" description="Choose a model file. Phase 1 supports .pkl, .joblib, and .xgb artifacts." />
+      <StepTitle title="Upload raw artifact" description="Choose a model file (.pkl, .joblib, .xgb for Tabular; .pt, .pth, .h5, or MLflow .zip for Deep Learning)." />
       <FileDropzone
-        accept=".pkl,.joblib,.xgb"
+        accept=".pkl,.joblib,.xgb,.pt,.pth,.h5,.zip"
         title={form.source_artifact ? form.source_artifact.name : 'Choose raw model artifact'}
-        subtitle=".pkl, .joblib, or .xgb"
+        subtitle=".pkl, .joblib, .xgb, .pt, .pth, .h5, or .zip"
         onChange={(file) => setField('source_artifact', file)}
       />
 
@@ -284,33 +294,59 @@ function FlavorStep({
   form: ModelBuildFormValues;
   setField: (field: keyof ModelBuildFormValues, value: string | File | null) => void;
 }) {
-  const options: Array<{ value: ModelFlavor; title: string; description: string }> = [
-    { value: 'sklearn', title: 'Scikit-learn', description: 'Use for sklearn estimators saved as .pkl or .joblib.' },
-    { value: 'xgboost', title: 'XGBoost', description: 'Use for XGBoost Booster/XGBModel saved as .xgb, .pkl, or .joblib.' },
+  const options: Array<{ value: ModelFlavor; title: string; badge: string; description: string }> = [
+    { value: 'sklearn', title: 'Scikit-learn', badge: 'FastAPI Lightweight', description: 'Use for sklearn estimators saved as .pkl or .joblib. Packaged with minimal memory footprint.' },
+    { value: 'xgboost', title: 'XGBoost', badge: 'FastAPI Lightweight', description: 'Use for XGBoost Booster/XGBModel saved as .xgb, .pkl, or .joblib.' },
+    { value: 'pytorch', title: 'PyTorch', badge: '⚡ BentoML Powered', description: 'Deep Learning models (.pt, .pth, or MLflow). Packaged via BentoML with Adaptive Batching & async Redpanda logging.' },
+    { value: 'tensorflow', title: 'TensorFlow', badge: '⚡ BentoML Powered', description: 'Deep Learning models (.h5, SavedModel). Packaged via BentoML with optimized multi-core inference.' },
   ];
+
+  const isBentoFlavor = form.flavor === 'pytorch' || form.flavor === 'tensorflow';
 
   return (
     <div className="space-y-5">
-      <StepTitle title="Choose framework flavor" description="The packager uses this flavor to call the correct MLflow save_model function." />
-      <div className="grid gap-3 sm:grid-cols-2">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => setField('flavor', option.value)}
-            className={`rounded-2xl border p-5 text-left transition-colors ${
-              form.flavor === option.value
-                ? 'border-black bg-black text-white'
-                : 'border-gray-300 bg-white text-gray-700 hover:border-black'
-            }`}
-          >
-            <span className="text-sm font-bold">{option.title}</span>
-            <p className={`mt-2 text-sm leading-6 ${form.flavor === option.value ? 'text-gray-300' : 'text-gray-500'}`}>
-              {option.description}
-            </p>
-          </button>
-        ))}
+      <StepTitle title="Choose framework flavor" description="Select the machine learning or deep learning framework. Deep Learning models automatically use BentoML Adaptive Batching." />
+      <div className="grid gap-4 sm:grid-cols-2">
+        {options.map((option) => {
+          const isSelected = form.flavor === option.value;
+          const isBento = option.badge.includes('BentoML');
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setField('flavor', option.value)}
+              className={`rounded-2xl border p-5 text-left transition-all ${isSelected
+                  ? 'border-black bg-black text-white shadow-lg'
+                  : 'border-gray-300 bg-white text-gray-700 hover:border-black'
+                }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-base font-bold">{option.title}</span>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${isSelected
+                    ? isBento ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
+                    : isBento ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                  {option.badge}
+                </span>
+              </div>
+              <p className={`mt-2 text-sm leading-6 ${isSelected ? 'text-gray-300' : 'text-gray-500'}`}>
+                {option.description}
+              </p>
+            </button>
+          );
+        })}
       </div>
+
+      {isBentoFlavor && (
+        <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+          <div className="flex items-center gap-2 text-sm font-bold text-purple-950">
+            <span>🚀 BentoML Pluggable Packaging Strategy Active</span>
+          </div>
+          <p className="mt-1 text-sm text-purple-800 leading-relaxed">
+            This model will be containerized using BentoML instead of the default FastAPI server. High-throughput prediction requests will be dynamically batched for optimal concurrency while ensuring 100% data drift telemetry via Redpanda/Kafka to Evidently AI.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -420,7 +456,7 @@ function DeployStep({
   return (
     <div className="space-y-5">
       <StepTitle title="Preview & Deploy" description="Review your model configuration, build the MLflow package, and then deploy it as a REST API." />
-      
+
       <div className="grid gap-4 md:grid-cols-2">
         <SummaryItem label="Model" value={form.name || 'Untitled model'} />
         <SummaryItem label="Version" value={form.version || 'v1'} />

@@ -29,7 +29,10 @@ resource "aws_subnet" "private_1a" {
   vpc_id            = aws_vpc.mlops_vpc.id
   cidr_block        = var.private_subnet_1a_cidr
   availability_zone = "ap-southeast-1a"
-  tags              = { Name = "mlops-subnet-private" }
+  tags = merge(
+    { Name = "mlops-subnet-private" },
+    var.enable_karpenter ? { "karpenter.sh/discovery" = var.karpenter_cluster_name } : {}
+  )
 }
 
 # Internet Gateway

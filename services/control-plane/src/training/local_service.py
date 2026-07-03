@@ -11,14 +11,14 @@ from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
 from authentication.models import TrainingJob
-from training.sagemaker_service import (
+from training.s3_storage_service import (
     _safe_extract_zip,
     _s3_client,
     _s3_uri,
-    _write_field_file_to_path,
-    get_training_job_prefix,
+    _split_s3_uri,
     upload_training_inputs_to_s3,
 )
+from training.tracking_ingestion_service import ingest_training_job_tracking
 
 MAX_LOG_CHARS = 6000
 
@@ -60,12 +60,12 @@ def _create_model_archive(model_dir: Path, archive_path: Path) -> None:
             archive.add(item, arcname=item.relative_to(model_dir))
 
 
-def _prepare_python(source_dir: Path, workspace: Path, requirements_file) -> str:
-    if not requirements_file or not settings.LOCAL_TRAINING_ALLOW_PIP_INSTALL:
+def _prepare_python(source_dir: Path, workspace: Path, requirements_text: str) -> str:
+    if not requirements_text or not settings.LOCAL_TRAINING_ALLOW_PIP_INSTALL:
         return sys.executable
 
     requirements_path = source_dir / "requirements.txt"
-    _write_field_file_to_path(requirements_file, requirements_path)
+    requirements_path.write_text(requirements_text, encoding="utf-8")
 
     venv_dir = workspace / "venv"
     venv.EnvBuilder(with_pip=True).create(venv_dir)
@@ -119,9 +119,13 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
         model_dir.mkdir(parents=True, exist_ok=True)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        _write_field_file_to_path(training_job.source_zip, source_zip_path)
+        s3_client = _s3_client()
+        source_bucket, source_key = _split_s3_uri(training_job.s3_source_uri)
+        s3_client.download_file(source_bucket, source_key, str(source_zip_path))
         _safe_extract_zip(source_zip_path, source_dir)
-        _write_field_file_to_path(training_job.training_data, input_train_dir / "train.csv")
+
+        data_bucket, data_key = _split_s3_uri(training_job.s3_training_data_uri)
+        s3_client.download_file(data_bucket, data_key, str(input_train_dir / "train.csv"))
 
         entry_point_path = source_dir / training_job.entry_point.strip()
         if not entry_point_path.exists() or not entry_point_path.is_file():
@@ -134,7 +138,8 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
                 }
             )
 
-        python_path = _prepare_python(source_dir, workspace, training_job.requirements_file)
+        requirements_text = training_job.model_api.requirements_text if training_job.model_api else ""
+        python_path = _prepare_python(source_dir, workspace, requirements_text)
         env = os.environ.copy()
         env.update(
             {
@@ -186,8 +191,6 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
             ]
         )
         try:
-            from training.tracking_ingestion_service import ingest_training_job_tracking
-
             ingest_training_job_tracking(training_job)
         except Exception as exc:
             training_job.tracking_status = "failed"

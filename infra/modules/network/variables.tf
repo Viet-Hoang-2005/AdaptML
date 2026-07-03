@@ -27,3 +27,15 @@ variable "enable_nat_gateway" {
   type        = bool
   default     = false
 }
+
+variable "enable_karpenter" {
+  description = "Whether to tag subnets for Karpenter discovery"
+  type        = bool
+  default     = false
+}
+
+variable "karpenter_cluster_name" {
+  description = "Karpenter discovery tag value"
+  type        = string
+  default     = "mlops-paas-cluster"
+}

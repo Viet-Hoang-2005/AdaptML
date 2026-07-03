@@ -7,12 +7,13 @@ import sys
 import tarfile
 import threading
 import time
+import boto3
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
-
-import boto3
+from urllib import request as urlrequest
+from urllib.error import URLError
 
 WORKSPACE = Path("/workspace")
 SOURCE_DIR = WORKSPACE / "source"
@@ -33,8 +34,24 @@ INSIGHTS_INPUT_FILES = (
 MAX_MODEL_INSIGHT_ITEMS = 500
 
 
+def log_to_redis(message: str) -> None:
+    job_id = os.environ.get("TRAINING_JOB_ID", "").strip()
+    redis_url = os.environ.get("REDIS_URL", "redis://mlops-paas-redis.default.svc.cluster.local:6379/1")
+    if not job_id:
+        return
+    try:
+        import redis
+        r = redis.from_url(redis_url)
+        r.rpush(f"training_logs:{job_id}", message)
+        r.expire(f"training_logs:{job_id}", 86400 * 7)
+    except Exception:
+        pass
+
+
 def log(message: str) -> None:
-    print(f"[training-runner] {message}", flush=True)
+    formatted = f"[training-runner] {message}"
+    print(formatted, flush=True)
+    log_to_redis(formatted)
 
 
 def metric_log(payload: dict) -> None:
@@ -328,17 +345,80 @@ def s3_client():
     return boto3.client("s3", region_name=os.environ.get("AWS_DEFAULT_REGION"))
 
 
+def _imds_request(path: str, token: str | None = None, method: str = "GET", timeout: float = 1.0) -> str:
+    headers = {}
+    if token:
+        headers["X-aws-ec2-metadata-token"] = token
+    if method == "PUT" and path.lstrip("/") == "api/token":
+        headers["X-aws-ec2-metadata-token-ttl-seconds"] = "21600"
+    req = urlrequest.Request(
+        f"http://169.254.169.254/latest/{path.lstrip('/')}",
+        headers=headers,
+        method=method,
+    )
+    with urlrequest.urlopen(req, timeout=timeout) as response:
+        return response.read().decode("utf-8").strip()
+
+
+def tag_current_ec2_instance(training_job_id: str) -> None:
+    if not training_job_id:
+        return
+    try:
+        token = _imds_request(
+            "api/token",
+            method="PUT",
+            timeout=1.0,
+        )
+    except (OSError, URLError):
+        token = None
+
+    try:
+        instance_id = _imds_request("meta-data/instance-id", token=token)
+        availability_zone = _imds_request("meta-data/placement/availability-zone", token=token)
+    except (OSError, URLError) as exc:
+        log(f"Skipping EC2 Name tag update because instance metadata is unavailable: {exc}")
+        return
+
+    region = availability_zone[:-1]
+    instance_name = f"mlops-training-{training_job_id}"
+    try:
+        boto3.client("ec2", region_name=region).create_tags(
+            Resources=[instance_id],
+            Tags=[{"Key": "Name", "Value": instance_name}],
+        )
+        log(f"Tagged EC2 instance {instance_id} as {instance_name}")
+    except Exception as exc:
+        log(f"Skipping EC2 Name tag update for {instance_id}: {exc}")
+
+
 def download_s3(uri: str, destination: Path) -> None:
-    bucket, key = parse_s3_uri(uri)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    log(f"Downloading s3://{bucket}/{key} to {destination}")
-    s3_client().download_file(bucket, key, str(destination))
+    if uri.startswith("http://") or uri.startswith("https://"):
+        log(f"Downloading presigned URL to {destination}")
+        import requests
+        with requests.get(uri, stream=True, timeout=300) as response:
+            response.raise_for_status()
+            with open(destination, "wb") as out_file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    out_file.write(chunk)
+    else:
+        bucket, key = parse_s3_uri(uri)
+        log(f"Downloading s3://{bucket}/{key} to {destination}")
+        s3_client().download_file(bucket, key, str(destination))
 
 
 def upload_s3(source: Path, uri: str) -> None:
-    bucket, key = parse_s3_uri(uri)
-    log(f"Uploading model artifact to s3://{bucket}/{key}")
-    s3_client().upload_file(str(source), bucket, key)
+    if uri.startswith("http://") or uri.startswith("https://"):
+        log(f"Uploading {source} via presigned PUT URL")
+        import requests
+        with open(source, "rb") as f:
+            res = requests.put(uri, data=f, timeout=300)
+        if res.status_code not in (200, 201, 204):
+            raise RuntimeError(f"Presigned PUT upload failed with HTTP status {res.status_code}: {res.text}")
+    else:
+        bucket, key = parse_s3_uri(uri)
+        log(f"Uploading model artifact to s3://{bucket}/{key}")
+        s3_client().upload_file(str(source), bucket, key)
 
 
 def safe_extract_zip(zip_path: Path, destination: Path) -> None:
@@ -356,11 +436,23 @@ def install_requirements(requirements_path: Path) -> None:
     if not requirements_path.exists():
         return
     log("Installing requirements.txt")
-    subprocess.run(
+    res = subprocess.run(
         [sys.executable, "-m", "pip", "install", "-r", str(requirements_path)],
         cwd=str(SOURCE_DIR),
-        check=True,
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    if res.stdout:
+        for line in res.stdout.splitlines():
+            print(line, flush=True)
+            log_to_redis(line)
+    if res.stderr:
+        for line in res.stderr.splitlines():
+            print(line, file=sys.stderr, flush=True)
+            log_to_redis(line)
+    if res.returncode != 0:
+        raise RuntimeError(f"pip install -r requirements.txt failed with exit code {res.returncode}")
 
 
 def _read_int_file(path: str) -> int | None:
@@ -548,22 +640,31 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
     log(f"Running training entry point: {entry_point}")
     stop_metrics = threading.Event()
     start_metric_emitter(stop_metrics)
+    stdout_lines = []
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             [sys.executable, str(entry_point_path)],
             cwd=str(SOURCE_DIR),
             env=env,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            check=False,
+            bufsize=1,
         )
+        if process.stdout:
+            for line in iter(process.stdout.readline, ""):
+                print(line, end="", flush=True)
+                log_to_redis(line.rstrip("\n"))
+                stdout_lines.append(line)
+        process.wait()
     finally:
         stop_metrics.set()
-    if result.stdout:
-        print(result.stdout, end="", flush=True)
-    if result.stderr:
-        print(result.stderr, end="", file=sys.stderr, flush=True)
-    return result
+    return subprocess.CompletedProcess(
+        args=[sys.executable, str(entry_point_path)],
+        returncode=process.returncode,
+        stdout="".join(stdout_lines),
+        stderr="",
+    )
 
 
 def create_model_archive(archive_path: Path) -> None:
@@ -582,6 +683,30 @@ def create_model_archive(archive_path: Path) -> None:
                 archive.add(item, arcname=item.relative_to(MODEL_DIR))
 
 
+def package_and_upload_job_bundle(bundle_uri: str) -> None:
+    if not bundle_uri:
+        return
+    log("Packaging job source bundle (code, references, requirements.txt)...")
+    bundle_zip_path = WORKSPACE / "job_source_bundle.zip"
+    try:
+        with zipfile.ZipFile(bundle_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            if SOURCE_DIR.exists():
+                for item in SOURCE_DIR.rglob("*"):
+                    if item.is_file():
+                        rel = item.relative_to(SOURCE_DIR)
+                        zf.write(item, arcname=str(rel))
+            if INPUT_TRAIN_DIR.exists():
+                for item in INPUT_TRAIN_DIR.rglob("*"):
+                    if item.is_file():
+                        rel = item.relative_to(INPUT_TRAIN_DIR)
+                        zf.write(item, arcname=f"references/{rel}")
+        log(f"Uploading job source bundle...")
+        upload_s3(bundle_zip_path, bundle_uri)
+        log("Job source bundle uploaded successfully.")
+    except Exception as exc:
+        log(f"Warning: Failed to package and upload job bundle: {exc}")
+
+
 def main() -> None:
     source_uri = require_env("S3_SOURCE_URI")
     training_data_uri = require_env("S3_TRAINING_DATA_URI")
@@ -590,6 +715,8 @@ def main() -> None:
     model_version = os.environ.get("MODEL_VERSION", "").strip()
     training_job_id = os.environ.get("TRAINING_JOB_ID", "").strip()
     requirements_uri = os.environ.get("S3_REQUIREMENTS_URI", "").strip()
+
+    tag_current_ec2_instance(training_job_id)
 
     log("Preparing workspace")
     if WORKSPACE.exists():
@@ -612,22 +739,40 @@ def main() -> None:
     log("Extracting source zip")
     safe_extract_zip(source_zip_path, SOURCE_DIR)
 
-    install_requirements(requirements_path)
-    result = run_training(entry_point, model_version)
-    training_status = "succeeded" if result.returncode == 0 else "failed"
-    write_mlops_bundle(
-        entry_point=entry_point,
-        model_version=model_version,
-        training_job_id=training_job_id,
-        status=training_status,
-        stdout_text=result.stdout or "",
-        stderr_text=result.stderr or "",
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Training entry point failed with exit code {result.returncode}")
-    create_model_archive(model_archive_path)
-    upload_s3(model_archive_path, output_uri)
-    log("Training job completed successfully")
+    requirements_text = os.environ.get("REQUIREMENTS_TEXT", "").strip()
+    if requirements_text:
+        import base64
+        try:
+            decoded = base64.b64decode(requirements_text.encode("utf-8")).decode("utf-8")
+            if any(c.isalpha() for c in decoded):
+                requirements_text = decoded
+        except Exception:
+            pass
+        if "\n" not in requirements_text and " " in requirements_text:
+            requirements_text = "\n".join(requirements_text.split())
+        log("Writing requirements.txt from REQUIREMENTS_TEXT env var")
+        requirements_path.write_text(requirements_text, encoding="utf-8")
+
+    bundle_uri = os.environ.get("S3_JOB_SOURCE_BUNDLE_URI", "").strip()
+    try:
+        install_requirements(requirements_path)
+        result = run_training(entry_point, model_version)
+        training_status = "succeeded" if result.returncode == 0 else "failed"
+        write_mlops_bundle(
+            entry_point=entry_point,
+            model_version=model_version,
+            training_job_id=training_job_id,
+            status=training_status,
+            stdout_text=result.stdout or "",
+            stderr_text=result.stderr or "",
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Training entry point failed with exit code {result.returncode}")
+        create_model_archive(model_archive_path)
+        upload_s3(model_archive_path, output_uri)
+        log("Training job completed successfully")
+    finally:
+        package_and_upload_job_bundle(bundle_uri)
 
 
 if __name__ == "__main__":

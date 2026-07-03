@@ -6,11 +6,11 @@ set -e
 NAMESPACE="monitoring"
 RELEASE_NAME="monitoring"
 
-echo "[1/3] Add Helm repo prometheus-community..."
+echo "[1/2] Add Helm repo prometheus-community..."
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
-echo "[2/3] Install kube-prometheus-stack (Prometheus + Grafana + node-exporter + kube-state-metrics)..."
+echo "[2/2] Install kube-prometheus-stack (Prometheus + Grafana + node-exporter + kube-state-metrics)..."
 helm upgrade --install ${RELEASE_NAME} prometheus-community/kube-prometheus-stack \
   --namespace ${NAMESPACE} \
   --create-namespace \
@@ -40,5 +40,5 @@ helm upgrade --install ${RELEASE_NAME} prometheus-community/kube-prometheus-stac
   --timeout 10m \
   --wait
 
-echo "[3/3] Prometheus & Grafana installation completed!"
+echo "Prometheus & Grafana installation completed!"
 kubectl get pods -n ${NAMESPACE}

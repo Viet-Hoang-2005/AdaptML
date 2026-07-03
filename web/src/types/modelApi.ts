@@ -13,7 +13,7 @@ export type ModelAPIStatus =
   | 'disabled';
 export type ModelBuildStatus = 'not_started' | 'building' | 'ready' | 'error';
 export type ModelEndpointStatus = 'not_deployed' | 'deploying' | 'healthy' | 'unhealthy' | 'deploy_failed' | 'stopped';
-export type ModelFlavor = 'sklearn' | 'xgboost';
+export type ModelFlavor = 'sklearn' | 'xgboost' | 'pytorch' | 'tensorflow';
 export type ModelSourceType = 'manual_upload' | 'training_job';
 
 export interface ModelAPI {
@@ -396,7 +396,7 @@ export interface TrainingJob {
   name: string;
   model_version: string;
   entry_point: string;
-  training_backend: 'sagemaker' | 'local' | 'aws_batch';
+  training_backend: 'kubeflow' | 'local';
   vcpu: number;
   memory: number;
   max_runtime_seconds: number;
@@ -461,11 +461,13 @@ export interface TrainingJobLogsResponse {
   job_id: number;
   training_job_id: number;
   status: TrainingJobStatus;
-  logs: string;
+  logs: string | string[];
   text: string;
-  log_stream_name: string;
-  next_token: string;
-  updated_at: string;
+  log_stream_name?: string;
+  next_token?: string;
+  next_offset?: number;
+  error_message?: string;
+  updated_at?: string;
 }
 
 export interface TrainingMetricPoint {
@@ -508,7 +510,7 @@ export interface TrainingJobEventsResponse {
 }
 
 export interface TrainingUsageResponse {
-  training_backend: 'sagemaker' | 'local' | 'aws_batch';
+  training_backend: 'kubeflow' | 'local';
   monthly_quota_seconds: number;
   monthly_runtime_seconds: number;
   remaining_seconds: number;

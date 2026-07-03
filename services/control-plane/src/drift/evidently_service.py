@@ -3,6 +3,8 @@ import boto3
 import docker
 import logging
 import threading
+
+from datetime import datetime, timezone
 from django.conf import settings
 from authentication.models import DriftMonitoringJob
 from integrations.hashid_utils import encode_model_id
@@ -28,10 +30,11 @@ def run_evidently_job_sync(job_id: int):
         
         ref_path = job.reference_data_s3_path
         ref_url = ""
-        user_name = job.tenant.email.split('@')[0] if getattr(job.tenant, 'email', None) else job.tenant.tenant_id
-        model_name = job.model_api.name.replace(' ', '') if job.model_api.name else 'UnnamedModel'
-        version = job.model_api.version.replace(' ', '') if job.model_api.version else 'v1'
-        s3_key = f"{user_name}/models/{model_name}/{version}/references/{ref_path}"
+        tenant_id = job.tenant.tenant_id
+        model_hash_id = encode_model_id(job.model_api.id) if job.model_api else "temp-id"
+        version = job.model_api.version.replace(' ', '') if job.model_api and job.model_api.version else 'v1'
+        
+        s3_key = f"users/{tenant_id}/models/{model_hash_id}/{version}/references/{ref_path}"
         try:
             ref_url = s3_client.generate_presigned_url(
                 'get_object',
@@ -41,10 +44,8 @@ def run_evidently_job_sync(job_id: int):
         except Exception as e:
             logger.error(f"Could not generate presigned URL for {s3_key}: {e}")
 
-        from datetime import datetime, timezone
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        tenant_id_str = getattr(job.tenant, "tenant_id", "T-LOCALDEV")
-        base_report_key = f"{user_name}/models/{model_name}/{version}/drift-reports/{run_id}"
+        base_report_key = f"users/{tenant_id}/models/{model_hash_id}/{version}/drift/{job.id}/{run_id}"
 
         html_upload_url = ""
         report_json_upload_url = ""
@@ -98,7 +99,7 @@ def run_evidently_job_sync(job_id: int):
 
         env = {
             "JOB_ID": str(job.id),
-            "TENANT_ID": tenant_id_str,
+            "TENANT_ID": tenant_id,
             "MODEL_ID": str(job.model_api.id),  # integer DB ID matching paas_production_logs
             "MODEL_NAME": job.model_api.name,   # human-readable name for MLflow
             "MODEL_URI": model_uri_resolved,
@@ -132,7 +133,7 @@ def run_evidently_job_sync(job_id: int):
             webhook_url = os.environ.get("ARGO_DRIFT_WEBHOOK_URL", "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/drift")
             payload = {
                 "job_id": str(job.id),
-                "tenant_id": tenant_id_str,
+                "tenant_id": tenant_id,
                 "model_id": str(job.model_api.id),
                 "model_name": job.model_api.name,
                 "model_uri": model_uri_resolved,
@@ -155,7 +156,7 @@ def run_evidently_job_sync(job_id: int):
             network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
             
             model_hashid = encode_model_id(job.model_api.id)
-            container_name = f"evidently_{tenant_id_str.lower()}_model_{model_hashid.lower()}"
+            container_name = f"evidently_{tenant_id.lower()}_model_{model_hashid.lower()}"
             
             logger.info(f"Spawning container {container_name} for job {job.id}")
             

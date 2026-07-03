@@ -16,7 +16,7 @@ from training.tracking_ingestion_service import (
     compute_deployability,
     ingest_training_job_tracking,
 )
-from training.sagemaker_service import upload_training_inputs_to_s3
+from training.s3_storage_service import upload_training_inputs_to_s3
 
 
 class _FakeS3Paginator:
@@ -71,7 +71,7 @@ class S3TrainingInputPackagingTests(TestCase):
             "name": "demo-model",
             "model_version": "v1",
             "entry_point": "train.py",
-            "training_backend": "aws_batch",
+            "training_backend": "kubeflow",
             "source_zip": SimpleUploadedFile("placeholder.zip", b""),
             "training_data": SimpleUploadedFile("placeholder.csv", b""),
             "status": "pending",
@@ -81,8 +81,8 @@ class S3TrainingInputPackagingTests(TestCase):
         defaults.update(overrides)
         return TrainingJob.objects.create(**defaults)
 
-    @override_settings(AWS_STORAGE_BUCKET_NAME="target-bucket", SAGEMAKER_OUTPUT_PREFIX="tenants")
-    @patch("training.sagemaker_service._s3_client")
+    @override_settings(AWS_STORAGE_BUCKET_NAME="target-bucket")
+    @patch("training.s3_storage_service._s3_client")
     def test_full_s3_code_and_reference_prefixes_are_packaged_for_batch(self, mock_s3_client):
         fake_client = _FakeS3Client()
         mock_s3_client.return_value = fake_client
@@ -124,7 +124,7 @@ class TrackingIngestionTests(TestCase):
             name="demo-model",
             model_version="v1",
             entry_point="train.py",
-            training_backend="aws_batch",
+            training_backend="kubeflow",
             source_zip=SimpleUploadedFile("source.zip", b"zip"),
             training_data=SimpleUploadedFile("train.csv", b"f1,label\n1,0\n"),
             status=status,

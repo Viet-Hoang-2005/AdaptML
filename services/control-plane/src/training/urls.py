@@ -16,8 +16,10 @@ from training.views import (
     TrainingJobSummaryView,
     TrainingUsageView,
 )
+from training.training_webhook_view import TrainingJobWebhookView
 
 urlpatterns = [
+    path("<int:training_job_id>/training-webhook", TrainingJobWebhookView.as_view(), name="training_job_webhook"),
     path("jobs/", TrainingJobListCreateView.as_view(), name="training_job_list_create"),
     path("jobs/<int:training_job_id>/", TrainingJobDetailView.as_view(), name="training_job_detail"),
     path("jobs/<int:training_job_id>/refresh-status/", TrainingJobRefreshStatusView.as_view(), name="training_job_refresh_status"),
