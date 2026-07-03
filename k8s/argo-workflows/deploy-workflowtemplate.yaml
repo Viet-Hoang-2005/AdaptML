@@ -125,4 +125,4 @@ spec:
                   - name: {{inputs.parameters.container_name}}-svc
                     port: 5000
           EOF
-          echo "Deployment successfully created for model {{inputs.parameters.model_id}}"
+          echo "Deployment successfully created: {{inputs.parameters.container_name}} using image {{inputs.parameters.image_name}}"

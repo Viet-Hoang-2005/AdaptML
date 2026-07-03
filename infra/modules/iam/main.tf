@@ -126,6 +126,44 @@ resource "aws_iam_role_policy_attachment" "karpenter_node_ebs_csi_attach" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
 }
 
+data "aws_iam_policy_document" "karpenter_node_training_tag_policy_doc" {
+  count = var.enable_karpenter ? 1 : 0
+
+  statement {
+    sid     = "AllowTrainingNodeNameTag"
+    effect  = "Allow"
+    actions = ["ec2:CreateTags"]
+    resources = [
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*"
+    ]
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "aws:TagKeys"
+      values   = ["Name"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "aws:ResourceTag/karpenter.sh/nodepool"
+      values   = ["mlops-paas-training-*"]
+    }
+  }
+}
+
+resource "aws_iam_policy" "karpenter_node_training_tag_policy" {
+  count       = var.enable_karpenter ? 1 : 0
+  name        = "mlops-karpenter-node-training-tag-policy"
+  description = "Allow Karpenter training nodes to set their EC2 Name tag from training job id"
+  policy      = data.aws_iam_policy_document.karpenter_node_training_tag_policy_doc[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "karpenter_node_training_tag_attach" {
+  count      = var.enable_karpenter ? 1 : 0
+  role       = aws_iam_role.karpenter_node_role[0].name
+  policy_arn = aws_iam_policy.karpenter_node_training_tag_policy[0].arn
+}
+
 data "aws_iam_policy_document" "karpenter_controller_policy_doc" {
   count = var.enable_karpenter ? 1 : 0
 
@@ -160,6 +198,7 @@ data "aws_iam_policy_document" "karpenter_controller_policy_doc" {
     resources = [
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:launch-template/*",
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:fleet/*",
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:spot-instances-request/*",
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*",
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:volume/*",
       "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:network-interface/*"

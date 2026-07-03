@@ -1268,6 +1268,17 @@ def build_endpoint_url(model_api):
     return f"{get_model_server_public_url()}/{model_api.tenant.tenant_id}/models/{hashid_str}/{version}/predict"
 
 
+def model_artifact_uri(model_api):
+    if not model_api.artifact:
+        return ""
+
+    bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "") or getattr(settings, "AWS_BUCKET_NAME", "")
+    if bucket_name and model_api.artifact.name:
+        return f"s3://{bucket_name}/{model_api.artifact.name}"
+
+    return model_api.artifact.url
+
+
 def validate_unique_model_version(tenant, name, version, exclude_model_id=None):
     queryset = ModelAPI.objects.filter(
         tenant=tenant,
@@ -1442,6 +1453,8 @@ class ModelAPIListCreateView(APIView):
         artifact_file = request.FILES.get("artifact")
         source_code_file = request.FILES.get("source_code_file")
         reference_data_file = request.FILES.get("reference_data_file")
+        endpoint_route_changed = version != previous_version
+        endpoint_artifact_changed = bool(artifact_file)
 
         if not name:
             return Response({"error": "Model name is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1671,6 +1684,7 @@ class ModelAPIDetailView(APIView):
         if not model_api:
             return Response({"error": "Model API not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        previous_version = model_api.version or "v1"
         name = (request.data.get("name") or model_api.name).strip()
         description = (request.data.get("description") or "").strip()
         model_info = (request.data.get("model_info") or "").strip()
@@ -1714,16 +1728,20 @@ class ModelAPIDetailView(APIView):
         model_api.model_info = model_info
         model_api.access_mode = access_mode
         model_api.version = version
-        model_api.status = "ready"
-        model_api.error_message = ""
+        if endpoint_artifact_changed:
+            model_api.status = "ready"
+            model_api.error_message = ""
         model_api.save()
 
-        if model_api.artifact:
-            model_api.model_uri = model_api.artifact.url
-        model_api.endpoint_url = build_endpoint_url(model_api)
-        model_api.save(update_fields=["model_uri", "endpoint_url", "updated_at"])
+        update_fields = ["endpoint_url", "updated_at"]
 
-        if model_api.artifact:
+        if endpoint_artifact_changed:
+            model_api.model_uri = model_artifact_uri(model_api)
+            update_fields.append("model_uri")
+        model_api.endpoint_url = build_endpoint_url(model_api)
+        model_api.save(update_fields=update_fields)
+
+        if endpoint_artifact_changed or endpoint_route_changed:
             get_deploy_adapter().deploy_model(
                 model_id=model_api.id,
                 tenant_id=model_api.tenant.tenant_id,
@@ -1887,20 +1905,11 @@ class ModelAPIBuildWebhookView(APIView):
 
             safe_name = slugify(model_api.name) or "model"
             package_filename = f"{safe_name}-mlflow-package.zip"
-            bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "") or getattr(settings, "AWS_BUCKET_NAME", "")
             if task_type == "TEST_ZIP":
-                model_api.model_uri = (
-                    f"s3://{bucket_name}/{model_api.artifact.name}"
-                    if bucket_name and model_api.artifact
-                    else model_api.artifact.url
-                )
+                model_api.model_uri = model_artifact_uri(model_api)
             else:
                 model_api.artifact.name = model_artifact_path(model_api, package_filename)
-                model_api.model_uri = (
-                    f"s3://{bucket_name}/{model_api.artifact.name}"
-                    if bucket_name
-                    else model_api.artifact.url
-                )
+                model_api.model_uri = model_artifact_uri(model_api)
             model_api.endpoint_url = build_endpoint_url(model_api)
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
             harbor_project = getattr(settings, "HARBOR_USER_PROJECT", "user-images")
