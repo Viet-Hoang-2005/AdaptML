@@ -395,8 +395,12 @@ def download_s3(uri: str, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if uri.startswith("http://") or uri.startswith("https://"):
         log(f"Downloading presigned URL to {destination}")
-        with urlrequest.urlopen(uri, timeout=300) as response, open(destination, "wb") as out_file:
-            shutil.copyfileobj(response, out_file)
+        import requests
+        with requests.get(uri, stream=True, timeout=300) as response:
+            response.raise_for_status()
+            with open(destination, "wb") as out_file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    out_file.write(chunk)
     else:
         bucket, key = parse_s3_uri(uri)
         log(f"Downloading s3://{bucket}/{key} to {destination}")
@@ -406,12 +410,11 @@ def download_s3(uri: str, destination: Path) -> None:
 def upload_s3(source: Path, uri: str) -> None:
     if uri.startswith("http://") or uri.startswith("https://"):
         log(f"Uploading {source} via presigned PUT URL")
+        import requests
         with open(source, "rb") as f:
-            data = f.read()
-        req = urlrequest.Request(uri, data=data, method="PUT")
-        with urlrequest.urlopen(req, timeout=300) as response:
-            if response.status not in (200, 201, 204):
-                raise RuntimeError(f"Presigned PUT upload failed with HTTP status {response.status}")
+            res = requests.put(uri, data=f, timeout=300)
+        if res.status_code not in (200, 201, 204):
+            raise RuntimeError(f"Presigned PUT upload failed with HTTP status {res.status_code}: {res.text}")
     else:
         bucket, key = parse_s3_uri(uri)
         log(f"Uploading model artifact to s3://{bucket}/{key}")
