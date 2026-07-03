@@ -4,7 +4,11 @@ import threading
 import requests
 from django.conf import settings
 from django.core.cache import cache
-from training.s3_storage_service import upload_training_inputs_to_s3
+from training.s3_storage_service import (
+    upload_training_inputs_to_s3,
+    generate_presigned_download_url,
+    generate_presigned_upload_url,
+)
 
 logger = logging.getLogger("paas.training.argo")
 
@@ -22,8 +26,9 @@ class ArgoTrainingAdapter:
         model_artifact_uri = f"s3://{bucket_name}/{output_prefix}/model.tar.gz"
         training_job.external_job_id = job_name
         training_job.status = "pending"
+        training_job.model_artifact_uri = model_artifact_uri
         training_job.output_s3_uri = f"s3://{bucket_name}/{output_prefix}/"
-        training_job.save(update_fields=["external_job_id", "status", "output_s3_uri"])
+        training_job.save(update_fields=["external_job_id", "status", "model_artifact_uri", "output_s3_uri"])
 
         # Clear previous logs in Redis
         try:
@@ -31,6 +36,10 @@ class ArgoTrainingAdapter:
             client.delete(f"training_logs:{training_job.id}")
         except Exception as exc:
             logger.warning(f"Could not clear old training logs in Redis: {exc}")
+
+        source_presigned = generate_presigned_download_url(str(training_job.s3_source_uri), expiry_seconds=14400)
+        data_presigned = generate_presigned_download_url(str(training_job.s3_training_data_uri), expiry_seconds=14400)
+        output_presigned = generate_presigned_upload_url(model_artifact_uri, expiry_seconds=14400)
 
         webhook_url = os.environ.get(
             "ARGO_TRAINING_WEBHOOK_URL",
@@ -45,9 +54,9 @@ class ArgoTrainingAdapter:
             "memory": str(training_job.memory),
             "accelerator_type": str(training_job.accelerator_type),
             "accelerator_count": str(training_job.accelerator_count),
-            "s3_source_uri": str(training_job.s3_source_uri),
-            "s3_training_data_uri": str(training_job.s3_training_data_uri),
-            "s3_output_uri": model_artifact_uri,
+            "s3_source_uri": source_presigned,
+            "s3_training_data_uri": data_presigned,
+            "s3_output_uri": output_presigned,
             "entry_point": str(training_job.entry_point),
             "model_version": str(training_job.model_version),
             "control_plane_webhook_url": training_webhook_url(training_job.id),

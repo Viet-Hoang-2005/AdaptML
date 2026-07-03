@@ -34,8 +34,12 @@ class TrainingJobWebhookView(APIView):
         if status_val == "completed":
             training_job.status = "completed"
             training_job.error_message = ""
-            training_job.model_artifact_uri = data.get("model_artifact_uri") or training_job.model_artifact_uri
-            training_job.output_s3_uri = data.get("output_s3_uri") or training_job.output_s3_uri
+            incoming_artifact = data.get("model_artifact_uri") or ""
+            if incoming_artifact.startswith("s3://"):
+                training_job.model_artifact_uri = incoming_artifact
+            incoming_output = data.get("output_s3_uri") or ""
+            if incoming_output.startswith("s3://"):
+                training_job.output_s3_uri = incoming_output
             training_job.mark_finished(save=False)
             update_fields = [
                 "status",

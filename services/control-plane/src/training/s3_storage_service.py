@@ -119,3 +119,25 @@ def upload_training_inputs_to_s3(training_job) -> tuple[str, str, str]:
 
     training_job.save(update_fields=["s3_source_uri", "s3_training_data_uri"])
     return source_uri, data_uri, prefix
+
+
+def generate_presigned_download_url(s3_uri: str, expiry_seconds: int = 7200) -> str:
+    if not s3_uri or not s3_uri.startswith("s3://"):
+        return s3_uri
+    bucket, key = _split_s3_uri(s3_uri)
+    return _s3_client().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": key},
+        ExpiresIn=expiry_seconds,
+    )
+
+
+def generate_presigned_upload_url(s3_uri: str, expiry_seconds: int = 7200) -> str:
+    if not s3_uri or not s3_uri.startswith("s3://"):
+        return s3_uri
+    bucket, key = _split_s3_uri(s3_uri)
+    return _s3_client().generate_presigned_url(
+        "put_object",
+        Params={"Bucket": bucket, "Key": key},
+        ExpiresIn=expiry_seconds,
+    )
