@@ -470,6 +470,15 @@ kubectl apply -k k8s/karpenter/
 kubectl apply -k k8s/argo-workflows/
 ```
 
+#### Bước 8: Thiết lập tự động dọn dẹp dung lượng S3 (Garbage Collection cho Harbor Registry)
+
+Do Harbor sử dụng AWS S3 làm backend lưu trữ (`mlops-paas-artifacts`), khi xóa image hoặc tag trên Harbor, các image layer (blobs) sẽ không bị xóa ngay khỏi S3. Để thu hồi dung lượng S3 tự động, chạy script thiết lập lịch Garbage Collection hàng ngày (`00:00 AM`) với tùy chọn `delete_untagged=true`:
+
+```bash
+# Thiết lập lịch tự động dọn S3 qua Harbor API (tự động nạp biến từ .env)
+python3 scripts/setup_harbor_schedule.py
+```
+
 ---
 
 **Production Service URLs:**
