@@ -299,11 +299,17 @@ def log_to_mlflow(
         import mlflow
         log(f"Connecting to MLflow Tracking Server at {tracking_uri}")
         mlflow.set_tracking_uri(tracking_uri)
-        exp_name = f"tenant-{tenant_id}" if tenant_id else "default-tenant"
+        exp_name = os.environ.get("MLFLOW_EXPERIMENT_NAME", "").strip()
+        if not exp_name:
+            exp_name = f"tenant-{tenant_id}" if tenant_id else "default-tenant"
+        artifact_root = os.environ.get("MLFLOW_ARTIFACT_ROOT", "").strip()
         try:
             exp = mlflow.get_experiment_by_name(exp_name)
             if not exp:
-                mlflow.create_experiment(exp_name)
+                if artifact_root:
+                    mlflow.create_experiment(exp_name, artifact_location=artifact_root)
+                else:
+                    mlflow.create_experiment(exp_name)
         except Exception as exc:
             pass
         mlflow.set_experiment(exp_name)
@@ -316,6 +322,8 @@ def log_to_mlflow(
                 mlflow.set_tag("tenant_id", tenant_id)
             if model_version:
                 mlflow.set_tag("model_version", model_version)
+            if artifact_root:
+                mlflow.set_tag("mlflow_artifact_root", artifact_root)
             mlflow.set_tag("entry_point", entry_point)
             mlflow.set_tag("status", status)
 
@@ -709,7 +717,11 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
             "SM_OUTPUT_DIR": str(OUTPUT_DIR),
             "MODEL_VERSION": model_version,
             "AWS_BUCKET_NAME": os.environ.get("AWS_BUCKET_NAME", ""),
-            "MLFLOW_EXPERIMENT_NAME": f"tenant-{tenant_id}" if tenant_id else "default-tenant",
+            "MLFLOW_EXPERIMENT_NAME": os.environ.get(
+                "MLFLOW_EXPERIMENT_NAME",
+                f"tenant-{tenant_id}" if tenant_id else "default-tenant",
+            ),
+            "MLFLOW_ARTIFACT_ROOT": os.environ.get("MLFLOW_ARTIFACT_ROOT", ""),
         }
     )
 

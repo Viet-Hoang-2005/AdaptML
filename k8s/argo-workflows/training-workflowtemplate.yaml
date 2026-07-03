@@ -31,6 +31,10 @@ spec:
             value: ""
           - name: mlflow_tracking_uri
             value: "http://mlflow-server.mlflow-server.svc.cluster.local:5000"
+          - name: mlflow_experiment_name
+            value: ""
+          - name: mlflow_artifact_root
+            value: ""
       steps:
         - - name: run-cpu-pytorch-job
             template: cpu-pytorch-job
@@ -65,6 +69,10 @@ spec:
                   value: "{{inputs.parameters.requirements_text}}"
                 - name: mlflow_tracking_uri
                   value: "{{inputs.parameters.mlflow_tracking_uri}}"
+                - name: mlflow_experiment_name
+                  value: "{{inputs.parameters.mlflow_experiment_name}}"
+                - name: mlflow_artifact_root
+                  value: "{{inputs.parameters.mlflow_artifact_root}}"
           - name: run-gpu-pytorch-job
             template: gpu-pytorch-job
             when: "'{{inputs.parameters.accelerator_type}}' == 'gpu' && {{inputs.parameters.accelerator_count}} > 0"
@@ -100,6 +108,10 @@ spec:
                   value: "{{inputs.parameters.requirements_text}}"
                 - name: mlflow_tracking_uri
                   value: "{{inputs.parameters.mlflow_tracking_uri}}"
+                - name: mlflow_experiment_name
+                  value: "{{inputs.parameters.mlflow_experiment_name}}"
+                - name: mlflow_artifact_root
+                  value: "{{inputs.parameters.mlflow_artifact_root}}"
     - name: cpu-pytorch-job
       inputs:
         parameters:
@@ -117,6 +129,8 @@ spec:
           - name: s3_job_source_bundle_uri
           - name: requirements_text
           - name: mlflow_tracking_uri
+          - name: mlflow_experiment_name
+          - name: mlflow_artifact_root
       resource:
         action: create
         successCondition: status.replicaStatuses.Master.succeeded == 1
@@ -185,6 +199,10 @@ spec:
                             value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
                           - name: MLFLOW_TRACKING_URI
                             value: "{{inputs.parameters.mlflow_tracking_uri}}"
+                          - name: MLFLOW_EXPERIMENT_NAME
+                            value: "{{inputs.parameters.mlflow_experiment_name}}"
+                          - name: MLFLOW_ARTIFACT_ROOT
+                            value: "{{inputs.parameters.mlflow_artifact_root}}"
     - name: gpu-pytorch-job
       inputs:
         parameters:
@@ -203,6 +221,8 @@ spec:
           - name: s3_job_source_bundle_uri
           - name: requirements_text
           - name: mlflow_tracking_uri
+          - name: mlflow_experiment_name
+          - name: mlflow_artifact_root
       resource:
         action: create
         successCondition: status.replicaStatuses.Master.succeeded == 1
@@ -279,6 +299,10 @@ spec:
                             value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
                           - name: MLFLOW_TRACKING_URI
                             value: "{{inputs.parameters.mlflow_tracking_uri}}"
+                          - name: MLFLOW_EXPERIMENT_NAME
+                            value: "{{inputs.parameters.mlflow_experiment_name}}"
+                          - name: MLFLOW_ARTIFACT_ROOT
+                            value: "{{inputs.parameters.mlflow_artifact_root}}"
     - name: report-status
       container:
         image: curlimages/curl:latest
