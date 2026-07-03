@@ -376,16 +376,30 @@ def tag_current_ec2_instance(training_job_id: str) -> None:
 
 
 def download_s3(uri: str, destination: Path) -> None:
-    bucket, key = parse_s3_uri(uri)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    log(f"Downloading s3://{bucket}/{key} to {destination}")
-    s3_client().download_file(bucket, key, str(destination))
+    if uri.startswith("http://") or uri.startswith("https://"):
+        log(f"Downloading presigned URL to {destination}")
+        with urlrequest.urlopen(uri, timeout=300) as response, open(destination, "wb") as out_file:
+            shutil.copyfileobj(response, out_file)
+    else:
+        bucket, key = parse_s3_uri(uri)
+        log(f"Downloading s3://{bucket}/{key} to {destination}")
+        s3_client().download_file(bucket, key, str(destination))
 
 
 def upload_s3(source: Path, uri: str) -> None:
-    bucket, key = parse_s3_uri(uri)
-    log(f"Uploading model artifact to s3://{bucket}/{key}")
-    s3_client().upload_file(str(source), bucket, key)
+    if uri.startswith("http://") or uri.startswith("https://"):
+        log(f"Uploading {source} via presigned PUT URL")
+        with open(source, "rb") as f:
+            data = f.read()
+        req = urlrequest.Request(uri, data=data, method="PUT")
+        with urlrequest.urlopen(req, timeout=300) as response:
+            if response.status not in (200, 201, 204):
+                raise RuntimeError(f"Presigned PUT upload failed with HTTP status {response.status}")
+    else:
+        bucket, key = parse_s3_uri(uri)
+        log(f"Uploading model artifact to s3://{bucket}/{key}")
+        s3_client().upload_file(str(source), bucket, key)
 
 
 def safe_extract_zip(zip_path: Path, destination: Path) -> None:
