@@ -34,8 +34,24 @@ INSIGHTS_INPUT_FILES = (
 MAX_MODEL_INSIGHT_ITEMS = 500
 
 
+def log_to_redis(message: str) -> None:
+    job_id = os.environ.get("TRAINING_JOB_ID", "").strip()
+    redis_url = os.environ.get("REDIS_URL", "redis://mlops-paas-redis.default.svc.cluster.local:6379/1")
+    if not job_id:
+        return
+    try:
+        import redis
+        r = redis.from_url(redis_url)
+        r.rpush(f"training_logs:{job_id}", message)
+        r.expire(f"training_logs:{job_id}", 86400 * 7)
+    except Exception:
+        pass
+
+
 def log(message: str) -> None:
-    print(f"[training-runner] {message}", flush=True)
+    formatted = f"[training-runner] {message}"
+    print(formatted, flush=True)
+    log_to_redis(formatted)
 
 
 def metric_log(payload: dict) -> None:
@@ -417,11 +433,23 @@ def install_requirements(requirements_path: Path) -> None:
     if not requirements_path.exists():
         return
     log("Installing requirements.txt")
-    subprocess.run(
+    res = subprocess.run(
         [sys.executable, "-m", "pip", "install", "-r", str(requirements_path)],
         cwd=str(SOURCE_DIR),
-        check=True,
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    if res.stdout:
+        for line in res.stdout.splitlines():
+            print(line, flush=True)
+            log_to_redis(line)
+    if res.stderr:
+        for line in res.stderr.splitlines():
+            print(line, file=sys.stderr, flush=True)
+            log_to_redis(line)
+    if res.returncode != 0:
+        raise RuntimeError(f"pip install -r requirements.txt failed with exit code {res.returncode}")
 
 
 def _read_int_file(path: str) -> int | None:
@@ -609,22 +637,31 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
     log(f"Running training entry point: {entry_point}")
     stop_metrics = threading.Event()
     start_metric_emitter(stop_metrics)
+    stdout_lines = []
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             [sys.executable, str(entry_point_path)],
             cwd=str(SOURCE_DIR),
             env=env,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            check=False,
+            bufsize=1,
         )
+        if process.stdout:
+            for line in iter(process.stdout.readline, ""):
+                print(line, end="", flush=True)
+                log_to_redis(line.rstrip("\n"))
+                stdout_lines.append(line)
+        process.wait()
     finally:
         stop_metrics.set()
-    if result.stdout:
-        print(result.stdout, end="", flush=True)
-    if result.stderr:
-        print(result.stderr, end="", file=sys.stderr, flush=True)
-    return result
+    return subprocess.CompletedProcess(
+        args=[sys.executable, str(entry_point_path)],
+        returncode=process.returncode,
+        stdout="".join(stdout_lines),
+        stderr="",
+    )
 
 
 def create_model_archive(archive_path: Path) -> None:
@@ -701,6 +738,15 @@ def main() -> None:
 
     requirements_text = os.environ.get("REQUIREMENTS_TEXT", "").strip()
     if requirements_text:
+        import base64
+        try:
+            decoded = base64.b64decode(requirements_text.encode("utf-8")).decode("utf-8")
+            if any(c.isalpha() for c in decoded):
+                requirements_text = decoded
+        except Exception:
+            pass
+        if "\n" not in requirements_text and " " in requirements_text:
+            requirements_text = "\n".join(requirements_text.split())
         log("Writing requirements.txt from REQUIREMENTS_TEXT env var")
         requirements_path.write_text(requirements_text, encoding="utf-8")
 

@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import threading
@@ -14,13 +15,14 @@ logger = logging.getLogger("paas.training.argo")
 
 def training_webhook_url(training_job_id: int) -> str:
     internal_base_url = getattr(settings, "CONTROL_PLANE_INTERNAL_URL", "http://control-plane:8000").rstrip("/")
-    return f"{internal_base_url}/api/training-jobs/{training_job_id}/training-webhook"
+    return f"{internal_base_url}/api/training/{training_job_id}/training-webhook"
 
 
 class ArgoTrainingAdapter:
     def start_training_job(self, training_job) -> None:
+        logger.info(f"Preparing input bundle for job {training_job.id}")
         _, _, s3_prefix = upload_training_inputs_to_s3(training_job)
-        job_name = f"tjob-{training_job.tenant.tenant_id.lower()}-{training_job.id}"
+        job_name = f"tjob-t-{training_job.tenant.tenant_id.lower()}-{training_job.id}"
         bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "")
         output_prefix = f"{s3_prefix}/output"
         model_artifact_uri = f"s3://{bucket_name}/{output_prefix}/model.tar.gz"
@@ -38,7 +40,8 @@ class ArgoTrainingAdapter:
         except Exception as exc:
             logger.warning(f"Could not clear old training logs in Redis: {exc}")
 
-        requirements_text = training_job.model_api.requirements_text if getattr(training_job, "model_api", None) else ""
+        raw_req = training_job.model_api.requirements_text if getattr(training_job, "model_api", None) else ""
+        requirements_text = base64.b64encode(raw_req.encode("utf-8")).decode("utf-8") if raw_req else ""
 
         source_presigned = generate_presigned_download_url(str(training_job.s3_source_uri), expiry_seconds=14400)
         data_presigned = generate_presigned_download_url(str(training_job.s3_training_data_uri), expiry_seconds=14400)
