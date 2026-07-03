@@ -281,6 +281,69 @@ def write_metric_events(path: Path, events: list[dict]) -> None:
             handle.write("\n")
 
 
+def log_to_mlflow(
+    *,
+    entry_point: str,
+    model_version: str,
+    training_job_id: str,
+    tenant_id: str,
+    status: str,
+    metrics: dict,
+    params: dict,
+    model_dir: Path,
+) -> None:
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "").strip()
+    if not tracking_uri:
+        return
+    try:
+        import mlflow
+        log(f"Connecting to MLflow Tracking Server at {tracking_uri}")
+        mlflow.set_tracking_uri(tracking_uri)
+        exp_name = f"tenant-{tenant_id}" if tenant_id else "default-tenant"
+        try:
+            exp = mlflow.get_experiment_by_name(exp_name)
+            if not exp:
+                mlflow.create_experiment(exp_name)
+        except Exception as exc:
+            pass
+        mlflow.set_experiment(exp_name)
+
+        run_name = f"job-{training_job_id}" if training_job_id else "training-job"
+        with mlflow.start_run(run_name=run_name):
+            if training_job_id:
+                mlflow.set_tag("training_job_id", training_job_id)
+            if tenant_id:
+                mlflow.set_tag("tenant_id", tenant_id)
+            if model_version:
+                mlflow.set_tag("model_version", model_version)
+            mlflow.set_tag("entry_point", entry_point)
+            mlflow.set_tag("status", status)
+
+            if isinstance(params, dict):
+                for k, v in params.items():
+                    try:
+                        mlflow.log_param(str(k)[:250], str(v)[:500])
+                    except Exception:
+                        pass
+
+            if isinstance(metrics, dict):
+                for k, v in metrics.items():
+                    try:
+                        if isinstance(v, (int, float)) and not isinstance(v, bool):
+                            mlflow.log_metric(str(k)[:250], float(v))
+                    except Exception:
+                        pass
+
+            if model_dir.exists():
+                try:
+                    mlflow.log_artifacts(str(model_dir), artifact_path="model")
+                except Exception as exc:
+                    log(f"Warning logging artifacts to MLflow: {exc}")
+        log("Successfully logged training job parameters, metrics, and artifacts to MLflow")
+    except Exception as exc:
+        log(f"Warning: MLflow logging encountered an error: {exc}")
+
+
 def write_mlops_bundle(
     *,
     entry_point: str,
@@ -325,6 +388,17 @@ def write_mlops_bundle(
         "warnings_count": len(warnings),
     }
     write_json(mlops_dir / "training_summary.json", summary)
+
+    log_to_mlflow(
+        entry_point=entry_point,
+        model_version=model_version,
+        training_job_id=training_job_id,
+        tenant_id=os.environ.get("TENANT_ID", "").strip(),
+        status=status,
+        metrics=metrics,
+        params=params,
+        model_dir=MODEL_DIR,
+    )
 
 
 def require_env(name: str) -> str:
@@ -627,6 +701,7 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
         raise RuntimeError(f"Source zip must contain entry point: {entry_point}")
 
     env = os.environ.copy()
+    tenant_id = os.environ.get("TENANT_ID", "").strip()
     env.update(
         {
             "SM_CHANNEL_TRAIN": str(INPUT_TRAIN_DIR),
@@ -634,6 +709,7 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
             "SM_OUTPUT_DIR": str(OUTPUT_DIR),
             "MODEL_VERSION": model_version,
             "AWS_BUCKET_NAME": os.environ.get("AWS_BUCKET_NAME", ""),
+            "MLFLOW_EXPERIMENT_NAME": f"tenant-{tenant_id}" if tenant_id else "default-tenant",
         }
     )
 

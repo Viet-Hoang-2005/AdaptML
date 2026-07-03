@@ -14,6 +14,7 @@ resources:
   - health
   - monitoring
   - argo-workflows
+  - mlflow-server
 
   # 2. Applications (Dùng overlay production)
   - apps/production

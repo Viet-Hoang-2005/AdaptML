@@ -29,6 +29,8 @@ spec:
             value: ""
           - name: requirements_text
             value: ""
+          - name: mlflow_tracking_uri
+            value: "http://mlflow-server.mlflow-server.svc.cluster.local:5000"
       steps:
         - - name: run-cpu-pytorch-job
             template: cpu-pytorch-job
@@ -61,6 +63,8 @@ spec:
                   value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
                 - name: requirements_text
                   value: "{{inputs.parameters.requirements_text}}"
+                - name: mlflow_tracking_uri
+                  value: "{{inputs.parameters.mlflow_tracking_uri}}"
           - name: run-gpu-pytorch-job
             template: gpu-pytorch-job
             when: "'{{inputs.parameters.accelerator_type}}' == 'gpu' && {{inputs.parameters.accelerator_count}} > 0"
@@ -94,6 +98,8 @@ spec:
                   value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
                 - name: requirements_text
                   value: "{{inputs.parameters.requirements_text}}"
+                - name: mlflow_tracking_uri
+                  value: "{{inputs.parameters.mlflow_tracking_uri}}"
     - name: cpu-pytorch-job
       inputs:
         parameters:
@@ -110,6 +116,7 @@ spec:
           - name: model_version
           - name: s3_job_source_bundle_uri
           - name: requirements_text
+          - name: mlflow_tracking_uri
       resource:
         action: create
         successCondition: status.replicaStatuses.Master.succeeded == 1
@@ -132,6 +139,7 @@ spec:
                 template:
                   metadata:
                     labels:
+                      tenant_id: "{{inputs.parameters.tenant_id}}"
                       training_job_id: "{{inputs.parameters.job_id}}"
                   spec:
                     nodeSelector:
@@ -176,7 +184,7 @@ spec:
                           - name: REDIS_URL
                             value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
                           - name: MLFLOW_TRACKING_URI
-                            value: "http://mlflow:5000"
+                            value: "{{inputs.parameters.mlflow_tracking_uri}}"
     - name: gpu-pytorch-job
       inputs:
         parameters:
@@ -194,6 +202,7 @@ spec:
           - name: model_version
           - name: s3_job_source_bundle_uri
           - name: requirements_text
+          - name: mlflow_tracking_uri
       resource:
         action: create
         successCondition: status.replicaStatuses.Master.succeeded == 1
@@ -215,9 +224,8 @@ spec:
                 restartPolicy: Never
                 template:
                   metadata:
-                    annotations:
-                      sidecar.istio.io/inject: "false"
                     labels:
+                      tenant_id: "{{inputs.parameters.tenant_id}}"
                       training_job_id: "{{inputs.parameters.job_id}}"
                   spec:
                     nodeSelector:
@@ -270,7 +278,7 @@ spec:
                           - name: REDIS_URL
                             value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
                           - name: MLFLOW_TRACKING_URI
-                            value: "http://mlflow:5000"
+                            value: "{{inputs.parameters.mlflow_tracking_uri}}"
     - name: report-status
       container:
         image: curlimages/curl:latest
