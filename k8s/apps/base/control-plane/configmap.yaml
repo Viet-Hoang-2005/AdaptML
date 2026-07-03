@@ -38,3 +38,4 @@ data:
   MODEL_SERVER_PUBLIC_URL: "https://mlops-nids-nt114.id.vn"
   MODEL_SERVER_INTERNAL_URL: "http://traefik.kube-system.svc.cluster.local:5000"
   MLFLOW_TRACKING_URI: "http://mlflow-server.mlflow-server.svc.cluster.local:5000"
+  MLFLOW_TRACKING_REQUIRED: "true"

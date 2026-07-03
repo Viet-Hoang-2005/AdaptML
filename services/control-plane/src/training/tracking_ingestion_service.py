@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.utils import timezone
 from authentication.models import TrainingJob
+from integrations.hashid_utils import encode_model_id
 from registry.views import sync_registry_version_from_model_api
 
 MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
@@ -305,7 +306,24 @@ def _log_to_mlflow(training_job: TrainingJob, mlops_dir: Path, metrics: dict, pa
         raise TrackingIngestionError("MLFLOW_TRACKING_URI is not configured.")
 
     mlflow.set_tracking_uri(tracking_uri)
-    experiment = mlflow.set_experiment(experiment_name)
+    if getattr(training_job, "model_api", None):
+        tenant_id = training_job.tenant.tenant_id
+        model_hash_id = encode_model_id(training_job.model_api.id)
+        safe_version = (str(training_job.model_version or training_job.model_api.version or "v1").strip() or "v1").replace(" ", "")
+        bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "")
+        artifact_root = f"s3://{bucket_name}/users/{tenant_id}/models/{model_hash_id}/{safe_version}/mlflow"
+        experiment_name = f"tenant-{tenant_id}-model-{model_hash_id}-{safe_version}"
+    else:
+        artifact_root = ""
+
+    experiment = mlflow.get_experiment_by_name(experiment_name)
+    if not experiment:
+        experiment_id = mlflow.create_experiment(
+            experiment_name,
+            artifact_location=artifact_root or None,
+        )
+        experiment = mlflow.get_experiment(experiment_id)
+    mlflow.set_experiment(experiment_name)
     run_name = training_job.mlflow_run_name or f"training-job-{training_job.id}-{training_job.name}"
 
     start_run_kwargs = {"run_name": run_name}
@@ -323,6 +341,7 @@ def _log_to_mlflow(training_job: TrainingJob, mlops_dir: Path, metrics: dict, pa
                 "entry_point": training_job.entry_point,
                 "model_artifact_uri": training_job.model_artifact_uri,
                 "deployability_status": training_job.deployability_status,
+                "mlflow_artifact_root": artifact_root,
             }
         )
 
@@ -343,6 +362,7 @@ def _log_to_mlflow(training_job: TrainingJob, mlops_dir: Path, metrics: dict, pa
         return {
             "run_id": run.info.run_id,
             "experiment_id": str(run.info.experiment_id or getattr(experiment, "experiment_id", "")),
+            "experiment_name": experiment_name,
             "artifact_uri": mlflow.get_artifact_uri(),
             "tracking_uri": tracking_uri,
             "run_name": run_name,
@@ -501,7 +521,10 @@ def ingest_training_job_tracking(training_job: TrainingJob, force: bool = False)
         training_job.mlflow_experiment_id = mlflow_info.get("experiment_id", "")
         training_job.mlflow_artifact_uri = mlflow_info.get("artifact_uri", "")
         training_job.mlflow_tracking_uri = mlflow_info.get("tracking_uri", "")
-        training_job.mlflow_experiment_name = getattr(settings, "MLFLOW_EXPERIMENT_NAME", "mlops-paas-training")
+        training_job.mlflow_experiment_name = mlflow_info.get(
+            "experiment_name",
+            getattr(settings, "MLFLOW_EXPERIMENT_NAME", "mlops-paas-training"),
+        )
         training_job.mlflow_run_name = mlflow_info.get("run_name", "")
         training_job.tracking_status = "completed"
         training_job.tracking_error = ""
