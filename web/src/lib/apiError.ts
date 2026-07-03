@@ -22,12 +22,19 @@ const getFieldErrorMessage = (data: ApiErrorBody) => {
 };
 
 export const getApiErrorMessage = (error: unknown, fallback: string) => {
-  if (!axios.isAxiosError<ApiErrorBody>(error)) {
+  if (!axios.isAxiosError<unknown>(error)) {
     return error instanceof Error ? error.message : fallback;
   }
 
   const data = error.response?.data;
   if (!data) return error.message || fallback;
+  if (typeof data === 'string') {
+    return data.trim().startsWith('<') ? fallback : data;
+  }
+  if (typeof data !== 'object') {
+    return error.message || fallback;
+  }
 
-  return data.error || data.detail || data.message || getFieldErrorMessage(data) || error.message || fallback;
+  const body = data as ApiErrorBody;
+  return body.error || body.detail || body.message || getFieldErrorMessage(body) || error.message || fallback;
 };
