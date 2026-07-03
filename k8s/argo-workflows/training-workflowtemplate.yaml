@@ -126,7 +126,7 @@ spec:
                       - name: harbor-registry-pull-secret
                     containers:
                       - name: pytorch
-                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:d549e8a29bf4635d4081dd2db952eb0c6d8f266e
+                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:f9bc7bbfa61d50bc4d4d2cb40a4748c0e9152b23
                         command: ["python", "-u", "/app/train_runner.py"]
                         resources:
                           requests:
@@ -209,7 +209,7 @@ spec:
                       - name: harbor-registry-pull-secret
                     containers:
                       - name: pytorch
-                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:d549e8a29bf4635d4081dd2db952eb0c6d8f266e
+                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:f9bc7bbfa61d50bc4d4d2cb40a4748c0e9152b23
                         command: ["python", "-u", "/app/train_runner.py"]
                         resources:
                           requests:
