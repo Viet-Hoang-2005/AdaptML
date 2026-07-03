@@ -60,7 +60,7 @@ MLOps extends DevOps principles to ML systems by coordinating data engineering, 
 
 \subsection{MLOps Platforms, Model Registry, and Model Serving}
 
-Implementation-oriented MLOps studies show how platform components can connect model development and deployment. Zhou \textit{et al.} discuss a machine learning pipeline platform \cite{zhou2020pipeline}, and Subramanya \textit{et al.} apply an MLOps workflow to electricity market forecasting \cite{subramanya2022devops}. TFX demonstrates how production ML platforms can integrate pipeline stages such as data ingestion, validation, training, and serving \cite{baylor2017tfx}. MLflow provides experiment tracking and model lifecycle support \cite{mlflow}. Separately, Clipper treats online prediction serving as a systems problem involving model abstraction and serving infrastructure \cite{crankshaw2017clipper}. In contrast to systems that focus on a single part of the lifecycle, this baseline combines registry metadata, generated endpoints, production logs, and drift signals in one prototype workflow.
+Implementation-oriented MLOps studies show how platform components can connect model development and deployment. Zhou \textit{et al.} discuss a machine learning pipeline platform \cite{zhou2020pipeline}, and Subramanya \textit{et al.} apply an MLOps workflow to electricity market forecasting \cite{subramanya2022devops}. TFX demonstrates how production ML platforms can integrate pipeline stages such as data ingestion, validation, training, and serving \cite{baylor2017tfx}. MLflow provides experiment tracking and model lifecycle support \cite{mlflow}. Separately, Clipper treats online prediction serving as a systems problem involving model abstraction and serving infrastructure \cite{crankshaw2017clipper}. Recent work also frames MLOps as a self-adaptive architecture in which runtime degradation and distribution-shift signals can inform adaptation decisions \cite{Bhatt2025HarmonE}. In contrast to systems that focus on a single part of the lifecycle, this baseline combines registry metadata, generated endpoints, production logs, and drift signals in one prototype workflow.
 
 \subsection{Data Quality, Data Drift, and Concept Drift Monitoring}
 
@@ -68,7 +68,7 @@ Production ML reliability depends on the data observed after deployment as well 
 
 \subsection{Cybersecurity/NIDS as a Non-Stationary Case Study}
 
-Network intrusion detection provides a useful non-stationary case study for drift-aware MLOps. CIC-IDS2017 provides labeled intrusion traffic for evaluating intrusion detection models \cite{cicids}, but real deployment environments can differ from dataset conditions. Sommer and Paxson argue that ML-based intrusion detection faces challenges outside closed-world assumptions, including deployment context, generalization, and evolving traffic distributions \cite{sommer2010closedworld}. This paper therefore uses NIDS to illustrate lifecycle and monitoring requirements, not to claim a new state-of-the-art intrusion detection classifier.
+Network intrusion detection provides a useful non-stationary case study for drift-aware MLOps. CIC-IDS2017 provides labeled intrusion traffic for evaluating intrusion detection models \cite{cicids}, but real deployment environments can differ from dataset conditions. Sommer and Paxson argue that ML-based intrusion detection faces challenges outside closed-world assumptions, including deployment context, generalization, and evolving traffic distributions \cite{sommer2010closedworld}. Recent NIDS research likewise treats concept drift as an operational problem requiring continual or online adaptation policies for evolving traffic patterns \cite{Zhang2025SSFNIDS}. This paper therefore uses NIDS to illustrate lifecycle and monitoring requirements, not to claim a new state-of-the-art intrusion detection classifier.
 
 \subsection{Research Gap}
 
@@ -420,6 +420,18 @@ in \textit{Proc. IEEE Symposium on Security and Privacy}, 2010, pp. 305--316.
 
 \bibitem{kubernetes}
 B. Burns, B. Grant, D. Oppenheimer, E. Brewer, and J. Wilkes, ``Borg, Omega, and Kubernetes,'' \textit{Communications of the ACM}, vol. 59, no. 5, pp. 50--57, 2016.
+
+\bibitem{Bhatt2025HarmonE}
+H. Bhatt, S. Biswas, S. Rakhunathan, and K. Vaidhyanathan,
+``HarmonE: A Self-Adaptive Approach to Architecting Sustainable MLOps,''
+arXiv preprint arXiv:2505.13693, 2025. Accepted to ECSA 2025.
+DOI: 10.48550/arXiv.2505.13693.
+
+\bibitem{Zhang2025SSFNIDS}
+X. Zhang, R. Zhao, Z. Jiang, H. Chen, Y. Ding, E. C. H. Ngai, and S.-H. Yang,
+``Continual Learning with Strategic Selection and Forgetting for Network Intrusion Detection,''
+arXiv preprint arXiv:2412.16264, 2025. Accepted by IEEE INFOCOM 2025.
+DOI: 10.48550/arXiv.2412.16264.
 
 \end{thebibliography}
 
