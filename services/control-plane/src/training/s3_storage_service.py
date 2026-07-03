@@ -59,11 +59,22 @@ def upload_training_inputs_to_s3(training_job) -> tuple[str, str, str]:
     """Tải source code zip và dataset lên S3 bucket phục vụ training."""
     import tempfile
     from io import BytesIO
+    from integrations.hashid_utils import encode_model_id
+
     bucket = settings.AWS_STORAGE_BUCKET_NAME
     if not bucket:
         raise ValidationError({"error": "AWS_STORAGE_BUCKET_NAME is not configured."})
 
-    prefix = f"tenants/{training_job.tenant.tenant_id}/jobs/{training_job.id}"
+    if getattr(training_job, "model_api", None):
+        tenant_id = training_job.tenant.tenant_id
+        model_hash_id = encode_model_id(training_job.model_api.id)
+        safe_version = training_job.model_api.version.replace(' ', '') if training_job.model_api.version else 'v1'
+        prefix = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/training/jobs/{training_job.id}"
+        code_target_key = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/code/source.zip"
+    else:
+        prefix = f"tenants/{training_job.tenant.tenant_id}/jobs/{training_job.id}"
+        code_target_key = f"{prefix}/source/source.zip"
+
     s3 = _s3_client()
 
     source_uri = _normalize_s3_uri(bucket, training_job.s3_source_uri)
@@ -72,30 +83,30 @@ def upload_training_inputs_to_s3(training_job) -> tuple[str, str, str]:
     training_data = getattr(training_job, "training_data", None)
 
     if not source_uri and source_zip:
-        key = f"{prefix}/source/source.zip"
         source_zip.seek(0)
-        s3.upload_fileobj(source_zip, bucket, key)
-        source_uri = _s3_uri(bucket, key)
+        s3.upload_fileobj(source_zip, bucket, code_target_key)
+        source_uri = _s3_uri(bucket, code_target_key)
         training_job.s3_source_uri = source_uri
     elif source_uri and source_uri.startswith("s3://"):
         src_bucket, src_key = _split_s3_uri(source_uri)
-        target_key = f"{prefix}/source/source.zip"
+        target_key = code_target_key
         if src_key.endswith("/"):
-            # Zip existing S3 directory into target_key
             mem_zip = BytesIO()
             with zipfile.ZipFile(mem_zip, "w", zipfile.ZIP_DEFLATED) as zf:
                 paginator = s3.get_paginator("list_objects_v2")
                 for page in paginator.paginate(Bucket=src_bucket, Prefix=src_key):
                     for obj in page.get("Contents", []):
                         k = obj["Key"]
-                        if k.endswith("/"): continue
+                        if k.endswith("/") or k == target_key:
+                            continue
                         rel_name = k[len(src_key):].lstrip("/")
                         body = s3.get_object(Bucket=src_bucket, Key=k)["Body"].read()
                         zf.writestr(rel_name, body)
             mem_zip.seek(0)
             s3.upload_fileobj(mem_zip, bucket, target_key)
         else:
-            s3.copy_object(CopySource={"Bucket": src_bucket, "Key": src_key}, Bucket=bucket, Key=target_key)
+            if src_key != target_key:
+                s3.copy_object(CopySource={"Bucket": src_bucket, "Key": src_key}, Bucket=bucket, Key=target_key)
         source_uri = _s3_uri(bucket, target_key)
         training_job.s3_source_uri = source_uri
 
@@ -107,10 +118,17 @@ def upload_training_inputs_to_s3(training_job) -> tuple[str, str, str]:
         training_job.s3_training_data_uri = data_uri
     elif data_uri and data_uri.startswith("s3://"):
         src_bucket, src_key = _split_s3_uri(data_uri)
-        target_key = f"{prefix}/data/train.csv"
-        if src_key.endswith("/"):
-            src_key = _first_object_key(s3, src_bucket, src_key)
-        s3.copy_object(CopySource={"Bucket": src_bucket, "Key": src_key}, Bucket=bucket, Key=target_key)
+        if getattr(training_job, "model_api", None):
+            if src_key.endswith("/"):
+                target_key = _first_object_key(s3, src_bucket, src_key)
+            else:
+                target_key = src_key
+        else:
+            target_key = f"{prefix}/data/train.csv"
+            if src_key.endswith("/"):
+                src_key = _first_object_key(s3, src_bucket, src_key)
+            if src_key != target_key:
+                s3.copy_object(CopySource={"Bucket": src_bucket, "Key": src_key}, Bucket=bucket, Key=target_key)
         data_uri = _s3_uri(bucket, target_key)
         training_job.s3_training_data_uri = data_uri
 
