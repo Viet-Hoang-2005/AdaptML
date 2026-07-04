@@ -387,12 +387,12 @@ WebAttacks & 0.981 & 0.874 / 0.466 / 0.816 & 0.999 / 0.997 / 0.999 & +0.531 \\
 
 All three scenarios exceed the drift-share threshold with 51 of 52 features marked as drifted. The retrained challengers recover Macro-F1 on future holdout windows under this offline protocol, while the result remains a prototype recovery measurement rather than evidence of direct production rollout.
 
-We also ran a short serving benchmark against a deployed endpoint using Locust replay traffic and Prometheus metrics scraped from the serving pod \texttt{endpoint-t-1ac7d01a-model-xn102v-b8b8c59f8-hd8jj}. The run issued 4,397 client-side prediction requests over roughly two minutes with 20 virtual users. Locust measured an average response time of 213.9 ms and p95 response time of 360 ms; its failure count corresponds to label-prediction mismatches recorded by the test script, not HTTP request failures. Prometheus reported an average server-side throughput of 44.4 requests/s, peak throughput of 79.3 requests/s, average mean handler latency of 47.1 ms, and average p95 handler latency of 331.2 ms for the \texttt{/models/\{model\_id\_str\}/predict} handler. Figure~\ref{fig:endpoint-benchmark} shows the Prometheus time series used for this observation.
+We also ran a serving benchmark against a deployed endpoint using Locust replay traffic and Prometheus metrics scraped from the serving pod. The 100-user run issued 4,343 client-side prediction requests over approximately 89 seconds before the replay dataset was exhausted. Locust measured an average throughput of 47.6 requests/s, an average response time of 1.74 s, and p95 response time of 2.30 s. The run recorded four HTTP 502 responses. Prometheus reported peak server-side throughput of 144.1 requests/s and non-zero-window average handler latency of 1.60 s for the \texttt{/models/\{model\_id\_str\}/predict} handler. These measurements suggest that at 100 concurrent users the serving path remains mostly available but is latency-bound and begins to show gateway errors, indicating queueing or saturation in the model-serving path. Figure~\ref{fig:endpoint-benchmark} shows the Locust throughput and latency time series used for this observation.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{assets/chart-locust-benchmark.png}
-\caption{Prototype serving benchmark with 20 Locust users over an approximately two-minute replay window. Throughput and latency are queried from Prometheus for the serving pod during the benchmark.}
+\caption{Prototype serving benchmark with 100 Locust users over an approximately 89-second replay window. Throughput and latency are measured from Locust's client-side history during the benchmark.}
 \label{fig:endpoint-benchmark}
 \end{figure}
 
