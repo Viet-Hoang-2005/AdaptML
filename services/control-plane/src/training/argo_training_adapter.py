@@ -5,6 +5,7 @@ import threading
 import requests
 from django.conf import settings
 from django.core.cache import cache
+from integrations.hashid_utils import encode_model_id
 from training.s3_storage_service import (
     upload_training_inputs_to_s3,
     generate_presigned_download_url,
@@ -16,6 +17,24 @@ logger = logging.getLogger("paas.training.argo")
 def training_webhook_url(training_job_id: int) -> str:
     internal_base_url = getattr(settings, "CONTROL_PLANE_INTERNAL_URL", "http://control-plane:8000").rstrip("/")
     return f"{internal_base_url}/api/training/{training_job_id}/training-webhook"
+
+
+def _safe_model_version(value: str) -> str:
+    return (str(value or "v1").strip() or "v1").replace(" ", "")
+
+
+def _mlflow_tracking_layout(training_job, bucket_name: str, s3_prefix: str) -> tuple[str, str]:
+    if getattr(training_job, "model_api", None):
+        tenant_id = training_job.tenant.tenant_id
+        model_hash_id = encode_model_id(training_job.model_api.id)
+        safe_version = _safe_model_version(training_job.model_version or training_job.model_api.version)
+        artifact_root = f"s3://{bucket_name}/users/{tenant_id}/models/{model_hash_id}/{safe_version}/mlflow"
+        experiment_name = f"tenant-{tenant_id}-model-{model_hash_id}-{safe_version}"
+        return experiment_name, artifact_root
+
+    artifact_root = f"s3://{bucket_name}/{s3_prefix}/mlflow"
+    experiment_name = f"tenant-{training_job.tenant.tenant_id}"
+    return experiment_name, artifact_root
 
 
 class ArgoTrainingAdapter:
@@ -47,6 +66,7 @@ class ArgoTrainingAdapter:
         data_presigned = generate_presigned_download_url(str(training_job.s3_training_data_uri), expiry_seconds=14400)
         output_presigned = generate_presigned_upload_url(model_artifact_uri, expiry_seconds=14400)
         bundle_presigned = generate_presigned_upload_url(job_bundle_uri, expiry_seconds=14400)
+        mlflow_experiment_name, mlflow_artifact_root = _mlflow_tracking_layout(training_job, bucket_name, s3_prefix)
 
         webhook_url = os.environ.get(
             "ARGO_TRAINING_WEBHOOK_URL",
@@ -69,6 +89,9 @@ class ArgoTrainingAdapter:
             "entry_point": str(training_job.entry_point),
             "model_version": str(training_job.model_version),
             "control_plane_webhook_url": training_webhook_url(training_job.id),
+            "mlflow_tracking_uri": os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server.mlflow-server.svc.cluster.local:5000"),
+            "mlflow_experiment_name": mlflow_experiment_name,
+            "mlflow_artifact_root": mlflow_artifact_root,
         }
 
         def _send_webhook():

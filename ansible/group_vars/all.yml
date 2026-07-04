@@ -2,3 +2,34 @@
 domain_name: "mlops-nids-nt114.id.vn"
 aws_region: "ap-southeast-1"
 k3s_channel: "stable"
+
+# Execution modes:
+# - bootstrap_k3s_cluster=true installs K3s server/agents on EC2 nodes.
+# - deploy_k8s_platform=true installs platform controllers and lets ArgoCD sync k8s/.
+bootstrap_k3s_cluster: true
+deploy_k8s_platform: true
+
+# Karpenter/K3s self-managed bootstrap defaults. These values match the
+# Terraform defaults and can be overridden from inventory/group_vars.
+karpenter_cluster_name: "mlops-paas-cluster"
+karpenter_node_instance_profile_name: "mlops-karpenter-node-profile"
+karpenter_interruption_queue_name: "{{ karpenter_cluster_name }}"
+karpenter_k3s_token_secret_name: "mlops/k3s-agent-token"
+k3s_node_token_override: ""
+karpenter_controller_role_arn: ""
+manage_karpenter_nodepools_with_ansible: true
+karpenter_cpu_instance_types:
+  - c6i.2xlarge
+  - c6i.4xlarge
+karpenter_gpu_instance_types:
+  - g4dn.xlarge
+  - g4dn.12xlarge
+  - g5.xlarge
+  - g5.12xlarge
+
+# Operator versions are intentionally configurable so a new cluster can pin the
+# exact versions used in production without editing shell scripts.
+karpenter_version: "1.13.0"
+karpenter_bridge_crd_version: "1.0.8"
+kubeflow_training_operator_version: "v1.7.0"
+cnpg_operator_chart_version: ""

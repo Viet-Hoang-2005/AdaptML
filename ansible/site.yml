@@ -2,24 +2,39 @@
 - name: Setup common utilities and OS preparation on all nodes
   hosts: all
   gather_facts: true
+  tags:
+    - bootstrap
+    - platform
   roles:
     - common
 
 - name: Setup K3s Server (Master) and Helm
   hosts: master
   gather_facts: true
+  tags:
+    - bootstrap
   roles:
-    - k3s_master
-    - helm
+    - role: k3s_master
+      when: bootstrap_k3s_cluster | bool
+    - role: helm
+      when: bootstrap_k3s_cluster | bool
 
 - name: Join Worker nodes to K3s cluster
   hosts: workers
   gather_facts: true
+  tags:
+    - bootstrap
   roles:
-    - k3s_worker
+    - role: k3s_worker
+      when: bootstrap_k3s_cluster | bool
 
 - name: Deploy Kubernetes Add-ons (Storage, Secrets, Scaling, ArgoCD, Workflows, Monitoring)
   hosts: master
   gather_facts: true
+  tags:
+    - platform
   roles:
-    - k8s_addons
+    - role: helm
+      when: deploy_k8s_platform | bool
+    - role: k8s_addons
+      when: deploy_k8s_platform | bool

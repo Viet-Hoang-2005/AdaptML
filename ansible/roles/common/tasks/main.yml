@@ -17,4 +17,5 @@
       - apt-transport-https
       - software-properties-common
       - nfs-common
+      - awscli
     state: present

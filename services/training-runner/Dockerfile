@@ -6,8 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+COPY requirements.txt /app/requirements.txt
 RUN python -m pip install --upgrade pip && \
-    python -m pip install boto3 redis requests
+    python -m pip install -r requirements.txt
 
 COPY runner.py /app/train_runner.py
 
