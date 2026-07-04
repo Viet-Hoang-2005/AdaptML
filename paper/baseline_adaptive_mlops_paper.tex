@@ -17,12 +17,18 @@
 
 \titlerunning{A Drift-Aware MLOps Framework for Multi-Model Serving}
 
-\author{Tran Nguyen Viet Hoang\inst{1} \and Bui Ngoc Thai\inst{1}}
-\authorrunning{T. N. V. Hoang and B. N. Thai}
+\author{Hoang Tran-Nguyen-Viet\inst{1} \and
+Thai Bui-Ngoc\inst{1} \and
+Tuan Le-Anh\inst{1} \and
+Bao Nguyen-Van\inst{1} \and
+Quan Le-Trung\inst{1}
+}
+
+\authorrunning{Hoang Tran-Nguyen-Viet et al.}
 
 \institute{Faculty of Computer Networks and Communications,\\
-University of Information Technology, VNU-HCM, Ho Chi Minh City, Vietnam\\
-\email{\{23520541,23521412\}@gm.uit.edu.vn}}
+University of Information Technology, VNU-HCM,\\Ho Chi Minh City, Vietnam\\
+\email{\{23520541,23521412\}@gm.uit.edu.vn, \{tuanla,baonv,quanlt\}@uit.edu.vn}}
 
 \maketitle
 
@@ -50,7 +56,7 @@ The main contributions of this paper are:
     \item We implement a prototype platform and instantiate it with a Network Intrusion Detection case study to demonstrate the feasibility of the proposed lifecycle.
 \end{itemize}
 
-The remainder of this article is structured as follows. Section~2 reviews related work on MLOps lifecycles, serving platforms, data quality, drift monitoring, and ML-based NIDS. Sections~3--5 define the problem, present the framework, and describe the drift-aware lifecycle algorithm; Sections~6--8 instantiate the framework in the NIDS case study, describe the prototype, and outline the evaluation design. Sections~9 and~10 discuss limitations and conclude the paper.
+The remainder of this article is structured as follows. Section~2 reviews related work on MLOps lifecycles, serving platforms, data quality, drift monitoring, and ML-based NIDS. Sections~3--5 define the problem, present the framework, and describe the drift-aware lifecycle algorithm; Sections~6--8 instantiate the framework in the NIDS case study, describe the prototype, and report preliminary evaluation results. Sections~9 and~10 discuss limitations and conclude the paper.
 
 \section{Related Work}
 
@@ -60,7 +66,24 @@ MLOps extends DevOps principles to ML systems by coordinating data engineering, 
 
 \subsection{MLOps Platforms, Model Registry, and Model Serving}
 
-Implementation-oriented MLOps studies show how platform components can connect model development and deployment. Zhou \textit{et al.} discuss a machine learning pipeline platform \cite{zhou2020pipeline}, and Subramanya \textit{et al.} apply an MLOps workflow to electricity market forecasting \cite{subramanya2022devops}. TFX demonstrates how production ML platforms can integrate pipeline stages such as data ingestion, validation, training, and serving \cite{baylor2017tfx}. MLflow provides experiment tracking and model lifecycle support \cite{mlflow}. Separately, Clipper treats online prediction serving as a systems problem involving model abstraction and serving infrastructure \cite{crankshaw2017clipper}. Recent work also frames MLOps as a self-adaptive architecture in which runtime degradation and distribution-shift signals can inform adaptation decisions \cite{Bhatt2025HarmonE}. In contrast to systems that focus on a single part of the lifecycle, this baseline combines registry metadata, generated endpoints, production logs, and drift signals in one prototype workflow.
+Implementation-oriented MLOps studies show how platform components connect model development and deployment. TFX integrates data ingestion, validation, training, and serving \cite{baylor2017tfx}; MLflow supports tracking and model lifecycle management \cite{mlflow}; and Clipper frames online prediction as a systems problem \cite{crankshaw2017clipper}. Earlier platform case studies discuss ML pipeline and domain workflows \cite{zhou2020pipeline,subramanya2022devops}, while recent work frames MLOps as self-adaptive architecture \cite{Bhatt2025HarmonE}. A recent empirical evaluation compares MLflow, Metaflow, Airflow, and Kubeflow Pipelines across installation, flexibility, interoperability, instrumentation, interpretability, and documentation, showing complementary strengths rather than one universal lifecycle abstraction \cite{MarcosMercade2026MLOpsFrameworks}.
+
+\begin{table}[t]
+\caption{MLOps tool-family scope and remaining gap.}
+\label{tab:mlops-tool-gap}
+\centering
+\small
+\begin{tabular}{@{}L{2.2cm}L{3.2cm}L{5.8cm}@{}}
+\toprule
+\textbf{Tool family} & \textbf{Main support} & \textbf{Gap relative to this work} \\
+\midrule
+MLflow & Tracking, artifacts, registry. & Tenant ownership, lifecycle state, serving logs, and UI actions need product control-plane logic. \\
+Flow tools & Workflow orchestration. & Registry governance, multi-model serving, and drift-driven review remain external concerns. \\
+Kubeflow/TFX & Pipeline and cloud-native ML workflows. & Tenant lifecycle, registry views, and drift summaries must be mapped into application metadata. \\
+Proposed framework & Registry, serving, logs, drift, and artifacts under one control plane. & Baseline prototype; production hardening and autonomous promotion remain future work. \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Data Quality, Data Drift, and Concept Drift Monitoring}
 
@@ -72,7 +95,7 @@ Network intrusion detection provides a useful non-stationary case study for drif
 
 \subsection{Research Gap}
 
-The reviewed literature covers MLOps architectures, production ML platforms, model serving, data quality, drift adaptation, and NIDS deployment challenges. However, these strands are often treated separately. This paper addresses the gap by presenting a baseline, tenant-aware, multi-model serving framework in which drift monitoring is represented as an explicit lifecycle signal connected to registry metadata, serving endpoints, production logs, and review-driven adaptation actions.
+The reviewed literature covers MLOps architectures, platforms, serving, data quality, drift adaptation, and NIDS deployment challenges. Existing tools provide useful building blocks, but they often center on tracking, orchestration, or pipeline execution rather than a tenant-facing lifecycle abstraction for multi-model serving. This paper addresses that gap by placing a Native Registry in the control plane as the product-level source of truth for tenant ownership, model families, versions, deployment metadata, production-log summaries, drift results, and review-driven lifecycle actions. Existing tools remain adapters for tracking, training execution, artifact storage, and drift reporting; the contribution is the integration pattern connecting them into a drift-aware multi-tenant serving lifecycle.
 
 \section{Problem Formulation}
 
@@ -258,7 +281,7 @@ where $\Phi(\cdot)$ updates the model state according to the drift ratio and the
 
 The NIDS model is used as a case study to instantiate the proposed framework. A network flow is represented as a tabular feature vector $x \in \mathbb{R}^{d}$ containing statistics such as duration, packet counts, byte rates, and protocol-related attributes. The model predicts whether the observed traffic is benign or belongs to an attack class.
 
-In the current prototype, XGBoost is used as the classification algorithm because it is widely used for tabular data and can be packaged into a serving-compatible model artifact. The project contains multiple trained model versions, including binary-classification artifacts used for upload and model-evolution validation. These models are treated as artifacts and registry versions rather than hard-coded services. This allows the case study to demonstrate the general framework behavior: model registration, endpoint invocation, production logging, and drift monitoring.
+In the current prototype, XGBoost is selected as the baseline classifier rather than as a claim of state-of-the-art NIDS performance. The case study uses tabular network-flow features, where tree-based gradient boosting provides a practical balance between non-linear feature interaction modeling, training cost, inference efficiency, and artifact portability \cite{xgboost}. Compared with simple linear baselines, XGBoost can capture interactions among flow statistics such as duration, packet counts, and byte rates. Compared with deep neural models, it requires less task-specific architecture design and is easier to package, version, and serve as a compact artifact in a multi-tenant MLOps prototype. Therefore, XGBoost is used to exercise the lifecycle--training, packaging, registration, endpoint invocation, production logging, and drift monitoring--rather than to optimize NIDS classification accuracy. Other classifiers can be onboarded through the same artifact and registry workflow when they satisfy the serving contract.
 
 NIDS is an appropriate case study for drift-aware MLOps for three reasons. First, network environments change over time, causing benign traffic distributions to shift. Second, attack patterns evolve, making historical training data incomplete. Third, labeled production data are often delayed or unavailable, so input distribution monitoring can provide an early warning signal before supervised performance metrics are available.
 
@@ -270,7 +293,16 @@ This section describes the implemented prototype as reflected in the repository.
 
 The prototype follows a control-plane/data-plane architecture. The control plane is implemented with Django and Django REST Framework and stores users, tenants, training jobs, model API records, registry versions, deployment metadata, and drift monitoring records in PostgreSQL. The data plane is implemented as a FastAPI model server that resolves a model endpoint, loads the serving artifact, performs prediction, and emits production log events. Redpanda is used as the asynchronous log transport, and a consumer service persists prediction records into PostgreSQL for later drift analysis.
 
-The implementation also includes S3-compatible artifact storage, Argo-triggered Kubernetes training workflows using Kubeflow PyTorchJob resources, a Python training runner, a model packager, MLflow integration, Evidently-based drift monitoring, and a Native Registry/Model Evolution layer. In the user-facing workflow, Native Registry data stored in PostgreSQL is the source of truth for Model Evolution. MLflow is treated as internal experiment lineage and model-format support rather than a required user interface.
+Figure~\ref{fig:prototype-flow} summarizes the implemented prototype workflow across the control plane, data plane, training execution, artifact storage, production logging, and drift monitoring components.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{assets/flow.png}
+\caption{Prototype workflow of the drift-aware MLOps framework. The Django control plane coordinates upload, packaging, training requests, deployment requests, registry metadata, and drift checks. The FastAPI data plane serves model predictions and emits production logs through Redpanda/PostgreSQL, while Argo/Kubeflow, object storage, Harbor, MLflow, Evidently, and Karpenter-backed compute are used as supporting services where configured.}
+\label{fig:prototype-flow}
+\end{figure}
+
+The implementation also includes S3-compatible artifact storage, Kubernetes training workflows using Kubeflow PyTorchJob resources, a Python training runner, a model packager, MLflow integration, Evidently-based drift monitoring, and a Native Registry/Model Evolution layer. In the user-facing workflow, Native Registry data stored in PostgreSQL is the source of truth for Model Evolution. MLflow is treated as internal experiment lineage and model-format support rather than a required user interface.
 
 \begin{table}
 \caption{Prototype modules and responsibilities.}
@@ -305,7 +337,9 @@ After training completes, the runner produces a required \texttt{model.tar.gz} a
 
 When a completed job is ingested, the control plane downloads the artifact, extracts metadata, and stores metrics, parameters, insights, manifest, and deployability summaries. These summaries are mirrored into Model Evolution when a model is registered from the job.
 
-The Native Registry groups versions through \texttt{ModelFamily} and \texttt{ModelVersion} records linked to deployable \texttt{ModelAPI} records. Model Evolution displays tracking status, metrics, parameters, artifacts, model insights, deployability state, version comparison, deployment actions, drift summaries, and basic routing aliases.
+The Native Registry groups versions through family and version records linked to deployable \texttt{ModelAPI} records. Model Evolution displays tracking status, metrics, artifacts, deployability state, version comparison, deployment actions, drift summaries, and basic routing aliases.
+
+The Native Registry is a product-level control-plane abstraction, not a replacement for existing MLOps platforms. Tenant ownership, access rules, lifecycle states, deployment aliases, drift summaries, and UI actions remain in PostgreSQL through tenant-scoped records, while Argo/Kubeflow, object storage, MLflow, and Evidently act as adapters. This separation lets imported artifacts and training-job artifacts enter one lifecycle with per-tenant ownership, version comparison, deployability review, drift-aware status, and deployment actions.
 
 \subsection{Model Packaging and Serving}
 
@@ -329,23 +363,41 @@ This design avoids requiring user training scripts to import MLflow. It also avo
 
 The repository contains Docker Compose, Kubernetes/K3s-oriented manifests, Argo workflow templates, CI/CD configuration, and GitOps-style deployment configuration updates. These assets document prototype/testbed automation rather than production hardening or evidence of latest workflow success.
 
-Operationally, the web frontend calls the Django/DRF control plane for model upload, training, registry, deployment, and drift views. The control plane exchanges artifacts with S3-compatible storage, submits training requests to Argo Events, and receives training callbacks after Argo Workflows create Kubeflow \texttt{PyTorchJob} resources. The runner returns artifacts for Native Registry ingestion; the FastAPI server emits inference logs to Redpanda; the consumer stores logs in PostgreSQL; and the drift service writes summaries back to the control plane. Where Karpenter is configured, training pods can match AWS-backed training node pools, but runtime evidence such as workflow logs, pod status, artifact uploads, registry ingest records, and Karpenter events should be attached separately before stronger operational claims.
+Operationally, the frontend calls the Django/DRF control plane for model upload, training, registry, deployment, and drift views. The control plane exchanges artifacts with S3-compatible storage, submits training requests to Argo Events, receives callbacks after Kubeflow \texttt{PyTorchJob} execution, ingests runner artifacts into the Native Registry, receives production logs through Redpanda/PostgreSQL, and stores drift summaries. Where Karpenter is configured, training pods can match AWS-backed training node pools, but workflow logs, pod status, artifact uploads, registry ingest records, and Karpenter events should be attached separately before stronger operational claims.
 
-The implemented baseline covers authentication, manual model upload, Kubernetes-native training submission, metadata ingestion, Model Evolution views, version comparison, build/deploy/smoke-test actions, production logging, drift report generation, and a basic routing alias. Autonomous retraining, automated promotion, canary or blue-green deployment, weighted traffic routing, billing, and production-grade hardening remain outside the completed baseline.
+The implemented baseline covers authentication, upload, Kubernetes-native training, metadata ingestion, Model Evolution, version comparison, build, deploy, and smoke-test actions, production logging, drift reports, and a basic routing alias. Autonomous retraining, automated promotion, canary or blue-green deployment, weighted traffic routing, billing, and production-grade hardening remain outside the completed baseline.
 
-\section{Evaluation Design}
+\section{Preliminary Evaluation}
 
-Because this paper is a baseline, evaluation focuses on feasibility and system behavior rather than NIDS accuracy. The validation plan covers five aspects: model onboarding, inference serving, production logging, drift detection, and operational workflow reachability. Onboarding checks whether model packages or completed training artifacts can be validated, stored, registered, and assigned endpoint metadata. Serving and logging checks whether tabular requests produce predictions and queryable production logs. Drift validation compares reference and production windows and reports drifted features, drift ratio, dataset-level decision, and report artifacts. Operational validation should use Kubeflow/Argo run status, training pod logs, artifact paths, registry ingest records, Kubernetes status, Karpenter evidence where configured, and end-to-end training or inference traces when available.
+Because this paper is a baseline, evaluation focuses on prototype feasibility and drift-aware lifecycle behavior rather than optimizing NIDS accuracy. We run an offline replay/recovery experiment on CIC-IDS2017-style flow data in the binary BENIGN-vs-ATTACK setting. For each attack family, a drift window is split into a trigger/retraining subset and a future holdout subset. The framework-assisted path treats the drift decision as an alert that initiates review-driven challenger training and registration; it does not bypass review gates. Row-hash checks exclude future-holdout rows from retraining. Table~\ref{tab:drift-recovery} compares the fixed XGBoost baseline with the review-driven retrained challenger.
+
+\begin{table}[htbp]
+\centering
+\caption{Offline drift/retraining recovery results. Acc., M-F1, and W-F1 denote Accuracy, Macro-F1, and Weighted-F1.}
+\label{tab:drift-recovery}
+\small
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Scenario & Drift & Fixed Acc./M-F1/W-F1 & Retrained Acc./M-F1/W-F1 & $\Delta$M-F1 \\
+\midrule
+PortScan & 0.981 & 0.193 / 0.162 / 0.062 & 1.000 / 1.000 / 1.000 & +0.838 \\
+BruteForce & 0.981 & 0.595 / 0.374 / 0.444 & 1.000 / 0.999 / 1.000 & +0.625 \\
+WebAttacks & 0.981 & 0.874 / 0.466 / 0.816 & 0.999 / 0.997 / 0.999 & +0.531 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All three scenarios exceed the drift-share threshold with 51 of 52 features marked as drifted. The retrained challengers recover Macro-F1 on future holdout windows under this offline protocol, while the result remains a prototype recovery measurement rather than evidence of direct production rollout.
 
 \section{Discussion}
 
-The proposed framework reframes MLOps monitoring as part of an adaptive control loop. The model server does not only return predictions; it also emits production evidence. The monitoring layer does not only generate reports; it produces a signal that can affect model lifecycle decisions. This design is useful for a SaaS or PaaS-style environment where different users upload different models but still need a common operational pipeline.
+The proposed framework reframes MLOps monitoring as part of an adaptive control loop: the model server emits production evidence, and the monitoring layer produces signals that can affect lifecycle decisions. This is useful for SaaS or PaaS-style settings where different users upload different models but need a common operational pipeline.
 
-The current scope is intentionally limited. First, the system supports tabular classification models that can be represented as serving-compatible artifacts. Image, text, time-series, and large language models require additional schema validation and monitoring metrics. Second, arbitrary user-uploaded model artifacts introduce security risks. A hardened system must isolate execution, validate dependencies, restrict archive extraction, and enforce resource quotas. Third, autonomous retraining and promotion require reliable evaluation gates, rollback policies, and human approval mechanisms. Therefore, this baseline treats drift detection as an adaptation signal rather than an unconditional redeployment decision.
+The scope is intentionally limited. First, the system targets tabular classification artifacts; image, text, time-series, and large language models need additional schema validation and monitoring metrics. Second, arbitrary user-uploaded artifacts introduce security risks, so hardened systems must isolate execution, validate dependencies, restrict archive extraction, and enforce resource quotas. Third, autonomous retraining and promotion require reliable evaluation gates, rollback policies, and human approval. Therefore, this baseline treats drift detection as an adaptation signal rather than an unconditional redeployment decision.
 
 \section{Conclusion}
 
-This paper presented a baseline design for a drift-aware MLOps framework for multi-model serving. The framework integrates tenant-aware model onboarding, training-job execution, native model-evolution metadata, dynamic endpoints, asynchronous production logging, and reference-production drift monitoring. The system was formalized using tenants, model functions, production windows, drift indicators, lifecycle states, and adaptation actions. A Network Intrusion Detection model was used as a non-stationary security case study. Future work will focus on artifact-execution hardening, runtime deployment evidence, evaluation gates, and additional model types.
+This paper presented a baseline drift-aware MLOps framework for multi-model serving, integrating tenant-aware onboarding, Kubernetes-native training, native model-evolution metadata, dynamic endpoints, asynchronous production logging, and reference-production drift monitoring. The system was formalized using tenants, model functions, production windows, drift indicators, lifecycle states, and adaptation actions, and instantiated with Network Intrusion Detection as a non-stationary security case study. Preliminary offline recovery results show that drift alerts can support review-driven challenger retraining on future holdout windows, while future work will address artifact-execution hardening, runtime deployment evidence, evaluation gates, and additional model types.
 
 \begin{thebibliography}{00}
 
@@ -432,6 +484,11 @@ X. Zhang, R. Zhao, Z. Jiang, H. Chen, Y. Ding, E. C. H. Ngai, and S.-H. Yang,
 ``Continual Learning with Strategic Selection and Forgetting for Network Intrusion Detection,''
 arXiv preprint arXiv:2412.16264, 2025. Accepted by IEEE INFOCOM 2025.
 DOI: 10.48550/arXiv.2412.16264.
+
+\bibitem{MarcosMercade2026MLOpsFrameworks}
+J. Marcos-Mercad\'e, U. Lopez-Novoa, and M. Ega\~na Aranguren,
+``An Empirical Evaluation of Modern MLOps Frameworks,''
+arXiv preprint arXiv:2601.20415, 2026.
 
 \end{thebibliography}
 
