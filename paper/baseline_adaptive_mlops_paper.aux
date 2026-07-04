@@ -1,52 +1,77 @@
 \relax 
+\@writefile{toc}{\contentsline {title}{A Drift-Aware MLOps Framework for Multi-Model Serving: A Network Intrusion Detection Case Study}{1}{}\protected@file@percent }
+\@writefile{toc}{\authcount {2}}
+\@writefile{toc}{\contentsline {author}{Tran Nguyen Viet Hoang \and Bui Ngoc Thai}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{}\protected@file@percent }
 \citation{kreuzberger2023mlops}
 \citation{john2021towards,subramanya2022devops,renggli2021data}
 \citation{kreuzberger2023mlops}
-\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{1}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}MLOps Architectures}{1}{}\protected@file@percent }
 \citation{john2021towards}
+\citation{sculley2015debt}
+\citation{amershi2019software}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}MLOps Architectures and Lifecycle}{2}{}\protected@file@percent }
 \citation{zhou2020pipeline}
 \citation{subramanya2022devops}
+\citation{baylor2017tfx}
+\citation{mlflow}
+\citation{crankshaw2017clipper}
+\citation{Bhatt2025HarmonE}
 \citation{renggli2021data}
+\citation{polyzotis2017data}
 \citation{gama2014survey}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}MLOps Platforms and Case Studies}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Data Quality and Drift Monitoring}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Research Gap}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {III}Problem Formulation}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {IV}Proposed Framework}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Control Plane}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Data Plane}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Production Logging Layer}{3}{}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Model onboarding procedure.}}{3}{}\protected@file@percent }
-\newlabel{alg:onboarding}{{1}{3}{}{figure.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Drift Monitoring Layer}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Adaptation Layer}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {V}Drift-Aware Lifecycle Algorithm}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VI}Case Study: Network Intrusion Detection}{3}{}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Drift-aware inference and monitoring procedure.}}{4}{}\protected@file@percent }
-\newlabel{alg:monitoring}{{2}{4}{}{figure.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {VII}Prototype Implementation}{4}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Prototype Implementation Modules}}{4}{}\protected@file@percent }
-\newlabel{tab:implementation}{{I}{4}{}{table.1}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Baseline Feature Coverage}}{4}{}\protected@file@percent }
-\newlabel{tab:coverage}{{II}{4}{}{table.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {VIII}Evaluation Design}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Model Onboarding Validation}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Inference Serving Validation}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Production Logging Validation}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-D}}Drift Detection Validation}{4}{}\protected@file@percent }
+\citation{webb2016drift}
+\citation{cicids}
+\citation{sommer2010closedworld}
+\citation{Zhang2025SSFNIDS}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}MLOps Platforms, Model Registry, and Model Serving}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Data Quality, Data Drift, and Concept Drift Monitoring}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Cybersecurity/NIDS as a Non-Stationary Case Study}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Research Gap}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Problem Formulation}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Proposed Framework}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Control Plane}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Data Plane}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Production Logging Layer}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Drift Monitoring Layer}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Adaptation Layer}{6}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Model onboarding procedure.}}{7}{}\protected@file@percent }
+\newlabel{alg:onboarding}{{1}{7}{}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Drift-Aware Lifecycle Algorithm}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Case Study: Network Intrusion Detection}{7}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Drift-aware inference and monitoring procedure.}}{8}{}\protected@file@percent }
+\newlabel{alg:monitoring}{{2}{8}{}{figure.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Prototype Implementation}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Prototype Architecture}{8}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Prototype modules and responsibilities.}}{9}{}\protected@file@percent }
+\newlabel{tab:implementation}{{1}{9}{}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Training Job Execution}{9}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Training Runner Output Contract}{10}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.4}Metadata Ingestion and Native Registry}{10}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.5}Model Packaging and Serving}{10}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.6}Drift Monitoring}{10}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.7}MLflow Tracking Integration}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.8}Deployment and Operational Scope}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Evaluation Design}{11}{}\protected@file@percent }
 \bibcite{kreuzberger2023mlops}{1}
-\bibcite{john2021towards}{2}
-\bibcite{zhou2020pipeline}{3}
-\bibcite{subramanya2022devops}{4}
-\bibcite{renggli2021data}{5}
-\bibcite{gama2014survey}{6}
-\bibcite{mlflow}{7}
-\bibcite{xgboost}{8}
-\bibcite{cicids}{9}
-\bibcite{kubernetes}{10}
-\@writefile{toc}{\contentsline {section}{\numberline {IX}Discussion}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {X}Conclusion}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{References}{5}{}\protected@file@percent }
-\gdef \@abspage@last{5}
+\bibcite{sculley2015debt}{2}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Discussion}{12}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {10}Conclusion}{12}{}\protected@file@percent }
+\bibcite{amershi2019software}{3}
+\bibcite{john2021towards}{4}
+\bibcite{zhou2020pipeline}{5}
+\bibcite{baylor2017tfx}{6}
+\bibcite{subramanya2022devops}{7}
+\bibcite{renggli2021data}{8}
+\bibcite{polyzotis2017data}{9}
+\bibcite{gama2014survey}{10}
+\bibcite{webb2016drift}{11}
+\bibcite{mlflow}{12}
+\bibcite{crankshaw2017clipper}{13}
+\bibcite{xgboost}{14}
+\bibcite{cicids}{15}
+\bibcite{sommer2010closedworld}{16}
+\bibcite{kubernetes}{17}
+\bibcite{Bhatt2025HarmonE}{18}
+\bibcite{Zhang2025SSFNIDS}{19}
+\gdef \@abspage@last{14}
