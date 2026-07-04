@@ -366,3 +366,5 @@ async def predict(
             tenant_id=model_record["tenant_id"], model_id=str(model_record["id"]), status="error_500"
         ).inc()
         raise HTTPException(status_code=500, detail=str(exc))
+
+# Test endpoint to check if the model is loaded in cache
