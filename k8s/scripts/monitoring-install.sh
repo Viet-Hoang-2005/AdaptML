@@ -7,7 +7,7 @@ NAMESPACE="monitoring"
 RELEASE_NAME="monitoring"
 
 echo "[1/2] Add Helm repo prometheus-community..."
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 helm repo update
 
 echo "[2/2] Install kube-prometheus-stack (Prometheus + Grafana + node-exporter + kube-state-metrics)..."

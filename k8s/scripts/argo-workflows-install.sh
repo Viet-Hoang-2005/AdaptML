@@ -3,7 +3,7 @@
 set -e
 
 echo "[1/3] Adding Argo Helm repository..."
-helm repo add argo https://argoproj.github.io/argo-helm
+helm repo add argo https://argoproj.github.io/argo-helm --force-update
 helm repo update
 
 echo "[2/3] Installing Argo Workflows Controller & CRDs..."

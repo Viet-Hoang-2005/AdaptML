@@ -6,7 +6,7 @@ set -e
 NAMESPACE="keda"
 
 echo "[1/2] Add Helm repo for KEDA..."
-helm repo add kedacore https://kedacore.github.io/charts
+helm repo add kedacore https://kedacore.github.io/charts --force-update
 helm repo update
 
 echo "[2/2] Install KEDA..."

@@ -6,7 +6,7 @@ export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 
 # 1. Thêm Helm Repo chính thức của AWS EBS CSI Driver
 echo "[1/3] Add Helm repository 'aws-ebs-csi-driver'..."
-helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver --force-update
 helm repo update aws-ebs-csi-driver
 
 # 2. Cài đặt hoặc cập nhật AWS EBS CSI Driver vào namespace kube-system
