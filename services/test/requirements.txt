@@ -19,3 +19,4 @@ gradio
 joblib
 flask
 flask-cors
+locust==2.44.4
