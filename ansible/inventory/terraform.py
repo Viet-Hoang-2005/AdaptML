@@ -25,6 +25,8 @@ def main():
     master_ip = tf_data.get('master_public_ip', {}).get('value')
     master_private_ip = tf_data.get('master_private_ip', {}).get('value')
     worker_ips = tf_data.get('worker_private_ips', {}).get('value', [])
+    karpenter_node_instance_profile = tf_data.get('karpenter_node_instance_profile_name', {}).get('value')
+    karpenter_interruption_queue = tf_data.get('karpenter_interruption_queue_name', {}).get('value')
 
     inventory = {
         "_meta": {
@@ -48,6 +50,10 @@ def main():
             "ansible_host": master_ip,
             "private_ip": master_private_ip or master_ip
         }
+        if karpenter_node_instance_profile:
+            inventory["_meta"]["hostvars"][master_host]["karpenter_node_instance_profile_name"] = karpenter_node_instance_profile
+        if karpenter_interruption_queue:
+            inventory["_meta"]["hostvars"][master_host]["karpenter_interruption_queue_name"] = karpenter_interruption_queue
 
     if worker_ips and isinstance(worker_ips, list):
         for idx, w_ip in enumerate(worker_ips):
