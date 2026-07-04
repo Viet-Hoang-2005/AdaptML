@@ -1,0 +1,43 @@
+# values.yaml: Helm values for the ArgoCD controller installation.
+global:
+  nodeSelector:
+    workload-type: worker
+
+configs:
+  cm:
+    kustomize.buildOptions: --enable-helm
+    accounts.github-actions: apiKey
+  rbac:
+    policy.csv: |
+      p, role:github-actions, applications, get, *, allow
+      p, role:github-actions, applications, sync, default/mlops-paas-jobs, allow
+      p, role:github-actions, applications, sync, default/mlops-paas-system, allow
+      g, github-actions, role:github-actions
+
+controller:
+  nodeSelector:
+    workload-type: worker
+
+dex:
+  nodeSelector:
+    workload-type: worker
+
+redis:
+  nodeSelector:
+    workload-type: worker
+
+server:
+  nodeSelector:
+    workload-type: worker
+
+repoServer:
+  nodeSelector:
+    workload-type: worker
+
+applicationSet:
+  nodeSelector:
+    workload-type: worker
+
+notifications:
+  nodeSelector:
+    workload-type: worker
