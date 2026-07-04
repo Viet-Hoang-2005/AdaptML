@@ -343,9 +343,7 @@ The Native Registry is a product-level control-plane abstraction, not a replacem
 
 \subsection{Model Packaging and Serving}
 
-The prototype includes a model packager that prepares serving-compatible packages or images for supported artifacts. Build execution can be triggered through a local Docker path or through an Argo-oriented workflow path, depending on deployment configuration. The FastAPI model server loads the model artifact, including MLflow pyfunc artifacts where available, and exposes generated prediction endpoints. Prediction requests can be public or private depending on model configuration and are logged asynchronously for monitoring.
-
-No latency or throughput claims are made in this paper. The current implementation demonstrates the integration path from registry metadata to serving endpoint and production log generation.
+The prototype includes a model packager that prepares serving-compatible packages or images for supported artifacts. Build execution can be triggered through a local Docker path or through an Argo-oriented workflow path, depending on deployment configuration. The FastAPI model server loads the model artifact, including MLflow pyfunc artifacts where available, and exposes generated prediction endpoints. Prediction requests can be public or private depending on model configuration and are logged asynchronously for monitoring. Serving measurements in this paper are treated as prototype observations rather than production service-level claims.
 
 \subsection{Drift Monitoring}
 
@@ -388,6 +386,15 @@ WebAttacks & 0.981 & 0.874 / 0.466 / 0.816 & 0.999 / 0.997 / 0.999 & +0.531 \\
 \end{table}
 
 All three scenarios exceed the drift-share threshold with 51 of 52 features marked as drifted. The retrained challengers recover Macro-F1 on future holdout windows under this offline protocol, while the result remains a prototype recovery measurement rather than evidence of direct production rollout.
+
+We also ran a short serving benchmark against a deployed endpoint using Locust replay traffic and Prometheus metrics scraped from the serving pod \texttt{endpoint-t-1ac7d01a-model-xn102v-b8b8c59f8-hd8jj}. The run issued 4,397 client-side prediction requests over roughly two minutes with 20 virtual users. Locust measured an average response time of 213.9 ms and p95 response time of 360 ms; its failure count corresponds to label-prediction mismatches recorded by the test script, not HTTP request failures. Prometheus reported an average server-side throughput of 44.4 requests/s, peak throughput of 79.3 requests/s, average mean handler latency of 47.1 ms, and average p95 handler latency of 331.2 ms for the \texttt{/models/\{model\_id\_str\}/predict} handler. Figure~\ref{fig:endpoint-benchmark} shows the Prometheus time series used for this observation.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{assets/chart-locust-benchmark.png}
+\caption{Prototype serving benchmark with 20 Locust users over an approximately two-minute replay window. Throughput and latency are queried from Prometheus for the serving pod during the benchmark.}
+\label{fig:endpoint-benchmark}
+\end{figure}
 
 \section{Discussion}
 

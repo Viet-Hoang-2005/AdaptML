@@ -4,7 +4,7 @@ import pandas as pd
 from locust import HttpUser, task, between, events
 
 # 1. CẤU HÌNH VÀ NẠP DỮ LIỆU TOÀN CỤC
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 TEST_CSV_PATH = os.path.join(ROOT_DIR, 'data', 'test_data.csv')
 
 # Từ điển (Dictionary) theo dõi thống kê kết quả dự đoán

@@ -3,5 +3,4 @@ kind: Kustomization
 
 resources:
   - application.yaml
-  - rbac.yaml
   - repo-sync.yaml
