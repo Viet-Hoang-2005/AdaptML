@@ -3,7 +3,7 @@
 ## Command used
 
 ```bash
-python paper/results/quantitative/run_offline_drift_retraining_recovery_eval.py --binary --drift-threshold 0.5 --random-seed 42
+python paper/results/quantitative/run_offline_drift_retraining_recovery_eval.py --binary --drift-threshold 0.5 --random-seed 42 --use-mixed-reference-for-drift --drift-benign-mix-fraction 0.0
 ```
 
 ## Scope and claim-safety note
@@ -31,7 +31,7 @@ All scenarios report zero M1-training/future-holdout and trigger/future-holdout 
 ## Summary results
 
 - S1 PortScan: drift_share=0.981, fixed Macro-F1=0.1616, retrained Macro-F1=0.9997, Delta Macro-F1=0.8381.
-- S2 BruteForce: drift_share=0.981, fixed Macro-F1=0.3744, retrained Macro-F1=0.9995, Delta Macro-F1=0.6251.
+- S2 BruteForce: drift_share=0.942, fixed Macro-F1=0.3744, retrained Macro-F1=0.9995, Delta Macro-F1=0.6251.
 - S3 WebAttacks: drift_share=0.981, fixed Macro-F1=0.4664, retrained Macro-F1=0.9975, Delta Macro-F1=0.5311.
 
 ## How to use in the paper
