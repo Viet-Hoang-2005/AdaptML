@@ -60,13 +60,9 @@ The remainder of this article is structured as follows. Section~2 reviews relate
 
 \section{Related Work}
 
-\subsection{MLOps Architectures and Lifecycle}
+MLOps extends DevOps principles to ML systems by coordinating data engineering, experimentation, training, deployment, monitoring, and governance. Kreuzberger \textit{et al.} define MLOps as a paradigm for reliably and efficiently maintaining ML systems in production \cite{kreuzberger2023mlops}; John \textit{et al.} propose an adoption maturity model \cite{john2021towards}; Sculley \textit{et al.} identify technical debt beyond model code, including data dependencies, configuration, monitoring, and feedback loops \cite{sculley2015debt}; and Amershi \textit{et al.} show that ML engineering differs from traditional software engineering because data, models, and code evolve together \cite{amershi2019software}. This paper narrows these lifecycle concerns to drift-aware signals for tenant-aware multi-model serving.
 
-MLOps extends DevOps principles to ML systems by coordinating data engineering, experimentation, training, deployment, monitoring, and governance. Kreuzberger \textit{et al.} define MLOps as a paradigm for reliably and efficiently developing and maintaining ML systems in production \cite{kreuzberger2023mlops}, while John \textit{et al.} propose a maturity model for assessing MLOps adoption \cite{john2021towards}. Sculley \textit{et al.} show that ML systems accumulate technical debt beyond model code, including data dependencies, configuration, monitoring, and feedback loops \cite{sculley2015debt}. Amershi \textit{et al.} further show that software engineering for ML differs from traditional software engineering because data, models, and code evolve together \cite{amershi2019software}. Our work narrows these lifecycle concerns to drift-aware signals for tenant-aware multi-model serving.
-
-\subsection{MLOps Platforms, Model Registry, and Model Serving}
-
-Implementation-oriented MLOps studies show how platform components connect model development and deployment. TFX integrates data ingestion, validation, training, and serving \cite{baylor2017tfx}; MLflow supports tracking and model lifecycle management \cite{mlflow}; and Clipper frames online prediction as a systems problem \cite{crankshaw2017clipper}. Earlier platform case studies discuss ML pipeline and domain workflows \cite{zhou2020pipeline,subramanya2022devops}, while recent work frames MLOps as self-adaptive architecture \cite{Bhatt2025HarmonE}. A recent empirical evaluation compares MLflow, Metaflow, Airflow, and Kubeflow Pipelines across installation, flexibility, interoperability, instrumentation, interpretability, and documentation, showing complementary strengths rather than one universal lifecycle abstraction \cite{MarcosMercade2026MLOpsFrameworks}.
+Platform studies provide complementary building blocks. TFX integrates ingestion, validation, training, and serving \cite{baylor2017tfx}; MLflow supports tracking and model lifecycle management \cite{mlflow}; and Clipper frames online prediction as a systems problem \cite{crankshaw2017clipper}. Pipeline and domain case studies \cite{zhou2020pipeline,subramanya2022devops}, self-adaptive MLOps architecture work \cite{Bhatt2025HarmonE}, and a recent empirical comparison of MLflow, Metaflow, Airflow, and Kubeflow Pipelines \cite{MarcosMercade2026MLOpsFrameworks} show complementary strengths rather than one universal lifecycle abstraction.
 
 \begin{table}[t]
 \caption{MLOps tool-family scope and remaining gap.}
@@ -85,17 +81,11 @@ Proposed framework & Registry, serving, logs, drift, and artifacts under one con
 \end{tabular}
 \end{table}
 
-\subsection{Data Quality, Data Drift, and Concept Drift Monitoring}
+Production ML reliability depends on post-deployment data as well as the pipelines that manage it. Renggli \textit{et al.} treat data quality as a first-class MLOps concern \cite{renggli2021data}, and Polyzotis \textit{et al.} identify production data-management challenges \cite{polyzotis2017data}. Data Drift and concept drift are related but distinct: Gama \textit{et al.} survey adaptation to changing streams \cite{gama2014survey}, while Webb \textit{et al.} characterize forms of concept drift \cite{webb2016drift}. Here, Data Drift is an operational signal: because labels may be delayed or unavailable, the system first compares input distributions and then triggers inspection or workflow handoff.
 
-Production ML reliability depends on the data observed after deployment as well as on the pipelines that manage that data. Renggli \textit{et al.} argue that data quality should be treated as a first-class MLOps concern \cite{renggli2021data}, and Polyzotis \textit{et al.} identify data management challenges that arise in production ML pipelines \cite{polyzotis2017data}. Data Drift and concept drift are related but distinct concerns: Gama \textit{et al.} survey adaptation to changing data streams \cite{gama2014survey}, while Webb \textit{et al.} characterize different forms of concept drift \cite{webb2016drift}. In this paper, Data Drift is used as an operational signal. Because production labels may be delayed or unavailable, the system first compares input distributions and then triggers inspection or workflow handoff when drift is detected.
+Network intrusion detection is a non-stationary case study for this lifecycle. CIC-IDS2017 provides labeled intrusion traffic \cite{cicids}, but real environments can differ from dataset conditions. Sommer and Paxson highlight deployment context, generalization, and evolving traffic challenges for ML-based intrusion detection \cite{sommer2010closedworld}, and recent NIDS work treats concept drift as an operational problem requiring adaptation policies \cite{Zhang2025SSFNIDS}. This paper uses NIDS to illustrate lifecycle and monitoring requirements, not to claim a new state-of-the-art intrusion detection classifier.
 
-\subsection{Cybersecurity/NIDS as a Non-Stationary Case Study}
-
-Network intrusion detection provides a useful non-stationary case study for drift-aware MLOps. CIC-IDS2017 provides labeled intrusion traffic for evaluating intrusion detection models \cite{cicids}, but real deployment environments can differ from dataset conditions. Sommer and Paxson argue that ML-based intrusion detection faces challenges outside closed-world assumptions, including deployment context, generalization, and evolving traffic distributions \cite{sommer2010closedworld}. Recent NIDS research likewise treats concept drift as an operational problem requiring continual or online adaptation policies for evolving traffic patterns \cite{Zhang2025SSFNIDS}. This paper therefore uses NIDS to illustrate lifecycle and monitoring requirements, not to claim a new state-of-the-art intrusion detection classifier.
-
-\subsection{Research Gap}
-
-The reviewed literature covers MLOps architectures, platforms, serving, data quality, drift adaptation, and NIDS deployment challenges. Existing tools provide useful building blocks, but they often center on tracking, orchestration, or pipeline execution rather than a tenant-facing lifecycle abstraction for multi-model serving. This paper addresses that gap by placing a Native Registry in the control plane as the product-level source of truth for tenant ownership, model families, versions, deployment metadata, production-log summaries, drift results, and review-driven lifecycle actions. Existing tools remain adapters for tracking, training execution, artifact storage, and drift reporting; the contribution is the integration pattern connecting them into a drift-aware multi-tenant serving lifecycle.
+The reviewed literature covers MLOps architectures, platforms, serving, data quality, drift adaptation, and NIDS deployment challenges. Existing tools provide useful building blocks, but they often center on tracking, orchestration, or pipeline execution rather than a tenant-facing lifecycle abstraction for multi-model serving. This paper addresses that gap by placing a Native Registry in the control plane as the product-level source of truth for tenant ownership, model families, versions, deployment metadata, production-log summaries, drift results, and review-driven lifecycle actions; the contribution is a control-plane integration pattern that owns lifecycle state while using existing tools as adapters.
 
 \section{Problem Formulation}
 
@@ -139,7 +129,7 @@ where $W$ is the monitoring window size. The objective is not only to compute pr
 a_T = \pi(m_{u,i},D_{\mathrm{ref}}^{u,i},D_{\mathrm{cur}}^{u,i}(T),S_T),
 \end{equation}
 
-where $\pi(\cdot)$ is the adaptation policy and $S_T$ is the current lifecycle state of the model. Possible actions include no operation, alert generation, manual review, retraining trigger, and review-driven rollback or promotion candidates.
+where $\pi(\cdot)$ is the adaptation policy and $S_T$ is the current lifecycle state of the model. Possible actions include no operation, alert generation, manual review, retraining review triggers, and candidate rollback or promotion records for human review.
 
 For each feature $j$, the framework computes a drift score:
 
@@ -177,11 +167,7 @@ where $\tau_D$ is the dataset-level threshold. This formulation separates model 
 
 \section{Proposed Framework}
 
-The logical flow of the proposed framework consists of four stages. First, a user onboards a model artifact or registers an artifact produced by a controlled training workflow through the control plane. Second, the data plane exposes the model as a prediction endpoint. Third, each prediction produces an asynchronous log event. Fourth, the monitoring layer periodically reconstructs the current production window and compares it with the reference data. If drift is detected, the adaptation layer creates an alert or triggers a retraining workflow.
-
-% TODO: Add system architecture overview figure showing Web/User, Django/DRF Control Plane, Kubeflow training workflow or Kubernetes training resource, training pods, Karpenter NodePool/NodeClaim boundary where configured, Object Storage, Native Registry/PostgreSQL, FastAPI Model Server, Redpanda/Consumer, Evidently Drift Monitoring, and deployment boundary.
-% TODO: Add prototype screenshots only if page count remains within the 14-page limit.
-% Candidate screenshots: training job detail, Model Evolution, drift report, CI/CD run, Kubernetes/Karpenter status, Kubeflow/Argo training run status, and artifact/registry ingest evidence.
+The logical flow of the proposed framework consists of four stages. First, a user onboards a model artifact or registers an artifact produced by a controlled training workflow through the control plane. Second, the data plane exposes the model as a prediction endpoint. Third, each prediction produces an asynchronous log event. Fourth, the monitoring layer periodically reconstructs the current production window and compares it with the reference data. If drift is detected, the adaptation layer creates an alert or triggers a retraining review workflow.
 
 \subsection{Control Plane}
 
@@ -209,28 +195,7 @@ The monitoring layer compares reference data with recent production data. In the
 
 The adaptation layer maps monitoring outputs to lifecycle actions. In the baseline implementation, the primary action is a drift alert or workflow trigger. The framework can be extended to support retraining jobs, model evaluation gates, review-driven promotion, rollback, and notification workflows. This distinction is important: the current prototype demonstrates a drift-aware control loop, while fully autonomous retraining and deployment remain future work.
 
-\section{Drift-Aware Lifecycle Algorithm}
-
-The model lifecycle can be represented as a state transition system:
-
-\begin{equation}
-\begin{split}
-S \in \{&
-\mathrm{uploaded},\ \mathrm{validated},\ \mathrm{deployed},\
-\mathrm{monitored},\\
-&\mathrm{drifted},\ \mathrm{reviewing},\ \mathrm{retraining},\
-\mathrm{promoted},\ \mathrm{failed}
-\}.
-\end{split}
-\end{equation}
-
-The transition function is:
-
-\begin{equation}
-S_{T+1}=\Phi(S_T,m_{u,i},\rho,\tau_D,a_T),
-\end{equation}
-
-where $\Phi(\cdot)$ updates the model state according to the drift ratio and the selected action. If $\rho < \tau_D$, the model remains in the monitored state. If $\rho \geq \tau_D$, the model is marked as drifted and the system can trigger alerting, review, or a workflow handoff.
+Figures~\ref{alg:onboarding} and~\ref{alg:monitoring} summarize the framework-level onboarding and drift-aware monitoring procedures.
 
 \begin{figure}[t]
 \small
@@ -277,6 +242,29 @@ where $\Phi(\cdot)$ updates the model state according to the drift ratio and the
 \label{alg:monitoring}
 \end{figure}
 
+\section{Drift-Aware Lifecycle Algorithm}
+
+The model lifecycle can be represented as a state transition system:
+
+\begin{equation}
+\begin{split}
+S \in \{&
+\mathrm{uploaded},\ \mathrm{validated},\ \mathrm{deployed},\
+\mathrm{monitored},\\
+&\mathrm{drifted},\ \mathrm{reviewing},\ \mathrm{retraining},\
+\mathrm{promoted},\ \mathrm{failed}
+\}.
+\end{split}
+\end{equation}
+
+The transition function is:
+
+\begin{equation}
+S_{T+1}=\Phi(S_T,m_{u,i},\rho,\tau_D,a_T),
+\end{equation}
+
+where $\Phi(\cdot)$ updates the model state according to the drift ratio and the selected action. If $\rho < \tau_D$, the model remains in the monitored state. If $\rho \geq \tau_D$, the model is marked as drifted and the system can trigger alerting, review, or a workflow handoff.
+
 \section{Case Study: Network Intrusion Detection}
 
 The NIDS model is used as a case study to instantiate the proposed framework. A network flow is represented as a tabular feature vector $x \in \mathbb{R}^{d}$ containing statistics such as duration, packet counts, byte rates, and protocol-related attributes. The model predicts whether the observed traffic is benign or belongs to an attack class.
@@ -287,22 +275,18 @@ NIDS is an appropriate case study for drift-aware MLOps for three reasons. First
 
 \section{Prototype Implementation}
 
-This section describes the implemented prototype as reflected in the repository. The purpose is to document the system boundary and implementation coverage, not to claim production readiness or performance characteristics.
-
-\subsection{Prototype Architecture}
-
-The prototype follows a control-plane/data-plane architecture. The control plane is implemented with Django and Django REST Framework and stores users, tenants, training jobs, model API records, registry versions, deployment metadata, and drift monitoring records in PostgreSQL. The data plane is implemented as a FastAPI model server that resolves a model endpoint, loads the serving artifact, performs prediction, and emits production log events. Redpanda is used as the asynchronous log transport, and a consumer service persists prediction records into PostgreSQL for later drift analysis.
+This section documents prototype boundaries, not production readiness or performance characteristics. The prototype uses a control-plane/data-plane split: the Django/DRF control plane stores tenant, job, registry, deployment, and drift metadata in PostgreSQL, while the FastAPI data plane resolves endpoints, loads artifacts, predicts, and emits log events through Redpanda/PostgreSQL for drift analysis.
 
 Figure~\ref{fig:prototype-flow} summarizes the implemented prototype workflow across the control plane, data plane, training execution, artifact storage, production logging, and drift monitoring components.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{assets/flow.png}
+\includegraphics[width=0.8\linewidth]{assets/flow.png}
 \caption{Prototype workflow of the drift-aware MLOps framework. The Django control plane coordinates upload, packaging, training requests, deployment requests, registry metadata, and drift checks. The FastAPI data plane serves model predictions and emits production logs through Redpanda/PostgreSQL, while Argo/Kubeflow, object storage, Harbor, MLflow, Evidently, and Karpenter-backed compute are used as supporting services where configured.}
 \label{fig:prototype-flow}
 \end{figure}
 
-The implementation also includes S3-compatible artifact storage, Kubernetes training workflows using Kubeflow PyTorchJob resources, a Python training runner, a model packager, MLflow integration, Evidently-based drift monitoring, and a Native Registry/Model Evolution layer. In the user-facing workflow, Native Registry data stored in PostgreSQL is the source of truth for Model Evolution. MLflow is treated as internal experiment lineage and model-format support rather than a required user interface.
+The implementation also includes S3-compatible artifact storage, Kubeflow \texttt{PyTorchJob} workflows, a Python training runner, a model packager, optional MLflow tracking/model-format support, Evidently-based drift monitoring, and Native Registry/Model Evolution. For users, PostgreSQL-backed Native Registry data is the source of truth; MLflow is internal lineage support rather than a required interface.
 
 \begin{table}
 \caption{Prototype modules and responsibilities.}
@@ -323,47 +307,23 @@ Deployment configuration & Docker Compose/K8s/Argo files & Supports local integr
 \end{tabular}
 \end{table}
 
-\subsection{Training Job Execution}
+\textit{Training execution.} Training jobs can be created from uploaded source packages or Source Editor code. In the Kubernetes-native path, the control plane validates source and reference data, prepares S3-compatible references and presigned URLs, and sends a request to Argo Events. Argo Workflows instantiate a Kubeflow \texttt{PyTorchJob}, where the runner executes the configured entry point and uploads the resulting \texttt{model.tar.gz} artifact to object storage.
 
-Training jobs can be created from uploaded source packages or code stored through the Source Editor workflow. In the Kubernetes-native path, the control plane validates the selected source and reference data, prepares S3-compatible references and presigned URLs, and sends a training request to Argo Events. Argo Workflows instantiate a Kubeflow \texttt{PyTorchJob} in the training namespace, where the runner executes the configured entry point and uploads the resulting \texttt{model.tar.gz} artifact to object storage.
+The non-local path does not require user scripts to import MLflow or receive MLflow credentials. User scripts write model artifacts and optional metadata; the runner packages the output and a completion webhook updates the \texttt{TrainingJob}. The required output is \texttt{model.tar.gz}; an optional \texttt{\_mlops} bundle may contain training summary, metrics, parameters, model insights, artifact manifest, stdout/stderr logs, and warnings. Missing metadata reduces registry detail but does not invalidate the artifact.
 
-The non-local path does not require user scripts to import MLflow or receive MLflow credentials. User scripts write model artifacts and optional metadata; the runner packages the output, and a completion webhook updates the \texttt{TrainingJob} record so the control plane can ingest metadata and synchronize Native Registry records when the artifact is registered.
+\textit{Metadata and registry.} When a completed job is ingested, the control plane downloads the artifact, extracts metadata, and stores metrics, parameters, insights, manifest, and deployability summaries. These summaries are mirrored into Model Evolution when a model is registered from the job. The Native Registry groups versions through family and version records linked to deployable \texttt{ModelAPI} records, and Model Evolution displays tracking status, metrics, artifacts, deployability state, version comparison, deployment actions, drift summaries, and basic routing aliases.
 
-\subsection{Training Runner Output Contract}
+The Native Registry is a product-level control-plane abstraction, not a replacement for existing MLOps platforms. Tenant ownership, access rules, lifecycle states, deployment aliases, drift summaries, and UI actions remain in PostgreSQL through tenant-scoped records, while Argo/Kubeflow, object storage, MLflow, and Evidently act as adapters. This lets imported and training-job artifacts enter one lifecycle with per-tenant ownership, version comparison, deployability review, drift-aware status, and deployment actions.
 
-After training completes, the runner produces a required \texttt{model.tar.gz} archive and, when available, an \texttt{\_mlops} metadata bundle containing training summary, metrics, parameters, model insights, artifact manifest, stdout/stderr logs, and warnings. Only the archive is required; the remaining metadata improves registry display and version comparison but does not invalidate the artifact when absent.
+\textit{Packaging, serving, and monitoring.} The model packager prepares serving-compatible packages or images through a local Docker path or an Argo-oriented workflow path. The FastAPI model server loads artifacts, including MLflow pyfunc artifacts where available, exposes generated prediction endpoints, and logs prediction requests asynchronously for monitoring. Serving measurements are prototype observations rather than production service-level claims. Drift monitoring uses production records in PostgreSQL and model reference data; Evidently computes feature-level and dataset-level summaries, and the control plane stores report locations and drift metadata for Model Evolution.
 
-\subsection{Metadata Ingestion and Native Registry}
+In this baseline, drift is a monitoring and adaptation signal. It does not automatically redeploy a model, perform rollback, or select traffic weights; those decisions require evaluation gates and human review policies outside the current baseline. MLflow is optional internal tracking after artifact ingestion: if enabled, the control plane may log metrics, parameters, and metadata artifacts and store a run identifier; if disabled or unavailable, Model Evolution still uses Native Registry data in PostgreSQL.
 
-When a completed job is ingested, the control plane downloads the artifact, extracts metadata, and stores metrics, parameters, insights, manifest, and deployability summaries. These summaries are mirrored into Model Evolution when a model is registered from the job.
+\textit{Deployment and operational scope.} The repository contains Docker Compose, Kubernetes/K3s-oriented manifests, Argo workflow templates, CI/CD configuration, and deployment-configuration updates. These assets document prototype/testbed automation rather than production hardening.
 
-The Native Registry groups versions through family and version records linked to deployable \texttt{ModelAPI} records. Model Evolution displays tracking status, metrics, artifacts, deployability state, version comparison, deployment actions, drift summaries, and basic routing aliases.
+Operationally, the frontend calls the Django/DRF control plane for upload, training, registry, deployment, and drift views. The control plane exchanges artifacts with S3-compatible storage, submits training requests to Argo Events, receives callbacks after Kubeflow \texttt{PyTorchJob} execution, ingests runner artifacts into the Native Registry, receives production logs through Redpanda and PostgreSQL, and stores drift summaries. Where Karpenter is configured, training pods can match AWS-backed training node pools, but workflow logs, pod status, artifact uploads, registry ingest records, and Karpenter events should be attached separately before stronger operational claims.
 
-The Native Registry is a product-level control-plane abstraction, not a replacement for existing MLOps platforms. Tenant ownership, access rules, lifecycle states, deployment aliases, drift summaries, and UI actions remain in PostgreSQL through tenant-scoped records, while Argo/Kubeflow, object storage, MLflow, and Evidently act as adapters. This separation lets imported artifacts and training-job artifacts enter one lifecycle with per-tenant ownership, version comparison, deployability review, drift-aware status, and deployment actions.
-
-\subsection{Model Packaging and Serving}
-
-The prototype includes a model packager that prepares serving-compatible packages or images for supported artifacts. Build execution can be triggered through a local Docker path or through an Argo-oriented workflow path, depending on deployment configuration. The FastAPI model server loads the model artifact, including MLflow pyfunc artifacts where available, and exposes generated prediction endpoints. Prediction requests can be public or private depending on model configuration and are logged asynchronously for monitoring. Serving measurements in this paper are treated as prototype observations rather than production service-level claims.
-
-\subsection{Drift Monitoring}
-
-Drift monitoring uses production records stored in PostgreSQL and reference data associated with a model. The Evidently integration computes feature-level and dataset-level drift summaries and stores report locations and drift result metadata in the control plane. The drift result can be exposed as a report link or summarized in Model Evolution.
-
-In this baseline, drift is a monitoring and adaptation signal. It does not automatically redeploy a model, perform rollback, or select traffic weights. Such decisions require evaluation gates and human review policies that are outside the current baseline.
-
-\subsection{MLflow Tracking Integration}
-
-MLflow is used as optional internal tracking. After the control plane ingests the training artifact, it may log metrics, parameters, and metadata artifacts to an MLflow tracking server and store the run identifier. If MLflow tracking is disabled, Model Evolution still displays metrics, parameters, artifacts, model insights, and deployability information from the Native Registry. If MLflow logging fails, the metadata retained in PostgreSQL remains available for review and deployment decisions.
-
-This design avoids requiring user training scripts to import MLflow. It also avoids making the MLflow UI the primary product workflow. The user-facing Model Evolution pages are backed by Native Registry records.
-
-\subsection{Deployment and Operational Scope}
-
-The repository contains Docker Compose, Kubernetes/K3s-oriented manifests, Argo workflow templates, CI/CD configuration, and GitOps-style deployment configuration updates. These assets document prototype/testbed automation rather than production hardening or evidence of latest workflow success.
-
-Operationally, the frontend calls the Django/DRF control plane for model upload, training, registry, deployment, and drift views. The control plane exchanges artifacts with S3-compatible storage, submits training requests to Argo Events, receives callbacks after Kubeflow \texttt{PyTorchJob} execution, ingests runner artifacts into the Native Registry, receives production logs through Redpanda/PostgreSQL, and stores drift summaries. Where Karpenter is configured, training pods can match AWS-backed training node pools, but workflow logs, pod status, artifact uploads, registry ingest records, and Karpenter events should be attached separately before stronger operational claims.
-
-The implemented baseline covers authentication, upload, Kubernetes-native training, metadata ingestion, Model Evolution, version comparison, build, deploy, and smoke-test actions, production logging, drift reports, and a basic routing alias. Autonomous retraining, automated promotion, canary or blue-green deployment, weighted traffic routing, billing, and production-grade hardening remain outside the completed baseline.
+The implemented baseline covers authentication, upload, Kubernetes-native training, metadata ingestion, Model Evolution, version comparison, prototype build, deploy, and smoke-test actions, production logging, drift reports, and a basic routing alias. Autonomous retraining, automated promotion, canary or blue-green deployment, weighted traffic routing, billing, and production-grade hardening remain outside the completed baseline.
 
 \section{Preliminary Evaluation}
 
@@ -387,12 +347,12 @@ WebAttacks & 0.981 & 0.874 / 0.466 / 0.816 & 0.999 / 0.997 / 0.999 & +0.531 \\
 
 All three scenarios exceed the drift-share threshold with 51 of 52 features marked as drifted. The retrained challengers recover Macro-F1 on future holdout windows under this offline protocol, while the result remains a prototype recovery measurement rather than evidence of direct production rollout.
 
-We also ran a serving benchmark against a deployed endpoint using Locust replay traffic and Prometheus metrics scraped from the serving pod. The 100-user run issued 4,343 client-side prediction requests over approximately 89 seconds before the replay dataset was exhausted. Locust measured an average throughput of 47.6 requests/s, an average response time of 1.74 s, and p95 response time of 2.30 s. The run recorded four HTTP 502 responses. Prometheus reported peak server-side throughput of 144.1 requests/s and non-zero-window average handler latency of 1.60 s for the \texttt{/models/\{model\_id\_str\}/predict} handler. These measurements suggest that at 100 concurrent users the serving path remains mostly available but is latency-bound and begins to show gateway errors, indicating queueing or saturation in the model-serving path. Figure~\ref{fig:endpoint-benchmark} shows the Locust throughput and latency time series used for this observation.
+We also ran a bounded prototype serving replay against a testbed endpoint using Locust traffic and Prometheus metrics scraped from the serving pod. The 100-user run issued 4,343 client-side prediction requests over approximately 89 seconds before the replay dataset was exhausted. In this bounded replay, Locust observed an average request rate of 47.6 requests/s, an average response time of 1.74 s, and an observed p95 response time of 2.30 s. The run recorded four HTTP 502 responses. Prometheus reported a peak observed server-side rate of 144.1 requests/s and non-zero-window average handler latency of 1.60 s for the \texttt{/models/\{model\_id\_str\}/predict} handler. These observations suggest that the prototype completed most replay requests but began showing gateway errors and possible queueing or saturation symptoms in the model-serving path. No SLA, scalability, or production performance claim is made from this replay. Figure~\ref{fig:endpoint-benchmark} shows the Locust request-rate and latency time series used for this observation.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{assets/chart-locust-benchmark.png}
-\caption{Prototype serving benchmark with 100 Locust users over an approximately 89-second replay window. Throughput and latency are measured from Locust's client-side history during the benchmark.}
+\includegraphics[width=0.8\linewidth]{assets/chart-locust-benchmark.png}
+\caption{Bounded prototype serving replay with 100 Locust users over an approximately 89-second window. Request rate and latency are observed from Locust's client-side history during the replay.}
 \label{fig:endpoint-benchmark}
 \end{figure}
 
