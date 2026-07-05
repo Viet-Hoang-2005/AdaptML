@@ -8,6 +8,7 @@
 \usepackage{booktabs}
 \usepackage{url}
 \usepackage{array}
+\usepackage{multirow}
 
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 
@@ -169,6 +170,7 @@ where $\tau_D$ is the dataset-level threshold. This formulation separates model 
 
 The logical flow of the proposed framework consists of four stages. First, a user onboards a model artifact or registers an artifact produced by a controlled training workflow through the control plane. Second, the data plane exposes the model as a prediction endpoint. Third, each prediction produces an asynchronous log event. Fourth, the monitoring layer periodically reconstructs the current production window and compares it with the reference data. If drift is detected, the adaptation layer creates an alert or triggers a retraining review workflow.
 
+
 \subsection{Control Plane}
 
 The control plane manages user-facing and governance operations. It stores tenants, authentication credentials, API keys, model metadata, artifact locations, endpoint URLs, access modes, and model statuses. In the prototype, this layer is implemented using Django. A model record contains the model name, description, owner tenant, artifact URI, access mode, generated endpoint, and lifecycle status.
@@ -277,6 +279,16 @@ NIDS is an appropriate case study for drift-aware MLOps for three reasons. First
 
 The prototype uses a control-plane/data-plane split: the Django/DRF control plane stores tenant, job, registry, deployment, and drift metadata in PostgreSQL, while the FastAPI data plane resolves endpoints, loads artifacts, and emits log events for drift analysis. Table~\ref{tab:implementation} summarizes the implemented modules.
 
+Figure~\ref{fig:prototype-flow} summarizes the implemented prototype workflow across the control plane, data plane, training execution, artifact storage, production logging, and drift monitoring components.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.8\linewidth]{assets/flow.png}
+\caption{Prototype workflow of the drift-aware MLOps framework. The Django control plane coordinates upload, packaging, training requests, deployment requests, registry metadata, and drift checks. The FastAPI data plane serves model predictions and emits production logs through Redpanda/PostgreSQL, while Argo/Kubeflow, object storage, Harbor, MLflow, Evidently, and Karpenter-backed compute are used as supporting services where configured.}
+\label{fig:prototype-flow}
+\end{figure}
+
+
 \begin{table}[htbp]
 \caption{Prototype modules and responsibilities.}
 \label{tab:implementation}
@@ -295,38 +307,36 @@ Deployment configuration & Docker Compose/K8s/Argo files & Supports local integr
 \bottomrule
 \end{tabular}
 \end{table}
+\begin{figure}[htbp]
+\centering
+\begin{minipage}[t]{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{screenshots/10_model_evolution_v1_v2_lineage.png}
+  \caption{Model Evolution UI showing version lineage (v1 $\rightarrow$ v2) and dynamic serving readiness.}
+  \label{fig:ui-evolution}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{screenshots/14_drift_evidently_report_results.png}
+  \caption{Evidently AI drift monitoring dashboard showing feature-level drift detection.}
+  \label{fig:ui-drift}
+\end{minipage}
+\end{figure}
+
 \textit{Training execution.} The control plane validates source code and reference data, submits a training webhook to Argo Events, and Argo Workflows instantiate a Kubeflow \texttt{PyTorchJob} on Karpenter-provisioned nodes. The runner executes the configured entry point, uploads the resulting \texttt{model.tar.gz} to S3, and a completion webhook ingests the artifact. User scripts do not need to import MLflow; an optional \texttt{\_mlops} bundle may include training metrics and a manifest, but its absence does not invalidate the artifact.
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.8\linewidth]{assets/training_flow.png}
-\caption{Training pipeline: the control plane submits a Kubeflow \texttt{PyTorchJob} via Argo Workflows; the runner executes on Karpenter-provisioned EC2 nodes and uploads the resulting artifact to S3, with optional MLflow metric tracking.}
-\label{fig:training-flow}
-\end{figure}
+\textit{Metadata and registry.} When a completed job is ingested, the control plane extracts metrics, parameters, insights, and deployability summaries, which are mirrored into Model Evolution upon registration. The Native Registry groups versions through family and version records linked to \texttt{ModelAPI} records, using PostgreSQL as the tenant source of truth for ownership, lifecycle, and drift results. Figure~\ref{fig:ui-evolution} depicts the Model Evolution UI for the NIDS XGBoost family, illustrating version lineage from v1 to v2 with live serving readiness.
 
-\textit{Metadata and registry.} When a completed job is ingested, the control plane extracts metrics, parameters, insights, and deployability summaries, which are mirrored into Model Evolution upon registration. The Native Registry groups versions through family and version records linked to deployable \texttt{ModelAPI} records, with PostgreSQL as the per-tenant source of truth for ownership, lifecycle state, and drift results.
+\textit{Packaging, serving, and monitoring.} The packager builds serving-compatible images via Argo and Docker, pushes them to Harbor, and creates a FastAPI pod exposing a prediction endpoint. Prediction logs flow asynchronously via Redpanda to PostgreSQL. Evidently computes drift reports on production windows; drift is an adaptation signal requiring human review without automatic redeployment. Figure~\ref{fig:ui-drift} illustrates the Evidently AI dashboard, where feature distribution shifts are evaluated via Wasserstein and Jensen--Shannon distances.
 
-\textit{Packaging, serving, and monitoring.} The packager builds serving-compatible images via Argo/Docker, pushes them to Harbor, and creates a FastAPI deployment pod exposing a prediction endpoint. Prediction logs flow asynchronously through Redpanda to PostgreSQL, and Evidently computes drift reports on production windows; drift is an adaptation signal requiring human review and does not trigger automatic redeployment. Figure~\ref{fig:deploy-drift} illustrates both pipelines.
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.8\linewidth]{assets/build_deploy_model_flow.png}
-\caption*{(a) Upload, packaging, and deployment pipeline}
-\vspace{6pt}
-\includegraphics[width=0.8\linewidth]{assets/drift_flow.png}
-\caption*{(b) Production logging and drift monitoring pipeline}
-\caption{Prototype deployment pipelines: (a) model artifact upload triggers packaging via the Argo/Docker path, building and pushing a serving image to Harbor before creating a FastAPI deployment pod; (b) each prediction request emits a log to Redpanda, which a consumer persists to PostgreSQL; drift assessment is triggered automatically on threshold or manually by the user, with Evidently computing the report and the result stored for Model Evolution.}
-\label{fig:deploy-drift}
-\end{figure}
-
-\textit{Deployment and operational scope.} The repository includes Docker Compose, Kubernetes/K3s manifests, and Argo workflow templates for prototype/testbed deployment; where Karpenter is configured, training pods scale on AWS-backed GPU/CPU node pools on demand. The implemented baseline covers training, registry, serving, production logging, drift reports, and a basic routing alias; autonomous promotion, canary deployment, and production-grade hardening remain future work.
-
+\textit{Deployment and operational scope.} The repository includes Docker Compose, Kubernetes (K3s) manifests, and Argo workflow templates for prototype and testbed deployment; where Karpenter is configured, training pods scale on AWS-backed GPU and CPU node pools on demand. The implemented baseline covers training, registry, serving, production logging, drift reports, and a basic routing alias; autonomous promotion, canary deployment, and production-grade hardening remain future work.
 
 \section{Preliminary Evaluation}
 
 Because this paper is a baseline, evaluation focuses on prototype feasibility and drift-aware lifecycle behavior rather than optimizing NIDS accuracy. We design an offline multi-level replay experiment on CIC-IDS2017-style binary BENIGN-vs-ATTACK data. For each attack family (PortScan, BruteForce, WebAttacks), the attack data are split into a trigger/retraining subset (60\%) and a future holdout subset (40\%). A production/drift window is constructed by mixing ATTACK rows from the future holdout with BENIGN rows at three controlled attack fractions: Mild ($\approx$15\%), Moderate ($\approx$40\%), and Severe ($\approx$85\%), producing nine evaluation points across a realistic range of distribution shift intensities. The framework-assisted path treats the drift decision as an alert initiating review-driven challenger retraining; it does not bypass review gates or perform automatic promotion. Row-hash checks prevent data leakage in all scenarios.
 
-Drift is measured using the Kolmogorov--Smirnov (KS) test at $p < 0.05$ over 52 flow features. We report the \emph{mean KS statistic} as a continuous drift magnitude indicator. Table~\ref{tab:drift-multilevel} summarizes the results.
+Drift is measured using the Kolmogorov--Smirnov (KS) test at $p < 0.05$ over 52 flow features. We report the \emph{mean KS statistic} as a continuous drift magnitude indicator. Figure~\ref{fig:ui-drift} illustrates a representative Evidently AI drift report generated by the monitoring layer. Table~\ref{tab:drift-multilevel} summarizes the results.
+
 
 \begin{table}[htbp]
 \centering
