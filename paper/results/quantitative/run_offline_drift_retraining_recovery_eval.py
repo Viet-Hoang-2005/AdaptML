@@ -98,6 +98,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attack-trigger-fraction", type=float, default=0.6)
     parser.add_argument("--benign-reference-fraction", type=float, default=0.6)
     parser.add_argument("--benign-retraining-fraction", type=float, default=0.2)
+    parser.add_argument(
+        "--drift-benign-mix-fraction",
+        type=float,
+        default=0.3,
+        help=(
+            "Fraction of BENIGN rows (from reference_benign pool) to mix into the "
+            "trigger window used ONLY for drift computation. This makes the drift "
+            "window more realistic (default: 0.3 = ~30%% BENIGN). "
+            "Set to 0.0 to keep the original 100%%-ATTACK drift window."
+        ),
+    )
+    parser.add_argument(
+        "--use-mixed-reference-for-drift",
+        action="store_true",
+        default=False,
+        help=(
+            "Use the full reference_data.csv (BENIGN + known attacks like DDoS) as the "
+            "drift reference baseline instead of only BENIGN rows. This is the more "
+            "realistic production setting where the reference represents typical mixed "
+            "traffic, and drift measures deviation from that baseline."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -585,7 +607,26 @@ def main() -> int:
     train_m0_clean, removed_m0_future_overlap = decontaminate_against(train_m0_raw, expected_features, future_hash_union)
     medians = coerce_features(train_m0_clean, expected_features).median(numeric_only=True).fillna(0.0)
     m0_train = prepare_dataset("M0 training", train_m0_clean, expected_features, medians)
-    reference_dataset = prepare_dataset("W0 reference baseline", reference_benign, expected_features, medians)
+
+    # Choose reference baseline for drift computation.
+    # --use-mixed-reference-for-drift: use the full reference_data.csv (BENIGN + known attacks
+    # like DDoS). This is the realistic production setting where the reference represents
+    # typical mixed traffic. Drift then measures whether an incoming window deviates from
+    # that mixed baseline, producing more moderate drift_share values (~0.4–0.65).
+    # Default (False): use only BENIGN rows — always produces very high drift_share (~0.98)
+    # when drift windows are 100% attack, which looks unrealistically high.
+    if args.use_mixed_reference_for_drift:
+        reference_for_drift = prepare_dataset(
+            "W0 reference baseline (full mixed traffic)",
+            reference_raw,
+            expected_features,
+            medians,
+        )
+        print("[drift] Using full mixed reference_data.csv as drift baseline (--use-mixed-reference-for-drift).")
+    else:
+        reference_for_drift = prepare_dataset("W0 reference baseline (BENIGN only)", reference_benign, expected_features, medians)
+
+    reference_dataset = reference_for_drift
     model_m0 = train_model(m0_train.X, m0_train.y, seed, "M0-fixed-XGB")
 
     fixed_metrics: List[Dict[str, Any]] = []
@@ -607,9 +648,35 @@ def main() -> int:
         trigger_dataset = prepare_dataset(f"{scenario.scenario} trigger/retraining window", attack_trigger_clean, expected_features, medians)
         future_dataset = prepare_dataset(f"{scenario.scenario} future holdout", scenario.future_df, expected_features, medians)
 
+        # Build a realistic drift window for drift computation by mixing BENIGN rows
+        # from the reference pool into the trigger attack window. This prevents
+        # the drift window from being 100% ATTACK vs 100% BENIGN reference, which
+        # would always produce drift_share ~0.98 (unrealistically high).
+        drift_benign_mix = args.drift_benign_mix_fraction
+        if drift_benign_mix > 0.0 and not reference_benign.empty:
+            n_attack_trigger = len(attack_trigger_clean)
+            # Number of BENIGN rows to inject so they form drift_benign_mix of the window
+            n_benign_inject = min(
+                int(round(n_attack_trigger * drift_benign_mix / max(1.0 - drift_benign_mix, 1e-9))),
+                len(reference_benign),
+            )
+            if n_benign_inject > 0:
+                benign_inject = reference_benign.sample(
+                    n=n_benign_inject, random_state=seed + index + 700, replace=False
+                ).reset_index(drop=True)
+                drift_window_df = pd.concat([attack_trigger_clean, benign_inject], ignore_index=True)
+                drift_window_df = shuffled(drift_window_df, seed + index + 800)
+            else:
+                drift_window_df = attack_trigger_clean
+        else:
+            drift_window_df = attack_trigger_clean
+        drift_window_dataset = prepare_dataset(
+            f"{scenario.scenario} drift detection window (mixed)", drift_window_df, expected_features, medians
+        )
+
         drift = compute_drift(
             reference_dataset,
-            trigger_dataset,
+            drift_window_dataset,
             args.pvalue_threshold,
             args.drift_threshold,
             scenario.scenario,

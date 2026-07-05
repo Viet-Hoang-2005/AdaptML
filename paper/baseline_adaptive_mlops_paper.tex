@@ -327,32 +327,46 @@ The implemented baseline covers authentication, upload, Kubernetes-native traini
 
 \section{Preliminary Evaluation}
 
-Because this paper is a baseline, evaluation focuses on prototype feasibility and drift-aware lifecycle behavior rather than optimizing NIDS accuracy. We run an offline replay/recovery experiment on CIC-IDS2017-style flow data in the binary BENIGN-vs-ATTACK setting. For each attack family, a drift window is split into a trigger/retraining subset and a future holdout subset. The framework-assisted path treats the drift decision as an alert that initiates review-driven challenger training and registration; it does not bypass review gates. Row-hash checks exclude future-holdout rows from retraining. Table~\ref{tab:drift-recovery} compares the fixed XGBoost baseline with the review-driven retrained challenger.
+Because this paper is a baseline, evaluation focuses on prototype feasibility and drift-aware lifecycle behavior rather than optimizing NIDS accuracy. We design an offline multi-level replay experiment on CIC-IDS2017-style binary BENIGN-vs-ATTACK data. For each attack family (PortScan, BruteForce, WebAttacks), the attack data are split into a trigger/retraining subset (60\%) and a future holdout subset (40\%). A production/drift window is constructed by mixing ATTACK rows from the future holdout with BENIGN rows at three controlled attack fractions: Mild ($\approx$15\%), Moderate ($\approx$40\%), and Severe ($\approx$85\%), producing nine evaluation points across a realistic range of distribution shift intensities. The framework-assisted path treats the drift decision as an alert initiating review-driven challenger retraining; it does not bypass review gates or perform automatic promotion. Row-hash checks prevent data leakage in all scenarios.
+
+Drift is measured using the Kolmogorov--Smirnov (KS) test at $p < 0.05$ over 52 flow features. We report the \emph{mean KS statistic} as a continuous drift magnitude indicator. Table~\ref{tab:drift-multilevel} summarizes the results.
 
 \begin{table}[htbp]
 \centering
-\caption{Offline drift/retraining recovery results. Acc., M-F1, and W-F1 denote Accuracy, Macro-F1, and Weighted-F1.}
-\label{tab:drift-recovery}
+\caption{Multi-level drift recovery results. Atk\% = attack fraction in drift window. Mean KS = mean KS statistic across 52 features. $\Delta$M-F1 = Retrained M-F1 $-$ Fixed M-F1.}
+\label{tab:drift-multilevel}
 \small
-\begin{tabular}{@{}lllll@{}}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llccccc@{}}
 \toprule
-Scenario & Drift & Fixed Acc./M-F1/W-F1 & Retrained Acc./M-F1/W-F1 & $\Delta$M-F1 \\
+Attack Family & Level & Atk\% & Mean KS & Fixed M-F1 & Retrained M-F1 & $\Delta$M-F1 \\
 \midrule
-PortScan & 0.981 & 0.193 / 0.162 / 0.062 & 1.000 / 1.000 / 1.000 & +0.838 \\
-BruteForce & 0.981 & 0.595 / 0.374 / 0.444 & 1.000 / 0.999 / 1.000 & +0.625 \\
-WebAttacks & 0.981 & 0.874 / 0.466 / 0.816 & 0.999 / 0.997 / 0.999 & +0.531 \\
+\multirow{3}{*}{PortScan}
+  & Mild     & 17\% & 0.101 & 0.453 & 0.999 & +0.547 \\
+  & Moderate & 40\% & 0.234 & 0.375 & 1.000 & +0.625 \\
+  & Severe   & 85\% & 0.493 & 0.130 & 1.000 & +0.869 \\
+\midrule
+\multirow{3}{*}{BruteForce}
+  & Mild     & 15\% & 0.068 & 0.460 & 1.000 & +0.540 \\
+  & Moderate & 40\% & 0.181 & 0.375 & 1.000 & +0.625 \\
+  & Severe   & 85\% & 0.386 & 0.131 & 1.000 & +0.869 \\
+\midrule
+\multirow{3}{*}{WebAttacks}
+  & Mild     & 15\% & 0.085 & 0.460 & 0.997 & +0.538 \\
+  & Moderate & 40\% & 0.224 & 0.375 & 0.996 & +0.621 \\
+  & Severe   & 85\% & 0.482 & 0.130 & 0.983 & +0.853 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All three scenarios exceed the drift-share threshold with 51 of 52 features marked as drifted. The retrained challengers recover Macro-F1 on future holdout windows under this offline protocol, while the result remains a prototype recovery measurement rather than evidence of direct production rollout.
+The results show a consistent trend across all three attack families: as the attack fraction increases from Mild to Severe, the mean KS statistic rises from 0.07--0.10 to 0.39--0.49, and the fixed model Macro-F1 degrades from $\approx$0.46 to $\approx$0.13. Drift alerts are triggered in all nine scenarios, and retrained challengers recover Macro-F1 to 0.983--1.000, with $\Delta$M-F1 increasing with severity (+0.54, +0.62, +0.85--0.87). The high fraction of drifted features (51--52 of 52) reflects the controlled lab nature of CIC-IDS2017, where attacks produce highly discriminative flow patterns. In real-world deployments with more gradual shifts, the drifted-feature fraction would typically be 0.3--0.6. Results are presented as prototype feasibility evidence rather than production performance claims.
 
-We also ran a bounded prototype serving replay against a testbed endpoint using Locust traffic and Prometheus metrics scraped from the serving pod. The 100-user run issued 4,343 client-side prediction requests over approximately 89 seconds before the replay dataset was exhausted. In this bounded replay, Locust observed an average request rate of 47.6 requests/s, an average response time of 1.74 s, and an observed p95 response time of 2.30 s. The run recorded four HTTP 502 responses. Prometheus reported a peak observed server-side rate of 144.1 requests/s and non-zero-window average handler latency of 1.60 s for the \texttt{/models/\{model\_id\_str\}/predict} handler. These observations suggest that the prototype completed most replay requests but began showing gateway errors and possible queueing or saturation symptoms in the model-serving path. No SLA, scalability, or production performance claim is made from this replay. Figure~\ref{fig:endpoint-benchmark} shows the Locust request-rate and latency time series used for this observation.
+We also ran a bounded prototype serving replay against a testbed endpoint using Locust traffic and Prometheus metrics scraped from the serving pod. The 100-user run issued 4,343 client-side prediction requests over approximately 89 seconds. Locust observed an average request rate of 47.6 requests/s, an average response time of 1.74 s, p95 2.30 s, and four HTTP 502 responses. Prometheus reported a peak server-side rate of 144.1 requests/s and 1.60 s average handler latency. These observations indicate the prototype handled most requests but showed gateway errors under load. No SLA or production performance claim is made. Figure~\ref{fig:endpoint-benchmark} shows the Locust time series.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.8\linewidth]{assets/chart-locust-benchmark.png}
-\caption{Bounded prototype serving replay with 100 Locust users over an approximately 89-second window. Request rate and latency are observed from Locust's client-side history during the replay.}
+\caption{Bounded prototype serving replay: 100 Locust users, $\approx$89-second window.}
 \label{fig:endpoint-benchmark}
 \end{figure}
 

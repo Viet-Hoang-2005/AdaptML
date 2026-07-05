@@ -1,6 +1,6 @@
 {
-  "created_at_utc": "2026-07-03T14:58:31.597706+00:00",
-  "command": "python paper/results/quantitative/run_offline_drift_retraining_recovery_eval.py --binary --drift-threshold 0.5 --random-seed 42",
+  "created_at_utc": "2026-07-05T04:09:14.453397+00:00",
+  "command": "python paper/results/quantitative/run_offline_drift_retraining_recovery_eval.py --binary --drift-threshold 0.5 --random-seed 42 --use-mixed-reference-for-drift --drift-benign-mix-fraction 0.0",
   "binary": true,
   "random_seed": 42,
   "max_train_rows": 100000,
