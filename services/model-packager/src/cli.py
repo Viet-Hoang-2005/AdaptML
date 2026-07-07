@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -225,7 +226,13 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
     elif not all([flavor, source_key, output_key, bucket_name]):
         raise ValueError("Missing required environment variables for build.")
 
-    workspace = Path(tempfile.mkdtemp(prefix=f"build-{model_id}-"))
+    workspace_dir = os.environ.get("BUILD_WORKSPACE_DIR")
+    if workspace_dir:
+        workspace = Path(workspace_dir)
+        workspace.mkdir(parents=True, exist_ok=True)
+        print(f"Using shared workspace directory: {workspace}")
+    else:
+        workspace = Path(tempfile.mkdtemp(prefix=f"build-{model_id}-"))
     try:
         artifact_name = ""
         extracted_label_mapping_path = None
@@ -293,7 +300,40 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
         s3.upload_file(str(zip_path), bucket_name, output_key)
         print("Upload completed.")
 
-        if flavor in ["pytorch", "tensorflow", "keras"]:
+        if os.environ.get("BUILD_ENGINE", "").lower() == "kaniko":
+            print("Kaniko build engine detected. Preparing build context without Docker daemon...")
+            harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
+            if flavor in ["pytorch", "tensorflow", "keras"]:
+                print("Detected Deep Learning flavor. Generating BentoML Dockerfile...")
+                base_image = f"{harbor_url}/mlops-paas/bento-model-server:latest" if harbor_url else "bento-model-server:latest"
+                dockerfile_content = f"""FROM {base_image}
+USER root
+COPY requirements.txt /tmp/custom_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+COPY model /app/model_artifact
+"""
+            else:
+                print("Generating custom lightweight Dockerfile...")
+                base_image = f"{harbor_url}/mlops-paas/mlops-paas-model-server:latest" if harbor_url else "mlops-paas-model-server:latest"
+                dockerfile_content = f"""FROM {base_image}
+USER root
+COPY requirements.txt /tmp/custom_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+"""
+            (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
+            (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
+            
+            payload = {
+                "model_id": model_id,
+                "status": "success",
+                "package_manifest": manifest,
+                "package_preview_tree": preview_tree,
+                "task_type": "BUILD",
+            }
+            (workspace / "webhook_payload.json").write_text(json.dumps(payload), encoding="utf-8")
+            print("Build context prepared successfully for Kaniko! BUILD_PREPARE_SUCCESS")
+            return
+        elif flavor in ["pytorch", "tensorflow", "keras"]:
             print("Detected Deep Learning flavor. Building BentoML container image...")
             build_bento_image(workspace, model_id, tenant_id, requirements_text)
         else:
@@ -313,7 +353,8 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
         )
         print("BUILD_EOF_SUCCESS")
     finally:
-        shutil.rmtree(workspace, ignore_errors=True)
+        if not os.environ.get("BUILD_WORKSPACE_DIR"):
+            shutil.rmtree(workspace, ignore_errors=True)
 
 def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> None:
     source_key = os.environ.get("SOURCE_KEY")
@@ -321,7 +362,13 @@ def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> 
     if not all([source_key, bucket_name]):
         raise ValueError("Missing required environment variables for test.")
 
-    workspace = Path(tempfile.mkdtemp(prefix=f"test-{model_id}-"))
+    workspace_dir = os.environ.get("BUILD_WORKSPACE_DIR")
+    if workspace_dir:
+        workspace = Path(workspace_dir)
+        workspace.mkdir(parents=True, exist_ok=True)
+        print(f"Using shared workspace directory: {workspace}")
+    else:
+        workspace = Path(tempfile.mkdtemp(prefix=f"test-{model_id}-"))
     try:
         artifact_name = Path(source_key).name
         zip_path = workspace / artifact_name
@@ -375,7 +422,29 @@ def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> 
         }
 
         print("Building custom Docker image...")
-        build_custom_image(workspace, model_id, tenant_id, requirements_text)
+        if os.environ.get("BUILD_ENGINE", "").lower() == "kaniko":
+            print("Kaniko build engine detected. Preparing build context for TEST_ZIP...")
+            harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
+            base_image = f"{harbor_url}/mlops-paas/mlops-paas-model-server:latest" if harbor_url else "mlops-paas-model-server:latest"
+            dockerfile_content = f"""FROM {base_image}
+USER root
+COPY requirements.txt /tmp/custom_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+"""
+            (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
+            (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
+            payload = {
+                "model_id": model_id,
+                "status": "success",
+                "package_manifest": manifest,
+                "package_preview_tree": preview_tree,
+                "task_type": "TEST_ZIP",
+            }
+            (workspace / "webhook_payload.json").write_text(json.dumps(payload), encoding="utf-8")
+            print("TEST_ZIP context prepared successfully for Kaniko! BUILD_PREPARE_SUCCESS")
+            return
+        else:
+            build_custom_image(workspace, model_id, tenant_id, requirements_text)
         print("Test and build completed successfully!")
 
         post_webhook(
@@ -390,7 +459,18 @@ def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> 
         )
         print("BUILD_EOF_SUCCESS")
     finally:
-        shutil.rmtree(workspace, ignore_errors=True)
+        if not os.environ.get("BUILD_WORKSPACE_DIR"):
+            shutil.rmtree(workspace, ignore_errors=True)
+
+def run_notify_task(workspace_dir: str, webhook_url: str) -> None:
+    workspace = Path(workspace_dir)
+    payload_file = workspace / "webhook_payload.json"
+    if not payload_file.exists():
+        raise FileNotFoundError(f"Webhook payload not found at {payload_file}")
+    payload = json.loads(payload_file.read_text(encoding="utf-8"))
+    print(f"Sending post-build notification for model {payload.get('model_id')}...")
+    post_webhook(webhook_url, payload)
+    print("NOTIFY_EOF_SUCCESS")
 
 def setup_logger(model_id: str):
     redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/1")
@@ -443,12 +523,13 @@ def main():
 
         s3 = boto3.client(
             "s3",
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
             region_name=os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1"),
         )
 
-        if task_type == "TEST_ZIP":
+        if task_type == "NOTIFY_BUILD":
+            workspace_dir = os.environ.get("BUILD_WORKSPACE_DIR", "/workspace")
+            run_notify_task(workspace_dir, webhook_url)
+        elif task_type == "TEST_ZIP":
             run_test_zip_task(s3, model_id, bucket_name, webhook_url)
         else:
             run_build_task(s3, model_id, bucket_name, webhook_url)

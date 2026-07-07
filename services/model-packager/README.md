@@ -1,22 +1,81 @@
-# Model Packager (Build Job)
+# Model Packager — Build Job Container
 
-Model Packager là một dịch vụ kịch bản (script) hoạt động trong quá trình CI/CD nội bộ của hệ thống PaaS. Nó chịu trách nhiệm biến một Artifact tải lên thành một Docker Image chạy được.
+Model Packager là container thực thi quá trình **đóng gói mô hình** — biến một artifact tải lên (ZIP chứa MLflow model) thành Docker Image hoàn chỉnh có thể chạy được trong K3s. Service này được gọi bởi **build pipeline** (Argo Workflow hoặc Docker SDK), không expose HTTP API.
 
-## 🚀 Vai Trò & Chức Năng Chính
+---
 
-- **Đóng Gói (Packaging)**: Lấy Artifact của mô hình (thường từ S3, qua đường dẫn MLflow hoặc presigned URL), sao chép nó vào bên trong bộ mã nguồn của một thư mục `model-server` base.
-- **Biên dịch Docker Image**: Sử dụng Docker build (thông qua Kaniko trong Kubernetes hoặc thư viện docker Python) để xây dựng Image hoàn chỉnh.
-- **Đẩy Image lên Registry**: Tự động đánh thẻ (tag) và đẩy Image mới lên Harbor Private Registry (được thiết lập riêng cho cụm).
+## Vai Trò
 
-## 🛠️ Luồng Hoạt Động (Argo Workflow)
+- **Chuẩn hóa Artifact**: Tải model artifact từ S3 (hoặc MLflow artifact URI), giải nén, tìm file model (`.pkl`, `.joblib`, `.xgb`), chuẩn hóa sang MLflow Pyfunc format.
+- **Sinh Dockerfile**: Tự động chọn Base Image phù hợp với `flavor`:
+  - `bento` (Deep Learning) → dùng `bento-model-server` base image với BentoML Adaptive Batching.
+  - Các flavor khác → dùng `model-server` base image (FastAPI thuần).
+- **Build Docker Image**:
+  - **Local** (`BUILD_ENGINE=docker`): Dùng Docker SDK (`docker-py`) để build và push lên Harbor.
+  - **Production K3s** (`BUILD_ENGINE=kaniko`): Sinh `Dockerfile` + `requirements.txt` vào `/workspace` (emptyDir volume) để Kaniko executor (step tiếp theo trong Argo Workflow) thực hiện build rootless.
+- **Log Streaming**: Ghi log build vào Redis (`build_logs:{model_id}`) để Frontend HTTP Polling hiển thị.
+- **Webhook Callback** (`TASK_TYPE=NOTIFY_BUILD`): Sau khi Kaniko build xong, đọc `webhook_payload.json` từ `/workspace` và gửi POST về Control Plane thông báo trạng thái.
 
-1. Khi người dùng tạo một phiên bản mô hình mới, Control Plane gửi webhook `build` sang Argo Events.
-2. Argo Workflow (`build-model-job`) được kích hoạt, pull Image của `model-packager`.
-3. Packager script tải Artifact từ S3 xuống và trích xuất.
-4. Packager sử dụng Docker Daemon được mount vào, hoặc Kaniko (tùy cấu hình cluster), để build một Docker Image kết hợp Base Image FastAPI và Model Artifact.
-5. Image được Push lên Harbor với tag tương ứng với ID mô hình và phiên bản.
+---
 
-## 🛠️ Công Nghệ Sử Dụng
+## Luồng Argo 3-Step (Production K3s)
 
-- **Python, Docker SDK**.
-- **Hệ sinh thái MLflow** (để parse PyFunc model hoặc lấy ONNX object).
+```
+Step 1: model-packager (TASK_TYPE=BUILD, BUILD_ENGINE=kaniko)
+  → Tải artifact từ S3
+  → Chuẩn hóa MLflow format
+  → Sinh Dockerfile + requirements.txt → /workspace/
+  → Ghi webhook_payload.json → /workspace/
+
+Step 2: kaniko-executor
+  → Đọc /workspace/Dockerfile
+  → Build rootless (không Docker socket)
+  → Push image → Harbor Registry
+
+Step 3: model-packager (TASK_TYPE=NOTIFY_BUILD)
+  → Đọc /workspace/webhook_payload.json
+  → POST webhook → Control Plane (build success/error)
+```
+
+---
+
+## Cấu Trúc Thư Mục
+
+```
+src/
+├── cli.py    # Entry point: BUILD, NOTIFY_BUILD task logic; Docker build; Kaniko context generation; S3 helpers; Redis log
+└── core/     # Utilities: load_model, save_mlflow_model, make_zip, parse_requirements, build_preview_tree
+```
+
+---
+
+## Công nghệ
+
+| Thành phần | Công nghệ |
+|---|---|
+| Model Loading | `mlflow.pyfunc`, `joblib`, `xgboost` |
+| Build (Local) | `docker-py` SDK |
+| Build (Production) | Kaniko (rootless, sinh Dockerfile context vào emptyDir) |
+| Storage | `boto3` S3 |
+| Log Buffer | `redis` (key: `build_logs:{model_id}`, TTL 1h) |
+
+---
+
+## Biến Môi Trường
+
+| Biến | Mô tả |
+|---|---|
+| `TASK_TYPE` | `BUILD` (chuẩn bị + build) hoặc `NOTIFY_BUILD` (gửi webhook sau Kaniko) |
+| `BUILD_ENGINE` | `docker` (local) hoặc `kaniko` (production) |
+| `BUILD_WORKSPACE_DIR` | Đường dẫn shared volume với Kaniko (mặc định: `/workspace`) |
+| `MODEL_ID` | ID mô hình cần build |
+| `MODEL_HASHID` | Hashid của model (dùng làm tag image) |
+| `TENANT_ID` | Tenant sở hữu model |
+| `FLAVOR` | Loại model (`bento` hoặc standard) |
+| `SOURCE_KEY` | S3 key của artifact ZIP |
+| `OUTPUT_KEY` | S3 key lưu build output |
+| `AWS_BUCKET_NAME`, `AWS_DEFAULT_REGION` | S3 config |
+| `HARBOR_REGISTRY_URL`, `HARBOR_USERNAME`, `HARBOR_PASSWORD` | Harbor config |
+| `CONTROL_PLANE_WEBHOOK_URL` | URL callback kết quả build |
+| `CONTROL_PLANE_WEBHOOK_SECRET` | HMAC secret xác thực webhook |
+| `REDIS_URL` | Redis để stream build logs |

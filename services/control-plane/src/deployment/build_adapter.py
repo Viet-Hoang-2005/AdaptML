@@ -82,8 +82,6 @@ class DockerBuildAdapter(BuildAdapter):
                     "OUTPUT_KEY": output_key,
                     "LABEL_MAPPING_KEY": label_mapping_key or "",
                     "REDIS_URL": "redis://redis:6379/1",
-                    "AWS_ACCESS_KEY_ID": os.environ.get("AWS_ACCESS_KEY_ID", ""),
-                    "AWS_SECRET_ACCESS_KEY": os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
                     "AWS_BUCKET_NAME": getattr(settings, "AWS_STORAGE_BUCKET_NAME", ""),
                     "AWS_DEFAULT_REGION": getattr(settings, "AWS_S3_REGION_NAME", "ap-southeast-1"),
                     "HARBOR_REGISTRY_URL": getattr(settings, "HARBOR_REGISTRY_URL", ""),

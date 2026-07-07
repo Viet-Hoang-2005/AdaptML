@@ -32,11 +32,11 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
             "name": "nids-xgb",
             "model_version": "v2",
             "entry_point": "train.py",
-            "training_backend": "aws_batch",
+            "training_backend": "kubeflow",
             "source_zip": SimpleUploadedFile("source.zip", b"zip"),
             "training_data": SimpleUploadedFile("train.csv", b"f1,label\n1,0\n"),
             "status": "completed",
-            "model_artifact_uri": "s3://bucket/tenants/T-1/training-jobs/1/output/batch/model.tar.gz",
+            "model_artifact_uri": "s3://bucket/tenants/T-1/training-jobs/1/output/kubeflow/model.tar.gz",
             "tracking_status": "completed",
             "training_summary": {"entry_point": "train.py", "status": "succeeded"},
             "metrics_summary": {"accuracy": 0.97, "loss": 0.12},
@@ -486,7 +486,7 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
         self.assertEqual(response.data["model_insights_item_count"], 2)
         self.assertEqual(response.data["model_insights_summary"]["items"][0]["name"], "packet_rate")
         self.assertEqual(response.data["deployability_status"], "deployable")
-        self.assertEqual(response.data["source_training_job_backend"], "aws_batch")
+        self.assertEqual(response.data["source_training_job_backend"], "kubeflow")
         self.assertEqual(response.data["mlflow_run_id"], "run-123")
 
     @override_settings(MLFLOW_UI_URL="http://localhost:5001")

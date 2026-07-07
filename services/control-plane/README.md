@@ -1,28 +1,79 @@
-# Control Plane (Django Backend)
+# Control Plane — Django Backend
 
-Control Plane là "bộ não" trung tâm của nền tảng AI PaaS, chịu trách nhiệm quản lý định danh (Identity), metadata, và điều phối toàn bộ các nghiệp vụ liên quan đến vòng đời mô hình học máy.
+Control Plane là **bộ não trung tâm** của nền tảng AI PaaS. Chịu trách nhiệm quản lý định danh người dùng, điều phối toàn bộ vòng đời mô hình (Upload → Build → Deploy → Train → Monitor), và đóng vai trò **Identity Provider** bằng JWT RS256.
 
-## 🚀 Vai Trò & Chức Năng Chính
+---
 
-- **Identity Provider (IdP) & RBAC**: Quản lý tài khoản người dùng, OAuth2 (GitHub/Google), cấp phát và quản lý API Keys.
-- **Asymmetric JWT Authentication**: Sinh ra JWT bằng Private Key (RS256) cho các API Keys để người dùng có thể giao tiếp với các Model Server (Data Plane) mà không bị độ trễ mạng (Network Overhead).
-- **Metadata Management**: Lưu trữ thông tin về Models, API Endpoints, và Drift Monitoring Jobs vào CSDL PostgreSQL (`django_schema`).
-- **Orchestration qua Argo Workflows**: Thay vì trực tiếp can thiệp vào Kubernetes, Control Plane gọi Webhook sang **Argo Events** để kích hoạt các tiến trình:
-  - `build-model-job`: Đóng gói mô hình thành Docker Image.
-  - `deploy-model-job`: Triển khai mô hình lên K8s.
-  - `delete-model-job`: Xóa tài nguyên mô hình trên K8s và xóa Image trên Harbor.
-  - `evidently-job`: Chạy kiểm tra Data Drift.
+## Vai Trò
 
-## 🛠️ Công Nghệ Sử Dụng
+- **Xác thực & Phân quyền**: Đăng ký/đăng nhập, OAuth2 (GitHub/Google), API Keys, JWT RS256 Asymmetric (Private Key ký — Public Key verify tại Model Endpoint).
+- **Model Registry**: Quản lý metadata mô hình (upload, trạng thái build/deploy, phiên bản), proxy MLflow API với tenant isolation.
+- **Điều phối Argo Workflows**: Khi người dùng thao tác trên Dashboard, Control Plane gửi Webhook tới Argo Events để kích hoạt:
+  - `build-model-job` — Đóng gói mô hình thành Docker Image (Kaniko/Docker).
+  - `deploy-model-job` — Tạo Deployment + Service + Traefik IngressRoute.
+  - `delete-model-job` — Xóa tài nguyên K8s và Image trên Harbor.
+  - `training-job` — Tạo Kubeflow PyTorchJob.
+  - `cancel-training-job` — Xóa PyTorchJob đang chạy.
+  - `evidently-job` — Chạy phân tích Data Drift.
+- **Log Streaming**: Ghi log build/train vào Redis; Frontend HTTP Polling mỗi 3 giây.
+- **S3 Storage**: Lưu model artifacts, training data, sinh presigned URL cho Evidently.
 
-- **Framework**: Django, Django REST Framework (DRF).
-- **Database**: PostgreSQL (CloudNativePG).
-- **Storage**: AWS S3 (Boto3) để lưu trữ Reference Data và Model Artifacts.
-- **Registry**: Tích hợp API của Harbor để quản lý Image.
+---
 
-## 📂 Cấu Trúc Thư Mục
+## Cấu Trúc Thư Mục
 
-- `src/authentication/`: Quản lý User, Tenant, JWT, API Keys, Models, và Billing.
-- `src/registry/`: Quản lý vòng đời tải lên mô hình, proxy MLflow, tương tác Harbor.
-- `src/deployment/`: Chứa các Adapter (Docker/Argo) để kích hoạt quá trình Build/Deploy.
-- `src/drift/`: Cấu hình giám sát Drift và xử lý Webhook nhận kết quả từ Argo Workflows.
+```
+src/
+├── authentication/   # User, Tenant, API Keys, JWT, OAuth2 (GitHub/Google), ModelAPI CRUD
+├── registry/         # Model lifecycle: upload, build/deploy webhook handlers, MLflow proxy, Harbor sync
+├── training/         # TrainingJob CRUD, ArgoTrainingAdapter, LocalTrainingAdapter, log streaming
+├── drift/            # DriftJob CRUD, Evidently webhook handlers, drift report URLs
+├── realtime/         # WebSocket/Redis log streaming utilities
+├── integrations/     # S3 utilities, Hashids encoding, ZIP helpers
+└── core/             # Django settings, URL routing, WSGI/ASGI config
+```
+
+---
+
+## Công nghệ
+
+| Thành phần | Công nghệ |
+|---|---|
+| Framework | Django 4.x + Django REST Framework |
+| Database | PostgreSQL (schema: `control_plane`) |
+| Cache / Log Buffer | Redis |
+| Storage | AWS S3 (boto3) |
+| Container Registry | Harbor (Robot Account API) |
+| Async | Daphne (ASGI) + Django Channels |
+| Auth | `djangorestframework-simplejwt` (RS256), `python-social-auth` |
+
+---
+
+## Biến Môi Trường Quan Trọng
+
+| Biến | Mô tả |
+|---|---|
+| `BUILD_STRATEGY` | `docker` (local) hoặc `argo` (production K3s) |
+| `TRAINING_BACKEND` | `local` (docker-compose) hoặc `kubeflow` (K3s) |
+| `ARGO_EVENTS_WEBHOOK_URL` | Endpoint của Argo Events EventSource |
+| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` | Cặp RSA key cho Asymmetric JWT |
+| `CONTROL_PLANE_WEBHOOK_SECRET` | HMAC secret xác thực internal webhook callbacks |
+| `AWS_BUCKET_NAME` | S3 bucket lưu artifacts |
+| `HARBOR_REGISTRY_URL` | URL của Harbor Private Registry |
+
+---
+
+## Chạy Local
+
+```bash
+# Với docker-compose từ thư mục gốc
+docker compose up control-plane
+
+# Chạy migrations
+docker compose exec control-plane python manage.py migrate
+
+# Tạo superuser
+docker compose exec control-plane python manage.py createsuperuser
+```
+
+API Docs: http://localhost:8000/docs hoặc http://localhost:8000/api/

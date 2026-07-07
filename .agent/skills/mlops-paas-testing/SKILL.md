@@ -1,27 +1,109 @@
 ---
 name: mlops-paas-testing
-description: Phương pháp kiểm thử AI PaaS, bao gồm test API Model upload, kiểm tra xác thực JWT Asymmetric, và Stress Test để đảm bảo giới hạn tài nguyên đa người thuê.
+description: Phương pháp kiểm thử AI PaaS: Tenant Isolation, JWT RS256 validation, Build Pipeline (Docker/Kaniko), Training Job flow, và Drift Detection.
 ---
 
 # Phương pháp Kiểm thử Nền tảng AI PaaS
 
-Trong môi trường AI PaaS, trọng tâm kiểm thử không chỉ là độ chính xác của Mô hình Học máy, mà là sự an toàn, độc lập và tính đúng đắn của toàn bộ Nền tảng.
+> Đọc skill `mlops-paas-architecture` trước để nắm kiến trúc tổng thể.
 
-## 1. Kiểm thử Cách Ly Người Dùng (Tenant Isolation Testing)
+---
 
-- **Data Isolation**: Kiểm thử để chắc chắn rằng Tenant A không thể query được Prediction Logs, Reference Data, hay Model Artifacts (từ S3/MLflow proxy) của Tenant B.
-- **RCE Validation**: Thử tải lên một model độc hại chứa mã Pickle (RCE Payload). Hệ thống (FastAPI/Seldon) phải từ chối hoặc bọc nó trong một không gian Sandboxed mà không thể thoát ra (Container Escape) hay ping được vào các service nội bộ của Control Plane.
+## 1. Kiểm thử Cách Ly Người Dùng (Tenant Isolation)
 
-## 2. Kiểm thử Xác Thực Bất Đối Xứng (JWT RS256 Testing)
+**Data Isolation**:
+- Đăng nhập với Tenant A, thử truy cập API với `model_id` thuộc Tenant B → phải nhận `403 Forbidden`
+- Verify Django ORM filter đúng theo `tenant_id` trong mọi ViewSet
 
-- Tạo JWT hợp lệ từ Private Key (mô phỏng Django), sau đó dùng Public Key (mô phỏng FastAPI) để decode và verify nội dung.
-- Kiểm thử các ca biên:
-  - Token hết hạn (Expired).
-  - Token bị chỉnh sửa một payload nhỏ (Signature bị hỏng).
-  - FastAPI mất kết nối tới Django JWKS Endpoint (Đảm bảo FastAPI có cơ chế Fallback sử dụng Cache Public Key gần nhất).
+**Endpoint Isolation**:
+- Tenant A dùng API Key (JWT) của mình gọi endpoint của Tenant B → phải nhận `401 Unauthorized`
+- FastAPI model-server verify `model_id` trong JWT payload phải khớp với model đang chạy
 
-## 3. Kiểm Thử Khởi Động Lạnh (Cold-Start) và Noisy Neighbor
+**K8s Resource Isolation**:
+- Mỗi model deployment có `resources.requests` và `resources.limits` riêng
+- Tenant A không thể ảnh hưởng tài nguyên của Tenant B (Noisy Neighbor protection)
 
-- **Locust Stress Test**: Tạo ra một luồng traffic khổng lồ tới Model của Tenant A. Đo đạc xem Pod của Tenant B có bị ảnh hưởng (tăng độ trễ, văng OOM) hay không.
-- **KEDA Verification**: Kiểm tra thời gian từ lúc gửi Request HTTP đầu tiên đến khi Pod Scale-from-Zero (0 -> 1) hoàn thành. Đảm bảo Ingress giữ request đúng cách và không ném lỗi `503 Service Unavailable`.
-- Đảm bảo Kubernetes Resource Quotas hoạt động đúng bằng cách theo dõi `kubectl describe pod` xem OOMKilled có xuất hiện đúng trên các Pod cố tình ăn quá bộ nhớ cấp phép.
+---
+
+## 2. Kiểm thử JWT RS256
+
+Kiểm thử end-to-end:
+1. Lấy `access_token` từ `POST /api/auth/login/`
+2. Dùng token đó gọi `POST /{tenant_id}/models/{hashid}/{version}/predict`
+3. Verify response 200
+
+Kiểm thử các trường hợp biên:
+- Token hết hạn (`exp` đã qua) → 401
+- Token bị chỉnh sửa (signature lỗi) → 401
+- Token `model_id` không khớp endpoint đang phục vụ → 403
+- JWKS endpoint không khả dụng → FastAPI phải dùng cached public key (fallback)
+
+---
+
+## 3. Kiểm thử Build Pipeline
+
+**Local (BUILD_STRATEGY=docker)**:
+```bash
+# Test DockerBuildAdapter trực tiếp
+POST /api/models/ (upload model ZIP)
+# Kiểm tra container model-packager được spawn
+docker ps | grep build_
+# Kiểm tra webhook callback
+GET /api/models/{id}/ → status="ready"
+```
+
+**Production (BUILD_STRATEGY=argo)**:
+```bash
+# Xem Argo Workflow được kích hoạt
+kubectl get workflows -n default
+# Xem từng bước của pipeline
+kubectl get pods -n default | grep build-model-job
+# Verify 3 bước: prepare-package, kaniko-build, notify-success
+```
+
+---
+
+## 4. Kiểm thử Training Job
+
+**Local (TRAINING_BACKEND=local)**:
+- Submit training job với script đơn giản (ví dụ trong `examples/training/nids-xgboost/`)
+- Verify log stream qua `GET /api/training-jobs/{id}/logs/`
+- Verify file `model.tar.gz` được upload lên S3 sau khi hoàn tất
+
+**Production (TRAINING_BACKEND=kubeflow)**:
+- Verify Argo Workflow được tạo sau khi submit Training Job
+- Verify PyTorchJob CRD xuất hiện trong namespace `user-jobs`
+- Verify Karpenter provision node khi Job đang Pending (nếu không có node sẵn)
+- Verify webhook callback cập nhật status về Control Plane
+
+---
+
+## 5. Kiểm thử Drift Detection
+
+- Kích hoạt Drift Job từ Dashboard
+- Verify Argo Workflow `evidently-job-*` được tạo
+- Verify HTML report và JSON summary được upload lên S3
+- Verify webhook callback cập nhật DriftJob status
+- Test với dataset có drift rõ ràng → `drift_score >= threshold`
+- Test với dataset tương tự reference → `drift_score < threshold`
+
+---
+
+## 6. Stress Test (Noisy Neighbor)
+
+Dùng Locust để tạo traffic lớn vào model của Tenant A:
+- Đo latency của Tenant B → phải không bị ảnh hưởng đáng kể
+- Kiểm tra Pod của Tenant A bị OOMKilled (nếu cố tình dùng quá memory limit) nhưng Pod của Tenant B vẫn chạy bình thường
+- Verify KEDA Scale-Out hoạt động đúng khi traffic tăng cao
+
+---
+
+## 7. Test Script Django (Unit Tests)
+
+Chạy test suite của Control Plane:
+```bash
+cd services/control-plane
+docker compose run control-plane python manage.py test
+```
+
+File test: `services/control-plane/src/registry/tests.py`
