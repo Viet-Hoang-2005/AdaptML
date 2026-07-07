@@ -166,7 +166,3 @@ Giai đoạn chuyển đổi từ kiến trúc "GitHub Actions làm nhạc trư�
 | **MAJOR** | Thay đổi kiến trúc lớn, phá vỡ cấu trúc cũ | `1.0->2.0`: Flask->FastAPI; `2.0->3.0`: thêm K3s+CloudNativePG |
 | **MINOR** | Tính năng mới, tương thích ngược | Thêm endpoint mới, thêm class phân loại mới |
 | **PATCH** | Sửa lỗi nhỏ, vá bảo mật | Sửa path S3, fix connection string |
-
----
-
-_Last updated: 2026-04-11 - UIT · NT114 · MLOps NIDS System Project_

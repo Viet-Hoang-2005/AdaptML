@@ -1,13 +1,12 @@
-"""AWS Batch-compatible NIDS training entry point (no MLflow).
+"""Kubeflow / Argo Workflows compatible NIDS training entry point (no MLflow).
 
-Derived from the legacy ``sagemaker/train.py`` XGBoost NIDS trainer. This
-version preserves the useful model-training logic (XGBoost with a
-RandomizedSearch-style configuration, class-imbalance handling, label
-encoding, and a train/val/test split) but removes ALL direct MLflow Tracking
-usage so it can run unmodified inside the AWS Batch training runner
-(``services/training-runner/runner.py``).
+Derived from the XGBoost NIDS trainer. This version preserves the useful
+model-training logic (XGBoost with a RandomizedSearch-style configuration,
+class-imbalance handling, label encoding, and a train/val/test split) but
+removes ALL direct MLflow Tracking usage so it can run unmodified inside the
+training runner (``services/training-runner/runner.py``).
 
-Runtime contract (set by the AWS Batch runner):
+Runtime contract (set by the training runner):
   - SM_CHANNEL_TRAIN : directory containing the training CSV (runner mounts
                        the dataset here as ``train.csv``).
   - SM_MODEL_DIR     : directory for model artifacts (packaged into
@@ -17,7 +16,7 @@ Runtime contract (set by the AWS Batch runner):
                        ``model_insights.json``, ``feature_importance.json``).
   - MODEL_VERSION    : logical model version label.
 
-Local testing contract (no AWS Batch required):
+Local testing contract (no cloud backend required):
   python train.py --train-csv data/train_2_classes.csv \
       --model-dir /tmp/model --output-dir /tmp/output --model-version v-test
 
@@ -394,7 +393,7 @@ def main() -> None:
                 "random_state": RANDOM_STATE,
                 "label_column": label_column,
                 "feature_count": len(feature_names),
-                "training_backend": "aws_batch",
+                "training_backend": "kubeflow",
                 "xgboost_available": fallback_warning is None,
                 "fallback_reason": fallback_warning,
             },

@@ -259,26 +259,12 @@ CONTROL_PLANE_INTERNAL_URL = os.environ.get('CONTROL_PLANE_INTERNAL_URL', 'http:
 DOCKER_NETWORK_NAME = os.environ.get('DOCKER_NETWORK_NAME', 'mlops_paas_network').strip() or 'mlops_paas_network'
 CONTROL_PLANE_WEBHOOK_SECRET = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key").strip()
 
-# SageMaker Training PaaS configuration.
-TRAINING_BACKEND = os.environ.get('TRAINING_BACKEND', 'sagemaker').strip().lower()
-AWS_SAGEMAKER_ROLE_ARN = os.environ.get('AWS_SAGEMAKER_ROLE_ARN', '').strip()
-SAGEMAKER_INSTANCE_TYPE = os.environ.get('SAGEMAKER_INSTANCE_TYPE', 'ml.m5.large')
-SAGEMAKER_MAX_RUN = int(os.environ.get('SAGEMAKER_MAX_RUN', '3600'))
-SAGEMAKER_MAX_WAIT = int(os.environ.get('SAGEMAKER_MAX_WAIT', '7200'))
-SAGEMAKER_OUTPUT_PREFIX = os.environ.get('SAGEMAKER_OUTPUT_PREFIX', 'tenants').strip().strip('/')
-SAGEMAKER_SKLEARN_FRAMEWORK_VERSION = os.environ.get('SAGEMAKER_SKLEARN_FRAMEWORK_VERSION', '1.2-1')
-SAGEMAKER_PY_VERSION = os.environ.get('SAGEMAKER_PY_VERSION', 'py3')
-SAGEMAKER_USE_SPOT = env_bool('SAGEMAKER_USE_SPOT', True)
+# Training PaaS configuration (Kubeflow + Local).
+TRAINING_BACKEND = os.environ.get('TRAINING_BACKEND', 'local').strip().lower()
 LOCAL_TRAINING_TIMEOUT = int(os.environ.get('LOCAL_TRAINING_TIMEOUT', '1800'))
 LOCAL_TRAINING_MAX_OUTPUT_MB = int(os.environ.get('LOCAL_TRAINING_MAX_OUTPUT_MB', '500'))
 LOCAL_TRAINING_ALLOW_PIP_INSTALL = env_bool('LOCAL_TRAINING_ALLOW_PIP_INSTALL', True)
-AWS_BATCH_REGION = os.environ.get('AWS_BATCH_REGION', os.environ.get('AWS_DEFAULT_REGION', 'ap-southeast-1'))
-AWS_BATCH_JOB_QUEUE = os.environ.get('AWS_BATCH_JOB_QUEUE', '').strip()
-AWS_BATCH_JOB_DEFINITION = os.environ.get('AWS_BATCH_JOB_DEFINITION', '').strip()
-AWS_BATCH_LOG_GROUP = os.environ.get('AWS_BATCH_LOG_GROUP', '/aws/batch/mlops-training').strip()
 ENABLE_GPU_TRAINING = env_bool('ENABLE_GPU_TRAINING', False)
-AWS_BATCH_GPU_JOB_QUEUE = os.environ.get('AWS_BATCH_GPU_JOB_QUEUE', '').strip()
-AWS_BATCH_GPU_JOB_DEFINITION = os.environ.get('AWS_BATCH_GPU_JOB_DEFINITION', '').strip()
 TRAINING_MAX_RUNTIME_SECONDS = int(os.environ.get('TRAINING_MAX_RUNTIME_SECONDS', '43200'))
 TRAINING_MONTHLY_QUOTA_SECONDS = int(os.environ.get('TRAINING_MONTHLY_QUOTA_SECONDS', '43200'))
 TRAINING_MAX_ACTIVE_JOBS_PER_TENANT = int(os.environ.get('TRAINING_MAX_ACTIVE_JOBS_PER_TENANT', '1'))
@@ -286,16 +272,9 @@ TRAINING_MAX_ACTIVE_JOBS_PER_TENANT = int(os.environ.get('TRAINING_MAX_ACTIVE_JO
 # Phase 10E.1: MLflow integration settings
 # Container/internal URI used when training runs inside docker-compose or local.
 MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow:5000').strip()
-# Browser-facing URL used to build "Open in MLflow" deep links.
 MLFLOW_UI_URL = os.environ.get('MLFLOW_UI_URL', 'http://localhost:5001').rstrip('/')
-# Default experiment name; training scripts may override via their own env.
 MLFLOW_EXPERIMENT_NAME = os.environ.get('MLFLOW_EXPERIMENT_NAME', 'mlops-paas-training').strip()
-# AWS Batch-specific MLflow URI (optional). If empty, MLflow is NOT injected into Batch.
-AWS_BATCH_MLFLOW_TRACKING_URI = os.environ.get('AWS_BATCH_MLFLOW_TRACKING_URI', '').strip()
-# false = best-effort (training continues even if MLflow is unreachable)
-# true  = MLflow failure will fail the training job
 MLFLOW_TRACKING_REQUIRED = env_bool('MLFLOW_TRACKING_REQUIRED', default=False)
-# Timeout in seconds for MLflow HTTP requests inside AWS Batch training containers
 MLFLOW_HTTP_REQUEST_TIMEOUT = int(os.environ.get('MLFLOW_HTTP_REQUEST_TIMEOUT', '10') or '10')
 
 # Cấu hình lưu trữ AWS S3 (cho Avatar & File)
