@@ -1,24 +1,85 @@
 ---
 name: mlops-paas-security
-description: Kỹ năng thiết kế an ninh cho nền tảng AI PaaS, tập trung vào bảo mật đa người thuê (multi-tenant), ngăn chặn RCE, và quản lý giới hạn tài nguyên.
+description: Bảo mật nền tảng AI PaaS Multi-Tenant: Asymmetric JWT, Kaniko Rootless Build (thay Docker Socket), AWS IAM Role (thay Access Key tĩnh), External Secrets Operator, và Tenant Isolation.
 ---
 
-# Bảo mật Nền tảng AI PaaS Đa Người Thuê
+# Bảo mật Nền tảng AI PaaS
 
-Khi thiết kế hoặc sửa đổi các tính năng trên nền tảng AI PaaS, hãy tuân thủ nghiêm ngặt các nguyên tắc bảo mật sau:
+> Đọc skill `mlops-paas-architecture` trước để nắm kiến trúc tổng thể.
 
-## 1. Ngăn chặn Thực thi Mã độc (RCE - Remote Code Execution)
-- **Zero-Trust File Upload**: Chỉ cho phép người dùng tải lên mô hình ở định dạng chuẩn an toàn (ví dụ: ONNX, MLflow MLmodel phân phối qua Pyfunc). **Tuyệt đối cấm tải lên file `.pkl` (Pickle)** vì nó có thể chứa mã độc thực thi khi được load.
-- **Sandboxing Pods (K8s Security Context)**: Tất cả các Pod làm nhiệm vụ phục vụ Inference của khách hàng phải bị vô hiệu hóa quyền bằng cấu hình `securityContext.drop: ["ALL"]` và `runAsNonRoot: true`. Nếu có điều kiện, sử dụng Runtime như gVisor hoặc Kata Containers.
+---
 
-## 2. Cách Ly Không Gian Mạng (Network Isolation)
-- **Network Policies**: Phải thiết lập K8s Network Policy cấm các Pod Inference (Data Plane) truy cập ngược lại vào mạng lưới nội bộ của Control Plane (như Database User của Django, API nội bộ) hoặc truy cập Internet ra bên ngoài nhằm ngăn chặn rò rỉ dữ liệu (Data Exfiltration).
-- Các Pod Inference chỉ được phép giao tiếp với API Gateway (Traefik) và kết nối xuất ra Redpanda Kafka để log dữ liệu.
+## 1. Xác thực Bất Đối Xứng (JWT RS256)
 
-## 3. Giới Hạn Quota và Quản Lý Dung Lượng Lưu Trữ
-- **Storage Lifecycle (AWS S3)**: Không lưu trữ vĩnh viễn các mô hình cũ. Cấu hình S3 Lifecycle policies tự động chuyển mô hình cũ (không được gán nhãn Production) sang tầng lưu trữ giá rẻ hoặc tự động xóa sau một khoảng thời gian.
-- **Tenant Quotas**: Django (Control Plane) phải theo dõi và áp đặt hạn mức (Quota) lưu trữ (S3) và tài nguyên tính toán (Max Pods) cho mỗi khách hàng (Tenant). Khóa tính năng Retrain nếu người dùng vượt quá dung lượng cho phép.
+- Django Control Plane ký JWT bằng **Private Key** (RS256)
+- FastAPI Model Server xác thực Token bằng **Public Key** lấy từ JWKS endpoint
+- **Ưu điểm**: Không cần gọi network về Control Plane khi verify — loại bỏ Network Overhead
+- JWT payload chứa `tenant_id` và `model_id` để đảm bảo cô lập
 
-## 4. Bảo Mật Xác Thực Giao Tiếp Dịch Vụ
-- **Xác thực Bất đối xứng (Asymmetric JWT - RS256)**: Để ngăn chặn giả mạo token và giảm thiểu độ trễ giao tiếp (Network Overhead), Django đóng vai trò Identity Provider ký JWT bằng Private Key. FastAPI (Model Server) lấy Public Key qua endpoint JWKS để tự kiểm tra token tại chỗ.
-- Thời gian sống (TTL) của Access Token cần cực ngắn (ví dụ: 15 phút). Các service luôn cần xử lý Refresh Token flow để lấy token mới.
+Env vars liên quan: `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` (trong `.env` và `mlops/production-secrets` trên AWS)
+
+---
+
+## 2. Kaniko Rootless Build — Loại bỏ Docker Socket
+
+**Vấn đề cũ**: Mount `/var/run/docker.sock` vào container cho phép container đó leo thang đặc quyền (root trên host node) — nguy hiểm trong môi trường Multi-Tenant.
+
+**Giải pháp hiện tại (Production K3s)**:
+- Dùng `gcr.io/kaniko-project/executor` — build image trong user-space, không cần Docker Daemon
+- Kaniko đọc `Dockerfile` từ `emptyDir` volume được chia sẻ giữa các bước
+- Xác thực với Harbor qua Secret `harbor-registry-dockerconfig` (dockerconfigjson) mount vào `/kaniko/.docker/`
+
+File: `k8s/argo-workflows/build-workflowtemplate.yaml` — không còn `hostPath: /var/run/docker.sock`
+
+---
+
+## 3. AWS IAM Role — Loại bỏ Access Key tĩnh trên Production
+
+**Production K3s (EC2 với IAM Policy)**:
+- EC2 worker nodes được gắn IAM Role với policy cho phép truy cập S3 và Secrets Manager
+- `boto3` tự động dùng Instance Metadata Service (IMDS) → không cần `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` trong environment của container
+
+**Local (docker-compose)**:
+- `AWS_ACCESS_KEY_ID` và `AWS_SECRET_ACCESS_KEY` lấy từ file `.env`
+- `build_adapter.py` và `deploy_adapter.py` chỉ inject các biến này vào container khi chúng thực sự tồn tại trong environment (tránh truyền chuỗi rỗng `""` làm boto3 lỗi InvalidAccessKeyId)
+
+---
+
+## 4. External Secrets Operator (ESO)
+
+- Không lưu secrets trong Git — chỉ lưu định nghĩa `ExternalSecret` referencing AWS Secrets Manager keys
+- ESO tự động đồng bộ secrets mỗi 1 giờ
+- 3 kho AWS Secrets Manager:
+  - `mlops/aws-secrets` — AWS Credentials (local dev only)
+  - `mlops/github-actions-secrets` — Harbor Robot Account, Cosign Keys
+  - `mlops/production-secrets` — DB, JWT keys, OAuth, Harbor, Webhook secrets
+
+---
+
+## 5. Tenant Isolation
+
+**ORM Layer**: Tất cả Django query đều filter theo `request.user.tenant` — không tenant nào có thể truy cập tài nguyên của tenant khác.
+
+**K8s Layer**:
+- Mỗi model endpoint là Deployment/Service/IngressRoute riêng biệt
+- Training jobs chạy trong namespace `user-jobs` với ResourceQuota
+- Traefik IngressRoute route theo `/{tenant_id}/models/{hashid}/...` — cô lập bằng URL path
+
+**Harbor Registry**:
+- Image của mỗi tenant được tag theo pattern: `{tenant_id}-model-{model_hashid}:latest`
+- Lưu trong project `user-images` trên Harbor
+
+---
+
+## 6. Webhook Validation
+
+Tất cả internal webhook callback đều được xác thực bằng HMAC `X-Webhook-Secret` header:
+- `CONTROL_PLANE_WEBHOOK_SECRET` trong Secret `mlops-paas-secret`
+- Áp dụng cho: build-webhook, training-webhook, drift-webhook
+
+---
+
+## 7. Image Signing (Cosign)
+
+CI/CD pipeline (GitHub Actions) dùng Cosign để ký Docker Images sau khi push lên Harbor.
+- `COSIGN_PRIVATE_KEY` và `COSIGN_PASSWORD` lưu trong `mlops/github-actions-secrets`
