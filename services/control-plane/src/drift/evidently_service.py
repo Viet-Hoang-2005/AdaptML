@@ -1,6 +1,7 @@
 import os
 import boto3
 import docker
+import requests
 import logging
 import threading
 
@@ -129,7 +130,6 @@ def run_evidently_job_sync(job_id: int):
 
         strategy = os.environ.get("BUILD_STRATEGY", "docker").lower()
         if strategy == "argo":
-            import requests
             webhook_url = os.environ.get("ARGO_DRIFT_WEBHOOK_URL", "http://webhook-eventsource-eventsource-svc.default.svc.cluster.local:12000/drift")
             payload = {
                 "job_id": str(job.id),

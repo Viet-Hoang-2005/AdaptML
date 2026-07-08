@@ -1,5 +1,8 @@
 import logging
 import re
+import boto3
+
+from urllib.parse import urlparse
 from typing import Any, Dict
 from django.core.cache import cache
 
@@ -32,8 +35,6 @@ def get_training_metrics_payload(training_job) -> Dict[str, Any]:
 
 
 def create_model_artifact_presigned_url(training_job, expiration: int = 3600) -> str:
-    import boto3
-    from urllib.parse import urlparse
     uri = training_job.model_artifact_uri or training_job.output_s3_uri
     if not uri or not uri.startswith("s3://"):
         return ""

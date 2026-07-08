@@ -18,6 +18,12 @@ spec:
           - name: version
           - name: image_name
           - name: container_name
+          - name: model_type
+            default: "ml"
+          - name: target_port
+            default: "5001"
+          - name: model_uri
+            default: ""
       script:
         image: bitnami/kubectl:latest
         command: [bash]
@@ -46,11 +52,11 @@ spec:
                 nodeSelector:
                   workload-type: worker
                 containers:
-                  - name: model-server
+                  - name: model-engine
                     image: {{inputs.parameters.image_name}}
                     imagePullPolicy: Always
                     ports:
-                      - containerPort: 5000
+                      - containerPort: {{inputs.parameters.target_port}}
                     envFrom:
                       - secretRef:
                           name: mlops-paas-secret
@@ -65,18 +71,10 @@ spec:
                         value: "{{inputs.parameters.hashid}}"
                       - name: MODEL_VERSION
                         value: "{{inputs.parameters.version}}"
+                      - name: MODEL_URI
+                        value: "{{inputs.parameters.model_uri}}"
                       - name: PYTHONPATH
                         value: "/app/libs:/app"
-                      - name: DB_USER
-                        valueFrom:
-                          secretKeyRef:
-                            name: postgres-secrets
-                            key: DB_USER
-                      - name: DB_PASSWORD
-                        valueFrom:
-                          secretKeyRef:
-                            name: postgres-secrets
-                            key: DB_PASSWORD
                     volumeMounts:
                       - name: dynamic-libs
                         mountPath: /app/libs
@@ -108,8 +106,8 @@ spec:
             ports:
               - name: http
                 protocol: TCP
-                port: 5000
-                targetPort: 5000
+                port: {{inputs.parameters.target_port}}
+                targetPort: {{inputs.parameters.target_port}}
           ---
           apiVersion: traefik.io/v1alpha1
           kind: Middleware
@@ -135,6 +133,6 @@ spec:
                   - name: rewrite-{{inputs.parameters.container_name}}
                 services:
                   - name: {{inputs.parameters.container_name}}-svc
-                    port: 5000
+                    port: {{inputs.parameters.target_port}}
           EOF
           echo "Deployment successfully created: {{inputs.parameters.container_name}} using image {{inputs.parameters.image_name}}"

@@ -126,50 +126,58 @@ services:
     networks:
       - mlops_paas_network
 
-  # 3. FastAPI Model Server (Image Builder)
+  # 3. Model Server API Gateway
   model-server:
     build:
       context: ./services/model-server
       dockerfile: Dockerfile
     image: mlops-paas-model-server
-    container_name: mlops_paas_model_server
-    restart: "no"
-    command: ["echo", "Model Server Image Built Successfully. Waiting for dynamic execution..."]
+    container_name: mlops_paas_model_gateway
+    restart: always
+    ports:
+      - "5000:5000"
     environment:
       PYTHONUNBUFFERED: 1
-    volumes:
-      - ./models:/models # Mount thư mục models local vào container
-      - ./services/model-server:/app
-
+      DB_HOST_RO: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-mlops_paas}
+      REDPANDA_BROKERS: redpanda:9092
+      KAFKA_TOPIC: mlops_paas_production_data
+      REDIS_URL: redis://redis:6379/1
+      JWKS_URL: http://control-plane:8000/api/auth/.well-known/jwks.json
     depends_on:
       postgres:
-        condition: service_healthy # Đợi postgres healthy mới start API
+        condition: service_healthy
       redpanda:
+        condition: service_started
+      redis:
         condition: service_started
     networks:
       - mlops_paas_network
 
-  # 3.1 Shared Base Model Server (Image Builder for Dynamic Runtime Injection)
-  model-server-base:
+  # 3.1 Base Image Machine Learning Serving Engine
+  machine-learning-serving:
     build:
-      context: ./services/model-server
+      context: ./services/machine-learning-serving
       dockerfile: Dockerfile
-    image: mlops-paas-model-server
-    container_name: mlops_paas_model_server_base
+    image: mlops-paas-machine-learning-serving
+    container_name: mlops_paas_machine_learning_serving_base
     restart: "no"
-    command: ["echo", "Shared Base Model Server Image Built Successfully. Ready for Dynamic Runtime Injection..."]
+    command: ["echo", "Base Image Machine Learning Serving Engine Built Successfully. Ready for Dynamic Runtime Injection..."]
     networks:
       - mlops_paas_network
 
-  # 3.2 Shared Base BentoML Server (Image Builder for Dynamic Runtime Injection)
-  bento-model-server-base:
+  # 3.2 Base Image Deep Learning Serving Engine
+  deep-learning-serving:
     build:
-      context: ./services/bento-model-server
+      context: ./services/deep-learning-serving
       dockerfile: Dockerfile
-    image: mlops-paas-bento-model-server
-    container_name: mlops_paas_bento_model_server_base
+    image: mlops-paas-deep-learning-serving
+    container_name: mlops_paas_deep_learning_serving_base
     restart: "no"
-    command: ["echo", "Shared Base BentoML Server Image Built Successfully. Ready for Dynamic Runtime Injection..."]
+    command: ["echo", "Base Image Deep Learning Serving Engine Built Successfully. Ready for Dynamic Runtime Injection..."]
     networks:
       - mlops_paas_network
 

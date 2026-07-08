@@ -63,17 +63,13 @@ def resolve_mlflow_model_dir(source_dir: Path) -> Path:
         raise FileNotFoundError("MLmodel file was not found in the model artifact.")
     return candidates[0].parent
 
-def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
-    model_id = int(model_record["id"])
-    version_marker = str(model_record.get("updated_at"))
+def load_model_from_uri(model_id: int, model_uri: str, version_marker: str = "latest") -> Dict[str, Any]:
     cached = MODEL_CACHE.get(model_id)
-
     if cached and cached.get("version_marker") == version_marker:
         return cached
 
-    model_uri = model_record.get("model_uri")
     if not model_uri:
-        raise HTTPException(status_code=503, detail="Model API does not have a model artifact.")
+        raise HTTPException(status_code=503, detail="Model artifact URI is empty.")
 
     try:
         source_dir = download_model_artifact(model_id, model_uri)
@@ -95,7 +91,6 @@ def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
                 except Exception as e:
                     print(f"Failed to load mapping file {mapping_file}: {e}")
 
-        # Fallback to check entire source_dir if not found in mlflow_model_dir
         if not label_mapping:
             for ext, loader, mode in [(".json", json.load, "r"), (".pkl", pickle.load, "rb")]:
                 mapping_file = next(source_dir.rglob(f"*{ext}"), None)
@@ -129,7 +124,6 @@ def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
                 else:
                     raw_model.n_classes_ = len(getattr(raw_model, "classes_", [0, 1]))
                 
-        # If signature is missing, try to extract expected features from raw model
         if not expected_features and raw_model:
             if hasattr(raw_model, "feature_names_in_") and getattr(raw_model, "feature_names_in_", None) is not None:
                 expected_features = list(raw_model.feature_names_in_)
@@ -147,3 +141,9 @@ def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
         "version_marker": version_marker,
     }
     return MODEL_CACHE[model_id]
+
+def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
+    model_id = int(model_record["id"])
+    model_uri = model_record.get("model_uri")
+    version_marker = str(model_record.get("updated_at", "latest"))
+    return load_model_from_uri(model_id, model_uri, version_marker)

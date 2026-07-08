@@ -209,6 +209,10 @@ class ModelAPI(models.Model):
         ("ready", "Ready"),
         ("error", "Error"),
     )
+    MODEL_TYPE_CHOICES = (
+        ("ml", "Machine Learning"),
+        ("dl", "Deep Learning"),
+    )
 
     tenant = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="model_apis")
     name = models.CharField(max_length=160)
@@ -217,6 +221,7 @@ class ModelAPI(models.Model):
     model_info = models.TextField(blank=True)
     access_mode = models.CharField(max_length=20, choices=ACCESS_MODE_CHOICES, default="private")
     source_type = models.CharField(max_length=30, choices=SOURCE_TYPE_CHOICES, default="manual_upload")
+    model_type = models.CharField(max_length=10, choices=MODEL_TYPE_CHOICES, default="ml")
     source_training_job = models.ForeignKey(
         "TrainingJob",
         on_delete=models.SET_NULL,
@@ -267,6 +272,22 @@ class ModelAPI(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.tenant.tenant_id})"
+
+    def detect_and_set_model_type(self):
+        text_to_check = f"{self.flavor} {self.name} {self.model_info} {self.requirements_text}".lower()
+        if any(kw in text_to_check for kw in ["tensorflow", "keras", "pytorch", "torch", "onnx", "dl", "bentoml", "transformers", "huggingface"]):
+            self.model_type = "dl"
+        elif any(kw in text_to_check for kw in ["xgboost", "scikit-learn", "sklearn", "lightgbm", "lgbm", "ml"]):
+            self.model_type = "ml"
+
+    def save(self, *args, **kwargs):
+        self.detect_and_set_model_type()
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and isinstance(update_fields, (list, tuple, set)):
+            if "model_type" not in update_fields:
+                kwargs["update_fields"] = list(update_fields) + ["model_type"]
+        super().save(*args, **kwargs)
+
 
 
 class TrainingJob(models.Model):

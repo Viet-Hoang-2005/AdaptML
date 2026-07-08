@@ -189,7 +189,7 @@ sequenceDiagram
     end
 
     KF->>S3: Tải training data + source code
-    KF-->>KF: Huấn luyện (train_runner.py)
+    KF-->>KF: Huấn luyện (runner.py)
     KF->>MLFLOW: Log metrics, Register Model (Staging)
     KF->>S3: Upload model artifact (model.tar.gz)
     KF->>CP: Webhook: status=completed / failed

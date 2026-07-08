@@ -57,6 +57,8 @@ def get_model_api_record(model_id: int) -> Dict[str, Any]:
             model.access_mode,
             model.model_uri,
             model.endpoint_url,
+            model.endpoint_container_name,
+            model.model_type,
             model.status,
             model.updated_at,
             users.tenant_id

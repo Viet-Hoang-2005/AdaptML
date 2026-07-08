@@ -1,6 +1,5 @@
 import logging
 import os
-import threading
 import time
 import docker
 import requests
@@ -93,6 +92,9 @@ class DockerDeployAdapter(DeployAdapter):
             logger.error("Cannot deploy missing model %s", model_id)
             return
         try:
+            model_type = getattr(model_api, "model_type", "ml")
+            target_port = 5001 if model_type == "ml" else 5002
+
             client = docker.from_env()
             custom_image_name = endpoint_image_name(tenant_id, model_id)
             try:
@@ -100,8 +102,8 @@ class DockerDeployAdapter(DeployAdapter):
                 image_name = custom_image_name
                 logger.info("Found custom Docker image %s for model %s. Using it.", image_name, model_id)
             except docker.errors.ImageNotFound:
-                image_name = "mlops-paas-model-server"
-                logger.info("Using shared Base Image %s with Dynamic Runtime Injection for model %s.", image_name, model_id)
+                image_name = "mlops-paas-machine-learning-serving" if model_type == "ml" else "mlops-paas-deep-learning-serving"
+                logger.info("Using shared Base Image %s with Dynamic Runtime Injection for model %s (type=%s).", image_name, model_id, model_type)
 
             container_name = endpoint_container_name(tenant_id, model_id)
 
@@ -121,7 +123,7 @@ class DockerDeployAdapter(DeployAdapter):
                 f"traefik.http.routers.model_{model_id}.rule": f"PathPrefix(`{public_path}`)",
                 f"traefik.http.middlewares.rewrite_{model_id}.replacepath.path": internal_path,
                 f"traefik.http.routers.model_{model_id}.middlewares": f"rewrite_{model_id}",
-                f"traefik.http.services.model_{model_id}.loadbalancer.server.port": "5000",
+                f"traefik.http.services.model_{model_id}.loadbalancer.server.port": str(target_port),
             }
 
             network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
@@ -133,16 +135,9 @@ class DockerDeployAdapter(DeployAdapter):
 
             environment = {
                 "PYTHONUNBUFFERED": "1",
-                "DB_USER": db_user,
-                "DB_PASSWORD": db_password,
-                "DB_NAME": db_name,
-                "DB_HOST_RO": db_host,
-                "DB_PORT": db_port,
-                "REDPANDA_BROKERS": "redpanda:9092",
-                "KAFKA_TOPIC": os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data"),
-                "JWKS_URL": "http://control-plane:8000/api/auth/.well-known/jwks.json",
-                "CONTROL_PLANE_DB_SCHEMA": os.environ.get("DB_SCHEMA", "control_plane"),
-                "REDIS_URL": "redis://redis:6379/1",
+                "MODEL_ID": str(model_id),
+                "MODEL_VERSION": version,
+                "MODEL_URI": getattr(model_api, "model_uri", "") or "",
                 "AWS_DEFAULT_REGION": os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1"),
                 "AWS_BUCKET_NAME": os.environ.get("AWS_BUCKET_NAME", ""),
             }
@@ -215,7 +210,8 @@ class DockerDeployAdapter(DeployAdapter):
         model_api = ModelAPI.objects.filter(id=model_id).first()
         tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
-        url = f"http://{container_name}:5000/models/{encode_model_id(model_id)}/health"
+        target_port = 5001 if getattr(model_api, "model_type", "ml") == "ml" else 5002
+        url = f"http://{container_name}:{target_port}/health"
         deadline = time.monotonic() + timeout_seconds
         last_error: dict | str = "Endpoint health check did not run."
         while time.monotonic() < deadline:
@@ -230,7 +226,8 @@ class DockerDeployAdapter(DeployAdapter):
         model_api = ModelAPI.objects.filter(id=model_id).first()
         tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
-        url = f"http://{container_name}:5000/models/{encode_model_id(model_id)}/health"
+        target_port = 5001 if getattr(model_api, "model_type", "ml") == "ml" else 5002
+        url = f"http://{container_name}:{target_port}/health"
         endpoint_url = model_api.endpoint_url if model_api else ""
         try:
             client = docker.from_env()
@@ -347,13 +344,16 @@ class ArgoDeployAdapter(DeployAdapter):
         hashid_str = encode_model_id(model_id)
         public_path = f"/{tenant_id}/models/{hashid_str}/{version}/predict"
         internal_path = f"/models/{hashid_str}/predict"
+        model_type = getattr(model_api, "model_type", "ml")
+        target_port = 5001 if model_type == "ml" else 5002
         
         image_name = model_api.endpoint_image_name
         if not image_name:
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
             harbor_project = getattr(settings, "HARBOR_USER_PROJECT", "user-images")
-            image_name = f"{harbor_url}/{harbor_project}/mlops-paas-model-server:latest"
-            logger.info("Using shared Harbor Base Image %s with Dynamic Runtime Injection for model %s.", image_name, model_id)
+            base_img = "mlops-paas-machine-learning-serving" if model_type == "ml" else "mlops-paas-deep-learning-serving"
+            image_name = f"{harbor_url}/{harbor_project}/{base_img}:latest"
+            logger.info("Using shared Harbor Base Image %s with Dynamic Runtime Injection for model %s (type=%s).", image_name, model_id, model_type)
 
         payload = {
             "tenant_id": tenant_id,
@@ -361,7 +361,10 @@ class ArgoDeployAdapter(DeployAdapter):
             "hashid": hashid_str,
             "version": version,
             "image_name": image_name,
-            "container_name": container_name
+            "container_name": container_name,
+            "model_type": model_type,
+            "target_port": str(target_port),
+            "model_uri": getattr(model_api, "model_uri", "") or "",
         }
 
         model_api.status = "deploying"
@@ -395,7 +398,8 @@ class ArgoDeployAdapter(DeployAdapter):
         model_api = ModelAPI.objects.filter(id=model_id).first()
         tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
-        url = f"http://{container_name}-svc:5000/models/{encode_model_id(model_id)}/health"
+        target_port = 5001 if getattr(model_api, "model_type", "ml") == "ml" else 5002
+        url = f"http://{container_name}-svc:{target_port}/health"
         deadline = time.monotonic() + timeout_seconds
         last_error = "Endpoint health check did not run."
         while time.monotonic() < deadline:
@@ -417,7 +421,8 @@ class ArgoDeployAdapter(DeployAdapter):
         model_api = ModelAPI.objects.filter(id=model_id).first()
         tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
-        url = f"http://{container_name}-svc:5000/models/{encode_model_id(model_id)}/health"
+        target_port = 5001 if getattr(model_api, "model_type", "ml") == "ml" else 5002
+        url = f"http://{container_name}-svc:{target_port}/health"
         try:
             response = requests.get(url, timeout=10)
             if response.status_code == 200:

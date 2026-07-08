@@ -1,10 +1,10 @@
 import logging
-import os
+import boto3
 import zipfile
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
-
-import boto3
+from integrations.hashid_utils import encode_model_id
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
@@ -57,10 +57,6 @@ def _safe_extract_zip(zip_path: Path, target_dir: Path) -> None:
 
 def upload_training_inputs_to_s3(training_job) -> tuple[str, str, str]:
     """Tải source code zip và dataset lên S3 bucket phục vụ training."""
-    import tempfile
-    from io import BytesIO
-    from integrations.hashid_utils import encode_model_id
-
     bucket = settings.AWS_STORAGE_BUCKET_NAME
     if not bucket:
         raise ValidationError({"error": "AWS_STORAGE_BUCKET_NAME is not configured."})

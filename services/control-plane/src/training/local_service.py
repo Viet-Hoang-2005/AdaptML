@@ -5,11 +5,10 @@ import sys
 import tarfile
 import tempfile
 import venv
-from pathlib import Path
 
+from pathlib import Path
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
-
 from authentication.models import TrainingJob
 from training.s3_storage_service import (
     _safe_extract_zip,

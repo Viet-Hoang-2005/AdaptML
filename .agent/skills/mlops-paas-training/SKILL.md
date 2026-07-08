@@ -60,7 +60,7 @@ Chạy entry point script qua `subprocess.run`, sau đó tự động đóng gó
 
 ## 5. Training Runner (`services/training-runner`)
 
-Container `train_runner.py` chạy trong PyTorchJob:
+Container `runner.py` chạy trong PyTorchJob:
 1. Nhận env vars: `S3_SOURCE_URI`, `S3_TRAINING_DATA_URI`, `S3_OUTPUT_URI`, `ENTRY_POINT`, `MODEL_VERSION`, `TRAINING_JOB_ID`, `TENANT_ID`
 2. Tải source code và training data từ S3
 3. Cài đặt requirements nếu có

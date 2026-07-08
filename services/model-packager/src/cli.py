@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import yaml
 import shutil
 import subprocess
 import sys
@@ -8,15 +9,14 @@ import tarfile
 import tempfile
 import traceback
 import zipfile
-from pathlib import Path
-from urllib.parse import urlparse
-
 import boto3
 import docker
 import redis
 import requests
 import mlflow.pyfunc
 
+from pathlib import Path
+from urllib.parse import urlparse
 from core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
 
 SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
@@ -196,12 +196,6 @@ COPY model /app/model_artifact
 
 
 def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
-    try:
-        import yaml
-    except ImportError:
-        print("PyYAML is not installed; skipping conda.yaml pip extraction.")
-        return []
-
     with conda_file.open("r", encoding="utf-8") as handle:
         conda_env = yaml.safe_load(handle) or {}
 
