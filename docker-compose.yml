@@ -135,7 +135,7 @@ services:
     container_name: mlops_paas_model_gateway
     restart: always
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       PYTHONUNBUFFERED: 1
       DB_HOST_RO: postgres
@@ -192,7 +192,7 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:5000"
     ports:
-      - "5001:5000"
+      - "5002:5000"
       - "8080:8080" # Dashboard Traefik
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -318,7 +318,7 @@ services:
       --backend-store-uri sqlite:////mlflow/mlflow.db
       --default-artifact-root /mlflow/artifacts
     ports:
-      - "5002:5000"
+      - "5003:5000"
     volumes:
       - mlflow-data:/mlflow
     networks:

@@ -206,7 +206,7 @@ class DockerDeployAdapter(DeployAdapter):
                 endpoint_last_checked_at=timezone.now(),
             )
 
-    def wait_for_health(self, model_id: int, timeout_seconds: int = 45, interval_seconds: int = 3) -> tuple[bool, str]:
+    def wait_for_health(self, model_id: int, timeout_seconds: int = 90, interval_seconds: int = 5) -> tuple[bool, str]:
         model_api = ModelAPI.objects.filter(id=model_id).first()
         tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
@@ -394,7 +394,7 @@ class ArgoDeployAdapter(DeployAdapter):
             model_api.endpoint_error = str(e)
             model_api.save(update_fields=["status", "endpoint_status", "endpoint_error", "updated_at"])
 
-    def wait_for_health(self, model_id: int, timeout_seconds: int = 45, interval_seconds: int = 3) -> tuple[bool, str]:
+    def wait_for_health(self, model_id: int, timeout_seconds: int = 180, interval_seconds: int = 5) -> tuple[bool, str]:
         model_api = ModelAPI.objects.filter(id=model_id).first()
         tenant_id = model_api.tenant.tenant_id if model_api else "unknown"
         container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)

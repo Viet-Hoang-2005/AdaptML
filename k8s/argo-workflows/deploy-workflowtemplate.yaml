@@ -52,7 +52,7 @@ spec:
                 nodeSelector:
                   workload-type: worker
                 containers:
-                  - name: model-engine
+                  - name: model-server
                     image: {{inputs.parameters.image_name}}
                     imagePullPolicy: Always
                     ports:

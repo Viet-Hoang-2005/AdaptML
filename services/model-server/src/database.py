@@ -1,10 +1,13 @@
 # database.py: Quản lý kết nối đến Control Plane Model Registry
+import json
 import os
 import re
 from typing import Dict, Any
 from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine, text
+
+MODEL_RECORD_CACHE_TTL = int(os.environ.get("MODEL_RECORD_CACHE_TTL_SECONDS", "60"))
 
 def build_control_plane_database_url() -> str | None:
     explicit_url = os.environ.get("CONTROL_PLANE_DATABASE_URL")
@@ -46,7 +49,7 @@ except Exception as exc:
     print(f"Failed to connect to Control Plane model registry: {exc}")
     model_registry_engine = None
 
-def get_model_api_record(model_id: int) -> Dict[str, Any]:
+def _fetch_model_api_record_from_db(model_id: int) -> Dict[str, Any] | None:
     if model_registry_engine is None:
         raise Exception("Model registry database is unavailable.")
 
@@ -74,4 +77,33 @@ def get_model_api_record(model_id: int) -> Dict[str, Any]:
     if not row:
         return None
 
-    return dict(row)
+    record = dict(row)
+    # Convert non-serializable types (e.g. datetime) to strings for JSON serialization
+    for key, value in record.items():
+        if hasattr(value, "isoformat"):
+            record[key] = value.isoformat()
+    return record
+
+def get_model_api_record(model_id: int, redis_client=None) -> Dict[str, Any] | None:
+    """
+    Fetch model API record, with an optional Redis 60-second cache.
+    Pass the module-level redis_client from index.py to enable caching.
+    """
+    if redis_client is not None:
+        cache_key = f":1:model_record:{model_id}"
+        try:
+            cached = redis_client.get(cache_key)
+            if cached:
+                return json.loads(cached)
+        except Exception as exc:
+            print(f"Redis model_record cache read error (fallback to DB): {exc}")
+
+    record = _fetch_model_api_record_from_db(model_id)
+
+    if record is not None and redis_client is not None:
+        try:
+            redis_client.setex(cache_key, MODEL_RECORD_CACHE_TTL, json.dumps(record))
+        except Exception as exc:
+            print(f"Redis model_record cache write error: {exc}")
+
+    return record

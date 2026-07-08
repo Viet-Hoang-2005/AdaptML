@@ -118,7 +118,7 @@ async def verify_model_access(
 ):
     try:
         model_id = decode_model_id(model_id_str)
-        model_record = get_model_api_record(model_id)
+        model_record = get_model_api_record(model_id, redis_client=redis_client)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
         
@@ -217,17 +217,26 @@ def resolve_worker_url(model_record: Dict[str, Any], endpoint_path: str) -> str:
     model_type = model_record.get("model_type", "ml")
     target_port = 5001 if model_type == "ml" else 5002
     container_name = model_record.get("endpoint_container_name")
-    
-    if container_name:
+
+    if not container_name:
         if os.environ.get("KUBERNETES_SERVICE_HOST"):
-            host = f"{container_name}-svc" if not container_name.endswith("-svc") else container_name
-        else:
-            host = container_name
-        return f"http://{host}:{target_port}{endpoint_path}"
-    
-    # Fallback to shared services if specific container name not saved yet
-    fallback_host = "machine-learning-serving" if model_type == "ml" else "deep-learning-serving"
-    return f"http://{fallback_host}:{target_port}{endpoint_path}"
+            # On K8s there is no shared fallback pod — fail clearly.
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Model endpoint is not deployed yet. "
+                    "Please trigger a deployment from the Control Plane first."
+                ),
+            )
+        # Docker Compose local-dev: fall back to named service so images can be tested individually without a full deploy cycle.
+        fallback_host = "machine-learning-serving" if model_type == "ml" else "deep-learning-serving"
+        return f"http://{fallback_host}:{target_port}{endpoint_path}"
+
+    if os.environ.get("KUBERNETES_SERVICE_HOST"):
+        host = f"{container_name}-svc" if not container_name.endswith("-svc") else container_name
+    else:
+        host = container_name
+    return f"http://{host}:{target_port}{endpoint_path}"
 
 @app.get("/")
 async def health_check():
