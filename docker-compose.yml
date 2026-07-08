@@ -22,7 +22,7 @@ services:
       retries: 5
       start_period: 10s
 
-  # Init Container để tạo schema riêng cho Control Plane và MLflow
+  # 1.1 Init Container để tạo schema riêng cho Control Plane và MLflow
   schema-init:
     image: postgres:15-alpine
     container_name: mlops_paas_schema_init
@@ -39,7 +39,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # pgAdmin 4 (PostgreSQL Web GUI)
+  # 1.2 pgAdmin 4 (PostgreSQL Web GUI)
   pgadmin:
     image: dpage/pgadmin4
     container_name: mlops_paas_pgadmin
@@ -149,7 +149,31 @@ services:
     networks:
       - mlops_paas_network
 
-  # Traefik API Gateway cho Model Server
+  # 3.1 Shared Base Model Server (Image Builder for Dynamic Runtime Injection)
+  model-server-base:
+    build:
+      context: ./services/model-server
+      dockerfile: Dockerfile
+    image: mlops-paas-model-server
+    container_name: mlops_paas_model_server_base
+    restart: "no"
+    command: ["echo", "Shared Base Model Server Image Built Successfully. Ready for Dynamic Runtime Injection..."]
+    networks:
+      - mlops_paas_network
+
+  # 3.2 Shared Base BentoML Server (Image Builder for Dynamic Runtime Injection)
+  bento-model-server-base:
+    build:
+      context: ./services/bento-model-server
+      dockerfile: Dockerfile
+    image: mlops-paas-bento-model-server
+    container_name: mlops_paas_bento_model_server_base
+    restart: "no"
+    command: ["echo", "Shared Base BentoML Server Image Built Successfully. Ready for Dynamic Runtime Injection..."]
+    networks:
+      - mlops_paas_network
+
+  # 3.3 Traefik API Gateway cho Model Server
   traefik:
     image: traefik:latest
     container_name: mlops_paas_traefik
@@ -160,7 +184,7 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:5000"
     ports:
-      - "5000:5000"
+      - "5001:5000"
       - "8080:8080" # Dashboard Traefik
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -194,6 +218,7 @@ services:
       PYTHONUNBUFFERED: 1
     networks:
       - mlops_paas_network
+
   # 6. PaaS Log Consumer (đứng giữa Redpanda và PostgreSQL)
   consumer:
     build:
@@ -250,7 +275,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # Redpanda Console UI
+  # 7.1 Redpanda Console UI
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:latest
     container_name: mlops_paas_redpanda_console
@@ -285,7 +310,7 @@ services:
       --backend-store-uri sqlite:////mlflow/mlflow.db
       --default-artifact-root /mlflow/artifacts
     ports:
-      - "5001:5000"
+      - "5002:5000"
     volumes:
       - mlflow-data:/mlflow
     networks:
@@ -305,3 +330,5 @@ volumes:
     name: mlops_paas_redpanda_data
   mlflow-data:
     name: mlops_paas_mlflow_data
+  pip-cache:
+    name: mlops_paas_pip_cache

@@ -101,7 +101,7 @@ class DockerDeployAdapter(DeployAdapter):
                 logger.info("Found custom Docker image %s for model %s. Using it.", image_name, model_id)
             except docker.errors.ImageNotFound:
                 image_name = "mlops-paas-model-server"
-                logger.info("Custom image not found. Falling back to %s for model %s.", image_name, model_id)
+                logger.info("Using shared Base Image %s with Dynamic Runtime Injection for model %s.", image_name, model_id)
 
             container_name = endpoint_container_name(tenant_id, model_id)
 
@@ -177,6 +177,7 @@ class DockerDeployAdapter(DeployAdapter):
                 environment=environment,
                 labels=labels,
                 network=network_name,
+                volumes={"pip-cache": {"bind": "/root/.cache/pip", "mode": "rw"}},
                 detach=True,
                 restart_policy={"Name": "always"},
             )
@@ -351,7 +352,8 @@ class ArgoDeployAdapter(DeployAdapter):
         if not image_name:
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
             harbor_project = getattr(settings, "HARBOR_USER_PROJECT", "user-images")
-            image_name = f"{harbor_url}/{harbor_project}/{tenant_id.lower()}-model-{hashid_str.lower()}:latest"
+            image_name = f"{harbor_url}/{harbor_project}/mlops-paas-model-server:latest"
+            logger.info("Using shared Harbor Base Image %s with Dynamic Runtime Injection for model %s.", image_name, model_id)
 
         payload = {
             "tenant_id": tenant_id,

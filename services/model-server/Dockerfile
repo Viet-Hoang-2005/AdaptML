@@ -18,11 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy toàn bộ mã nguồn và thư mục models vào container
 COPY . .
 
-# Tạo sẵn thư mục models (sẽ mount data thật vào đây qua docker-compose)
-RUN mkdir -p /models
+# Tạo sẵn thư mục models và đặt quyền thực thi cho entrypoint script
+RUN mkdir -p /models /app/libs && chmod +x /app/src/entrypoint.sh
 
 # Mở port 5000 để container giao tiếp với bên ngoài
 EXPOSE 5000
 
-# Chạy API bằng Uvicorn (Production Server cho FastAPI)
-CMD ["uvicorn", "src.index:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "2"]
+# Chạy entrypoint script để hỗ trợ Dynamic Runtime Injection
+CMD ["/app/src/entrypoint.sh"]

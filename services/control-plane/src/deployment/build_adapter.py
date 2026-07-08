@@ -26,6 +26,8 @@ def mark_build_start_failed(model_id: str, message: str) -> None:
     if updated:
         logger.info("Marked model %s build as error after build container start failure.", model_id)
 
+STANDARD_DYNAMIC_FLAVORS = {"sklearn", "pytorch", "bentoml", "xgboost", "lightgbm", "mlflow", "python", "keras", "tensorflow"}
+
 class BuildAdapter:
     def trigger_build(
         self,
@@ -55,6 +57,16 @@ class DockerBuildAdapter(BuildAdapter):
         training_artifact_uri: str = "",
         task_type: str = "BUILD",
     ):
+        if task_type == "BUILD" and (flavor or "").lower() in STANDARD_DYNAMIC_FLAVORS:
+            logger.info("Skipping container build for standard flavor '%s' (Dynamic Runtime Injection enabled for model %s).", flavor, model_id)
+            ModelAPI.objects.filter(id=model_id).update(
+                status="ready",
+                build_status="ready",
+                error_message="",
+                build_error="",
+            )
+            return
+
         def _run_container():
             try:
                 model_api = ModelAPI.objects.filter(id=model_id).first()
@@ -145,6 +157,16 @@ class ArgoBuildAdapter(BuildAdapter):
         training_artifact_uri: str = "",
         task_type: str = "BUILD",
     ):
+        if task_type == "BUILD" and (flavor or "").lower() in STANDARD_DYNAMIC_FLAVORS:
+            logger.info("Skipping Argo build workflow for standard flavor '%s' (Dynamic Runtime Injection enabled for model %s).", flavor, model_id)
+            ModelAPI.objects.filter(id=model_id).update(
+                status="ready",
+                build_status="ready",
+                error_message="",
+                build_error="",
+            )
+            return
+
         argo_webhook_url = os.environ.get("ARGO_EVENTS_WEBHOOK_URL")
         if not argo_webhook_url:
             logger.error("ARGO_EVENTS_WEBHOOK_URL is not set.")
