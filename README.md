@@ -57,15 +57,15 @@ Hệ thống này là một **nền tảng AI Platform-as-a-Service (AI PaaS) ML
 
 **1. Quy trình Đóng gói & Triển khai Mô hình (Build & Deploy Workflow)**
 
-![Build and Deploy Workflow](paper/assets/build-deploy-workflow.png)
+![Build and Deploy Workflow](paper/assets/build-deploy-workflow-dark.png)
 
 **2. Quy trình Huấn luyện & Điều phối Tài nguyên (Training Workflow)**
 
-![Training Workflow](paper/assets/training-workflow.png)
+![Training Workflow](paper/assets/training-workflow-dark.png)
 
 **3. Quy trình Giám sát & Phát hiện Độ lệch Dữ liệu (Data Drift Workflow)**
 
-![Data Drift Workflow](paper/assets/data-drift-workflow.png)
+![Data Drift Workflow](paper/assets/data-drift-workflow-dark.png)
 
 > 💡 **Tài liệu Kỹ thuật Chuyên sâu:** Xem giải thích chi tiết về luồng dữ liệu, sơ đồ tuần tự (Sequence Diagrams), cơ chế bảo mật Zero-Trust và lược đồ cơ sở dữ liệu tại [ARCHITECTURE.md](ARCHITECTURE.md).
 
