@@ -20,7 +20,8 @@ jobs:
       packager: ${{ steps.filter.outputs.packager == 'true' || github.event_name == 'workflow_dispatch' }}
       evidently: ${{ steps.filter.outputs.evidently == 'true' || github.event_name == 'workflow_dispatch' }}
       model_server: ${{ steps.filter.outputs.model_server == 'true' || github.event_name == 'workflow_dispatch' }}
-      bento_model_server: ${{ steps.filter.outputs.bento_model_server == 'true' || github.event_name == 'workflow_dispatch' }}
+      machine_learning_serving: ${{ steps.filter.outputs.machine_learning_serving == 'true' || github.event_name == 'workflow_dispatch' }}
+      deep_learning_serving: ${{ steps.filter.outputs.deep_learning_serving == 'true' || github.event_name == 'workflow_dispatch' }}
       training_runner: ${{ steps.filter.outputs.training_runner == 'true' || github.event_name == 'workflow_dispatch' }}
       infra: ${{ steps.filter.outputs.infra == 'true' || github.event_name == 'workflow_dispatch' }}
       matrix_targets: ${{ steps.matrix.outputs.targets }}
@@ -43,8 +44,10 @@ jobs:
               - 'services/evidently/**'
             model_server:
               - 'services/model-server/**'
-            bento_model_server:
-              - 'services/bento-model-server/**'
+            machine_learning_serving:
+              - 'services/machine-learning-serving/**'
+            deep_learning_serving:
+              - 'services/deep-learning-serving/**'
             training_runner:
               - 'services/training-runner/**'
             infra:
@@ -64,7 +67,8 @@ jobs:
               "packager": "${{ steps.filter.outputs.packager }}" == "true" or is_manual,
               "evidently": "${{ steps.filter.outputs.evidently }}" == "true" or is_manual,
               "model_server": "${{ steps.filter.outputs.model_server }}" == "true" or is_manual,
-              "bento_model_server": "${{ steps.filter.outputs.bento_model_server }}" == "true" or is_manual,
+              "machine_learning_serving": "${{ steps.filter.outputs.machine_learning_serving }}" == "true" or is_manual,
+              "deep_learning_serving": "${{ steps.filter.outputs.deep_learning_serving }}" == "true" or is_manual,
               "training_runner": "${{ steps.filter.outputs.training_runner }}" == "true" or is_manual,
           }
           configs = {
@@ -74,7 +78,8 @@ jobs:
               "packager": {"name": "Model Packager", "id": "packager", "context": "services/model-packager", "image": "mlops-paas-model-packager"},
               "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"},
               "model_server": {"name": "Model Server", "id": "model_server", "context": "services/model-server", "image": "mlops-paas-model-server"},
-              "bento_model_server": {"name": "Bento Model Server", "id": "bento_model_server", "context": "services/bento-model-server", "image": "bento-model-server"},
+              "machine_learning_serving": {"name": "Machine Learning Serving", "id": "machine_learning_serving", "context": "services/machine-learning-serving", "image": "mlops-paas-machine-learning-serving"},
+              "deep_learning_serving": {"name": "Deep Learning Serving", "id": "deep_learning_serving", "context": "services/deep-learning-serving", "image": "mlops-paas-deep-learning-serving"},
               "training_runner": {"name": "Training Runner", "id": "training_runner", "context": "services/training-runner", "image": "mlops-paas-training-runner"}
           }
           targets = [configs[k] for k, v in changed.items() if v]
@@ -132,7 +137,7 @@ jobs:
   lint-backend:
     name: "Backend Code Quality (Pylint)"
     needs: detect-changes
-    if: needs.detect-changes.outputs.control_plane == 'true' || needs.detect-changes.outputs.consumer == 'true' || needs.detect-changes.outputs.packager == 'true' || needs.detect-changes.outputs.evidently == 'true' || needs.detect-changes.outputs.bento_model_server == 'true' || needs.detect-changes.outputs.training_runner == 'true'
+    if: needs.detect-changes.outputs.control_plane == 'true' || needs.detect-changes.outputs.consumer == 'true' || needs.detect-changes.outputs.packager == 'true' || needs.detect-changes.outputs.evidently == 'true' || needs.detect-changes.outputs.model_server == 'true' || needs.detect-changes.outputs.machine_learning_serving == 'true' || needs.detect-changes.outputs.deep_learning_serving == 'true' || needs.detect-changes.outputs.training_runner == 'true'
     runs-on: ubuntu-latest
     outputs:
       score: ${{ steps.pylint.outputs.score }}
@@ -238,7 +243,8 @@ jobs:
           inf_changed = "${{ needs.detect-changes.outputs.infra }}" == "true"
 
           md_changed = "${{ needs.detect-changes.outputs.model_server }}" == "true"
-          bento_changed = "${{ needs.detect-changes.outputs.bento_model_server }}" == "true"
+          ml_serving_changed = "${{ needs.detect-changes.outputs.machine_learning_serving }}" == "true"
+          dl_serving_changed = "${{ needs.detect-changes.outputs.deep_learning_serving }}" == "true"
           training_runner_changed = "${{ needs.detect-changes.outputs.training_runner }}" == "true"
 
           secret_res = "${{ needs.secret-scan.result }}" == "success"
@@ -270,8 +276,10 @@ jobs:
               rows.append(f"| **Evidently Drift** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
           if md_changed:
               rows.append(f"| **Model Server** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
-          if bento_changed:
-              rows.append(f"| **Bento Model Server** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
+          if ml_serving_changed:
+              rows.append(f"| **Machine Learning Serving** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
+          if dl_serving_changed:
+              rows.append(f"| **Deep Learning Serving** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
           if training_runner_changed:
               rows.append(f"| **Training Runner** | {pylint_fmt} (Pylint) | {fmt(trivy_res)} |")
 

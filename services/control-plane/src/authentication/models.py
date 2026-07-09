@@ -274,7 +274,15 @@ class ModelAPI(models.Model):
         return f"{self.name} ({self.tenant.tenant_id})"
 
     def detect_and_set_model_type(self):
-        text_to_check = f"{self.flavor} {self.name} {self.model_info} {self.requirements_text}".lower()
+        flavor = (self.flavor or "").strip().lower()
+        if flavor in {"pytorch", "torch", "keras", "tensorflow"}:
+            self.model_type = "dl"
+            return
+        if flavor in {"xgboost", "scikit-learn", "sklearn"}:
+            self.model_type = "ml"
+            return
+
+        text_to_check = f"{self.name} {self.model_info} {self.requirements_text}".lower()
         if any(kw in text_to_check for kw in ["pytorch", "torch", "keras", "tensorflow"]):
             self.model_type = "dl"
         elif any(kw in text_to_check for kw in ["xgboost", "scikit-learn", "sklearn"]):
@@ -677,4 +685,3 @@ class ModelRoutingAlias(models.Model):
 
     def __str__(self):
         return f"{self.family.name}:{self.alias_name} -> {self.target_version.version}"
-

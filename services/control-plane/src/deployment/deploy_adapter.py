@@ -102,8 +102,25 @@ class DockerDeployAdapter(DeployAdapter):
                 image_name = custom_image_name
                 logger.info("Found custom Docker image %s for model %s. Using it.", image_name, model_id)
             except docker.errors.ImageNotFound:
-                image_name = "mlops-paas-machine-learning-serving" if model_type == "ml" else "mlops-paas-deep-learning-serving"
-                logger.info("Using shared Base Image %s with Dynamic Runtime Injection for model %s (type=%s).", image_name, model_id, model_type)
+                message = (
+                    f"Model image {custom_image_name} is not available. "
+                    "Build the model image before deploying; shared base-image runtime injection is disabled."
+                )
+                logger.error(message)
+                model_api.status = "deploy_failed"
+                model_api.endpoint_status = "deploy_failed"
+                model_api.endpoint_error = message
+                model_api.endpoint_image_name = custom_image_name
+                model_api.endpoint_last_checked_at = timezone.now()
+                model_api.save(update_fields=[
+                    "status",
+                    "endpoint_status",
+                    "endpoint_error",
+                    "endpoint_image_name",
+                    "endpoint_last_checked_at",
+                    "updated_at",
+                ])
+                return
 
             container_name = endpoint_container_name(tenant_id, model_id)
 
@@ -114,17 +131,10 @@ class DockerDeployAdapter(DeployAdapter):
             except docker.errors.NotFound:
                 pass
 
-            # Traefik labels - tenant_id must be the tenant code (e.g. T-24B1E790), NOT the DB PK integer.
             hashid_str = encode_model_id(model_id)
             public_path = f"/{tenant_id}/models/{hashid_str}/{version}/predict"
             internal_path = f"/models/{hashid_str}/predict"
-            labels = {
-                "traefik.enable": "true",
-                f"traefik.http.routers.model_{model_id}.rule": f"PathPrefix(`{public_path}`)",
-                f"traefik.http.middlewares.rewrite_{model_id}.replacepath.path": internal_path,
-                f"traefik.http.routers.model_{model_id}.middlewares": f"rewrite_{model_id}",
-                f"traefik.http.services.model_{model_id}.loadbalancer.server.port": str(target_port),
-            }
+            labels = {"traefik.enable": "false"}
 
             network_name = getattr(settings, "DOCKER_NETWORK_NAME", "mlops_paas_network")
             db_user = os.environ.get("DB_USER", "postgres")
@@ -140,6 +150,8 @@ class DockerDeployAdapter(DeployAdapter):
                 "MODEL_URI": getattr(model_api, "model_uri", "") or "",
                 "AWS_DEFAULT_REGION": os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1"),
                 "AWS_BUCKET_NAME": os.environ.get("AWS_BUCKET_NAME", ""),
+                "AWS_ACCESS_KEY_ID": os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                "AWS_SECRET_ACCESS_KEY": os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
             }
 
             logger.info(
@@ -349,11 +361,24 @@ class ArgoDeployAdapter(DeployAdapter):
         
         image_name = model_api.endpoint_image_name
         if not image_name:
-            harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
-            harbor_project = getattr(settings, "HARBOR_USER_PROJECT", "user-images")
-            base_img = "mlops-paas-machine-learning-serving" if model_type == "ml" else "mlops-paas-deep-learning-serving"
-            image_name = f"{harbor_url}/{harbor_project}/{base_img}:latest"
-            logger.info("Using shared Harbor Base Image %s with Dynamic Runtime Injection for model %s (type=%s).", image_name, model_id, model_type)
+            message = (
+                "Model endpoint image is missing. Build the model image before deploying; "
+                "shared base-image runtime injection is disabled."
+            )
+            logger.error("Cannot deploy model %s: %s", model_id, message)
+            model_api.status = "deploy_failed"
+            model_api.endpoint_status = "deploy_failed"
+            model_api.endpoint_error = message
+            model_api.endpoint_container_name = container_name
+            model_api.endpoint_public_path = public_path
+            model_api.endpoint_internal_path = internal_path
+            model_api.endpoint_last_checked_at = timezone.now()
+            model_api.save(update_fields=[
+                "status", "endpoint_status", "endpoint_error",
+                "endpoint_container_name", "endpoint_public_path",
+                "endpoint_internal_path", "endpoint_last_checked_at", "updated_at"
+            ])
+            return
 
         payload = {
             "tenant_id": tenant_id,
@@ -465,7 +490,8 @@ class ArgoDeployAdapter(DeployAdapter):
             
         tenant_id = model_api.tenant.tenant_id
         container_name = model_api.endpoint_container_name or endpoint_container_name(tenant_id, model_id)
-        url = f"http://{container_name}-svc:5000/health"
+        target_port = 5001 if getattr(model_api, "model_type", "ml") == "ml" else 5002
+        url = f"http://{container_name}-svc:{target_port}/health"
         
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:

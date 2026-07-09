@@ -12,4 +12,5 @@ docker==7.0.0
 bentoml>=1.2.0
 tensorflow>=2.16.1
 keras>=3.0.0
-torch==2.2.2+cpu
+torch==2.2.2+cpu; platform_machine != "aarch64" and platform_machine != "arm64"
+torch==2.2.2; platform_machine == "aarch64" or platform_machine == "arm64"

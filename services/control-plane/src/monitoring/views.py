@@ -37,6 +37,8 @@ class ModelAPIObservabilityView(APIView):
                 {
                     "model_id": encode_model_id(model_api.id),
                     "container_name": container_name,
+                    "model_type": model_type,
+                    "endpoint_status": model_api.endpoint_status,
                     "data_source": "unavailable",
                     "reason": "Prometheus is only available in the Kubernetes environment.",
                     "queried_at": timezone.now().isoformat(),
@@ -47,6 +49,7 @@ class ModelAPIObservabilityView(APIView):
                         "error_rate_pct": 0.0,
                         "avg_batch_size": 0.0,
                         "batch_wait_ms": 0.0,
+                        "traffic_source": "model-server-gateway",
                     },
                     "group2_resources": {
                         "cpu_percent": 0.0,
@@ -71,6 +74,8 @@ class ModelAPIObservabilityView(APIView):
             prometheus_url=prometheus_url,
             container_name=container_name,
             model_type=model_type,
+            tenant_id=model_api.tenant.tenant_id,
+            model_id=str(model_api.id),
         )
 
         group1 = adapter.get_group1_traffic()
@@ -81,6 +86,8 @@ class ModelAPIObservabilityView(APIView):
             {
                 "model_id": encode_model_id(model_api.id),
                 "container_name": container_name,
+                "model_type": model_type,
+                "endpoint_status": model_api.endpoint_status,
                 "data_source": "prometheus",
                 "queried_at": timezone.now().isoformat(),
                 "group1_traffic": group1,

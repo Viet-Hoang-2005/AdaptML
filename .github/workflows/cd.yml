@@ -21,7 +21,8 @@ jobs:
       packager: ${{ steps.filter.outputs.packager == 'true' || github.event_name == 'workflow_dispatch' }}
       evidently: ${{ steps.filter.outputs.evidently == 'true' || github.event_name == 'workflow_dispatch' }}
       model_server: ${{ steps.filter.outputs.model_server == 'true' || github.event_name == 'workflow_dispatch' }}
-      bento_model_server: ${{ steps.filter.outputs.bento_model_server == 'true' || github.event_name == 'workflow_dispatch' }}
+      machine_learning_serving: ${{ steps.filter.outputs.machine_learning_serving == 'true' || github.event_name == 'workflow_dispatch' }}
+      deep_learning_serving: ${{ steps.filter.outputs.deep_learning_serving == 'true' || github.event_name == 'workflow_dispatch' }}
       training_runner: ${{ steps.filter.outputs.training_runner == 'true' || github.event_name == 'workflow_dispatch' }}
       matrix_targets: ${{ steps.matrix.outputs.targets }}
     steps:
@@ -43,8 +44,10 @@ jobs:
               - 'services/evidently/**'
             model_server:
               - 'services/model-server/**'
-            bento_model_server:
-              - 'services/bento-model-server/**'
+            machine_learning_serving:
+              - 'services/machine-learning-serving/**'
+            deep_learning_serving:
+              - 'services/deep-learning-serving/**'
             training_runner:
               - 'services/training-runner/**'
 
@@ -61,7 +64,8 @@ jobs:
               "packager": "${{ steps.filter.outputs.packager }}" == "true" or is_manual,
               "evidently": "${{ steps.filter.outputs.evidently }}" == "true" or is_manual,
               "model_server": "${{ steps.filter.outputs.model_server }}" == "true" or is_manual,
-              "bento_model_server": "${{ steps.filter.outputs.bento_model_server }}" == "true" or is_manual,
+              "machine_learning_serving": "${{ steps.filter.outputs.machine_learning_serving }}" == "true" or is_manual,
+              "deep_learning_serving": "${{ steps.filter.outputs.deep_learning_serving }}" == "true" or is_manual,
               "training_runner": "${{ steps.filter.outputs.training_runner }}" == "true" or is_manual,
           }
           configs = {
@@ -71,7 +75,8 @@ jobs:
               "packager": {"name": "Model Packager", "id": "packager", "context": "services/model-packager", "image": "mlops-paas-model-packager"},
               "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"},
               "model_server": {"name": "Model Server", "id": "model_server", "context": "services/model-server", "image": "mlops-paas-model-server"},
-              "bento_model_server": {"name": "Bento Model Server", "id": "bento_model_server", "context": "services/bento-model-server", "image": "bento-model-server"},
+              "machine_learning_serving": {"name": "Machine Learning Serving", "id": "machine_learning_serving", "context": "services/machine-learning-serving", "image": "mlops-paas-machine-learning-serving"},
+              "deep_learning_serving": {"name": "Deep Learning Serving", "id": "deep_learning_serving", "context": "services/deep-learning-serving", "image": "mlops-paas-deep-learning-serving"},
               "training_runner": {"name": "Training Runner", "id": "training_runner", "context": "services/training-runner", "image": "mlops-paas-training-runner"}
           }
           targets = [configs[k] for k, v in changed.items() if v]
@@ -198,11 +203,15 @@ jobs:
           if [ "${{ needs.detect-changes.outputs.consumer }}" == "true" ]; then
             kustomize edit set image mlops-paas-consumer=$REG/mlops-paas-consumer:$SHA
           fi
+
+          if [ "${{ needs.detect-changes.outputs.model_server }}" == "true" ]; then
+            kustomize edit set image mlops-paas-model-server=$REG/mlops-paas-model-server:$SHA
+          fi
           cd ../../../
           
           # 2. Update Argo Workflow Templates (packager and evidently)
           if [ "${{ needs.detect-changes.outputs.packager }}" == "true" ]; then
-            yq e -i '(.spec.templates[] | select(.name == "build-model") | .container.image) = "'$REG'/mlops-paas-model-packager:'$SHA'"' k8s/argo-workflows/build-workflowtemplate.yaml
+            yq e -i '(.spec.templates[] | select(.name == "prepare-package-step" or .name == "notify-success-step") | .container.image) = "'$REG'/mlops-paas-model-packager:'$SHA'"' k8s/argo-workflows/build-workflowtemplate.yaml
           fi
           
           if [ "${{ needs.detect-changes.outputs.evidently }}" == "true" ]; then
@@ -226,7 +235,8 @@ jobs:
           PACKAGER_TAG="no change"
           EVIDENTLY_TAG="no change"
           MODEL_SERVER_TAG="no change"
-          BENTO_MODEL_SERVER_TAG="no change"
+          MACHINE_LEARNING_SERVING_TAG="no change"
+          DEEP_LEARNING_SERVING_TAG="no change"
           TRAINING_RUNNER_TAG="no change"
           
           if [ "${{ needs.detect-changes.outputs.frontend }}" == "true" ]; then
@@ -253,8 +263,12 @@ jobs:
             MODEL_SERVER_TAG="$REG/mlops-paas-model-server:$SHA"
           fi
 
-          if [ "${{ needs.detect-changes.outputs.bento_model_server }}" == "true" ]; then
-            BENTO_MODEL_SERVER_TAG="$REG/bento-model-server:$SHA"
+          if [ "${{ needs.detect-changes.outputs.machine_learning_serving }}" == "true" ]; then
+            MACHINE_LEARNING_SERVING_TAG="$REG/mlops-paas-machine-learning-serving:$SHA"
+          fi
+
+          if [ "${{ needs.detect-changes.outputs.deep_learning_serving }}" == "true" ]; then
+            DEEP_LEARNING_SERVING_TAG="$REG/mlops-paas-deep-learning-serving:$SHA"
           fi
 
           if [ "${{ needs.detect-changes.outputs.training_runner }}" == "true" ]; then
@@ -272,7 +286,8 @@ jobs:
           | **Model Packager** (\`mlops-paas-model-packager\`) | \`$PACKAGER_TAG\` |
           | **Evidently Drift** (\`mlops-paas-evidently\`) | \`$EVIDENTLY_TAG\` |
           | **Model Server** (\`mlops-paas-model-server\`) | \`$MODEL_SERVER_TAG\` |
-          | **Bento Model Server** (\`bento-model-server\`) | \`$BENTO_MODEL_SERVER_TAG\` |
+          | **Machine Learning Serving** (\`mlops-paas-machine-learning-serving\`) | \`$MACHINE_LEARNING_SERVING_TAG\` |
+          | **Deep Learning Serving** (\`mlops-paas-deep-learning-serving\`) | \`$DEEP_LEARNING_SERVING_TAG\` |
           | **Training Runner** (\`mlops-paas-training-runner\`) | \`$TRAINING_RUNNER_TAG\` |"
           
           SUMMARY_CONTENT=$(echo "$RAW_SUMMARY" | sed 's/^ *//')

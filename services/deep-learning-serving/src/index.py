@@ -3,7 +3,7 @@ import os
 import bentoml
 import mlflow.pyfunc
 import pandas as pd
-from typing import Any, Dict, List
+from typing import Any, Dict
 from src.loading import download_model_artifact, resolve_mlflow_model_dir
 
 logger = logging.getLogger("bentoml.paas_service")
@@ -33,10 +33,13 @@ class DeepLearningModelService:
             logger.error(f"Error loading DL model from {model_dir or model_uri}: {exc}")
             self.model = None
 
-    @bentoml.api(route="/predict", batchable=True, batch_dim=0, max_batch_size=64, max_latency_ms=10)
-    def predict(self, features: Any) -> List[Any]:
+    @bentoml.api(route="/predict", batchable=False)
+    def predict(self, payload: Any) -> Dict[str, Any]:
         if self.model is None:
             raise RuntimeError("Model failed to load at startup")
+
+        features = payload.get("features", payload) if isinstance(payload, dict) else payload
+        model_id = payload.get("model_id") if isinstance(payload, dict) else os.environ.get("MODEL_ID", "unknown")
 
         if isinstance(features, dict):
             if all(isinstance(v, (list, tuple, pd.Series)) for v in features.values()):
@@ -52,15 +55,24 @@ class DeepLearningModelService:
 
         preds = self.model.predict(df)
         if hasattr(preds, "tolist"):
-            return preds.tolist()
-        return list(preds)
+            result = preds.tolist()
+        else:
+            result = list(preds)
+        prediction = result[0] if isinstance(result, list) and len(result) == 1 else result
+        return {
+            "success": True,
+            "prediction": prediction,
+            "confidence": None,
+            "model_id": str(model_id),
+            "engine": "deep-learning-serving",
+        }
 
     @bentoml.api(route="/health", batchable=False)
     def health(self) -> Dict[str, Any]:
         return {
             "status": "healthy",
             "model_loaded": self.model is not None,
-            "runtime": "deep-learning-serving-native-adaptive-batching",
+            "runtime": "deep-learning-serving-bentoml",
             "model_id": os.environ.get("MODEL_ID", "unknown"),
             "engine": "deep-learning-serving",
         }

@@ -7,10 +7,19 @@ logger = logging.getLogger(__name__)
 
 
 class PrometheusObservabilityAdapter:
-    def __init__(self, prometheus_url: str, container_name: str, model_type: str = "ml"):
+    def __init__(
+        self,
+        prometheus_url: str,
+        container_name: str,
+        model_type: str = "ml",
+        tenant_id: str = "",
+        model_id: str = "",
+    ):
         self.prometheus_url = (prometheus_url or "").rstrip("/")
         self.container_name = container_name
         self.model_type = model_type
+        self.tenant_id = tenant_id
+        self.model_id = str(model_id) if model_id is not None else ""
         # Pod regex filter matching deployment container prefix or pod name
         self.pod_filter = f"{container_name}.*" if container_name else "unknown_container"
 
@@ -35,22 +44,21 @@ class PrometheusObservabilityAdapter:
     def get_group1_traffic(self) -> dict:
         """
         Group 1: Traffic & Performance signals.
-        Supports both BentoML DL native metrics (bentoml_service_request_*)
-        and model-server/Uvicorn ML metrics (http_requests_total / http_request_duration_seconds).
+        Uses gateway metrics so values represent the public end-to-end serving path:
+        client -> model-server gateway -> ML/DL worker -> gateway response.
+        Worker-native metrics are kept only for DL batching efficiency signals.
         Note: P99 latency is excluded per user specification.
         """
+        gateway_filter = f'tenant_id="{self.tenant_id}",model_id="{self.model_id}"'
+        rps_query = f'sum(rate(paas_predictions_total{{{gateway_filter}}}[2m]))'
+        p50_query = f'histogram_quantile(0.50, sum(rate(paas_prediction_latency_seconds_bucket{{{gateway_filter}}}[5m])) by (le)) * 1000'
+        p95_query = f'histogram_quantile(0.95, sum(rate(paas_prediction_latency_seconds_bucket{{{gateway_filter}}}[5m])) by (le)) * 1000'
+        error_query = f'sum(rate(paas_predictions_total{{{gateway_filter},status=~"error.*"}}[5m])) / (sum(rate(paas_predictions_total{{{gateway_filter}}}[5m])) + 0.001) * 100'
+
         if self.model_type == "dl":
-            rps_query = f'sum(rate(bentoml_service_request_total{{pod=~"{self.pod_filter}"}}[2m]))'
-            p50_query = f'histogram_quantile(0.50, sum(rate(bentoml_service_request_duration_seconds_bucket{{pod=~"{self.pod_filter}"}}[5m])) by (le)) * 1000'
-            p95_query = f'histogram_quantile(0.95, sum(rate(bentoml_service_request_duration_seconds_bucket{{pod=~"{self.pod_filter}"}}[5m])) by (le)) * 1000'
-            error_query = f'sum(rate(bentoml_service_request_total{{pod=~"{self.pod_filter}",http_response_code=~"5.."}}[5m])) / (sum(rate(bentoml_service_request_total{{pod=~"{self.pod_filter}"}}[5m])) + 0.001) * 100'
             batch_size_query = f'bentoml_runner_adaptive_batch_size_sum{{pod=~"{self.pod_filter}"}} / (bentoml_runner_adaptive_batch_size_count{{pod=~"{self.pod_filter}"}} + 0.001)'
             batch_wait_query = f'bentoml_runner_batch_wait_duration_seconds_sum{{pod=~"{self.pod_filter}"}} / (bentoml_runner_batch_wait_duration_seconds_count{{pod=~"{self.pod_filter}"}} + 0.001) * 1000'
         else:
-            rps_query = f'sum(rate(http_requests_total{{pod=~"{self.pod_filter}"}}[2m]))'
-            p50_query = f'histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{{pod=~"{self.pod_filter}"}}[5m])) by (le)) * 1000'
-            p95_query = f'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{{pod=~"{self.pod_filter}"}}[5m])) by (le)) * 1000'
-            error_query = f'sum(rate(http_requests_total{{pod=~"{self.pod_filter}",status=~"5.."}}[5m])) / (sum(rate(http_requests_total{{pod=~"{self.pod_filter}"}}[5m])) + 0.001) * 100'
             batch_size_query = '0'
             batch_wait_query = '0'
 
@@ -75,6 +83,7 @@ class PrometheusObservabilityAdapter:
             "error_rate_pct": error_rate,
             "avg_batch_size": avg_batch_size,
             "batch_wait_ms": batch_wait_ms,
+            "traffic_source": "model-server-gateway",
         }
 
     def get_group2_resources(self) -> dict:

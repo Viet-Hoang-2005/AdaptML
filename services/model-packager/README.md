@@ -8,8 +8,8 @@ Model Packager là container thực thi quá trình **đóng gói mô hình** �
 
 - **Chuẩn hóa Artifact**: Tải model artifact từ S3 (hoặc MLflow artifact URI), giải nén, tìm file model (`.pkl`, `.joblib`, `.xgb`), chuẩn hóa sang MLflow Pyfunc format.
 - **Sinh Dockerfile**: Tự động chọn Base Image phù hợp với `flavor`:
-  - `bento` (Deep Learning) → dùng `bento-model-server` base image với BentoML Adaptive Batching.
-  - Các flavor khác → dùng `model-server` base image (FastAPI thuần).
+  - `pytorch` / `keras` / `tensorflow` → dùng `deep-learning-serving` base image với BentoML.
+  - `sklearn` / `scikit-learn` / `xgboost` → dùng `machine-learning-serving` base image với FastAPI.
 - **Build Docker Image**:
   - **Local** (`BUILD_ENGINE=docker`): Dùng Docker SDK (`docker-py`) để build và push lên Harbor.
   - **Production K3s** (`BUILD_ENGINE=kaniko`): Sinh `Dockerfile` + `requirements.txt` vào `/workspace` (emptyDir volume) để Kaniko executor (step tiếp theo trong Argo Workflow) thực hiện build rootless.

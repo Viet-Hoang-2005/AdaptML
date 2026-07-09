@@ -6,6 +6,7 @@ metadata:
 spec:
   serviceAccountName: argo-workflow-sa
   entrypoint: build-model
+  onExit: notify-build-exit
   volumes:
     - name: workspace-vol
       emptyDir: {}
@@ -203,3 +204,27 @@ spec:
               name: mlops-paas-secret
           - configMapRef:
               name: mlops-paas-control-plane-config
+
+    - name: notify-build-exit
+      nodeSelector:
+        workload-type: worker
+      container:
+        image: curlimages/curl:8.8.0
+        command: [sh, -c]
+        args:
+          - |
+            if [ "{{workflow.status}}" = "Succeeded" ]; then
+              echo "Build workflow succeeded; success callback is handled by notify-success-step."
+              exit 0
+            fi
+            echo "Build workflow {{workflow.name}} finished with status {{workflow.status}}. Notifying Control Plane..."
+            curl -sS -X POST "{{workflow.parameters.control_plane_webhook_url}}" \
+              -H "Content-Type: application/json" \
+              -H "X-Build-Webhook-Secret: ${CONTROL_PLANE_WEBHOOK_SECRET}" \
+              --data "{\"status\":\"error\",\"task_type\":\"BUILD\",\"error_message\":\"Argo build workflow {{workflow.name}} failed with status {{workflow.status}}\"}"
+        env:
+          - name: CONTROL_PLANE_WEBHOOK_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: mlops-paas-secret
+                key: CONTROL_PLANE_WEBHOOK_SECRET

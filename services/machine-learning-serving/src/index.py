@@ -152,6 +152,7 @@ async def predict(payload: InferenceRequest):
                 "confidence": confidence,
                 "tenant_id": os.environ.get("TENANT_ID", "unknown"),
                 "model_id": str(model_id),
+                "engine": "machine-learning-serving",
             },
             status_code=200,
         )

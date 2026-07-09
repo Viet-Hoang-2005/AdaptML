@@ -1,3 +1,13 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: model-gateway-rewrite
+  namespace: default
+spec:
+  replacePathRegex:
+    regex: "^/[^/]+/models/([^/]+)/[^/]+/(predict|health)$"
+    replacement: "/models/${1}/${2}"
+---
 # Cấu hình IngressRoute cho Control Plane (Django Control Plane)
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
@@ -13,3 +23,10 @@ spec:
       services:
         - name: mlops-paas-control-plane
           port: 8000
+    - match: Host(`mlops-nids-nt114.id.vn`) && PathRegexp(`^/[A-Za-z0-9-]+/models/[A-Za-z0-9]+/[^/]+/(predict|health)$`)
+      kind: Rule
+      middlewares:
+        - name: model-gateway-rewrite
+      services:
+        - name: mlops-paas-model-server
+          port: 5000

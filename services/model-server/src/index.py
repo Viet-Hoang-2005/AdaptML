@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -279,6 +280,7 @@ async def predict(
     features_dict = payload.features
     tenant_id = model_record["tenant_id"]
     resolved_model_id = str(model_record["id"])
+    start_time = time.perf_counter()
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -301,7 +303,7 @@ async def predict(
             elif isinstance(data, list):
                 prediction_result = data
                 confidence = None
-                engine = "deep-learning-serving-native-batching"
+                engine = "deep-learning-serving"
             else:
                 prediction_result = data
                 confidence = None
@@ -327,3 +329,8 @@ async def predict(
     except Exception as exc:
         paas_predictions_counter.labels(tenant_id=tenant_id, model_id=resolved_model_id, status="error_500").inc()
         raise HTTPException(status_code=500, detail=str(exc))
+    finally:
+        paas_latency_histogram.labels(
+            tenant_id=tenant_id,
+            model_id=resolved_model_id,
+        ).observe(time.perf_counter() - start_time)

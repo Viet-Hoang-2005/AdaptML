@@ -140,13 +140,22 @@ services:
       PYTHONUNBUFFERED: 1
       DB_HOST_RO: postgres
       DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      DB_NAME: ${POSTGRES_DB:-mlops_paas}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control_plane}
       REDPANDA_BROKERS: redpanda:9092
       KAFKA_TOPIC: mlops_paas_production_data
       REDIS_URL: redis://redis:6379/1
       JWKS_URL: http://control-plane:8000/api/auth/.well-known/jwks.json
+      HASHIDS_SALT: ${HASHIDS_SALT:-mlops_paas_secret_salt}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.model-gateway.rule=PathRegexp(`^/[A-Za-z0-9-]+/models/[A-Za-z0-9]+/[^/]+/(predict|health)$`)"
+      - "traefik.http.routers.model-gateway.middlewares=model-gateway-rewrite"
+      - "traefik.http.middlewares.model-gateway-rewrite.replacepathregex.regex=^/[^/]+/models/([^/]+)/[^/]+/(predict|health)$"
+      - "traefik.http.middlewares.model-gateway-rewrite.replacepathregex.replacement=/models/$${1}/$${2}"
+      - "traefik.http.services.model-gateway.loadbalancer.server.port=5000"
     depends_on:
       postgres:
         condition: service_healthy
