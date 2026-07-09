@@ -162,10 +162,10 @@ services:
     build:
       context: ./services/machine-learning-serving
       dockerfile: Dockerfile
-    image: mlops-paas-machine-learning-serving
+    image: mlops-paas-machine-learning-serving:latest
     container_name: mlops_paas_machine_learning_serving_base
     restart: "no"
-    command: ["echo", "Base Image Machine Learning Serving Engine Built Successfully. Ready for Dynamic Runtime Injection..."]
+    command: ["echo", "Base Image mlops-paas-machine-learning-serving:latest built successfully. Ready for Pre-built Image Packaging..."]
     networks:
       - mlops_paas_network
 
@@ -174,10 +174,10 @@ services:
     build:
       context: ./services/deep-learning-serving
       dockerfile: Dockerfile
-    image: mlops-paas-deep-learning-serving
+    image: mlops-paas-deep-learning-serving:latest
     container_name: mlops_paas_deep_learning_serving_base
     restart: "no"
-    command: ["echo", "Base Image Deep Learning Serving Engine Built Successfully. Ready for Dynamic Runtime Injection..."]
+    command: ["echo", "Base Image mlops-paas-deep-learning-serving:latest built successfully. Ready for Pre-built Image Packaging..."]
     networks:
       - mlops_paas_network
 

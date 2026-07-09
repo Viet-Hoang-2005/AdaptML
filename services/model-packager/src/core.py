@@ -5,9 +5,15 @@ from typing import Any
 
 import cloudpickle
 import joblib
+import torch
+import xgboost as xgb
+import tensorflow as tf
+import keras
 import mlflow.sklearn
 import mlflow.xgboost
-import xgboost as xgb
+import mlflow.pytorch
+import mlflow.keras
+import mlflow.tensorflow
 
 def parse_requirements(requirements_text: str) -> list[str] | None:
     requirements = [
@@ -50,7 +56,20 @@ def load_model(path: Path, flavor: str) -> Any:
             return load_pickle_model(path)
         raise ValueError("XGBoost flavor requires a .xgb, .pkl, or .joblib artifact.")
 
-    raise ValueError("Unsupported model flavor.")
+    if flavor == "pytorch":
+        if extension not in {".pth", ".pt"}:
+            raise ValueError("PyTorch flavor requires a .pth or .pt artifact.")
+        return torch.load(path, map_location="cpu")
+
+    if flavor == "keras":
+        if extension not in {".h5", ".keras"}:
+            raise ValueError("Keras flavor requires a .h5 or .keras artifact.")
+        try:
+            return tf.keras.models.load_model(path)
+        except ImportError:
+            return keras.models.load_model(path)
+
+    raise ValueError(f"Unsupported model flavor: {flavor}")
 
 def save_mlflow_model(model: Any, flavor: str, output_dir: Path, requirements: list[str] | None) -> None:
     if flavor == "sklearn":
@@ -69,7 +88,30 @@ def save_mlflow_model(model: Any, flavor: str, output_dir: Path, requirements: l
         )
         return
 
-    raise ValueError("Unsupported model flavor.")
+    if flavor == "pytorch":
+        mlflow.pytorch.save_model(
+            pytorch_model=model,
+            path=str(output_dir),
+            pip_requirements=requirements,
+        )
+        return
+
+    if flavor == "keras":
+        try:
+            mlflow.keras.save_model(
+                keras_model=model,
+                path=str(output_dir),
+                pip_requirements=requirements,
+            )
+        except AttributeError:
+            mlflow.tensorflow.save_model(
+                model=model,
+                path=str(output_dir),
+                pip_requirements=requirements,
+            )
+        return
+
+    raise ValueError(f"Unsupported model flavor: {flavor}")
 
 def build_preview_tree(root: Path) -> list[str]:
     paths: list[str] = []

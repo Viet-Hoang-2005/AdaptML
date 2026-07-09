@@ -57,7 +57,7 @@ class DockerBuildAdapter(BuildAdapter):
         training_artifact_uri: str = "",
         task_type: str = "BUILD",
     ):
-        if task_type == "BUILD" and (flavor or "").lower() in STANDARD_DYNAMIC_FLAVORS:
+        if not os.environ.get("ENABLE_PREBUILT_MODEL_IMAGE", "true").lower() == "true" and task_type == "BUILD" and (flavor or "").lower() in STANDARD_DYNAMIC_FLAVORS:
             logger.info("Skipping container build for standard flavor '%s' (Dynamic Runtime Injection enabled for model %s).", flavor, model_id)
             ModelAPI.objects.filter(id=model_id).update(
                 status="ready",
@@ -157,7 +157,7 @@ class ArgoBuildAdapter(BuildAdapter):
         training_artifact_uri: str = "",
         task_type: str = "BUILD",
     ):
-        if task_type == "BUILD" and (flavor or "").lower() in STANDARD_DYNAMIC_FLAVORS:
+        if not os.environ.get("ENABLE_PREBUILT_MODEL_IMAGE", "true").lower() == "true" and task_type == "BUILD" and (flavor or "").lower() in STANDARD_DYNAMIC_FLAVORS:
             logger.info("Skipping Argo build workflow for standard flavor '%s' (Dynamic Runtime Injection enabled for model %s).", flavor, model_id)
             ModelAPI.objects.filter(id=model_id).update(
                 status="ready",

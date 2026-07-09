@@ -25,10 +25,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /install /usr/local
 COPY . .
-RUN chmod +x /app/src/entrypoint.sh
+RUN mkdir -p /app/libs
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/libs:/app
 ENV BENTOML_PORT=5002
 EXPOSE 5002
 
-CMD ["/app/src/entrypoint.sh"]
+CMD ["bentoml", "serve", "src.index:DeepLearningModelService", "--port", "5002", "--host", "0.0.0.0"]

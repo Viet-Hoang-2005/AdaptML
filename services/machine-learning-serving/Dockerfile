@@ -27,8 +27,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /install /usr/local
 COPY . .
 
-RUN mkdir -p /models /app/libs && chmod +x /app/src/entrypoint.sh
+RUN mkdir -p /models /app/libs
 
+ENV PYTHONPATH=/app/libs:/app
 EXPOSE 5001
 
-CMD ["/app/src/entrypoint.sh"]
+CMD ["uvicorn", "src.index:app", "--host", "0.0.0.0", "--port", "5001", "--workers", "2"]

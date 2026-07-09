@@ -1,9 +1,11 @@
 import logging
 import os
-from typing import Any, Dict
 import bentoml
 import mlflow.pyfunc
+import pandas as pd
 from fastapi import Body, FastAPI
+from typing import Any, Dict
+from src.loading import download_model_artifact, resolve_mlflow_model_dir
 
 logger = logging.getLogger("bentoml.paas_service")
 http_app = FastAPI(title="Deep Learning Serving Engine (BentoML)")
@@ -21,7 +23,6 @@ class DeepLearningModelService:
         
         try:
             if model_uri:
-                from src.loading import download_model_artifact, resolve_mlflow_model_dir
                 model_id = int(model_id_str) if model_id_str and model_id_str != "unknown" and model_id_str.isdigit() else 0
                 source_dir = download_model_artifact(model_id, model_uri)
                 model_dir = str(resolve_mlflow_model_dir(source_dir))
@@ -41,7 +42,6 @@ class DeepLearningModelService:
 
         features = input_data.get("features", input_data)
         
-        import pandas as pd
         if isinstance(features, dict):
             df = pd.DataFrame([features])
         elif isinstance(features, list):

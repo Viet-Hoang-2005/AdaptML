@@ -123,11 +123,13 @@ def build_custom_image(workspace: Path, model_id: str, tenant_id: str, requireme
         docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
 
     # Use fully-qualified base image so Docker can pull it from Harbor
-    base_image = f"{harbor_url}/mlops-paas/mlops-paas-model-server:latest" if harbor_url else "mlops-paas-model-server:latest"
+    base_image = f"{harbor_url}/mlops-paas/machine-learning-serving:latest" if harbor_url else "mlops-paas-machine-learning-serving:latest"
     dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
+COPY model /app/model_artifact
 """
     (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
@@ -163,11 +165,12 @@ def build_bento_image(workspace: Path, model_id: str, tenant_id: str, requiremen
         print(f"Logging into Harbor registry at {harbor_url}...")
         docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
 
-    base_image = f"{harbor_url}/mlops-paas/bento-model-server:latest" if harbor_url else "bento-model-server:latest"
+    base_image = f"{harbor_url}/mlops-paas/deep-learning-serving:latest" if harbor_url else "mlops-paas-deep-learning-serving:latest"
     dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
 COPY model /app/model_artifact
 """
     (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
@@ -299,20 +302,23 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
             if flavor in ["pytorch", "tensorflow", "keras"]:
                 print("Detected Deep Learning flavor. Generating BentoML Dockerfile...")
-                base_image = f"{harbor_url}/mlops-paas/bento-model-server:latest" if harbor_url else "bento-model-server:latest"
+                base_image = f"{harbor_url}/mlops-paas/deep-learning-serving:latest" if harbor_url else "mlops-paas-deep-learning-serving:latest"
                 dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
 COPY model /app/model_artifact
 """
             else:
                 print("Generating custom lightweight Dockerfile...")
-                base_image = f"{harbor_url}/mlops-paas/mlops-paas-model-server:latest" if harbor_url else "mlops-paas-model-server:latest"
+                base_image = f"{harbor_url}/mlops-paas/machine-learning-serving:latest" if harbor_url else "mlops-paas-machine-learning-serving:latest"
                 dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
+COPY model /app/model_artifact
 """
             (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
             (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
@@ -419,11 +425,13 @@ def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> 
         if os.environ.get("BUILD_ENGINE", "").lower() == "kaniko":
             print("Kaniko build engine detected. Preparing build context for TEST_ZIP...")
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
-            base_image = f"{harbor_url}/mlops-paas/mlops-paas-model-server:latest" if harbor_url else "mlops-paas-model-server:latest"
+            base_image = f"{harbor_url}/mlops-paas/machine-learning-serving:latest" if harbor_url else "mlops-paas-machine-learning-serving:latest"
             dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN pip install --no-cache-dir -r /tmp/custom_requirements.txt || echo 'Some requirements failed to install, continuing...'
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
+COPY model /app/model_artifact
 """
             (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
             (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
