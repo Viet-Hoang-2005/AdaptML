@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     'registry',
     'training',
     'drift',
+    'monitoring',
 ]
 
 MIDDLEWARE = [
@@ -297,3 +298,6 @@ BUILD_STRATEGY = os.environ.get("BUILD_STRATEGY", "docker").lower()
 # Harbor Settings
 HARBOR_REGISTRY_URL = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
 HARBOR_USER_PROJECT = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
+
+# Prometheus Monitoring URL
+PROMETHEUS_INTERNAL_URL = os.environ.get("PROMETHEUS_INTERNAL_URL", "").strip().rstrip("/")

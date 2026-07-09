@@ -35,3 +35,5 @@ data:
   MODEL_SERVER_INTERNAL_URL: "http://traefik.kube-system.svc.cluster.local:5000"
   MLFLOW_TRACKING_URI: "http://mlflow-server.mlflow-server.svc.cluster.local:5000"
   MLFLOW_TRACKING_REQUIRED: "true"
+  PROMETHEUS_INTERNAL_URL: "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
+

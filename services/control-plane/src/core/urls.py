@@ -12,4 +12,6 @@ urlpatterns = [
     path("api/registry/", include("registry.urls")),
     path("api/training/", include("training.urls")),
     path("api/drift/", include("drift.urls")),
+    path("api/monitoring/", include("monitoring.urls")),
 ]
+

@@ -1,6 +1,7 @@
 from django.urls import path, register_converter
 
 from integrations.hashid_utils import decode_model_id, encode_model_id
+from monitoring.views import ModelAPIObservabilityView
 from registry.views import (
     ModelAPIBuildLogsView,
     ModelAPIBuildView,
@@ -90,5 +91,6 @@ urlpatterns = [
     path("<hashid:model_id>/build-webhook", ModelAPIBuildWebhookView.as_view(), name="model_api_build_webhook"),
     path("<hashid:model_id>/source-code-files/", SourceCodeFileListView.as_view(), name="model_source_code_files"),
     path("<hashid:model_id>/source-code-upload/", SourceCodeFileUploadView.as_view(), name="model_source_code_upload"),
+    path("<hashid:model_id>/observability/", ModelAPIObservabilityView.as_view(), name="model_api_observability_direct"),
     path("<hashid:model_id>/", ModelAPIDetailView.as_view(), name="model_api_detail"),
 ]

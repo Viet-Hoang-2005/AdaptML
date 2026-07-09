@@ -1,9 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { getModelEndpointLogs } from '../../../lib/api';
-import { queryKeys } from '../../../lib/queryKeys';
 import type { ModelAPI } from '../../../types/modelApi';
-import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
-import { CheckCircle2, Circle, Loader2, PauseCircle, XCircle } from 'lucide-react';
+import { Activity, CheckCircle2, Circle, Info, Loader2, PauseCircle, XCircle } from 'lucide-react';
 
 function isActiveModel(model: ModelAPI) {
   return (
@@ -86,22 +82,6 @@ export function ModelStatus({ model }: { model: ModelAPI }) {
     else stage3 = 'active'; // checking
   }
 
-  // Live endpoint logs from WS cache
-  const { data: wsLogs } = useQuery<{ logs: string; updated_at: string }>({
-    queryKey: queryKeys.modelEndpointLogs(model.id),
-    enabled: false,
-  });
-
-  // REST fallback
-  const { data: restLogs } = useQuery({
-    queryKey: ['endpoint-logs-modal', model.id],
-    queryFn: () => getModelEndpointLogs(model.id),
-    refetchInterval: 5000,
-  });
-
-  const text = wsLogs?.logs || restLogs?.logs || '';
-  const logLines = text.split('\n').filter(Boolean);
-
   return (
     <div className="flex flex-col gap-6">
       {/* ── Lifecycle Tracker ── */}
@@ -115,13 +95,31 @@ export function ModelStatus({ model }: { model: ModelAPI }) {
         <TrackerStep label="Healthy" state={stage3} />
       </div>
 
-      <div className="flex flex-col">
-        <TerminalLogViewer
-          title={`Logs for ${model.endpoint_container_name || 'container'}`}
-          logsOverride={logLines}
-          isRunningOverride={isActiveModel(model) || isHealthy}
-          placeholder="Waiting for container logs..."
-        />
+      {/* ── Deprecation Notice for Realtime Pod Logs ── */}
+      <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/90 via-amber-50/50 to-orange-50/80 p-6 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 shadow-inner">
+            <Activity className="h-6 w-6" />
+          </div>
+          <div className="flex-1 space-y-2">
+            <h4 className="text-base font-bold text-gray-900 tracking-tight flex items-center gap-2">
+              <span>Realtime Pod Log Streaming Deprecated</span>
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+                Prometheus Powered
+              </span>
+            </h4>
+            <p className="text-sm leading-relaxed text-gray-600">
+              Live WebSocket container log streaming is no longer supported in our production Kubernetes environment. 
+              To ensure zero network overhead and enterprise-grade multi-tenant isolation, container health checks, 
+              hardware metrics (CPU/RAM/Network Bandwidth), and traffic statistics are now directly monitored via the 
+              <strong className="text-gray-800 font-semibold"> Prometheus Observability Engine</strong>.
+            </p>
+            <div className="pt-2 flex items-center gap-2 text-xs font-medium text-amber-700">
+              <Info className="h-4 w-4" />
+              <span>Navigate to the Observability or Metrics tab to inspect real-time serving performance.</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

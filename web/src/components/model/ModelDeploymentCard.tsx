@@ -22,8 +22,6 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { BuildLogsPanel } from './BuildLogsPanel';
-import { useModelRealtime } from '../../hooks/useModelRealtime';
-import type { WsStatus } from '../../hooks/useModelRealtime';
 import { toast } from '../../lib/toast';
 import type { ModelAPI } from '../../types/modelApi';
 
@@ -37,27 +35,11 @@ function isActiveModel(model: ModelAPI) {
   );
 }
 
-function LiveBadge({ wsStatus }: { wsStatus: WsStatus }) {
-  if (wsStatus === 'connected') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-500/20">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-        Live
-      </span>
-    );
-  }
-  if (wsStatus === 'connecting' || wsStatus === 'disconnected') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 ring-1 ring-inset ring-amber-500/20">
-        <span className="h-1.5 w-1.5 animate-ping rounded-full bg-amber-400" />
-        Reconnecting
-      </span>
-    );
-  }
+function LiveBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 ring-1 ring-inset ring-gray-500/20">
-      <WifiOff className="h-3 w-3" />
-      Polling
+    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-700 ring-1 ring-inset ring-blue-500/20" title="Monitored via Prometheus Observability Engine">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+      Prometheus Sync
     </span>
   );
 }
@@ -104,7 +86,6 @@ export function ModelDeploymentCard({
   isBuilding,
 }: ModelDeploymentCardProps) {
   const navigate = useNavigate();
-  const { wsStatus } = useModelRealtime(isActiveModel(model) ? model.id : null);
   const [copied, setCopied] = useState(false);
   const [showStopModal, setShowStopModal] = useState(false);
   const [showCleanupModal, setShowCleanupModal] = useState(false);
@@ -218,7 +199,7 @@ export function ModelDeploymentCard({
         
         {isActiveModel(model) && (
           <div className="flex shrink-0">
-            <LiveBadge wsStatus={wsStatus} />
+            <LiveBadge />
           </div>
         )}
       </div>
