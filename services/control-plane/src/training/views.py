@@ -618,8 +618,8 @@ class TrainingJobRegisterModelView(TrainingJobDetailView):
             raise ValidationError({"error": "Model name is required."})
         if access_mode not in {"private", "public"}:
             raise ValidationError({"error": "Access mode must be private or public."})
-        if flavor and flavor not in {"sklearn", "xgboost"}:
-            raise ValidationError({"error": "Flavor must be sklearn or xgboost."})
+        if flavor and flavor not in {"sklearn", "scikit-learn", "xgboost", "pytorch", "keras"}:
+            raise ValidationError({"error": "Flavor must be one of: xgboost, scikit-learn (sklearn), pytorch, keras."})
 
         model_api = (
             ModelAPI.objects.filter(

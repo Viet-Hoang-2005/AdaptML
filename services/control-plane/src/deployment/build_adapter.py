@@ -26,7 +26,7 @@ def mark_build_start_failed(model_id: str, message: str) -> None:
     if updated:
         logger.info("Marked model %s build as error after build container start failure.", model_id)
 
-STANDARD_DYNAMIC_FLAVORS = {"sklearn", "pytorch", "bentoml", "xgboost", "lightgbm", "mlflow", "python", "keras", "tensorflow"}
+STANDARD_DYNAMIC_FLAVORS = {"sklearn", "scikit-learn", "xgboost", "pytorch", "keras"}
 
 class BuildAdapter:
     def trigger_build(

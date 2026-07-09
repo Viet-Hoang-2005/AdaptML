@@ -44,8 +44,8 @@ logger = logging.getLogger(__name__)
 MAX_MODEL_ARTIFACT_SIZE_BYTES = 512 * 1024 * 1024
 MAX_METADATA_FILE_SIZE_BYTES = 2 * 1024 * 1024
 MAX_MODEL_INSIGHT_ITEMS = 500
-SUPPORTED_BUILD_FLAVORS = {"sklearn", "xgboost"}
-SUPPORTED_SOURCE_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
+SUPPORTED_BUILD_FLAVORS = {"sklearn", "scikit-learn", "xgboost", "pytorch", "keras"}
+SUPPORTED_SOURCE_EXTENSIONS = {".pkl", ".joblib", ".xgb", ".json", ".pth", ".pt", ".bin", ".keras", ".h5", ".hdf5"}
 
 
 def get_model_server_public_url():
@@ -1221,13 +1221,19 @@ def validate_source_artifact(artifact_file, flavor):
 
     filename = artifact_file.name.lower()
     if not any(filename.endswith(extension) for extension in SUPPORTED_SOURCE_EXTENSIONS):
-        return "Raw model artifact must be .pkl, .joblib, or .xgb."
+        return f"Raw model artifact extension is not supported for flavor '{flavor}'."
 
-    if flavor == "sklearn" and not filename.endswith((".pkl", ".joblib")):
+    if flavor in {"sklearn", "scikit-learn"} and not filename.endswith((".pkl", ".joblib")):
         return "Scikit-learn flavor requires a .pkl or .joblib artifact."
 
-    if flavor == "xgboost" and not filename.endswith((".pkl", ".joblib", ".xgb")):
-        return "XGBoost flavor requires a .xgb, .pkl, or .joblib artifact."
+    if flavor == "xgboost" and not filename.endswith((".pkl", ".joblib", ".xgb", ".json")):
+        return "XGBoost flavor requires a .xgb, .pkl, .joblib, or .json artifact."
+
+    if flavor == "pytorch" and not filename.endswith((".pth", ".pt", ".pkl", ".bin")):
+        return "PyTorch flavor requires a .pth, .pt, .pkl, or .bin artifact."
+
+    if flavor == "keras" and not filename.endswith((".keras", ".h5", ".hdf5", ".pkl")):
+        return "Keras flavor requires a .keras, .h5, or .hdf5 artifact."
 
     return ""
 
@@ -1381,7 +1387,7 @@ def _trigger_training_model_build(model_api):
             model_api.flavor = detected
             model_api.save(update_fields=["flavor", "updated_at"])
         else:
-            raise ValueError("Flavor must be sklearn or xgboost.")
+            raise ValueError("Flavor must be one of: xgboost, scikit-learn (sklearn), pytorch, keras.")
 
     safe_name = slugify(model_api.name) or "model"
     package_filename = f"{safe_name}-mlflow-package.zip"
@@ -1411,7 +1417,7 @@ def _trigger_manual_model_build(model_api):
     if not model_api.source_artifact:
         raise ValueError("Manual upload model is missing its source artifact.")
     if model_api.flavor not in SUPPORTED_BUILD_FLAVORS:
-        raise ValueError("Flavor must be sklearn or xgboost.")
+        raise ValueError("Flavor must be one of: xgboost, scikit-learn (sklearn), pytorch, keras.")
 
     safe_name = slugify(model_api.name) or "model"
     package_filename = f"{safe_name}-mlflow-package.zip"
@@ -1453,8 +1459,6 @@ class ModelAPIListCreateView(APIView):
         artifact_file = request.FILES.get("artifact")
         source_code_file = request.FILES.get("source_code_file")
         reference_data_file = request.FILES.get("reference_data_file")
-        endpoint_route_changed = version != previous_version
-        endpoint_artifact_changed = bool(artifact_file)
 
         if not name:
             return Response({"error": "Model name is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1549,7 +1553,7 @@ class ModelAPIBuildView(APIView):
             return Response({"error": duplicate_error}, status=status.HTTP_400_BAD_REQUEST)
 
         if flavor not in SUPPORTED_BUILD_FLAVORS:
-            return Response({"error": "Flavor must be sklearn or xgboost."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Flavor must be one of: xgboost, scikit-learn (sklearn), pytorch, keras."}, status=status.HTTP_400_BAD_REQUEST)
 
         if not source_artifact:
             return Response({"error": "Raw model artifact is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1693,6 +1697,8 @@ class ModelAPIDetailView(APIView):
         artifact_file = request.FILES.get("artifact")
         source_code_file = request.FILES.get("source_code_file")
         reference_data_file = request.FILES.get("reference_data_file")
+        endpoint_route_changed = version != previous_version
+        endpoint_artifact_changed = bool(artifact_file)
 
         if not name:
             return Response({"error": "Model name is required."}, status=status.HTTP_400_BAD_REQUEST)

@@ -3,14 +3,11 @@ import os
 import bentoml
 import mlflow.pyfunc
 import pandas as pd
-from fastapi import Body, FastAPI
-from typing import Any, Dict
+from typing import Any, Dict, List
 from src.loading import download_model_artifact, resolve_mlflow_model_dir
 
 logger = logging.getLogger("bentoml.paas_service")
-http_app = FastAPI(title="Deep Learning Serving Engine (BentoML)")
 
-@bentoml.asgi_app(http_app, path="/")
 @bentoml.service(
     resources={"cpu": "2"},
     traffic={"timeout": 60},
@@ -36,53 +33,34 @@ class DeepLearningModelService:
             logger.error(f"Error loading DL model from {model_dir or model_uri}: {exc}")
             self.model = None
 
-    def _predict(self, input_data: Dict[str, Any], model_id_str: str | None = None) -> Dict[str, Any]:
+    @bentoml.api(route="/predict", batchable=True, batch_dim=0, max_batch_size=64, max_latency_ms=10)
+    def predict(self, features: Any) -> List[Any]:
         if self.model is None:
-            return {"success": False, "error": "Model failed to load at startup"}
+            raise RuntimeError("Model failed to load at startup")
 
-        features = input_data.get("features", input_data)
-        
         if isinstance(features, dict):
-            df = pd.DataFrame([features])
+            if all(isinstance(v, (list, tuple, pd.Series)) for v in features.values()):
+                df = pd.DataFrame(features)
+            else:
+                df = pd.DataFrame([features])
         elif isinstance(features, list):
             df = pd.DataFrame(features)
-        else:
+        elif isinstance(features, pd.DataFrame):
             df = features
+        else:
+            df = pd.DataFrame(features)
 
         preds = self.model.predict(df)
         if hasattr(preds, "tolist"):
-            prediction_result = preds.tolist()
-        else:
-            prediction_result = list(preds)
+            return preds.tolist()
+        return list(preds)
 
-        return {
-            "success": True,
-            "prediction": prediction_result,
-            "model_loaded": True,
-            "engine": "deep-learning-serving",
-        }
-
-    def _health(self, model_id_str: str | None = None) -> Dict[str, Any]:
+    @bentoml.api(route="/health", batchable=False)
+    def health(self) -> Dict[str, Any]:
         return {
             "status": "healthy",
             "model_loaded": self.model is not None,
-            "runtime": "deep-learning-serving-adaptive-batching",
-            "model_id": os.environ.get("MODEL_ID") or model_id_str or "unknown",
+            "runtime": "deep-learning-serving-native-adaptive-batching",
+            "model_id": os.environ.get("MODEL_ID", "unknown"),
             "engine": "deep-learning-serving",
         }
-
-    @http_app.post("/predict")
-    def predict_http(self, input_data: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-        return self._predict(input_data)
-
-    @http_app.get("/health")
-    def health_http(self) -> Dict[str, Any]:
-        return self._health()
-
-    @bentoml.api(route="/predict")
-    def predict(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        return self._predict(input_data)
-
-    @bentoml.api(route="/health")
-    def health(self) -> Dict[str, Any]:
-        return self._health()

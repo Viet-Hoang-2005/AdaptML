@@ -294,8 +294,18 @@ async def predict(
                 return JSONResponse(status_code=response.status_code, content=error_detail)
                 
             data = response.json()
-            prediction_result = data.get("prediction")
-            confidence = data.get("confidence")
+            if isinstance(data, dict):
+                prediction_result = data.get("prediction")
+                confidence = data.get("confidence")
+                engine = data.get("engine", model_record.get("model_type", "ml"))
+            elif isinstance(data, list):
+                prediction_result = data
+                confidence = None
+                engine = "deep-learning-serving-native-batching"
+            else:
+                prediction_result = data
+                confidence = None
+                engine = model_record.get("model_type", "ml")
 
             paas_predictions_counter.labels(tenant_id=tenant_id, model_id=resolved_model_id, status="success").inc()
             background_tasks.add_task(send_to_redpanda, tenant_id, resolved_model_id, features_dict, prediction_result)
@@ -307,7 +317,7 @@ async def predict(
                     "confidence": confidence,
                     "tenant_id": tenant_id,
                     "model_id": resolved_model_id,
-                    "engine": data.get("engine", model_record.get("model_type", "ml")),
+                    "engine": engine,
                 },
                 status_code=200,
             )

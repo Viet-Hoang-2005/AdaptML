@@ -275,9 +275,9 @@ class ModelAPI(models.Model):
 
     def detect_and_set_model_type(self):
         text_to_check = f"{self.flavor} {self.name} {self.model_info} {self.requirements_text}".lower()
-        if any(kw in text_to_check for kw in ["tensorflow", "keras", "pytorch", "torch", "onnx", "dl", "bentoml", "transformers", "huggingface"]):
+        if any(kw in text_to_check for kw in ["pytorch", "torch", "keras", "tensorflow"]):
             self.model_type = "dl"
-        elif any(kw in text_to_check for kw in ["xgboost", "scikit-learn", "sklearn", "lightgbm", "lgbm", "ml"]):
+        elif any(kw in text_to_check for kw in ["xgboost", "scikit-learn", "sklearn"]):
             self.model_type = "ml"
 
     def save(self, *args, **kwargs):
