@@ -28,7 +28,6 @@ src/
 ├── registry/         # Model lifecycle: upload, build/deploy webhook handlers, MLflow proxy, Harbor sync
 ├── training/         # TrainingJob CRUD, ArgoTrainingAdapter, LocalTrainingAdapter, log streaming
 ├── drift/            # DriftJob CRUD, Evidently webhook handlers, drift report URLs
-├── realtime/         # WebSocket/Redis log streaming utilities
 ├── integrations/     # S3 utilities, Hashids encoding, ZIP helpers
 └── core/             # Django settings, URL routing, WSGI/ASGI config
 ```

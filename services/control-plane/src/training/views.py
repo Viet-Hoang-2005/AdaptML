@@ -1,10 +1,5 @@
-from pathlib import Path
-import zipfile
-
 from django.conf import settings
-from django.db.models import Count, Q, Sum
 from django.utils import timezone
-from django.core.files.base import ContentFile
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -13,370 +8,36 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from authentication.models import ModelAPI, TrainingJob
-from integrations.s3_zip_utils import get_s3_file_list
+from django.core.cache import cache
 from registry.views import (
     build_endpoint_url,
     serialize_model_api,
     sync_registry_version_from_model_api,
     validate_unique_model_version,
 )
-from integrations.hashid_utils import encode_model_id, decode_model_id
-from django.core.cache import cache
 from training.argo_training_adapter import ArgoTrainingAdapter
 from training.kubeflow_service import (
     create_model_artifact_presigned_url,
     get_training_metrics_payload,
 )
-from training.local_service import run_local_training_job
+from training.serializers import (
+    create_training_job_event,
+    serialize_training_job,
+    serialize_training_job_event,
+)
+from training.services.jobs import _submit_training_job
+from training.services.usage import _training_usage_for_user
+from training.services.validation import (
+    ACTIVE_STATUSES,
+    _ensure_active_job_capacity,
+    validate_create_training_job_request,
+)
 from training.tracking_ingestion_service import (
     ingest_training_job_tracking,
     serialize_training_tracking_summary,
 )
 
-MAX_TRAINING_FILE_SIZE_BYTES = 512 * 1024 * 1024
-RUNTIME_PROFILES = {
-    (1, 2048): "small",
-    (2, 4096): "medium",
-    (4, 8192): "large",
-}
-ACCELERATOR_TYPES = {"none", "gpu", "tpu", "trainium"}
-GPU_ACCELERATOR_COUNTS = {1, 2, 4}
-ACTIVE_STATUSES = {"pending", "uploading", "running"}
 TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
-
-
-def create_training_job_event(training_job, event_type, message, metadata=None):
-    training_job.events.create(event_type=event_type, message=message, metadata=metadata or {})
-
-
-def serialize_training_job_event(event):
-    return {
-        "id": event.id,
-        "training_job": event.training_job_id,
-        "event_type": event.event_type,
-        "message": event.message,
-        "metadata": event.metadata,
-        "created_at": event.created_at,
-    }
-
-
-def _current_month_window():
-    now = timezone.now()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    if month_start.month == 12:
-        month_end = month_start.replace(year=month_start.year + 1, month=1)
-    else:
-        month_end = month_start.replace(month=month_start.month + 1)
-    return month_start, month_end
-
-
-def _training_usage_for_user(user):
-    month_start, month_end = _current_month_window()
-    jobs = TrainingJob.objects.filter(
-        tenant=user,
-        created_at__gte=month_start,
-        created_at__lt=month_end,
-        deleted_at__isnull=True,
-    )
-    stored_runtime = jobs.aggregate(total=Sum("runtime_seconds"))["total"] or 0
-    running_runtime = 0
-    now = timezone.now()
-    for job in jobs.filter(status="running"):
-        if job.started_at:
-            running_runtime += max(int((now - job.started_at).total_seconds()), 0)
-
-    monthly_runtime_seconds = stored_runtime + running_runtime
-    monthly_quota_seconds = settings.TRAINING_MONTHLY_QUOTA_SECONDS
-    counts = jobs.aggregate(
-        active_jobs_count=Count("id", filter=Q(status__in=ACTIVE_STATUSES)),
-        running_jobs_count=Count("id", filter=Q(status="running")),
-        completed_jobs_count=Count("id", filter=Q(status="completed")),
-        failed_jobs_count=Count("id", filter=Q(status="failed")),
-    )
-
-    return {
-        "training_backend": settings.TRAINING_BACKEND,
-        "monthly_quota_seconds": monthly_quota_seconds,
-        "monthly_runtime_seconds": monthly_runtime_seconds,
-        "remaining_seconds": max(monthly_quota_seconds - monthly_runtime_seconds, 0),
-        "active_jobs_count": counts["active_jobs_count"],
-        "running_jobs_count": counts["running_jobs_count"],
-        "completed_jobs_count": counts["completed_jobs_count"],
-        "failed_jobs_count": counts["failed_jobs_count"],
-        "current_month_start": month_start,
-        "current_month_end": month_end,
-    }
-
-
-def serialize_training_job(training_job: TrainingJob):
-    registered_model = (
-        training_job.registered_model_apis.exclude(status="disabled")
-        .order_by("-updated_at")
-        .first()
-    )
-    return {
-        "id": training_job.id,
-        "name": training_job.name,
-        "model_version": training_job.model_version,
-        "entry_point": training_job.entry_point,
-        "training_backend": training_job.training_backend,
-        "vcpu": training_job.vcpu,
-        "memory": training_job.memory,
-        "max_runtime_seconds": training_job.max_runtime_seconds,
-        "accelerator_type": training_job.accelerator_type,
-        "accelerator_count": training_job.accelerator_count,
-        "retry_of": training_job.retry_of_id,
-        "source_zip": "",
-        "requirements_file": "",
-        "training_data": "",
-        "s3_source_uri": training_job.s3_source_uri,
-        "s3_training_data_uri": training_job.s3_training_data_uri,
-        "sagemaker_job_name": training_job.sagemaker_job_name,
-        "external_job_id": training_job.external_job_id,
-        "output_s3_uri": training_job.output_s3_uri,
-        "model_artifact_uri": training_job.model_artifact_uri,
-        "status": training_job.status,
-        "error_message": training_job.error_message,
-        "training_logs": training_job.training_logs,
-        "started_at": training_job.started_at,
-        "completed_at": training_job.completed_at,
-        "runtime_seconds": training_job.runtime_seconds,
-        "stop_reason": training_job.stop_reason,
-        "deleted_at": training_job.deleted_at,
-        "is_deleted": bool(training_job.deleted_at),
-        "registered_model": serialize_model_api(registered_model) if registered_model else None,
-        "registered_model_id": encode_model_id(registered_model.id) if registered_model else None,
-        "tracking_status": training_job.tracking_status,
-        "tracking_error": training_job.tracking_error,
-        "tracking_ingested_at": training_job.tracking_ingested_at,
-        "training_summary": training_job.training_summary,
-        "metrics_summary": training_job.metrics_summary,
-        "params_summary": training_job.params_summary,
-        "model_insights_summary": training_job.model_insights_summary,
-        "artifact_manifest": training_job.artifact_manifest,
-        "deployability_status": training_job.deployability_status,
-        "deployability_reason": training_job.deployability_reason,
-        "mlflow_run_id": training_job.mlflow_run_id or "",
-        "mlflow_experiment_id": training_job.mlflow_experiment_id or "",
-        "mlflow_artifact_uri": training_job.mlflow_artifact_uri or "",
-        "created_at": training_job.created_at,
-        "updated_at": training_job.updated_at,
-    }
-
-
-def _validate_upload_size(upload, label):
-    if upload.size > MAX_TRAINING_FILE_SIZE_BYTES:
-        raise ValidationError({"error": f"{label} must be 512MB or smaller."})
-
-
-def _parse_positive_int(value, field_name, default):
-    raw_value = value if value not in {None, ""} else default
-    try:
-        parsed = int(raw_value)
-    except (TypeError, ValueError):
-        raise ValidationError({"error": f"{field_name} must be a positive integer."})
-    if parsed <= 0:
-        raise ValidationError({"error": f"{field_name} must be a positive integer."})
-    return parsed
-
-
-def _parse_non_negative_int(value, field_name, default):
-    raw_value = value if value not in {None, ""} else default
-    try:
-        parsed = int(raw_value)
-    except (TypeError, ValueError):
-        raise ValidationError({"error": f"{field_name} must be a non-negative integer."})
-    if parsed < 0:
-        raise ValidationError({"error": f"{field_name} must be a non-negative integer."})
-    return parsed
-
-
-def _validate_accelerator_config(accelerator_type, accelerator_count, training_backend):
-    if accelerator_type not in ACCELERATOR_TYPES:
-        raise ValidationError({"error": "accelerator_type must be one of: none, gpu, tpu, trainium."})
-    if accelerator_type == "none":
-        if accelerator_count != 0:
-            raise ValidationError({"error": "accelerator_count must be 0 when accelerator_type is none."})
-        return
-    if accelerator_type in {"tpu", "trainium"}:
-        raise ValidationError({"error": f"{accelerator_type.upper()} training is not supported yet."})
-    if accelerator_type == "gpu":
-        if accelerator_count not in GPU_ACCELERATOR_COUNTS:
-            raise ValidationError({"error": "GPU accelerator_count must be one of: 1, 2, 4."})
-
-
-def _validate_source_zip_entry_point(source_zip, entry_point):
-    if source_zip.name.lower().endswith('.py'):
-        if Path(entry_point).name != Path(source_zip.name).name:
-            raise ValidationError({"error": f"Entry point must match uploaded python file name '{source_zip.name}'."})
-        return
-
-    try:
-        source_zip.seek(0)
-        with zipfile.ZipFile(source_zip) as archive:
-            file_names = [item.filename.replace("\\", "/").lstrip("./").lstrip("/") for item in archive.infolist()]
-    except zipfile.BadZipFile:
-        raise ValidationError({"error": "source_zip is not a valid zip archive."})
-    finally:
-        try:
-            source_zip.seek(0)
-        except Exception:
-            pass
-
-    if not file_names:
-        raise ValidationError({"error": "source_zip is empty."})
-
-    has_template_bundle = "source.zip" in file_names and not any(Path(name).name == "train.py" for name in file_names)
-    if has_template_bundle:
-        raise ValidationError(
-            {
-                "error": (
-                    "You uploaded the template bundle. Extract it and upload the inner source.zip, "
-                    "or use the included train.csv/requirements.txt separately."
-                )
-            }
-        )
-
-    normalized_entry_point = entry_point.replace("\\", "/").lstrip("./").lstrip("/")
-    if normalized_entry_point not in file_names:
-        matching_names = [name for name in file_names if Path(name).name == Path(normalized_entry_point).name]
-        suggestion = f" Did you mean '{matching_names[0]}'?" if len(matching_names) == 1 else ""
-        raise ValidationError(
-            {
-                "error": (
-                    f"Source zip must contain the configured entry point '{normalized_entry_point}'."
-                    f"{suggestion}"
-                )
-            }
-        )
-
-
-def _ensure_active_job_capacity(user):
-    active_count = TrainingJob.objects.filter(
-        tenant=user,
-        deleted_at__isnull=True,
-        status__in=ACTIVE_STATUSES,
-    ).count()
-    if active_count >= settings.TRAINING_MAX_ACTIVE_JOBS_PER_TENANT:
-        raise ValidationError(
-            {
-                "error": (
-                    "You already have an active training job. Please wait for it to finish or cancel it first."
-                )
-            }
-        )
-
-
-def _submit_training_job(training_job, training_backend):
-    if training_backend == "local":
-        run_local_training_job(training_job)
-    else:
-        ArgoTrainingAdapter().start_training_job(training_job)
-    create_training_job_event(training_job, "JOB_SUBMITTED", f"Training job submitted to backend: {training_backend}.")
-
-
-def validate_create_training_job_request(request):
-    name = (request.data.get("name") or "").strip()
-    model_version = (request.data.get("model_version") or "").strip()
-    entry_point = (request.data.get("entry_point") or "train.py").strip()
-    max_runtime_seconds = _parse_positive_int(request.data.get("max_runtime_seconds"), "max_runtime_seconds", 3600)
-    vcpu = _parse_positive_int(request.data.get("vcpu"), "vcpu", 2)
-    memory = _parse_positive_int(request.data.get("memory"), "memory", 4096)
-    accelerator_type = (request.data.get("accelerator_type") or "none").strip().lower()
-    accelerator_count = _parse_non_negative_int(request.data.get("accelerator_count"), "accelerator_count", 0)
-    registered_model_id = request.data.get("registered_model_id")
-
-    if not registered_model_id:
-        raise ValidationError({"error": "registered_model_id is required. You must select a model to train."})
-
-    model_id_int = decode_model_id(registered_model_id)
-    if not model_id_int:
-        raise ValidationError({"error": "Invalid registered_model_id."})
-        
-    base_model = ModelAPI.objects.filter(id=model_id_int, tenant=request.user).first()
-    if not base_model:
-        raise ValidationError({"error": "Registered model not found."})
-
-    if not name:
-        raise ValidationError({"error": "Training job name is required."})
-    if not model_version:
-        raise ValidationError({"error": "Model version is required."})
-    if not entry_point:
-        raise ValidationError({"error": "Entry point is required."})
-    if max_runtime_seconds > settings.TRAINING_MAX_RUNTIME_SECONDS:
-        raise ValidationError({"error": "Max runtime cannot exceed 12 hours per training job."})
-    if (vcpu, memory) not in RUNTIME_PROFILES:
-        raise ValidationError(
-            {
-                "error": (
-                    "Invalid runtime profile. Supported profiles are: "
-                    "small=1 vCPU/2048MB, medium=2 vCPU/4096MB, large=4 vCPU/8192MB."
-                )
-            }
-        )
-    training_backend = settings.TRAINING_BACKEND
-    _validate_accelerator_config(accelerator_type, accelerator_count, training_backend)
-
-    entry_point_path = Path(entry_point)
-    if entry_point_path.is_absolute() or ".." in entry_point_path.parts:
-        raise ValidationError({"error": "entry_point must be a relative path inside source_zip."})
-
-    s3_code_prefix = None
-    if base_model:
-        if base_model.source_code_file:
-            # Legacy path: source code stored as Django FileField (zip/py)
-            _validate_source_zip_entry_point(base_model.source_code_file.file, entry_point)
-        else:
-            # New path: source code stored in S3 via SourceEditor
-            safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
-            s3_code_prefix = f'users/{base_model.tenant.tenant_id}/models/{encode_model_id(base_model.id)}/{safe_version}/code/'
-            s3_files = get_s3_file_list(s3_code_prefix)
-            # Filter out .keep placeholder files
-            real_files = [f for f in s3_files if not f['relative_path'].endswith('.keep')]
-            if not real_files:
-                raise ValidationError(
-                    {"error": "Base model does not have source code. Upload source files in Step 1 (Sources) before starting training."}
-                )
-            # Verify entry_point exists in S3 files
-            s3_paths = [f['relative_path'] for f in real_files]
-            if entry_point not in s3_paths:
-                raise ValidationError(
-                    {
-                        "error": (
-                            f"Entry point '{entry_point}' not found in uploaded source code. "
-                            f"Available files: {', '.join(s3_paths[:5])}."
-                        )
-                    }
-                )
-        if not base_model.reference_data_file:
-            user_name = (
-                base_model.tenant.email.split('@')[0]
-                if getattr(base_model.tenant, 'email', None)
-                else base_model.tenant.tenant_id
-            )
-            safe_model_name = base_model.name.replace(' ', '') if base_model.name else 'UnnamedModel'
-            safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
-            s3_reference_prefix = f'users/{base_model.tenant.tenant_id}/models/{encode_model_id(base_model.id)}/{safe_version}/references/'
-            s3_ref_files = get_s3_file_list(s3_reference_prefix)
-            csv_files = [f for f in s3_ref_files if f['relative_path'].lower().endswith('.csv')]
-            if not csv_files:
-                raise ValidationError(
-                    {"error": "Base model does not have reference data. Upload a .csv file in Step 1 (Sources) before starting training."}
-                )
-
-    return {
-        "name": name,
-        "model_version": model_version,
-        "entry_point": entry_point,
-        "vcpu": vcpu,
-        "memory": memory,
-        "max_runtime_seconds": max_runtime_seconds,
-        "accelerator_type": accelerator_type,
-        "accelerator_count": accelerator_count,
-        "base_model": base_model,
-        "s3_code_prefix": s3_code_prefix,
-        "s3_reference_prefix": s3_reference_prefix,
-    }
 
 
 class TrainingJobListCreateView(APIView):
