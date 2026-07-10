@@ -169,19 +169,20 @@ def run_evidently_job_sync(job_id: int):
             container = client.containers.run(
                 image="mlops-paas-evidently",
                 name=container_name,
-                command=["python", "/app/detect_drift.py"],
                 environment=env,
                 network=network_name,
+                remove=False,
                 detach=True
             )
             
             result = container.wait()
             log_str = container.logs().decode('utf-8')
-            container.remove()
             
             if result['StatusCode'] != 0:
                 logger.error(f"Evidently job container failed. Output: {log_str}")
                 raise Exception(f"Container error: {log_str}")
+
+            container.remove()
                 
             logger.info(f"Evidently job finished. Logs:\n{log_str}")
             

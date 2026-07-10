@@ -9,14 +9,12 @@ import tarfile
 import tempfile
 import traceback
 import zipfile
-import boto3
 import docker
 import redis
 import requests
 import mlflow.pyfunc
 
 from pathlib import Path
-from urllib.parse import urlparse
 from core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
 
 SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
@@ -37,18 +35,30 @@ class RedisLogHandler(logging.Handler):
         except Exception:
             self.handleError(record)
 
-def parse_s3_uri(uri: str) -> tuple[str, str]:
-    parsed = urlparse(uri)
-    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
-        raise ValueError(f"Invalid S3 URI: {uri}")
-    return parsed.netloc, parsed.path.lstrip("/")
+def download_presigned_file(download_url: str, destination: Path) -> None:
+    if not download_url:
+        raise ValueError("Missing presigned download URL.")
 
-def download_s3_uri(s3, uri: str, destination: Path) -> None:
-    bucket, key = parse_s3_uri(uri)
-    print(f"Downloading training artifact from s3://{bucket}/{key}...")
+    print(f"Downloading artifact to {destination.name}...")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    s3.download_file(bucket, key, str(destination))
+    with requests.get(download_url, stream=True, timeout=(10, 600)) as response:
+        response.raise_for_status()
+        with destination.open("wb") as destination_file:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    destination_file.write(chunk)
     print("Download completed.")
+
+
+def upload_presigned_file(upload_url: str, source: Path) -> None:
+    if not upload_url:
+        raise ValueError("Missing presigned upload URL.")
+
+    print(f"Uploading {source.name}...")
+    with source.open("rb") as source_file:
+        response = requests.put(upload_url, data=source_file, timeout=(10, 600))
+    response.raise_for_status()
+    print("Upload completed.")
 
 def safe_extract_tar(archive_path: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
@@ -127,7 +137,7 @@ def build_custom_image(workspace: Path, model_id: str, tenant_id: str, requireme
     dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
 RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
 COPY model /app/model_artifact
 """
@@ -169,7 +179,7 @@ def build_bento_image(workspace: Path, model_id: str, tenant_id: str, requiremen
     dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
 RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
 COPY model /app/model_artifact
 """
@@ -208,19 +218,21 @@ def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
             pip_requirements.extend(dep["pip"])
     return pip_requirements
 
-def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> None:
+def run_build_task(model_id: str, webhook_url: str) -> None:
     flavor = os.environ.get("FLAVOR", "").lower()
     requirements_text = os.environ.get("REQUIREMENTS_TEXT", "")
-    source_key = os.environ.get("SOURCE_KEY")
+    source_download_url = os.environ.get("SOURCE_DOWNLOAD_URL", "")
+    source_artifact_name = os.environ.get("SOURCE_ARTIFACT_NAME", "")
     source_type = os.environ.get("SOURCE_TYPE", "manual_upload")
-    training_artifact_uri = os.environ.get("TRAINING_ARTIFACT_URI", "")
-    output_key = os.environ.get("OUTPUT_KEY")
+    output_upload_url = os.environ.get("OUTPUT_UPLOAD_URL", "")
+    label_mapping_download_url = os.environ.get("LABEL_MAPPING_DOWNLOAD_URL", "")
+    label_mapping_filename = os.environ.get("LABEL_MAPPING_FILENAME", "")
     tenant_id = os.environ.get("TENANT_ID", "unknown")
 
     if source_type == "training_job":
-        if not all([flavor, training_artifact_uri, output_key, bucket_name]):
-            raise ValueError("Missing required environment variables for training artifact build.")
-    elif not all([flavor, source_key, output_key, bucket_name]):
+        if not all([flavor, source_download_url, output_upload_url]):
+            raise ValueError("Missing presigned URLs for training artifact build.")
+    elif not all([flavor, source_download_url, source_artifact_name, output_upload_url]):
         raise ValueError("Missing required environment variables for build.")
 
     workspace_dir = os.environ.get("BUILD_WORKSPACE_DIR")
@@ -237,7 +249,7 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
         if source_type == "training_job":
             training_archive_path = workspace / "training-model.tar.gz"
             extracted_dir = workspace / "training-artifact"
-            download_s3_uri(s3, training_artifact_uri, training_archive_path)
+            download_presigned_file(source_download_url, training_archive_path)
             print("Extracting training artifact safely...")
             safe_extract_tar(training_archive_path, extracted_dir)
             artifact_path = find_supported_model_file(extracted_dir)
@@ -253,11 +265,9 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
             if extracted_label_mapping_path:
                 print(f"Using label mapping from training artifact: {extracted_label_mapping_path.name}")
         else:
-            artifact_name = Path(source_key).name
+            artifact_name = Path(source_artifact_name).name
             artifact_path = workspace / artifact_name
-            print(f"Downloading source artifact from s3://{bucket_name}/{source_key}...")
-            s3.download_file(bucket_name, source_key, str(artifact_path))
-            print("Download completed.")
+            download_presigned_file(source_download_url, artifact_path)
 
         print(f"Loading {flavor} model...")
         model = load_model(artifact_path, flavor)
@@ -271,12 +281,9 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
         if requirements_text.strip():
             (package_dir / "requirements.txt").write_text(requirements_text.strip() + "\n", encoding="utf-8")
 
-        label_mapping_key = os.environ.get("LABEL_MAPPING_KEY")
-        if label_mapping_key:
-            print(f"Downloading label mapping file from s3://{bucket_name}/{label_mapping_key}...")
-            mapping_path = package_dir / Path(label_mapping_key).name
-            s3.download_file(bucket_name, label_mapping_key, str(mapping_path))
-            print("Label mapping download completed.")
+        if label_mapping_download_url:
+            mapping_path = package_dir / Path(label_mapping_filename or "label-mapping.json").name
+            download_presigned_file(label_mapping_download_url, mapping_path)
         elif extracted_label_mapping_path:
             shutil.copy2(extracted_label_mapping_path, package_dir / extracted_label_mapping_path.name)
 
@@ -293,9 +300,7 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
         print("Compressing package to zip...")
         make_zip(package_dir, zip_path)
 
-        print(f"Uploading output to s3://{bucket_name}/{output_key}...")
-        s3.upload_file(str(zip_path), bucket_name, output_key)
-        print("Upload completed.")
+        upload_presigned_file(output_upload_url, zip_path)
 
         if os.environ.get("BUILD_ENGINE", "").lower() == "kaniko":
             print("Kaniko build engine detected. Preparing build context without Docker daemon...")
@@ -306,7 +311,7 @@ def run_build_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> Non
                 dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
 RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
 COPY model /app/model_artifact
 """
@@ -316,7 +321,7 @@ COPY model /app/model_artifact
                 dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
 RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
 COPY model /app/model_artifact
 """
@@ -356,11 +361,12 @@ COPY model /app/model_artifact
         if not os.environ.get("BUILD_WORKSPACE_DIR"):
             shutil.rmtree(workspace, ignore_errors=True)
 
-def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> None:
-    source_key = os.environ.get("SOURCE_KEY")
+def run_test_zip_task(model_id: str, webhook_url: str) -> None:
+    source_download_url = os.environ.get("SOURCE_DOWNLOAD_URL", "")
+    source_artifact_name = os.environ.get("SOURCE_ARTIFACT_NAME", "")
     tenant_id = os.environ.get("TENANT_ID", "unknown")
-    if not all([source_key, bucket_name]):
-        raise ValueError("Missing required environment variables for test.")
+    if not all([source_download_url, source_artifact_name]):
+        raise ValueError("Missing presigned download URL for test.")
 
     workspace_dir = os.environ.get("BUILD_WORKSPACE_DIR")
     if workspace_dir:
@@ -370,12 +376,10 @@ def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> 
     else:
         workspace = Path(tempfile.mkdtemp(prefix=f"test-{model_id}-"))
     try:
-        artifact_name = Path(source_key).name
+        artifact_name = Path(source_artifact_name).name
         zip_path = workspace / artifact_name
 
-        print(f"Downloading ZIP from s3://{bucket_name}/{source_key}...")
-        s3.download_file(bucket_name, source_key, str(zip_path))
-        print("Download completed.")
+        download_presigned_file(source_download_url, zip_path)
 
         extract_dir = workspace / "extracted"
         print("Extracting ZIP archive safely...")
@@ -429,7 +433,7 @@ def run_test_zip_task(s3, model_id: str, bucket_name: str, webhook_url: str) -> 
             dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
-RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|boto3|botocore|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
+RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
 RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
 COPY model /app/model_artifact
 """
@@ -520,21 +524,15 @@ def main():
 
     try:
         task_type = os.environ.get("TASK_TYPE", "BUILD")
-        bucket_name = os.environ.get("AWS_BUCKET_NAME")
         print(f"Starting {task_type} process for model {model_id}...")
-
-        s3 = boto3.client(
-            "s3",
-            region_name=os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1"),
-        )
 
         if task_type == "NOTIFY_BUILD":
             workspace_dir = os.environ.get("BUILD_WORKSPACE_DIR", "/workspace")
             run_notify_task(workspace_dir, webhook_url)
         elif task_type == "TEST_ZIP":
-            run_test_zip_task(s3, model_id, bucket_name, webhook_url)
+            run_test_zip_task(model_id, webhook_url)
         else:
-            run_build_task(s3, model_id, bucket_name, webhook_url)
+            run_build_task(model_id, webhook_url)
     except Exception as exc:
         logger.error("Build failed with error: %s", exc)
         logger.error(traceback.format_exc())

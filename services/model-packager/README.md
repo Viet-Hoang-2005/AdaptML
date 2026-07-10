@@ -56,7 +56,7 @@ src/
 | Model Loading | `mlflow.pyfunc`, `joblib`, `xgboost` |
 | Build (Local) | `docker-py` SDK |
 | Build (Production) | Kaniko (rootless, sinh Dockerfile context vào emptyDir) |
-| Storage | `boto3` S3 |
+| Storage | Presigned S3 HTTP URLs via `requests` |
 | Log Buffer | `redis` (key: `build_logs:{model_id}`, TTL 1h) |
 
 ---
@@ -72,9 +72,9 @@ src/
 | `MODEL_HASHID` | Hashid của model (dùng làm tag image) |
 | `TENANT_ID` | Tenant sở hữu model |
 | `FLAVOR` | Loại model (`bento` hoặc standard) |
-| `SOURCE_KEY` | S3 key của artifact ZIP |
-| `OUTPUT_KEY` | S3 key lưu build output |
-| `AWS_BUCKET_NAME`, `AWS_DEFAULT_REGION` | S3 config |
+| `SOURCE_DOWNLOAD_URL` | Presigned GET URL cho artifact model hoặc training archive |
+| `LABEL_MAPPING_DOWNLOAD_URL` | Presigned GET URL cho label mapping (optional) |
+| `OUTPUT_UPLOAD_URL` | Presigned PUT URL để tải model package lên S3 |
 | `HARBOR_REGISTRY_URL`, `HARBOR_USERNAME`, `HARBOR_PASSWORD` | Harbor config |
 | `CONTROL_PLANE_WEBHOOK_URL` | URL callback kết quả build |
 | `CONTROL_PLANE_WEBHOOK_SECRET` | HMAC secret xác thực webhook |

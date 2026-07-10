@@ -41,6 +41,7 @@ from registry.serializers import (
     serialize_registry_version,
 )
 from registry.services.metadata import (
+    SUPPORTED_BUILD_FLAVORS,
     _apply_manual_metadata_to_model_api,
     _auto_detect_flavor,
     combine_requirements_text,

@@ -296,7 +296,7 @@ DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 BUILD_STRATEGY = os.environ.get("BUILD_STRATEGY", "docker").lower()
 
 # Harbor Settings
-HARBOR_REGISTRY_URL = os.environ.get("HARBOR_REGISTRY_URL", "registry.mlops-nids-nt114.id.vn").strip().rstrip("/")
+HARBOR_REGISTRY_URL = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
 HARBOR_USER_PROJECT = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
 
 # Prometheus Monitoring URL

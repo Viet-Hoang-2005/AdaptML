@@ -100,7 +100,6 @@ spec:
       container:
         image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:276dba0c13cbb3737b6ab730a64f737174cc37c1
         imagePullPolicy: Always
-        command: ["python", "src/cli.py"]
         volumeMounts:
           - name: workspace-vol
             mountPath: /workspace
@@ -179,7 +178,6 @@ spec:
       container:
         image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:276dba0c13cbb3737b6ab730a64f737174cc37c1
         imagePullPolicy: Always
-        command: ["python", "src/cli.py"]
         volumeMounts:
           - name: workspace-vol
             mountPath: /workspace
