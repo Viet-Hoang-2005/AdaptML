@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104.x-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![MLflow](https://img.shields.io/badge/MLflow-3.11.x-0194E2?style=flat-square&logo=mlflow&logoColor=white)](https://mlflow.org)
 [![Evidently AI](https://img.shields.io/badge/Evidently_AI-0.4.x-6D31FF?style=flat-square)](https://evidentlyai.com)
-[![Redpanda](https://img.shields.io/badge/Redpanda-2.3.x-E52B20?style=flat-square)](https://redpanda.com)
+[![Redpanda](https://img.shields.io/badge/Redpanda-Streaming-E52B20?style=flat-square)](https://redpanda.com)
 [![Kubeflow](https://img.shields.io/badge/Kubeflow-PyTorchJob-2596BE?style=flat-square&logo=kubeflow&logoColor=white)](https://kubeflow.org)
 [![Karpenter](https://img.shields.io/badge/Karpenter-Autoscaling-0052CC?style=flat-square)](https://karpenter.sh)
 [![Argo Workflows](https://img.shields.io/badge/Argo-Workflows-EF7B4D?style=flat-square&logo=argo&logoColor=white)](https://argoproj.github.io/workflows)
@@ -98,7 +98,7 @@ Hệ thống này là một **nền tảng AI Platform-as-a-Service (AI PaaS) ML
 ## 5. Cấu trúc Thư mục 📁
 
 ```
-MLOps-nids-system/
+MLOps-paas-system/
 │
 ├── .github/
 │   └── workflows/
@@ -224,8 +224,8 @@ Khi chạy ở chế độ Local, hệ thống sử dụng **`TRAINING_BACKEND=l
 
 ```bash
 # Bước 1: Clone repository
-git clone https://github.com/Viet-Hoang-2005/MLOps-nids-system.git
-cd MLOps-nids-system
+git clone https://github.com/Viet-Hoang-2005/MLOps-paas-system.git
+cd MLOps-paas-system
 
 # Bước 2: Cấu hình biến môi trường
 cp .env.example .env

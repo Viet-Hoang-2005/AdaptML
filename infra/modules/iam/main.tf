@@ -416,7 +416,7 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       # Giới hạn chỉ Repository này mới được quyền dùng Role
-      values = ["repo:Viet-Hoang-2005/MLOps-nids-system:*"]
+      values = ["repo:Viet-Hoang-2005/MLOps-paas-system:*"]
     }
   }
 }

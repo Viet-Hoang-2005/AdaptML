@@ -19,7 +19,7 @@ spec:
           argocd.argoproj.io/secret-type: repository
       data:
         type: git
-        url: https://github.com/Viet-Hoang-2005/MLOps-nids-system.git
+        url: https://github.com/Viet-Hoang-2005/MLOps-paas-system.git
         username: "Viet-Hoang-2005"
         password: "{{ .GITHUB_TOKEN }}"
   data:

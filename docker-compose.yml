@@ -132,7 +132,7 @@ services:
       context: ./services/model-server
       dockerfile: Dockerfile
     image: mlops-paas-model-server
-    container_name: mlops_paas_model_gateway
+    container_name: mlops_paas_model_server
     restart: always
     ports:
       - "5001:5000"
@@ -151,11 +151,11 @@ services:
       HASHIDS_SALT: ${HASHIDS_SALT:-mlops_paas_secret_salt}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.model-gateway.rule=PathRegexp(`^/[A-Za-z0-9-]+/models/[A-Za-z0-9]+/[^/]+/(predict|health)$`)"
-      - "traefik.http.routers.model-gateway.middlewares=model-gateway-rewrite"
-      - "traefik.http.middlewares.model-gateway-rewrite.replacepathregex.regex=^/[^/]+/models/([^/]+)/[^/]+/(predict|health)$"
-      - "traefik.http.middlewares.model-gateway-rewrite.replacepathregex.replacement=/models/$${1}/$${2}"
-      - "traefik.http.services.model-gateway.loadbalancer.server.port=5000"
+      - "traefik.http.routers.model-server.rule=PathRegexp(`^/[A-Za-z0-9-]+/models/[A-Za-z0-9]+/[^/]+/(predict|health)$`)"
+      - "traefik.http.routers.model-server.middlewares=model-server-rewrite"
+      - "traefik.http.middlewares.model-server-rewrite.replacepathregex.regex=^/[^/]+/models/([^/]+)/[^/]+/(predict|health)$"
+      - "traefik.http.middlewares.model-server-rewrite.replacepathregex.replacement=/models/$${1}/$${2}"
+      - "traefik.http.services.model-server.loadbalancer.server.port=5000"
     depends_on:
       postgres:
         condition: service_healthy

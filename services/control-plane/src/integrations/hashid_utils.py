@@ -3,7 +3,7 @@ from django.conf import settings
 from hashids import Hashids
 
 # Get salt from environment or Django settings, fallback to default
-salt = os.environ.get("HASHIDS_SALT", "mlops_paas_secret_salt")
+salt = os.environ.get("HASHIDS_SALT")
 hashids = Hashids(salt=salt, min_length=6)
 
 def encode_model_id(int_id: int) -> str:

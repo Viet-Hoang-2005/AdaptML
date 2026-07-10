@@ -26,7 +26,7 @@ JWKS_URL = os.environ.get("JWKS_URL", "http://control-plane:8000/api/auth/.well-
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "redpanda:9092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/1")
-HASHIDS_SALT = os.environ.get("HASHIDS_SALT", "mlops_paas_secret_salt")
+HASHIDS_SALT = os.environ.get("HASHIDS_SALT")
 hashids = Hashids(salt=HASHIDS_SALT, min_length=6)
 
 def decode_model_id(hash_str: str) -> int:
