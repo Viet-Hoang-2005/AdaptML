@@ -80,6 +80,7 @@ class TrainingJobListCreateView(APIView):
             name=payload["name"],
             model_version=payload["model_version"],
             entry_point=payload["entry_point"],
+            requirements_text=payload["requirements_text"],
             training_backend=training_backend,
             vcpu=payload["vcpu"],
             memory=payload["memory"],
@@ -224,6 +225,7 @@ class TrainingJobRetryView(TrainingJobDetailView):
             name=original.name,
             model_version=original.model_version,
             entry_point=original.entry_point,
+            requirements_text=original.requirements_text,
             training_backend=original.training_backend,
             vcpu=original.vcpu,
             memory=original.memory,
@@ -232,6 +234,7 @@ class TrainingJobRetryView(TrainingJobDetailView):
             accelerator_count=original.accelerator_count,
             s3_source_uri=original.s3_source_uri,
             s3_training_data_uri=original.s3_training_data_uri,
+            model_api=original.model_api,
             retry_of=original,
             status="pending",
         )

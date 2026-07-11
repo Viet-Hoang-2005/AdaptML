@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { FileCode2, Cpu, Play, AlertTriangle, Database, ArrowLeft, ArrowRight, Zap, Clock} from 'lucide-react';
 import { useNavigate, Link, useBlocker } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -76,6 +76,7 @@ export default function CreateTrainingJobPage() {
     name: '',
     model_version: '',
     entry_point: '',
+    requirements_text: '',
     vcpu: 2,
     memory: 4096,
     max_runtime_seconds: 3600,
@@ -94,6 +95,7 @@ export default function CreateTrainingJobPage() {
   const [referenceDataDirty, setReferenceDataDirty] = useState(false);
   const [requirementsDirty, setRequirementsDirty] = useState(false);
   const [showStepConfirm, setShowStepConfirm] = useState(false);
+  const [showRequirementsDirtyWarning, setShowRequirementsDirtyWarning] = useState(false);
 
   const hasUnsavedChanges = sourceCodeDirty || referenceDataDirty || requirementsDirty;
 
@@ -124,6 +126,19 @@ export default function CreateTrainingJobPage() {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
+  const setRequirementsText = useCallback((requirementsText: string) => {
+    setForm(prev => (
+      prev.requirements_text === requirementsText
+        ? prev
+        : { ...prev, requirements_text: requirementsText }
+    ));
+  }, []);
+
+  /** Called by TextEditor after a successful Save (PATCH ModelAPI) */
+  const handleRequirementsSaved = useCallback(() => {
+    setRequirementsDirty(false);
+  }, []);
+
   const currentProfileId = runtimeProfiles.find(p => p.vcpu === form.vcpu && p.memory === form.memory)?.id || 'medium';
 
   const canContinue = () => {
@@ -148,6 +163,18 @@ export default function CreateTrainingJobPage() {
 
   const submitTraining = async () => {
     if (!selectedModel) return;
+
+    // Guard: warn if requirements editor has unsaved changes
+    if (requirementsDirty) {
+      setShowRequirementsDirtyWarning(true);
+      return;
+    }
+
+    await _doSubmitTraining();
+  };
+
+  const _doSubmitTraining = async () => {
+    if (!selectedModel) return;
     setSubmitting(true);
     try {
       const payload: TrainingJobFormValues = {
@@ -155,6 +182,9 @@ export default function CreateTrainingJobPage() {
         name: selectedModel.name,
         model_version: `v${(parseInt(selectedModel.version.replace('v', '')) || 0) + 1}`,
         registered_model_id: selectedModel.id,
+        // Intentionally omit requirements_text here — backend will read from
+        // ModelAPI.requirements_text (the last saved value) as source of truth.
+        requirements_text: undefined as unknown as string,
       };
 
       const response = await createTrainingJob(payload);
@@ -253,7 +283,12 @@ export default function CreateTrainingJobPage() {
             />
 
             {selectedModel && (
-              <TextEditor modelApi={selectedModel} onDirtyChange={setRequirementsDirty} />
+              <TextEditor
+                modelApi={selectedModel}
+                onDirtyChange={setRequirementsDirty}
+                onContentChange={setRequirementsText}
+                onSaveSuccess={handleRequirementsSaved}
+              />
             )}
           </div>
         )}
@@ -437,6 +472,28 @@ export default function CreateTrainingJobPage() {
           setStep(s => s + 1);
         }}
         onCancel={() => setShowStepConfirm(false)}
+      />
+
+      <ConfirmModal
+        open={showRequirementsDirtyWarning}
+        title="Requirements Not Saved"
+        description={
+          <span>
+            You have edited <strong>requirements.txt</strong> but have not saved it yet.
+            <br /><br />
+            The training job will use the <strong>last saved version</strong> from the server, not your current unsaved edits.
+            <br /><br />
+            Go back and click <strong>Save</strong> in the requirements editor to include your latest changes.
+          </span>
+        }
+        confirmText="Proceed with Saved Version"
+        cancelText="Go Back and Save"
+        tone="danger"
+        onConfirm={() => {
+          setShowRequirementsDirtyWarning(false);
+          _doSubmitTraining();
+        }}
+        onCancel={() => setShowRequirementsDirtyWarning(false)}
       />
     </section>
   );

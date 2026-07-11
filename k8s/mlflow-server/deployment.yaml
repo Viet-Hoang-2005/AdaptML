@@ -62,7 +62,7 @@ spec:
                 --allowed-hosts "*" \
                 --cors-allowed-origins "*" \
                 --backend-store-uri "postgresql://${DB_USER}:${DB_PASSWORD}@mlops-paas-postgres-rw.default.svc.cluster.local:5432/mlops_paas_db?options=-c%20search_path%3Dmlflow" \
-                --default-artifact-root "s3://mlops-paas-artifacts/mlflow/"
+                --default-artifact-root "s3://${AWS_BUCKET_NAME}/users/_system/mlflow/"
           ports:
             - containerPort: 5000
               name: http

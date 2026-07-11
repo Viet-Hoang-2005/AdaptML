@@ -332,8 +332,6 @@ spec:
                       value: ""
                     - name: control_plane_webhook_url
                       value: ""
-                    - name: s3_job_source_bundle_uri
-                      value: ""
                     - name: requirements_text
                       value: ""
                     - name: mlflow_tracking_uri
@@ -383,33 +381,27 @@ spec:
             - src:
                 {
                   dependencyName: train-dep,
-                  dataKey: body.s3_job_source_bundle_uri,
+                  dataKey: body.requirements_text,
                 }
               dest: spec.arguments.parameters.14.value
             - src:
                 {
                   dependencyName: train-dep,
-                  dataKey: body.requirements_text,
+                  dataKey: body.mlflow_tracking_uri,
                 }
               dest: spec.arguments.parameters.15.value
             - src:
                 {
                   dependencyName: train-dep,
-                  dataKey: body.mlflow_tracking_uri,
+                  dataKey: body.mlflow_experiment_name,
                 }
               dest: spec.arguments.parameters.16.value
             - src:
                 {
                   dependencyName: train-dep,
-                  dataKey: body.mlflow_experiment_name,
-                }
-              dest: spec.arguments.parameters.17.value
-            - src:
-                {
-                  dependencyName: train-dep,
                   dataKey: body.mlflow_artifact_root,
                 }
-              dest: spec.arguments.parameters.18.value
+              dest: spec.arguments.parameters.17.value
 
     - template:
         name: cancel-train-workflow-trigger

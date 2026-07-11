@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
 from integrations.hashid_utils import encode_model_id
+from integrations.s3_paths import training_job_code_key, training_job_data_key, training_job_prefix
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
@@ -61,15 +62,16 @@ def upload_training_inputs_to_s3(training_job) -> tuple[str, str, str]:
     if not bucket:
         raise ValidationError({"error": "AWS_STORAGE_BUCKET_NAME is not configured."})
 
-    if getattr(training_job, "model_api", None):
-        tenant_id = training_job.tenant.tenant_id
-        model_hash_id = encode_model_id(training_job.model_api.id)
-        safe_version = training_job.model_api.version.replace(' ', '') if training_job.model_api.version else 'v1'
-        prefix = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/training/jobs/{training_job.id}"
-        code_target_key = f"users/{tenant_id}/models/{model_hash_id}/{safe_version}/code/source.zip"
-    else:
-        prefix = f"tenants/{training_job.tenant.tenant_id}/jobs/{training_job.id}"
-        code_target_key = f"{prefix}/source/source.zip"
+    if not getattr(training_job, "model_api", None):
+        raise ValidationError(
+            {"error": "Training job must be linked to a model before uploading S3 inputs."}
+        )
+
+    tenant_id = training_job.tenant.tenant_id
+    model_hash_id = encode_model_id(training_job.model_api.id)
+    prefix = training_job_prefix(tenant_id, model_hash_id, training_job.id)
+    code_target_key = training_job_code_key(tenant_id, model_hash_id, training_job.id)
+    data_target_key = training_job_data_key(tenant_id, model_hash_id, training_job.id)
 
     s3 = _s3_client()
 
@@ -107,25 +109,17 @@ def upload_training_inputs_to_s3(training_job) -> tuple[str, str, str]:
         training_job.s3_source_uri = source_uri
 
     if not data_uri and training_data:
-        key = f"{prefix}/data/train.csv"
         training_data.seek(0)
-        s3.upload_fileobj(training_data, bucket, key)
-        data_uri = _s3_uri(bucket, key)
+        s3.upload_fileobj(training_data, bucket, data_target_key)
+        data_uri = _s3_uri(bucket, data_target_key)
         training_job.s3_training_data_uri = data_uri
     elif data_uri and data_uri.startswith("s3://"):
         src_bucket, src_key = _split_s3_uri(data_uri)
-        if getattr(training_job, "model_api", None):
-            if src_key.endswith("/"):
-                target_key = _first_object_key(s3, src_bucket, src_key)
-            else:
-                target_key = src_key
-        else:
-            target_key = f"{prefix}/data/train.csv"
-            if src_key.endswith("/"):
-                src_key = _first_object_key(s3, src_bucket, src_key)
-            if src_key != target_key:
-                s3.copy_object(CopySource={"Bucket": src_bucket, "Key": src_key}, Bucket=bucket, Key=target_key)
-        data_uri = _s3_uri(bucket, target_key)
+        if src_key.endswith("/"):
+            src_key = _first_object_key(s3, src_bucket, src_key)
+        if src_bucket != bucket or src_key != data_target_key:
+            s3.copy_object(CopySource={"Bucket": src_bucket, "Key": src_key}, Bucket=bucket, Key=data_target_key)
+        data_uri = _s3_uri(bucket, data_target_key)
         training_job.s3_training_data_uri = data_uri
 
     if not source_uri or not data_uri:

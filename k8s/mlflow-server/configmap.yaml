@@ -5,4 +5,4 @@ metadata:
   namespace: mlflow-server
 data:
   AWS_DEFAULT_REGION: "ap-southeast-1"
-  MLFLOW_DEFAULT_ARTIFACT_ROOT: "s3://mlops-paas-artifacts/mlflow/"
+  AWS_BUCKET_NAME: "mlops-paas-artifacts"

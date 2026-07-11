@@ -28,6 +28,7 @@ def serialize_training_job(training_job: TrainingJob):
         "name": training_job.name,
         "model_version": training_job.model_version,
         "entry_point": training_job.entry_point,
+        "requirements_text": training_job.requirements_text,
         "training_backend": training_job.training_backend,
         "vcpu": training_job.vcpu,
         "memory": training_job.memory,

@@ -6,6 +6,7 @@ import requests
 from django.conf import settings
 from django.core.cache import cache
 from integrations.hashid_utils import encode_model_id
+from integrations.s3_paths import training_job_mlflow_prefix
 from training.s3_storage_service import (
     upload_training_inputs_to_s3,
     generate_presigned_download_url,
@@ -19,21 +20,15 @@ def training_webhook_url(training_job_id: int) -> str:
     return f"{internal_base_url}/api/training/{training_job_id}/training-webhook"
 
 
-def _safe_model_version(value: str) -> str:
-    return (str(value or "v1").strip() or "v1").replace(" ", "")
-
-
 def _mlflow_tracking_layout(training_job, bucket_name: str, s3_prefix: str) -> tuple[str, str]:
-    if getattr(training_job, "model_api", None):
-        tenant_id = training_job.tenant.tenant_id
-        model_hash_id = encode_model_id(training_job.model_api.id)
-        safe_version = _safe_model_version(training_job.model_version or training_job.model_api.version)
-        artifact_root = f"s3://{bucket_name}/users/{tenant_id}/models/{model_hash_id}/{safe_version}/mlflow"
-        experiment_name = f"tenant-{tenant_id}-model-{model_hash_id}-{safe_version}"
-        return experiment_name, artifact_root
+    if not getattr(training_job, "model_api", None):
+        raise ValueError("Training jobs must be linked to a model before configuring MLflow artifacts.")
 
-    artifact_root = f"s3://{bucket_name}/{s3_prefix}/mlflow"
-    experiment_name = f"tenant-{training_job.tenant.tenant_id}"
+    tenant_id = training_job.tenant.tenant_id
+    model_hash_id = encode_model_id(training_job.model_api.id)
+    mlflow_prefix = training_job_mlflow_prefix(tenant_id, model_hash_id, training_job.id)
+    artifact_root = f"s3://{bucket_name}/{mlflow_prefix}"
+    experiment_name = f"tenant-{tenant_id}-training-job-{training_job.id}"
     return experiment_name, artifact_root
 
 
@@ -45,7 +40,6 @@ class ArgoTrainingAdapter:
         bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "")
         output_prefix = f"{s3_prefix}/output"
         model_artifact_uri = f"s3://{bucket_name}/{output_prefix}/model.tar.gz"
-        job_bundle_uri = f"s3://{bucket_name}/{s3_prefix}/source/source.zip"
         training_job.external_job_id = job_name
         training_job.status = "pending"
         training_job.model_artifact_uri = model_artifact_uri
@@ -59,13 +53,12 @@ class ArgoTrainingAdapter:
         except Exception as exc:
             logger.warning(f"Could not clear old training logs in Redis: {exc}")
 
-        raw_req = training_job.model_api.requirements_text if getattr(training_job, "model_api", None) else ""
+        raw_req = training_job.requirements_text
         requirements_text = base64.b64encode(raw_req.encode("utf-8")).decode("utf-8") if raw_req else ""
 
         source_presigned = generate_presigned_download_url(str(training_job.s3_source_uri), expiry_seconds=14400)
         data_presigned = generate_presigned_download_url(str(training_job.s3_training_data_uri), expiry_seconds=14400)
         output_presigned = generate_presigned_upload_url(model_artifact_uri, expiry_seconds=14400)
-        bundle_presigned = generate_presigned_upload_url(job_bundle_uri, expiry_seconds=14400)
         mlflow_experiment_name, mlflow_artifact_root = _mlflow_tracking_layout(training_job, bucket_name, s3_prefix)
 
         webhook_url = os.environ.get(
@@ -84,7 +77,6 @@ class ArgoTrainingAdapter:
             "s3_source_uri": source_presigned,
             "s3_training_data_uri": data_presigned,
             "s3_output_uri": output_presigned,
-            "s3_job_source_bundle_uri": bundle_presigned,
             "requirements_text": requirements_text,
             "entry_point": str(training_job.entry_point),
             "model_version": str(training_job.model_version),

@@ -4,18 +4,22 @@ import tempfile
 import zipfile
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
 from authentication.models import CustomUser, ModelAPI, ModelVersion, TrainingJob
+from integrations.hashid_utils import encode_model_id
 from training.tracking_ingestion_service import (
     compute_deployability,
     ingest_training_job_tracking,
 )
 from training.s3_storage_service import upload_training_inputs_to_s3
+from training.argo_training_adapter import _mlflow_tracking_layout
+from training.services.validation import validate_create_training_job_request
 
 
 class _FakeS3Paginator:
@@ -36,9 +40,9 @@ class _FakeS3Paginator:
 class _FakeS3Client:
     def __init__(self):
         self.objects = {
-            ("source-bucket", "tenants/T-1/models/demo/v1/code/train.py"): b"print('ok')\n",
-            ("source-bucket", "tenants/T-1/models/demo/v1/code/requirements.txt"): b"pandas\n",
-            ("source-bucket", "tenants/T-1/models/demo/v1/references/train.csv"): b"f1,label\n1,0\n",
+            ("source-bucket", "users/T-1/models/demo/code/train.py"): b"print('ok')\n",
+            ("source-bucket", "users/T-1/models/demo/code/requirements.txt"): b"pandas\n",
+            ("source-bucket", "users/T-1/models/demo/data/train.csv"): b"f1,label\n1,0\n",
         }
         self.uploads = {}
         self.copies = []
@@ -56,6 +60,9 @@ class _FakeS3Client:
     def upload_fileobj(self, file_obj, bucket, key):
         self.uploads[(bucket, key)] = file_obj.read()
 
+    def get_object(self, **kwargs):
+        return {"Body": BytesIO(self.objects[(kwargs["Bucket"], kwargs["Key"])])}
+
     def copy_object(self, **kwargs):
         self.copies.append(kwargs)
 
@@ -63,6 +70,7 @@ class _FakeS3Client:
 class S3TrainingInputPackagingTests(TestCase):
     def setUp(self):
         self.user = CustomUser.objects.create_user(email="tenant@example.com", password="pass")
+        self.model = ModelAPI.objects.create(tenant=self.user, name="demo-model", version="v1")
 
     def _job(self, **overrides):
         defaults = {
@@ -71,11 +79,10 @@ class S3TrainingInputPackagingTests(TestCase):
             "model_version": "v1",
             "entry_point": "train.py",
             "training_backend": "kubeflow",
-            "source_zip": SimpleUploadedFile("placeholder.zip", b""),
-            "training_data": SimpleUploadedFile("placeholder.csv", b""),
+            "model_api": self.model,
             "status": "pending",
-            "s3_source_uri": "s3://source-bucket/tenants/T-1/models/demo/v1/code/",
-            "s3_training_data_uri": "s3://source-bucket/tenants/T-1/models/demo/v1/references/",
+            "s3_source_uri": "s3://source-bucket/users/T-1/models/demo/code/",
+            "s3_training_data_uri": "s3://source-bucket/users/T-1/models/demo/data/",
         }
         defaults.update(overrides)
         return TrainingJob.objects.create(**defaults)
@@ -89,8 +96,10 @@ class S3TrainingInputPackagingTests(TestCase):
 
         source_uri, data_uri, prefix = upload_training_inputs_to_s3(job)
 
-        expected_source_key = f"{prefix}/source/source.zip"
-        expected_data_key = f"{prefix}/data/train.csv"
+        model_hash_id = encode_model_id(self.model.id)
+        self.assertEqual(prefix, f"users/{self.user.tenant_id}/models/{model_hash_id}/training/jobs/{job.id}")
+        expected_source_key = f"{prefix}/input/code/source.zip"
+        expected_data_key = f"{prefix}/input/data/train.csv"
         self.assertEqual(source_uri, f"s3://target-bucket/{expected_source_key}")
         self.assertEqual(data_uri, f"s3://target-bucket/{expected_data_key}")
         self.assertIn(("target-bucket", expected_source_key), fake_client.uploads)
@@ -99,11 +108,80 @@ class S3TrainingInputPackagingTests(TestCase):
         self.assertEqual(
             fake_client.copies[0],
             {
-                "CopySource": {"Bucket": "source-bucket", "Key": "tenants/T-1/models/demo/v1/references/train.csv"},
+                "CopySource": {"Bucket": "source-bucket", "Key": "users/T-1/models/demo/data/train.csv"},
                 "Bucket": "target-bucket",
                 "Key": expected_data_key,
             },
         )
+
+    def test_mlflow_artifacts_are_scoped_to_the_training_job(self):
+        job = self._job()
+        model_hash_id = encode_model_id(self.model.id)
+
+        experiment_name, artifact_root = _mlflow_tracking_layout(job, "target-bucket", "unused")
+
+        self.assertEqual(experiment_name, f"tenant-{self.user.tenant_id}-training-job-{job.id}")
+        self.assertEqual(
+            artifact_root,
+            f"s3://target-bucket/users/{self.user.tenant_id}/models/{model_hash_id}/training/jobs/{job.id}/mlflow",
+        )
+
+    def test_job_without_model_cannot_use_legacy_training_prefix(self):
+        job = self._job(model_api=None)
+
+        with self.assertRaises(ValidationError) as context:
+            upload_training_inputs_to_s3(job)
+
+        self.assertIn("must be linked to a model", str(context.exception))
+
+
+class TrainingJobRequirementsSnapshotTests(TestCase):
+    def setUp(self):
+        self.user = CustomUser.objects.create_user(email="requirements@example.com", password="pass")
+        self.model = ModelAPI.objects.create(
+            tenant=self.user,
+            name="requirements-model",
+            version="v1",
+            requirements_text="scikit-learn==1.5.0\n",
+        )
+
+    def _request(self, requirements_text=None):
+        data = {
+            "name": self.model.name,
+            "model_version": "v2",
+            "entry_point": "train.py",
+            "vcpu": 2,
+            "memory": 4096,
+            "max_runtime_seconds": 3600,
+            "accelerator_type": "none",
+            "accelerator_count": 0,
+            "registered_model_id": encode_model_id(self.model.id),
+        }
+        if requirements_text is not None:
+            data["requirements_text"] = requirements_text
+        return SimpleNamespace(user=self.user, data=data)
+
+    @patch("training.services.validation.get_s3_file_list")
+    def test_uses_model_requirements_when_editor_payload_is_omitted(self, mock_list_files):
+        mock_list_files.side_effect = [
+            [{"relative_path": "train.py"}],
+            [{"relative_path": "train.csv"}],
+        ]
+
+        payload = validate_create_training_job_request(self._request())
+
+        self.assertEqual(payload["requirements_text"], "scikit-learn==1.5.0\n")
+
+    @patch("training.services.validation.get_s3_file_list")
+    def test_uses_requirements_snapshot_from_training_editor(self, mock_list_files):
+        mock_list_files.side_effect = [
+            [{"relative_path": "train.py"}],
+            [{"relative_path": "train.csv"}],
+        ]
+
+        payload = validate_create_training_job_request(self._request("pandas==2.2.2\n"))
+
+        self.assertEqual(payload["requirements_text"], "pandas==2.2.2\n")
 
 
 @override_settings(MLFLOW_TRACKING_REQUIRED=True)
@@ -124,8 +202,6 @@ class TrackingIngestionTests(TestCase):
             model_version="v1",
             entry_point="train.py",
             training_backend="kubeflow",
-            source_zip=SimpleUploadedFile("source.zip", b"zip"),
-            training_data=SimpleUploadedFile("train.csv", b"f1,label\n1,0\n"),
             status=status,
             model_artifact_uri=str(artifact_path),
         )
@@ -192,7 +268,7 @@ class TrackingIngestionTests(TestCase):
         mock_mlflow.return_value = {
             "run_id": "run-1",
             "experiment_id": "exp-1",
-            "artifact_uri": "s3://bucket/mlflow/run-1",
+            "artifact_uri": "s3://bucket/users/T-1/models/demo/training/jobs/1/mlflow/run-1",
             "tracking_uri": "http://mlflow:5000",
             "run_name": "training-job-1-demo",
         }
@@ -218,7 +294,7 @@ class TrackingIngestionTests(TestCase):
         mock_mlflow.return_value = {
             "run_id": "run-no-insights",
             "experiment_id": "exp-1",
-            "artifact_uri": "s3://bucket/mlflow/run-no-insights",
+            "artifact_uri": "s3://bucket/users/T-1/models/demo/training/jobs/1/mlflow/run-no-insights",
             "tracking_uri": "http://mlflow:5000",
             "run_name": "training-job-no-insights-demo",
         }
@@ -239,7 +315,7 @@ class TrackingIngestionTests(TestCase):
         mock_mlflow.return_value = {
             "run_id": "run-2",
             "experiment_id": "exp-1",
-            "artifact_uri": "s3://bucket/mlflow/run-2",
+            "artifact_uri": "s3://bucket/users/T-1/models/demo/training/jobs/1/mlflow/run-2",
             "tracking_uri": "http://mlflow:5000",
             "run_name": "training-job-2-demo",
         }
@@ -284,7 +360,7 @@ class TrackingIngestionTests(TestCase):
         mock_mlflow.return_value = {
             "run_id": "run-3",
             "experiment_id": "exp-1",
-            "artifact_uri": "s3://bucket/mlflow/run-3",
+            "artifact_uri": "s3://bucket/users/T-1/models/demo/training/jobs/1/mlflow/run-3",
             "tracking_uri": "http://mlflow:5000",
             "run_name": "training-job-3-demo",
         }

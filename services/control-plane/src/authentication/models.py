@@ -11,6 +11,7 @@ from django.utils import timezone
 from django_redis import get_redis_connection
 from django.core.cache import cache
 from integrations.hashid_utils import encode_model_id
+from integrations.s3_paths import model_code_prefix, model_data_prefix
 
 class TrainingUploadStorage(FileSystemStorage):
     def __init__(self, *args, **kwargs):
@@ -56,12 +57,10 @@ def label_mapping_path(instance, filename):
     return f'users/{get_user_prefix(instance)}/models/{get_model_hash_id(instance)}/{safe_version}/mapping/{filename}'
 
 def model_source_code_path(instance, filename):
-    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'users/{get_user_prefix(instance)}/models/{get_model_hash_id(instance)}/{safe_version}/code/{filename}'
+    return f'{model_code_prefix(get_user_prefix(instance), get_model_hash_id(instance))}{filename}'
 
 def model_reference_data_path(instance, filename):
-    safe_version = instance.version.replace(' ', '') if instance.version else 'v1'
-    return f'users/{get_user_prefix(instance)}/models/{get_model_hash_id(instance)}/{safe_version}/references/{filename}'
+    return f'{model_data_prefix(get_user_prefix(instance), get_model_hash_id(instance))}{filename}'
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -335,6 +334,7 @@ class TrainingJob(models.Model):
     name = models.CharField(max_length=160)
     model_version = models.CharField(max_length=80)
     entry_point = models.CharField(max_length=160, default="train.py")
+    requirements_text = models.TextField(blank=True, default="")
     training_backend = models.CharField(max_length=20, choices=BACKEND_CHOICES, default="kubeflow")
     vcpu = models.PositiveIntegerField(default=2)
     memory = models.PositiveIntegerField(default=4096)

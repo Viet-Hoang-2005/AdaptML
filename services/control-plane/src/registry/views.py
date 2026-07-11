@@ -30,6 +30,7 @@ from authentication.models import (
     ModelRoutingAlias,
     ModelVersion,
     model_artifact_path,
+    ModelDeploymentHistory,
 )
 from integrations.s3_zip_utils import upload_single_file_to_s3, get_s3_file_list, handle_upload_to_s3, delete_s3_path
 from registry.serializers import (
@@ -39,6 +40,7 @@ from registry.serializers import (
     serialize_registry_history,
     serialize_registry_metric,
     serialize_registry_version,
+    _serialize_routing_alias,
 )
 from registry.services.metadata import (
     SUPPORTED_BUILD_FLAVORS,
@@ -59,6 +61,7 @@ from registry.services.runtime import (
     model_artifact_uri,
     resolve_smoke_test_url,
     build_endpoint_url,
+    build_alias_endpoint_url,
 )
 from registry.services.versioning import (
     _create_registry_history,
@@ -569,10 +572,14 @@ def _trigger_training_model_build(model_api):
     model_api.endpoint_url = build_endpoint_url(model_api)
     model_api.save(update_fields=["status", "build_status", "build_error", "error_message", "endpoint_url", "updated_at"])
 
+    req_text = model_api.requirements_text
+    if not req_text and model_api.source_training_job:
+        req_text = model_api.source_training_job.requirements_text or ""
+
     get_build_adapter().trigger_build(
         model_id=str(model_api.id),
         flavor=model_api.flavor,
-        requirements_text=model_api.requirements_text,
+        requirements_text=req_text,
         source_key="",
         output_key=output_key,
         training_artifact_uri=model_api.source_artifact_uri,

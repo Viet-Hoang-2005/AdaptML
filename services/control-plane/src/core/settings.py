@@ -283,6 +283,7 @@ MLFLOW_HTTP_REQUEST_TIMEOUT = int(os.environ.get('MLFLOW_HTTP_REQUEST_TIMEOUT', 
 # boto3 sẽ tự động sử dụng IAM Role được gán cho EC2 instance (cấu hình trong main.tf)
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_BUCKET_NAME', 'mlops-paas-artifacts')
 AWS_S3_REGION_NAME = os.environ.get('AWS_DEFAULT_REGION', 'ap-southeast-1')
+AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', '').strip() or None
 AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN') or None
 
 # Tự động gán quyền đọc cho file khi upload lên S3

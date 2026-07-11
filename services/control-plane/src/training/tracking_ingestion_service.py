@@ -11,6 +11,7 @@ from django.conf import settings
 from django.utils import timezone
 from authentication.models import TrainingJob
 from integrations.hashid_utils import encode_model_id
+from integrations.s3_paths import training_job_mlflow_prefix
 from registry.views import sync_registry_version_from_model_api
 
 MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
@@ -306,21 +307,23 @@ def _log_to_mlflow(training_job: TrainingJob, mlops_dir: Path, metrics: dict, pa
         raise TrackingIngestionError("MLFLOW_TRACKING_URI is not configured.")
 
     mlflow.set_tracking_uri(tracking_uri)
-    if getattr(training_job, "model_api", None):
-        tenant_id = training_job.tenant.tenant_id
-        model_hash_id = encode_model_id(training_job.model_api.id)
-        safe_version = (str(training_job.model_version or training_job.model_api.version or "v1").strip() or "v1").replace(" ", "")
-        bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "")
-        artifact_root = f"s3://{bucket_name}/users/{tenant_id}/models/{model_hash_id}/{safe_version}/mlflow"
-        experiment_name = f"tenant-{tenant_id}-model-{model_hash_id}-{safe_version}"
-    else:
-        artifact_root = ""
+    if not getattr(training_job, "model_api", None):
+        raise TrackingIngestionError(
+            "Training job is not linked to a model, so its MLflow artifact root cannot be resolved."
+        )
+
+    tenant_id = training_job.tenant.tenant_id
+    model_hash_id = encode_model_id(training_job.model_api.id)
+    bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "")
+    mlflow_prefix = training_job_mlflow_prefix(tenant_id, model_hash_id, training_job.id)
+    artifact_root = f"s3://{bucket_name}/{mlflow_prefix}"
+    experiment_name = f"tenant-{tenant_id}-training-job-{training_job.id}"
 
     experiment = mlflow.get_experiment_by_name(experiment_name)
     if not experiment:
         experiment_id = mlflow.create_experiment(
             experiment_name,
-            artifact_location=artifact_root or None,
+            artifact_location=artifact_root,
         )
         experiment = mlflow.get_experiment(experiment_id)
     mlflow.set_experiment(experiment_name)

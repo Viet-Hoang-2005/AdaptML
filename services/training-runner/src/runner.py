@@ -771,30 +771,6 @@ def create_model_archive(archive_path: Path) -> None:
                 archive.add(item, arcname=item.relative_to(MODEL_DIR))
 
 
-def package_and_upload_job_bundle(bundle_uri: str) -> None:
-    if not bundle_uri:
-        return
-    log("Packaging job source bundle (code, references, requirements.txt)...")
-    bundle_zip_path = WORKSPACE / "job_source_bundle.zip"
-    try:
-        with zipfile.ZipFile(bundle_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            if SOURCE_DIR.exists():
-                for item in SOURCE_DIR.rglob("*"):
-                    if item.is_file():
-                        rel = item.relative_to(SOURCE_DIR)
-                        zf.write(item, arcname=str(rel))
-            if INPUT_TRAIN_DIR.exists():
-                for item in INPUT_TRAIN_DIR.rglob("*"):
-                    if item.is_file():
-                        rel = item.relative_to(INPUT_TRAIN_DIR)
-                        zf.write(item, arcname=f"references/{rel}")
-        log(f"Uploading job source bundle...")
-        upload_s3(bundle_zip_path, bundle_uri)
-        log("Job source bundle uploaded successfully.")
-    except Exception as exc:
-        log(f"Warning: Failed to package and upload job bundle: {exc}")
-
-
 def main() -> None:
     source_uri = require_env("S3_SOURCE_URI")
     training_data_uri = require_env("S3_TRAINING_DATA_URI")
@@ -841,26 +817,22 @@ def main() -> None:
         log("Writing requirements.txt from REQUIREMENTS_TEXT env var")
         requirements_path.write_text(requirements_text, encoding="utf-8")
 
-    bundle_uri = os.environ.get("S3_JOB_SOURCE_BUNDLE_URI", "").strip()
-    try:
-        install_requirements(requirements_path)
-        result = run_training(entry_point, model_version)
-        training_status = "succeeded" if result.returncode == 0 else "failed"
-        write_mlops_bundle(
-            entry_point=entry_point,
-            model_version=model_version,
-            training_job_id=training_job_id,
-            status=training_status,
-            stdout_text=result.stdout or "",
-            stderr_text=result.stderr or "",
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"Training entry point failed with exit code {result.returncode}")
-        create_model_archive(model_archive_path)
-        upload_s3(model_archive_path, output_uri)
-        log("Training job completed successfully")
-    finally:
-        package_and_upload_job_bundle(bundle_uri)
+    install_requirements(requirements_path)
+    result = run_training(entry_point, model_version)
+    training_status = "succeeded" if result.returncode == 0 else "failed"
+    write_mlops_bundle(
+        entry_point=entry_point,
+        model_version=model_version,
+        training_job_id=training_job_id,
+        status=training_status,
+        stdout_text=result.stdout or "",
+        stderr_text=result.stderr or "",
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Training entry point failed with exit code {result.returncode}")
+    create_model_archive(model_archive_path)
+    upload_s3(model_archive_path, output_uri)
+    log("Training job completed successfully")
 
 
 if __name__ == "__main__":

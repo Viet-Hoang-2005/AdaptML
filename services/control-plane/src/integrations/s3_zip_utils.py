@@ -43,7 +43,7 @@ def extract_zip_and_upload_to_s3(zip_file_obj, s3_prefix: str) -> bool:
     Safely extract a ZIP file and upload all its contents to S3 under s3_prefix.
     Args:
         zip_file_obj: The uploaded file object (InMemoryUploadedFile or TemporaryUploadedFile)
-        s3_prefix: The destination prefix in S3 (e.g. tenants/T-1/models/model1/v1/code/)
+        s3_prefix: The destination prefix in S3 (e.g. users/T-1/models/model1/code/)
     """
     bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'mlops-paas-artifacts')
     region_name = getattr(settings, 'AWS_S3_REGION_NAME', 'ap-southeast-1')

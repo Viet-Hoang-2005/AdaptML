@@ -14,6 +14,7 @@ from django.conf import settings
 
 from authentication.models import ModelAPI, DriftMonitoringJob, DriftMonitoringResult
 from integrations.hashid_utils import decode_model_id, encode_model_id
+from integrations.s3_paths import model_data_prefix
 from integrations.s3_zip_utils import get_s3_file_list, upload_single_file_to_s3, delete_s3_path
 from drift.serializers import DriftMonitoringJobSerializer, DriftMonitoringResultSerializer
 from drift.evidently_service import run_evidently_job, run_evidently_job_sync
@@ -113,8 +114,7 @@ class ReferenceFileListView(views.APIView):
         
         tenant_id = request.user.tenant_id
         model_hash_id = encode_model_id(model_api.id)
-        safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
-        prefix = f'users/{tenant_id}/models/{model_hash_id}/{safe_version}/references/'
+        prefix = model_data_prefix(tenant_id, model_hash_id)
         
         files = get_s3_file_list(prefix)
             
@@ -132,8 +132,7 @@ class ReferenceFileUploadView(views.APIView):
             
         tenant_id = request.user.tenant_id
         model_hash_id = encode_model_id(model_api.id)
-        safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
-        key = f'users/{tenant_id}/models/{model_hash_id}/{safe_version}/references/{file_obj.name}'
+        key = f'{model_data_prefix(tenant_id, model_hash_id)}{file_obj.name}'
         
         bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'mlops-paas-artifacts')
         
@@ -153,12 +152,11 @@ class ReferenceFileUploadView(views.APIView):
             
         tenant_id = request.user.tenant_id
         model_hash_id = encode_model_id(model_api.id)
-        safe_version = model_api.version.replace(' ', '') if model_api.version else 'v1'
         
         if file_path.startswith('/'):
             file_path = file_path[1:]
             
-        key = f'users/{tenant_id}/models/{model_hash_id}/{safe_version}/references/{file_path}'
+        key = f'{model_data_prefix(tenant_id, model_hash_id)}{file_path}'
         
         try:
             delete_s3_path(key)

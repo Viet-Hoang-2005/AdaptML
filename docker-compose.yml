@@ -89,6 +89,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-mlops-paas-artifacts}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
+      AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-}
       TRAINING_BACKEND: ${TRAINING_BACKEND:-local}
       LOCAL_TRAINING_TIMEOUT: ${LOCAL_TRAINING_TIMEOUT:-1800}
       LOCAL_TRAINING_MAX_OUTPUT_MB: ${LOCAL_TRAINING_MAX_OUTPUT_MB:-500}
@@ -317,7 +318,10 @@ services:
 
   # 9. MLflow Tracking Server
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.14.1
+    build:
+      context: ./services/mlflow
+      dockerfile: Dockerfile
+    image: mlops-paas-mlflow:v2.14.1
     container_name: mlops_paas_mlflow
     restart: unless-stopped
     command: >
@@ -325,9 +329,14 @@ services:
       --host 0.0.0.0
       --port 5000
       --backend-store-uri sqlite:////mlflow/mlflow.db
-      --default-artifact-root /mlflow/artifacts
+      --default-artifact-root s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}/users/_system/mlflow/
     ports:
       - "5003:5000"
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
+      MLFLOW_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-}
     volumes:
       - mlflow-data:/mlflow
     networks:

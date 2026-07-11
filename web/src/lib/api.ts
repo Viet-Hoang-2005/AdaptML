@@ -391,6 +391,7 @@ const trainingJobFormData = (payload: TrainingJobFormValues) => {
   formData.append('name', payload.name);
   formData.append('model_version', payload.model_version);
   formData.append('entry_point', payload.entry_point || 'train.py');
+  formData.append('requirements_text', payload.requirements_text);
   formData.append('vcpu', String(payload.vcpu));
   formData.append('memory', String(payload.memory));
   formData.append('max_runtime_seconds', String(payload.max_runtime_seconds));

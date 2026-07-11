@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 
 from authentication.models import ModelAPI, TrainingJob
 from integrations.hashid_utils import decode_model_id, encode_model_id
+from integrations.s3_paths import model_code_prefix, model_data_prefix
 from integrations.s3_zip_utils import get_s3_file_list
 
 MAX_TRAINING_FILE_SIZE_BYTES = 512 * 1024 * 1024
@@ -143,6 +144,13 @@ def validate_create_training_job_request(request):
     if not base_model:
         raise ValidationError({"error": "Registered model not found."})
 
+    submitted_requirements = request.data.get("requirements_text")
+    requirements_text = (
+        base_model.requirements_text or ""
+        if submitted_requirements is None
+        else str(submitted_requirements)
+    )
+
     if not name:
         raise ValidationError({"error": "Training job name is required."})
     if not model_version:
@@ -168,14 +176,14 @@ def validate_create_training_job_request(request):
         raise ValidationError({"error": "entry_point must be a relative path inside source_zip."})
 
     s3_code_prefix = None
+    s3_reference_prefix = None
     if base_model:
         if base_model.source_code_file:
             # Legacy path: source code stored as Django FileField (zip/py)
             _validate_source_zip_entry_point(base_model.source_code_file.file, entry_point)
         else:
             # New path: source code stored in S3 via SourceEditor
-            safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
-            s3_code_prefix = f'users/{base_model.tenant.tenant_id}/models/{encode_model_id(base_model.id)}/{safe_version}/code/'
+            s3_code_prefix = model_code_prefix(base_model.tenant.tenant_id, encode_model_id(base_model.id))
             s3_files = get_s3_file_list(s3_code_prefix)
             # Filter out .keep placeholder files
             real_files = [f for f in s3_files if not f['relative_path'].endswith('.keep')]
@@ -195,14 +203,7 @@ def validate_create_training_job_request(request):
                     }
                 )
         if not base_model.reference_data_file:
-            user_name = (
-                base_model.tenant.email.split('@')[0]
-                if getattr(base_model.tenant, 'email', None)
-                else base_model.tenant.tenant_id
-            )
-            safe_model_name = base_model.name.replace(' ', '') if base_model.name else 'UnnamedModel'
-            safe_version = base_model.version.replace(' ', '') if base_model.version else 'v1'
-            s3_reference_prefix = f'users/{base_model.tenant.tenant_id}/models/{encode_model_id(base_model.id)}/{safe_version}/references/'
+            s3_reference_prefix = model_data_prefix(base_model.tenant.tenant_id, encode_model_id(base_model.id))
             s3_ref_files = get_s3_file_list(s3_reference_prefix)
             csv_files = [f for f in s3_ref_files if f['relative_path'].lower().endswith('.csv')]
             if not csv_files:
@@ -214,6 +215,7 @@ def validate_create_training_job_request(request):
         "name": name,
         "model_version": model_version,
         "entry_point": entry_point,
+        "requirements_text": requirements_text,
         "vcpu": vcpu,
         "memory": memory,
         "max_runtime_seconds": max_runtime_seconds,

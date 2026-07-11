@@ -91,7 +91,7 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
     training_job.error_message = ""
     training_job.stop_reason = ""
     training_job.sagemaker_job_name = ""
-    training_job.output_s3_uri = _s3_uri(settings.AWS_STORAGE_BUCKET_NAME, f"{prefix}/output/local/")
+    training_job.output_s3_uri = _s3_uri(settings.AWS_STORAGE_BUCKET_NAME, f"{prefix}/output/")
     training_job.mark_started(save=False)
     training_job.save(
         update_fields=[
@@ -137,8 +137,7 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
                 }
             )
 
-        requirements_text = training_job.model_api.requirements_text if training_job.model_api else ""
-        python_path = _prepare_python(source_dir, workspace, requirements_text)
+        python_path = _prepare_python(source_dir, workspace, training_job.requirements_text)
         env = os.environ.copy()
         env.update(
             {
@@ -167,7 +166,7 @@ def run_local_training_job(training_job: TrainingJob) -> dict:
         archive_path = workspace / "model.tar.gz"
         _create_model_archive(model_dir, archive_path)
 
-        artifact_key = f"{prefix}/output/local/model.tar.gz"
+        artifact_key = f"{prefix}/output/model.tar.gz"
         _s3_client().upload_file(str(archive_path), settings.AWS_STORAGE_BUCKET_NAME, artifact_key)
         artifact_uri = _s3_uri(settings.AWS_STORAGE_BUCKET_NAME, artifact_key)
 

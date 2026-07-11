@@ -25,8 +25,6 @@ spec:
           - name: entry_point
           - name: model_version
           - name: control_plane_webhook_url
-          - name: s3_job_source_bundle_uri
-            value: ""
           - name: requirements_text
             value: ""
           - name: mlflow_tracking_uri
@@ -63,8 +61,6 @@ spec:
                   value: "{{inputs.parameters.entry_point}}"
                 - name: model_version
                   value: "{{inputs.parameters.model_version}}"
-                - name: s3_job_source_bundle_uri
-                  value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
                 - name: requirements_text
                   value: "{{inputs.parameters.requirements_text}}"
                 - name: mlflow_tracking_uri
@@ -102,8 +98,6 @@ spec:
                   value: "{{inputs.parameters.entry_point}}"
                 - name: model_version
                   value: "{{inputs.parameters.model_version}}"
-                - name: s3_job_source_bundle_uri
-                  value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
                 - name: requirements_text
                   value: "{{inputs.parameters.requirements_text}}"
                 - name: mlflow_tracking_uri
@@ -126,7 +120,6 @@ spec:
           - name: s3_output_uri
           - name: entry_point
           - name: model_version
-          - name: s3_job_source_bundle_uri
           - name: requirements_text
           - name: mlflow_tracking_uri
           - name: mlflow_experiment_name
@@ -182,8 +175,6 @@ spec:
                             value: "{{inputs.parameters.s3_training_data_uri}}"
                           - name: S3_OUTPUT_URI
                             value: "{{inputs.parameters.s3_output_uri}}"
-                          - name: S3_JOB_SOURCE_BUNDLE_URI
-                            value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
                           - name: REQUIREMENTS_TEXT
                             value: "{{inputs.parameters.requirements_text}}"
                           - name: TRAINING_JOB_ID
@@ -217,7 +208,6 @@ spec:
           - name: s3_output_uri
           - name: entry_point
           - name: model_version
-          - name: s3_job_source_bundle_uri
           - name: requirements_text
           - name: mlflow_tracking_uri
           - name: mlflow_experiment_name
@@ -281,8 +271,6 @@ spec:
                             value: "{{inputs.parameters.s3_training_data_uri}}"
                           - name: S3_OUTPUT_URI
                             value: "{{inputs.parameters.s3_output_uri}}"
-                          - name: S3_JOB_SOURCE_BUNDLE_URI
-                            value: "{{inputs.parameters.s3_job_source_bundle_uri}}"
                           - name: REQUIREMENTS_TEXT
                             value: "{{inputs.parameters.requirements_text}}"
                           - name: TRAINING_JOB_ID

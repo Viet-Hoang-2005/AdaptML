@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from django.conf import settings
 from authentication.models import DriftMonitoringJob
 from integrations.hashid_utils import encode_model_id
+from integrations.s3_paths import model_data_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ def run_evidently_job_sync(job_id: int):
         model_hash_id = encode_model_id(job.model_api.id) if job.model_api else "temp-id"
         version = job.model_api.version.replace(' ', '') if job.model_api and job.model_api.version else 'v1'
         
-        s3_key = f"users/{tenant_id}/models/{model_hash_id}/{version}/references/{ref_path}"
+        s3_key = f"{model_data_prefix(tenant_id, model_hash_id)}{ref_path}"
         try:
             ref_url = s3_client.generate_presigned_url(
                 'get_object',

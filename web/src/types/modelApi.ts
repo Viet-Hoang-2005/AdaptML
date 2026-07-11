@@ -396,6 +396,7 @@ export interface TrainingJob {
   name: string;
   model_version: string;
   entry_point: string;
+  requirements_text: string;
   training_backend: 'kubeflow' | 'local';
   vcpu: number;
   memory: number;
@@ -443,6 +444,7 @@ export interface TrainingJobFormValues {
   name: string;
   model_version: string;
   entry_point: string;
+  requirements_text: string;
   vcpu: number;
   memory: number;
   max_runtime_seconds: number;

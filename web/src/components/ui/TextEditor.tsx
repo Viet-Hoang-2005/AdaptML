@@ -8,9 +8,12 @@ import type { ModelAPI } from '../../types/modelApi';
 export interface TextEditorProps {
   modelApi: ModelAPI;
   onDirtyChange?: (isDirty: boolean) => void;
+  onContentChange?: (content: string) => void;
+  /** Called after requirements are successfully persisted to the server (ModelAPI.requirements_text updated). */
+  onSaveSuccess?: () => void;
 }
 
-export function TextEditor({ modelApi, onDirtyChange }: TextEditorProps) {
+export function TextEditor({ modelApi, onDirtyChange, onContentChange, onSaveSuccess }: TextEditorProps) {
   const [content, setContent] = useState<string>(modelApi.requirements_text ?? '');
   const [originalContent, setOriginalContent] = useState<string>(modelApi.requirements_text ?? '');
   const [saving, setSaving] = useState(false);
@@ -18,11 +21,17 @@ export function TextEditor({ modelApi, onDirtyChange }: TextEditorProps) {
 
   const isDirty = content !== originalContent;
 
-  // Sync with parent when dirty state changes
+  // Notify parent when dirty state changes
   useEffect(() => {
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
+  // Notify parent of current content on every change (real-time)
+  useEffect(() => {
+    onContentChange?.(content);
+  }, [content, onContentChange]);
+
+  // Reset editor when a different model is selected
   const [prevModelId, setPrevModelId] = useState(modelApi.id);
   if (prevModelId !== modelApi.id) {
     setPrevModelId(modelApi.id);
@@ -56,13 +65,14 @@ export function TextEditor({ modelApi, onDirtyChange }: TextEditorProps) {
     try {
       await updateModelRequirements(modelApi.id, content);
       setOriginalContent(content);
+      onSaveSuccess?.();
       toast.success('requirements.txt saved successfully.');
     } catch {
       toast.error('Failed to save requirements.txt');
     } finally {
       setSaving(false);
     }
-  }, [modelApi.id, content]);
+  }, [modelApi.id, content, onSaveSuccess]);
 
   const isEmpty = content.trim() === '';
 

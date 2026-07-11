@@ -33,10 +33,8 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
             "model_version": "v2",
             "entry_point": "train.py",
             "training_backend": "kubeflow",
-            "source_zip": SimpleUploadedFile("source.zip", b"zip"),
-            "training_data": SimpleUploadedFile("train.csv", b"f1,label\n1,0\n"),
             "status": "completed",
-            "model_artifact_uri": "s3://bucket/tenants/T-1/training-jobs/1/output/kubeflow/model.tar.gz",
+            "model_artifact_uri": "s3://bucket/users/T-1/models/model-1/training/jobs/1/output/model.tar.gz",
             "tracking_status": "completed",
             "training_summary": {"entry_point": "train.py", "status": "succeeded"},
             "metrics_summary": {"accuracy": 0.97, "loss": 0.12},
@@ -63,7 +61,7 @@ class ModelEvolutionSummaryMirrorTests(TestCase):
             "deployability_reason": "Found supported model artifact: model.pkl.",
             "mlflow_run_id": "run-123",
             "mlflow_experiment_id": "exp-1",
-            "mlflow_artifact_uri": "s3://bucket/mlflow/run-123",
+            "mlflow_artifact_uri": "s3://bucket/users/T-1/models/model-1/training/jobs/1/mlflow/run-123",
         }
         defaults.update(overrides)
         return TrainingJob.objects.create(**defaults)
