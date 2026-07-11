@@ -1,22 +1,73 @@
-# Kafka Consumer (Data Ingestion Worker)
+# Consumer — Production Data Ingestion Worker
 
-Consumer là một Background Worker (tiến trình chạy ngầm) đóng vai trò trung gian giữa Event Stream và Cơ sở dữ liệu dài hạn. Nó hoạt động liên tục trong Kubernetes Cluster như một Deployment đơn lẻ (Replica=1).
+Consumer là một **Background Worker** chạy liên tục, đóng vai trò trung gian giữa Event Stream (Redpanda Kafka) và Cơ sở dữ liệu dài hạn (PostgreSQL). Nó thực hiện **Micro-Batching** để ghi dữ liệu inference log hiệu quả và đồng thời giám sát ngưỡng để kích hoạt Drift Detection.
 
-## 🚀 Vai Trò & Chức Năng Chính
+---
 
-- **Lắng nghe sự kiện (Event Polling)**: Liên tục lấy dữ liệu log dự đoán sinh ra từ nhiều Model Server (Data Plane) thông qua topic `mlops_paas_production_data` của Redpanda Kafka.
-- **Micro-Batching**: Không thực hiện `INSERT` cho từng dòng log nhỏ lẻ. Consumer gom (batch) nhiều tin nhắn Kafka vào bộ đệm và chỉ xả (flush) vào PostgreSQL khi đạt một trong hai điều kiện:
-  - Vượt quá số lượng kích thước tối đa của một lô (Batch Size Limit, vd: 100).
-  - Vượt quá thời gian chờ rảnh (Idle Timeout, vd: 5 giây).
-- **Schema Validation & Mapping**: Phân tích JSON Payload của Kafka để trích xuất `features` thành định dạng `JSONB` của PostgreSQL và `prediction` thành kiểu chuỗi (TEXT) hỗ trợ Data Drift Analytics sau này.
+## Vai Trò
 
-## 🛠️ Xử lý Độ tin cậy (Reliability)
+- **Kafka Consumer**: Lắng nghe liên tục topic `mlops_paas_production_data` từ Redpanda.
+- **Micro-Batching**: Gom nhiều message vào buffer, chỉ `INSERT` vào PostgreSQL khi:
+  - Đạt kích thước batch tối đa, **hoặc**
+  - Vượt thời gian chờ idle (idle timeout).
+- **Schema-Flexible Storage**: Lưu `features` dạng `JSONB` (hỗ trợ mọi số lượng features khác nhau giữa các mô hình), `prediction` dạng `TEXT`.
+- **Drift Threshold Monitoring**: Sau mỗi batch INSERT, kiểm tra xem số lượng production data của từng model có vượt ngưỡng drift chưa. Nếu có → gửi Webhook về Control Plane để kích hoạt Evidently Drift Job.
+- **At-Least-Once Delivery**: Kafka Offset chỉ được commit **sau khi** INSERT thành công vào DB — không bao giờ mất dữ liệu khi crash.
 
-- Trạng thái con trỏ Kafka (Offset Commit) chỉ được lưu (commit) *SAU KHI* dữ liệu đã được `INSERT` thành công vào CSDL Postgres. Điều này bảo vệ hệ thống khỏi mất mát dữ liệu (Data Loss) khi Consumer bị sập (At-least-once delivery).
-- Trong trường hợp cấu trúc log sai dạng hoặc chèn lỗi do PostgreSQL, Consumer ghi log báo lỗi cụ thể và thực hiện rollback tiến trình để không làm kẹt hàng đợi (Dead-letter Queue handling nội bộ).
+---
 
-## 🛠️ Công Nghệ Sử Dụng
+## Luồng Hoạt Động
 
-- **Python**.
-- **Message Broker**: Redpanda (Tương thích chuẩn giao thức Kafka), `confluent-kafka` thư viện C++ hiệu năng cao.
-- **Database ORM/Driver**: `psycopg2`, `SQLAlchemy` (dùng chung với `pandas.to_sql` để thao tác chèn hiệu suất cao).
+```
+Redpanda (topic: mlops_paas_production_data)
+  → Consumer subscribe, poll message
+  → Gom buffer (Micro-batching)
+  → build_dataframe(records) → pandas DataFrame
+  → save_dataframe_to_db()  → PostgreSQL (JSONB features + TEXT prediction)
+  → consumer.commit()  (sau khi INSERT thành công)
+  → check_threshold_and_trigger()
+      → Nếu diff >= threshold → POST webhook → Control Plane
+```
+
+---
+
+## Cấu Trúc Thư Mục
+
+```
+src/
+├── main.py       # Consumer loop: subscribe, poll, batch, commit, threshold check
+└── database.py   # PostgreSQL helpers: save_dataframe_to_db, get_production_data_count_by_model, get_model_drift_thresholds
+```
+
+---
+
+## Công nghệ
+
+| Thành phần | Công nghệ |
+|---|---|
+| Message Broker | Redpanda (Kafka-compatible), `confluent-kafka` |
+| Database | PostgreSQL + `psycopg2` / SQLAlchemy |
+| Batch Processing | `pandas` DataFrame → `to_sql` bulk insert |
+
+---
+
+## Biến Môi Trường
+
+| Biến | Mô tả |
+|---|---|
+| `REDPANDA_BROKERS` | Địa chỉ Redpanda broker (mặc định: `localhost:19092`) |
+| `KAFKA_TOPIC` | Topic lắng nghe (mặc định: `mlops_paas_production_data`) |
+| `CONTROL_PLANE_WEBHOOK_URL` | URL webhook kích hoạt drift check |
+| `CONTROL_PLANE_WEBHOOK_SECRET` | Secret header xác thực webhook |
+| `EVIDENTLY_TRIGGER_THRESHOLD` | Ngưỡng mặc định (mặc định: `100` rows) |
+| `DB_USER`, `DB_PASSWORD`, `DB_HOST_RW`, `DB_PORT`, `DB_NAME` | PostgreSQL connection |
+
+---
+
+## Chạy Local
+
+```bash
+docker compose up consumer
+```
+
+Consumer sẽ tự động connect Redpanda và bắt đầu consume. Nếu Redpanda chưa sẵn sàng, nó sẽ retry.

@@ -1,86 +1,147 @@
-# Hệ thống Hạ tầng AWS (Terraform)
+# Infrastructure as Code — Terraform (AWS)
 
-Thư mục này chứa toàn bộ mã nguồn **Infrastructure as Code (IaC)** được viết bằng Terraform để tự động hóa việc triển khai hạ tầng đám mây trên AWS cho dự án AI PaaS. Hệ thống được thiết kế theo kiến trúc module hóa, giúp dễ dàng tái sử dụng và tinh chỉnh.
+Thư mục `infra/` chứa toàn bộ mã **Infrastructure as Code (IaC)** viết bằng Terraform để tự động hóa triển khai hạ tầng AWS cho nền tảng AI PaaS. Kiến trúc được thiết kế theo dạng **module hóa** với các feature flag để bật/tắt từng thành phần độc lập.
 
-## 🚀 Các Thành Phần Hạ Tầng (Modules)
+---
 
-Cấu trúc hạ tầng bao gồm các module chính sau:
+## Cấu Trúc Thư Mục
 
-1. **`network`**:
-   - Thiết lập **Amazon VPC** để cô lập mạng.
-   - Tạo Public Subnets và Private Subnets đa vùng (Multi-AZ) để đảm bảo High Availability.
-   - Khởi tạo **Internet Gateway (IGW)** cho phép kết nối Internet hai chiều cho Public Subnets.
-   - (Tùy chọn) Cấu hình **NAT Gateway** kèm Elastic IP (EIP) để các EC2 Worker Node nằm trong Private Subnet có thể truy cập Internet một chiều (cần thiết khi tải Docker Image hoặc update hệ điều hành).
+```
+infra/
+├── main.tf          # Module composition: gọi từng module theo feature flag
+├── variables.tf     # Biến toàn cục: region, VPC CIDR, instance types, feature flags
+├── outputs.tf       # Output: public IPs, ALB DNS, S3 bucket name, IAM roles
+├── provider.tf      # AWS provider, Terraform version constraints
+└── modules/
+    ├── network/     # VPC, Subnets, Internet Gateway, NAT Gateway, Route Tables
+    ├── compute/     # EC2 Master + Workers (K3s cluster), IAM Instance Profile
+    ├── security/    # Security Groups: master_sg, worker_sg, lb_sg
+    ├── iam/         # IAM Roles + Policies: EC2 Instance Profile, Karpenter, GitHub Actions OIDC
+    ├── storage/     # S3 Buckets: mlops-paas-artifacts (model artifacts, training data, drift reports)
+    ├── alb/         # Application Load Balancer, Listener, Target Group
+    ├── dns/         # Route53 Hosted Zone, A Record, ACM Certificate (HTTPS)
+    └── secrets/     # AWS Secrets Manager: 3 secret resources
+```
 
-2. **`compute`**:
-   - Khởi tạo các máy chủ ảo (EC2 Instances).
-   - Thiết lập cụm K3s (Kubernetes): Gồm các node Master (Control Plane k8s) và Worker.
-   - Gắn các IAM Instance Profile để các máy ảo có thể giao tiếp với S3 và Secrets Manager mà không cần hardcode Access Key.
+---
 
-3. **`storage`**:
-   - Cung cấp các **Amazon S3 Buckets** để lưu trữ:
-     - `Artifacts`: Model weights (ONNX), MLflow artifacts, Reference Data, HTML Reports.
-     - `Avatars`: Ảnh đại diện của người dùng trên nền tảng.
+## Feature Flags (variables.tf)
 
-4. **`security`**:
-   - Định nghĩa các **Security Groups (Firewall)**:
-     - `master_sg`: Mở port 6443 (K8s API), 22 (SSH).
-     - `worker_sg`: Mở port cho NodePort, Ingress, Node-to-node communication.
-     - `lb_sg`: Mở port 80/443 cho Load Balancer.
+Mỗi module có thể bật/tắt độc lập qua `terraform.tfvars`:
 
-5. **`iam`**:
-   - Khởi tạo **IAM Roles & Policies**:
-     - Cấp quyền cho K8s Worker Nodes được phép đọc/ghi vào S3 Buckets.
-     - Cấp quyền lấy dữ liệu nhạy cảm từ AWS Secrets Manager thông qua External Secrets Operator (ESO).
-     - Gắn policy `AmazonEBSCSIDriverPolicy` để K3s Worker Nodes có thể tự động cấp phát ổ cứng AWS EBS (ví dụ khi tạo Persistent Volume Claims cho CSDL).
-     - Cấp quyền Karpenter cho cụm K3s self-managed: worker instance profile có quyền controller để tạo EC2 capacity, còn EC2 nodes do Karpenter tạo ra dùng instance profile riêng `mlops-karpenter-node-profile`.
-     - Tạo SQS interruption queue và EventBridge rules để Karpenter nhận Spot interruption/rebalance events.
-   - Thiết lập **GitHub Actions OIDC Provider**: Cho phép GitHub Actions tự động xác thực với AWS (Assume Role) để cập nhật Secret và thao tác hạ tầng CI/CD mà không cần cung cấp Access Key tĩnh rủi ro dài hạn.
+| Variable | Default | Mô tả |
+|---|---|---|
+| `enable_compute` | `true` | EC2 Master + Worker nodes |
+| `enable_alb` | `true` | Application Load Balancer |
+| `enable_dns` | `true` | Route53 + ACM Certificate |
+| `enable_nat_gateway` | `true` | NAT Gateway cho Private Subnet |
+| `enable_karpenter` | `true` | IAM + discovery tags cho Karpenter |
+| `enable_github_actions_iam` | `true` | OIDC Provider cho GitHub Actions |
+| `enable_secrets_manager` | `true` | AWS Secrets Manager resources |
 
-### Lưu ý khi dùng Karpenter với K3s self-managed
+---
 
-Phần IAM/Terraform cấp quyền để Karpenter có thể tạo EC2 instances. Với cụm **K3s self-managed**, các `EC2NodeClass` trong `k8s/karpenter/nodepool.yaml` dùng Ubuntu Custom AMI kèm `userData` để cài `k3s agent` và join vào K3s master.
+## Hạ tầng được tạo ra
 
-K3s node token không được lưu trong Git. Bootstrap script lấy token từ AWS Secrets Manager secret `mlops/k3s-agent-token`, nên cần đảm bảo secret này tồn tại và instance profile `mlops-karpenter-node-profile` có quyền `secretsmanager:GetSecretValue`.
+### Network (`modules/network/`)
+- **VPC**: `10.0.0.0/16`
+- **Public Subnet 1a** (`10.0.1.0/24`): Master Node + NAT Gateway
+- **Public Subnet 1b** (`10.0.3.0/24`): ALB (Multi-AZ)
+- **Private Subnet 1a** (`10.0.2.0/24`): Worker Nodes
+- Internet Gateway + Route Tables
 
-Khi training container bắt đầu chạy, `services/training-runner` dùng `TRAINING_JOB_ID` để đặt EC2 `Name` tag thành `mlops-training-<training-job-id>`. Instance profile `mlops-karpenter-node-profile` chỉ được phép cập nhật tag `Name` trên EC2 instances thuộc training nodepool.
+### Compute (`modules/compute/`)
+- **K3s Master**: `t3.medium`, 40GB EBS, Public Subnet 1a
+- **K3s Workers**: `t3.large` × 2, 40GB EBS, Private Subnet 1a
+- IAM Instance Profile gắn vào tất cả nodes (quyền S3, Secrets Manager, EBS CSI)
 
-6. **`secrets`**:
-   - Khởi tạo AWS Secrets Manager lưu trữ các biến môi trường nhạy cảm (như Database Password, JWT Keys, GitHub Actions Secrets) để Kubernetes tự động đồng bộ xuống cluster.
-   - Mặc định `enable_secrets_manager = true` để tránh Terraform vô tình xóa các secrets đang được External Secrets Operator và CI/CD sử dụng.
+### Security (`modules/security/`)
+- `master_sg`: Port 6443 (K8s API), 22 (SSH)
+- `worker_sg`: Port 80/443 (Traefik), inter-node communication
+- `lb_sg`: Port 80/443 từ Internet
 
-7. **`alb` & `dns` (Tùy chọn)**:
-   - Triển khai **Application Load Balancer (ALB)** để cân bằng tải traffic HTTP/HTTPS vào các Worker nodes.
-   - **Route 53**: Cấu hình bản ghi DNS để ánh xạ tên miền gốc và xin chứng chỉ bảo mật (ACM Certificate).
+### IAM (`modules/iam/`)
+- **EC2 Instance Profile** (`mlops-ec2-node-profile`): Quyền S3 full access, Secrets Manager read
+- **Karpenter Controller Role**: Quyền tạo/xóa EC2 instances, describe launch templates
+- **Karpenter Node Profile** (`mlops-karpenter-node-profile`): Profile cho EC2 nodes do Karpenter tạo; quyền read `mlops/k3s-agent-token` để tự động join K3s cluster
+- **GitHub Actions OIDC**: Cho phép GitHub Actions Assume Role → deploy secrets, không cần Access Key tĩnh
+- **SQS + EventBridge**: Interruption queue để Karpenter nhận Spot termination events
 
-## 🛠️ Hướng dẫn Triển Khai (Deployment)
+### Storage (`modules/storage/`)
+S3 Bucket `mlops-paas-artifacts`:
+```
+mlops-paas-artifacts/
+├── user-models/{tenant_id}/{model_id}/    # Model artifact ZIPs (upload từ Tenant)
+├── training-data/                          # Training datasets
+├── training-artifacts/{job_id}/            # model.tar.gz output từ Training Runner
+├── drift-reports/{job_id}/                 # HTML + JSON drift reports từ Evidently
+└── users/{tenant_id}/models/{hashid}/...  # MLflow artifact store
+```
 
-Yêu cầu chuẩn bị: Cài đặt `terraform`, `aws-cli` và cấu hình tài khoản AWS hợp lệ.
+### ALB (`modules/alb/`)
+- ALB `mlops-api-lb` → Target Group → Worker Port 80 (Traefik Ingress)
 
-1. Khởi tạo Terraform:
-   ```bash
-   terraform init
-   ```
+### DNS (`modules/dns/`)
+- Route53 Hosted Zone cho domain `mlops-nids-nt114.id.vn`
+- ACM Certificate (HTTPS) + DNS validation
 
-2. Tùy chỉnh tham số (Tùy chọn):
-   Tạo file `terraform.tfvars` và điều chỉnh các cờ bật/tắt tính năng (ví dụ: `enable_compute = true`).
+### Secrets Manager (`modules/secrets/`)
+Ba kho secret (trống khi tạo, được điền bởi `scripts/push_secrets_to_aws.py`):
 
-3. Xem trước cấu trúc hạ tầng sẽ thay đổi:
-   ```bash
-   terraform plan
-   ```
+| Secret Name | Dùng cho |
+|---|---|
+| `mlops/aws-secrets` | AWS Credentials (local dev) |
+| `mlops/github-actions-secrets` | Harbor Robot Account, Cosign Keys |
+| `mlops/production-secrets` | DB, JWT, OAuth, Harbor, Webhook, HARBOR_DOCKERCONFIG |
 
-4. Áp dụng triển khai lên AWS:
-   ```bash
-   terraform apply
-   ```
+---
 
-5. Hủy hạ tầng (Khi không còn sử dụng để tiết kiệm chi phí):
-   ```bash
-   terraform destroy
-   ```
+## Hướng dẫn Triển khai
 
-## 🔐 Lưu ý Bảo Mật
+### Yêu cầu
+- `terraform >= 1.5`
+- `aws-cli` đã cấu hình (`aws configure` hoặc IAM Role)
+- EC2 Key Pair tên `mlops-keypair` đã tạo sẵn trên AWS
 
-- **KHÔNG BAO GIỜ** commit các file `.tfstate` chứa trạng thái hạ tầng thực tế lên GitHub (Đã được chặn bởi `.gitignore`).
-- Các chứng chỉ nhạy cảm sẽ không được lưu trong Terraform script mà quản lý độc lập tại AWS Secrets Manager.
+### Các lệnh
+
+```bash
+cd infra/
+
+# 1. Khởi tạo providers và modules
+terraform init
+
+# 2. (Tùy chọn) Tạo file cấu hình
+cat > terraform.tfvars << EOF
+aws_region            = "ap-southeast-1"
+master_instance_type  = "t3.medium"
+worker_instance_type  = "t3.large"
+worker_instance_count = 2
+enable_karpenter      = true
+EOF
+
+# 3. Xem trước thay đổi
+terraform plan
+
+# 4. Triển khai
+terraform apply
+
+# 5. Lấy Public IP của Master để cấu hình Ansible inventory
+terraform output
+```
+
+### Hủy hạ tầng (tiết kiệm chi phí)
+
+```bash
+terraform destroy
+```
+
+> **Lưu ý**: `enable_secrets_manager = true` mặc định để tránh xóa nhầm secrets đang được sử dụng bởi ESO và CI/CD.
+
+---
+
+## Bảo mật
+
+- **KHÔNG commit** `.tfstate` lên Git (đã có trong `.gitignore`). File này chứa thông tin nhạy cảm về hạ tầng thực tế.
+- Secrets không được hardcode trong Terraform — chỉ tạo resource Secrets Manager rỗng; nội dung được đẩy qua `scripts/push_secrets_to_aws.py`.
+- EC2 nodes dùng IAM Instance Profile thay vì Access Key tĩnh.

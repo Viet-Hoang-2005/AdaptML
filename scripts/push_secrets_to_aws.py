@@ -81,7 +81,7 @@ def main():
     # Phân nhóm biến cho 3 kho Secret
     aws_keys = [
         "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SECRET_ACCESS_KEY"
     ]
     github_keys = [
         "GITHUB_REPO",
@@ -115,10 +115,20 @@ def main():
     production_secrets_payload = {k: env_data[k] for k in production_keys if k in env_data}
 
     # Lấy Region từ .env hoặc mặc định ap-southeast-1
-    region = env_data.get("AWS_DEFAULT_REGION", "ap-southeast-1")
+    region = os.environ.get("AWS_DEFAULT_REGION") or "ap-southeast-1"
+    aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
+    aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
 
     print(f"Connecting to AWS Secrets Manager at region: {region}...")
-    client = boto3.client("secretsmanager", region_name=region)
+    client_kwargs = {"service_name": "secretsmanager", "region_name": region}
+    if aws_access_key_id and aws_secret_access_key:
+        client_kwargs["aws_access_key_id"] = aws_access_key_id
+        client_kwargs["aws_secret_access_key"] = aws_secret_access_key
+        print("-> Using AWS credentials read directly from .env file / environment variables.")
+    else:
+        print("-> No explicit AWS credentials found in .env; falling back to default AWS credential chain (~/.aws/credentials or IAM role)...")
+
+    client = boto3.client(**client_kwargs)
 
     secrets_mapping = {
         "mlops/aws-secrets": aws_secrets_payload,

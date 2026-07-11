@@ -143,8 +143,6 @@ class DockerDeployAdapter(DeployAdapter):
                 "JWKS_URL": "http://control-plane:8000/api/auth/.well-known/jwks.json",
                 "CONTROL_PLANE_DB_SCHEMA": os.environ.get("DB_SCHEMA", "control_plane"),
                 "REDIS_URL": "redis://redis:6379/1",
-                "AWS_ACCESS_KEY_ID": os.environ.get("AWS_ACCESS_KEY_ID", ""),
-                "AWS_SECRET_ACCESS_KEY": os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
                 "AWS_DEFAULT_REGION": os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-1"),
                 "AWS_BUCKET_NAME": os.environ.get("AWS_BUCKET_NAME", ""),
             }

@@ -1,36 +1,97 @@
 ---
 name: mlops-paas-lifecycle
-description: Vòng đời của mô hình AI PaaS, từ việc User Upload, Build Image, Deploy API động, giám sát Drift qua Argo Workflows và Quản lý phiên bản.
+description: Vòng đời của mô hình AI PaaS: User Upload, Build Image (Kaniko/Docker), Deploy API động qua Traefik, Drift Detection qua Argo Workflows, và Quản lý phiên bản.
 ---
 
-# Luồng Vòng Đời Mô Hình (AI PaaS ML Lifecycle)
+# Luồng Vòng Đời Mô Hình (AI PaaS Model Lifecycle)
 
-Kiến trúc PaaS chuyển từ việc hardcode cho một mô hình NIDS sang một quy trình generic cho nhiều người dùng:
+> Đọc skill `mlops-paas-architecture` trước để nắm kiến trúc tổng thể.
 
-## 1. Upload Model, Build Image & Dynamic API Generation
+---
 
-1. **Upload**: AI Engineer (Tenant) đăng nhập vào Dashboard (ReactJS), upload mô hình dạng ONNX hoặc MLflow (Pyfunc) lên Control Plane.
-2. **Registration**: Django backend nhận thông tin, lưu metadata, và đẩy model weights lên AWS S3. Đăng ký model vào MLflow Registry dưới dạng `tenantID_modelName`.
-3. **Build Image**: Hệ thống tự động kích hoạt **Argo Workflow (build-model-job)** thông qua Argo Events để đóng gói mô hình thành Docker Image và đẩy lên **Harbor**.
-4. **API Provisioning**: Khi Build xong, Control Plane tiếp tục gọi **Argo Workflow (deploy-model-job)** tạo K8s Deployment và Ingress Controller để cấp phát một Public API Endpoint.
+## 1. Upload & Build Image
 
-## 2. Huấn luyện Mô hình tự động (Model Training Lifecycle)
+1. **Upload**: Tenant đăng nhập Dashboard (ReactJS), upload model (ZIP chứa MLflow artifact) hoặc train trước rồi dùng artifact từ S3.
+2. **S3 Storage**: Django lưu artifact lên S3, tạo bản ghi `ModelAPI` với trạng thái `uploading`.
+3. **Trigger Build**: Control Plane gọi `get_build_adapter()` → dựa vào `BUILD_STRATEGY` env:
+   - `docker` (local): `DockerBuildAdapter` → chạy container `model-packager` qua Docker SDK
+   - `argo` (production): `ArgoBuildAdapter` → POST webhook `/build` tới Argo Events
+4. **model-packager** xử lý:
+   - Tải artifact từ S3
+   - Chuẩn hóa sang MLflow Pyfunc format
+   - Sinh `Dockerfile` + `requirements.txt` vào `/workspace`
+   - Kaniko (production) build và push image lên Harbor
+5. **Webhook callback**: model-packager gửi `POST /api/models/{id}/build-webhook` với `status=success/error`
+6. **Control Plane**: cập nhật `ModelAPI.status = "ready"`, lưu `endpoint_image_name`
 
-1. **Submit Training Job**: Người dùng cấu hình tham số, chọn dataset S3 trên Dashboard và gửi yêu cầu huấn luyện.
-2. **Event-driven Orchestration**: Control Plane bắn webhook tới Argo Events. Argo kích hoạt Workflow tải dữ liệu và tạo CRD **`PyTorchJob`** trên K8s.
-3. **Dynamic Infrastructure**: Karpenter phát hiện Pod `PyTorchJob` đang `Pending` và tự động cấp phát node EC2 (CPU/GPU) phục vụ huấn luyện.
-4. **Log Streaming**: Log từ tiến trình train ghi thẳng vào Redis (`training_logs:{job_id}`). React UI sử dụng HTTP Polling để stream log thời gian thực.
-5. **Registration & Cleanup**: Khi hoàn tất, model weights được đẩy lên S3 và đăng ký tự động vào MLflow Registry. Karpenter thu hồi node về 0 nếu không còn job.
+---
 
-## 3. Reference Data & Data Drift Alert
+## 2. Deploy Model Endpoint
 
-1. **Upload Data**: Người dùng upload tệp dữ liệu huấn luyện chuẩn (Reference Data) lên S3 thông qua UI.
-2. **Production Data**: Khi Endpoint API của người dùng phục vụ dự đoán, log sẽ được đẩy qua Redpanda và consumer lưu vào CSDL Postgres bảng `paas_production_logs` (lưu JSONB cho features và TEXT cho labels).
-3. **Drift Check**: Hệ thống tự động (hoặc người dùng bấm Manual Run) kích hoạt **Argo Workflow (evidently-job)** tải Reference Data từ S3 và Production Logs từ Postgres, chạy Evidently tính toán Drift, và xuất HTML Report lên S3.
+1. User bấm Deploy từ Dashboard.
+2. Control Plane gọi `get_deploy_adapter()` → dựa vào `BUILD_STRATEGY`:
+   - `docker` (local): `DockerDeployAdapter` → `docker run` image model-server, tạo Traefik route qua dynamic config
+   - `argo` (production): `ArgoDeployAdapter` → POST webhook `/deploy` tới Argo Events
+3. **deploy-workflowtemplate** dùng `bitnami/kubectl` để `kubectl apply`:
+   - `Deployment` (Pod chạy FastAPI model-server)
+   - `Service` (port 5000)
+   - `Middleware` (Traefik RewritePath)
+   - `IngressRoute` (Traefik) với rule: `PathPrefix(/{tenant_id}/models/{hashid}/{version}/predict)`
+4. Control Plane nhận webhook callback, cập nhật `endpoint_url`
 
-## 4. Quản lý Phiên bản và Xóa Mô hình
+---
 
-1. **Versioning**: Toàn bộ các mô hình của người dùng được hiển thị trên UI. API của Django đóng vai trò **Proxy** đứng trước MLflow API để đảm bảo Multi-tenancy.
-2. **Deletion**: Khi người dùng xóa mô hình, hệ thống thực hiện hai việc:
-   - Gọi API tới Harbor để xóa Docker Image cũ.
-   - Kích hoạt **Argo Workflow (delete-model-job)** để gỡ bỏ K8s resources (Deployment, Ingress, ScaledObject) của mô hình đó. Mọi thứ dọn dẹp sạch sẽ, giải phóng tài nguyên hệ thống.
+## 3. Inference
+
+Client gọi:
+```
+POST /{tenant_id}/models/{model_hashid}/{version}/predict
+Authorization: Bearer <JWT_API_KEY>
+```
+Traefik xác định IngressRoute → rewrite path → forward tới `model-server` Pod.
+
+`model-server` (FastAPI):
+1. Verify JWT bằng Public Key từ JWKS endpoint (`/api/auth/.well-known/jwks.json`)
+2. Validate input features theo schema của model
+3. Chạy inference (MLflow Pyfunc)
+4. Map output bằng Label Mapping (nếu có)
+5. Produce log bất đồng bộ vào Redpanda Kafka (topic: `mlops_paas_production_data`)
+6. Return kết quả JSON
+
+`consumer` service:
+- Consume batch từ Redpanda
+- INSERT vào PostgreSQL với `features` JSONB và `prediction` TEXT
+
+---
+
+## 4. Drift Detection
+
+1. Tenant cấu hình Drift Job từ Dashboard (chọn model, threshold, lịch chạy).
+2. Control Plane POST webhook `/drift` tới Argo Events.
+3. **evidently-workflowtemplate** chạy container `evidently`:
+   - Tải Reference Data từ S3 (URL presigned)
+   - Query Production Logs từ PostgreSQL (`model_id = ?`)
+   - Chạy Evidently AI DataDrift analysis
+   - Upload HTML Report + JSON Summary lên S3
+   - POST webhook về Control Plane kèm `drift_score`, S3 report URLs
+4. Control Plane cập nhật `DriftJob` status, lưu report URLs
+
+---
+
+## 5. Xóa Mô hình
+
+1. User xóa model từ Dashboard.
+2. Control Plane:
+   - Gọi Harbor API xóa Docker Image
+   - POST webhook `/delete` tới Argo Events
+3. **delete-workflowtemplate** `kubectl delete`:
+   - `Deployment`, `Service`, `Middleware`, `IngressRoute`
+4. Django xóa bản ghi `ModelAPI` khỏi PostgreSQL
+
+---
+
+## 6. Model Versioning
+
+- Mỗi lần Build thành công tạo ra một `Registry Version` trong MLflow (proxy qua Django).
+- Django API đóng vai trò **MLflow Proxy** đứng trước để đảm bảo Tenant chỉ thấy được phiên bản model của mình (`tenant_id` lọc tại ORM layer).
+- `model_hashid` trong URL dùng Hashids library để mã hóa `model_id` thành chuỗi ngắn thân thiện.

@@ -1,15 +1,6 @@
 # Hướng dẫn Đóng góp (Contributing Guide)
 
-Tài liệu này cung cấp các nguyên tắc và quy trình để tham gia đóng góp mã nguồn vào dự án **MLOps Network Intrusion Detection System (NIDS)**. Đọc kỹ trước khi tạo Pull Request.
-
----
-
-## 👥 Nhóm Tác giả (Team)
-
-| Họ và Tên              | Email                  | Phụ trách chính                                                 |
-| ---------------------- | ---------------------- | --------------------------------------------------------------- |
-| Trần Nguyễn Việt Hoàng | 23520541@gm.uit.edu.vn | MLOps Architecture + FastAPI + Evidently AI + Training Pipeline |
-| Bùi Ngọc Thái          | 23521412@gm.uit.edu.vn | K3s Operations + Terraform/AWS + CI/CD + CloudNativePG          |
+Tài liệu này cung cấp các nguyên tắc và quy trình để tham gia đóng góp mã nguồn vào dự án **MLOps PaaS System**. Đọc kỹ trước khi tạo Pull Request.
 
 ---
 
@@ -180,10 +171,6 @@ Khi báo bug, vui lòng cung cấp:
 
 | Kênh            | Địa chỉ                                                                                                            |
 | --------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Email tác giả 1 | 23520541@gm.uit.edu.vn                                                                                             |
-| Email tác giả 2 | 23521412@gm.uit.edu.vn                                                                                             |
+| Email tác giả 1 | <23520541@gm.uit.edu.vn>                                                                                             |
+| Email tác giả 2 | <23521412@gm.uit.edu.vn>                                                                                             |
 | GitHub Issues   | [github.com/Viet-Hoang-2005/MLOps-nids-system/issues](https://github.com/Viet-Hoang-2005/MLOps-nids-system/issues) |
-
----
-
-_Created for UIT · NT114 · MLOps NIDS System Project_
