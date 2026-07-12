@@ -19,7 +19,7 @@ spec:
         workload-type: worker
       initContainers:
         - name: ensure-mlflow-schema
-          image: ghcr.io/mlflow/mlflow:latest
+          image: mlops-paas-mlflow
           imagePullPolicy: IfNotPresent
           command: ["python", "-c"]
           args:
@@ -50,7 +50,7 @@ spec:
                   key: DB_PASSWORD
       containers:
         - name: mlflow-server
-          image: ghcr.io/mlflow/mlflow:latest
+          image: mlops-paas-mlflow
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
@@ -61,7 +61,7 @@ spec:
                 --workers 1 \
                 --allowed-hosts "*" \
                 --cors-allowed-origins "*" \
-                --backend-store-uri "postgresql://${DB_USER}:${DB_PASSWORD}@mlops-paas-postgres-rw.default.svc.cluster.local:5432/mlops_paas_db?options=-c%20search_path%3Dmlflow"
+                --backend-store-uri "postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@mlops-paas-postgres-rw.default.svc.cluster.local:5432/mlops_paas_db?options=-c%20search_path%3Dmlflow"
           ports:
             - containerPort: 5000
               name: http

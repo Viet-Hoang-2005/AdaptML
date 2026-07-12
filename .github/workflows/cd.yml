@@ -20,6 +20,7 @@ jobs:
       consumer: ${{ steps.filter.outputs.consumer == 'true' || github.event_name == 'workflow_dispatch' }}
       packager: ${{ steps.filter.outputs.packager == 'true' || github.event_name == 'workflow_dispatch' }}
       evidently: ${{ steps.filter.outputs.evidently == 'true' || github.event_name == 'workflow_dispatch' }}
+      mlflow: ${{ steps.filter.outputs.mlflow == 'true' || github.event_name == 'workflow_dispatch' }}
       model_server: ${{ steps.filter.outputs.model_server == 'true' || github.event_name == 'workflow_dispatch' }}
       machine_learning_serving: ${{ steps.filter.outputs.machine_learning_serving == 'true' || github.event_name == 'workflow_dispatch' }}
       deep_learning_serving: ${{ steps.filter.outputs.deep_learning_serving == 'true' || github.event_name == 'workflow_dispatch' }}
@@ -42,6 +43,8 @@ jobs:
               - 'services/model-packager/**'
             evidently:
               - 'services/evidently/**'
+            mlflow:
+              - 'services/mlflow/**'
             model_server:
               - 'services/model-server/**'
             machine_learning_serving:
@@ -63,6 +66,7 @@ jobs:
               "consumer": "${{ steps.filter.outputs.consumer }}" == "true" or is_manual,
               "packager": "${{ steps.filter.outputs.packager }}" == "true" or is_manual,
               "evidently": "${{ steps.filter.outputs.evidently }}" == "true" or is_manual,
+              "mlflow": "${{ steps.filter.outputs.mlflow }}" == "true" or is_manual,
               "model_server": "${{ steps.filter.outputs.model_server }}" == "true" or is_manual,
               "machine_learning_serving": "${{ steps.filter.outputs.machine_learning_serving }}" == "true" or is_manual,
               "deep_learning_serving": "${{ steps.filter.outputs.deep_learning_serving }}" == "true" or is_manual,
@@ -74,6 +78,7 @@ jobs:
               "consumer": {"name": "Redpanda Consumer", "id": "consumer", "context": "services/consumer", "image": "mlops-paas-consumer"},
               "packager": {"name": "Model Packager", "id": "packager", "context": "services/model-packager", "image": "mlops-paas-model-packager"},
               "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"},
+              "mlflow": {"name": "MLflow Tracking Server", "id": "mlflow", "context": "services/mlflow", "image": "mlops-paas-mlflow"},
               "model_server": {"name": "Model Server", "id": "model_server", "context": "services/model-server", "image": "mlops-paas-model-server"},
               "machine_learning_serving": {"name": "Machine Learning Serving", "id": "machine_learning_serving", "context": "services/machine-learning-serving", "image": "mlops-paas-machine-learning-serving"},
               "deep_learning_serving": {"name": "Deep Learning Serving", "id": "deep_learning_serving", "context": "services/deep-learning-serving", "image": "mlops-paas-deep-learning-serving"},
@@ -189,7 +194,7 @@ jobs:
           REG="registry.mlops-nids-nt114.id.vn/mlops-paas"
           SHA="${{ github.sha }}"
           
-          # 1. Update kustomization.yaml (web, django, consumer)
+          # 1. Update kustomization.yaml (web, django, consumer, mlflow)
           cd k8s/apps/production
           
           if [ "${{ needs.detect-changes.outputs.frontend }}" == "true" ]; then
@@ -208,6 +213,13 @@ jobs:
             kustomize edit set image mlops-paas-model-server=$REG/mlops-paas-model-server:$SHA
           fi
           cd ../../../
+          
+          cd k8s/mlflow-server
+          
+          if [ "${{ needs.detect-changes.outputs.mlflow }}" == "true" ]; then
+            kustomize edit set image mlops-paas-mlflow=$REG/mlops-paas-mlflow:$SHA
+          fi
+          cd ../../
           
           # 2. Update Argo Workflow Templates (packager and evidently)
           if [ "${{ needs.detect-changes.outputs.packager }}" == "true" ]; then
@@ -234,6 +246,7 @@ jobs:
           CONSUMER_TAG="no change"
           PACKAGER_TAG="no change"
           EVIDENTLY_TAG="no change"
+          MLFLOW_TAG="no change"
           MODEL_SERVER_TAG="no change"
           MACHINE_LEARNING_SERVING_TAG="no change"
           DEEP_LEARNING_SERVING_TAG="no change"
@@ -257,6 +270,10 @@ jobs:
           
           if [ "${{ needs.detect-changes.outputs.evidently }}" == "true" ]; then
             EVIDENTLY_TAG="$REG/mlops-paas-evidently:$SHA"
+          fi
+
+          if [ "${{ needs.detect-changes.outputs.mlflow }}" == "true" ]; then
+            MLFLOW_TAG="$REG/mlops-paas-mlflow:$SHA"
           fi
 
           if [ "${{ needs.detect-changes.outputs.model_server }}" == "true" ]; then
@@ -285,6 +302,7 @@ jobs:
           | **Redpanda Consumer** (\`mlops-paas-consumer\`) | \`$CONSUMER_TAG\` |
           | **Model Packager** (\`mlops-paas-model-packager\`) | \`$PACKAGER_TAG\` |
           | **Evidently Drift** (\`mlops-paas-evidently\`) | \`$EVIDENTLY_TAG\` |
+          | **MLflow Tracking Server** (\`mlops-paas-mlflow\`) | \`$MLFLOW_TAG\` |
           | **Model Server** (\`mlops-paas-model-server\`) | \`$MODEL_SERVER_TAG\` |
           | **Machine Learning Serving** (\`mlops-paas-machine-learning-serving\`) | \`$MACHINE_LEARNING_SERVING_TAG\` |
           | **Deep Learning Serving** (\`mlops-paas-deep-learning-serving\`) | \`$DEEP_LEARNING_SERVING_TAG\` |

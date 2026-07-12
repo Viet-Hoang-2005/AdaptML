@@ -32,7 +32,7 @@ services:
     command: >
       sh -c "until pg_isready -h postgres -U ${DB_USER} -d ${DB_NAME}; do sleep 2; done;
       psql -h postgres -U ${DB_USER} -d ${DB_NAME} -v ON_ERROR_STOP=1
-      -c 'CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA:-control_plane};'"
+      -c 'CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA:-control_plane}; CREATE SCHEMA IF NOT EXISTS mlflow;'"
     depends_on:
       postgres:
         condition: service_healthy
@@ -388,14 +388,23 @@ services:
       mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --backend-store-uri postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT:-5432}/${DB_NAME}?options=-csearch_path%3Dmlflow
     ports:
       - "5003:5000"
     environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_PORT: ${DB_PORT:-5432}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
       MLFLOW_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      schema-init:
+        condition: service_completed_successfully
     volumes:
       - mlflow-data:/mlflow
     networks:
