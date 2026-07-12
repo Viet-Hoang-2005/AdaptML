@@ -36,7 +36,7 @@ Argo Workflows kích hoạt evidently-workflowtemplate
 
 ```
 src/
-└── detect_drift.py   # Main script: load data, run Evidently, upload S3, send webhook
+└── main.py   # Main script: load data, run Evidently, upload S3, send webhook
 ```
 
 ---

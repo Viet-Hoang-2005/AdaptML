@@ -26,4 +26,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /install /usr/local
 COPY . .
 
-CMD ["python", "-u", "-m", "src.detect_drift"]
+CMD ["python", "-u", "-m", "src.main"]

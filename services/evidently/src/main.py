@@ -1,4 +1,4 @@
-# detect_drift.py: Phát hiện Data Drift (Sử dụng Evidently 0.4.15 Stable)
+# main.py: Phát hiện Data Drift (Sử dụng Evidently 0.4.15 Stable)
 import os
 import sys
 import json
@@ -32,7 +32,7 @@ MODEL_ID = os.getenv("MODEL_ID")
 MODEL_NAME = os.getenv("MODEL_NAME", MODEL_ID)
 REFERENCE_DATA_URL = os.getenv("REFERENCE_DATA_URL")
 MODEL_URI = os.getenv("MODEL_URI", f"models:/{MODEL_NAME}/Production")
-CONTROL_PLANE_WEBHOOK_URL = os.getenv("CONTROL_PLANE_WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/drift-webhook")
+CONTROL_PLANE_WEBHOOK_URL = os.getenv("CONTROL_PLANE_WEBHOOK_URL", "")
 CONTROL_PLANE_WEBHOOK_SECRET = os.getenv("CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key")
 HTML_S3_URI = os.getenv("HTML_S3_URI", "")
 REPORT_JSON_S3_URI = os.getenv("REPORT_JSON_S3_URI", "")

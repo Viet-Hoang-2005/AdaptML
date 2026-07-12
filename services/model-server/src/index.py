@@ -1,6 +1,5 @@
 import json
 import os
-import pickle
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -15,26 +14,16 @@ from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Re
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
-from hashids import Hashids
 from jwt.algorithms import RSAAlgorithm
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
-from src.database import get_model_api_record, model_registry_engine
+from src.database import get_model_version_record, model_registry_engine, verify_project_api_key
 
 JWKS_URL = os.environ.get("JWKS_URL", "http://control-plane:8000/api/auth/.well-known/jwks.json")
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "redpanda:9092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/1")
-HASHIDS_SALT = os.environ.get("HASHIDS_SALT")
-hashids = Hashids(salt=HASHIDS_SALT, min_length=6)
-
-def decode_model_id(hash_str: str) -> int:
-    res = hashids.decode(hash_str)
-    if res:
-        return res[0]
-    raise ValueError(f"Invalid model_id hash: {hash_str}")
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -113,55 +102,33 @@ async def get_public_key(kid: str):
     return JWKS_CACHE.get(kid)
 
 async def verify_model_access(
-    model_id_str: str,
+    version_id: str,
     api_key: str = Security(api_key_header),
     authorization: str = Header(None),
 ):
     try:
-        model_id = decode_model_id(model_id_str)
-        model_record = get_model_api_record(model_id, redis_client=redis_client)
+        uuid.UUID(version_id)
+        model_record = get_model_version_record(version_id, redis_client=redis_client)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
         
     if not model_record:
-        raise HTTPException(status_code=404, detail="Model API not found.")
+        raise HTTPException(status_code=404, detail="Model version not found.")
         
     model_tenant_id = model_record["tenant_id"]
 
     if model_record["access_mode"] == "public":
-        return {"tenant_id": model_tenant_id, "auth_type": "public", "model_api": model_record}
+        return {"tenant_id": model_tenant_id, "auth_type": "public", "model_record": model_record}
 
     if api_key:
-        if not redis_client:
-            raise HTTPException(status_code=500, detail="Internal Server Error: Redis cache unavailable")
-
-        cached_data_bytes = redis_client.get(f":1:api_key:{api_key}")
-        if not cached_data_bytes:
+        key_record = verify_project_api_key(api_key, model_record["project_pk"])
+        if not key_record:
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid or revoked API Key")
-            
-        try:
-            if cached_data_bytes.startswith(b'\x80'):
-                cached_data_str = pickle.loads(cached_data_bytes)
-            else:
-                cached_data_str = cached_data_bytes.decode('utf-8')
-                
-            cached_data = json.loads(cached_data_str)
-            cached_tenant_id = cached_data.get("tenant_id")
-            scope = cached_data.get("scope", "all")
-            allowed_models = cached_data.get("allowed_models", [])
-        except json.JSONDecodeError:
-            cached_tenant_id = cached_data_str
-            scope = "all"
-            allowed_models = []
-
+        cached_tenant_id = key_record["tenant_id"]
         if cached_tenant_id != model_tenant_id:
             raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to access this model.")
             
-        allowed_model_ids = {str(allowed_model_id) for allowed_model_id in allowed_models}
-        if scope == "specific" and str(model_id) not in allowed_model_ids:
-            raise HTTPException(status_code=403, detail="Forbidden: This API Key is not authorized for this specific endpoint.")
-
-        return {"tenant_id": cached_tenant_id, "auth_type": "api_key", "model_api": model_record, "scope": scope}
+        return {"tenant_id": cached_tenant_id, "auth_type": "api_key", "model_record": model_record}
 
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized: Missing API Key or Bearer Token")
@@ -184,7 +151,7 @@ async def verify_model_access(
             raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to access this model.")
 
         payload["auth_type"] = "jwt"
-        payload["model_api"] = model_record
+        payload["model_record"] = model_record
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Unauthorized: Token has expired")
@@ -247,9 +214,9 @@ async def health_check():
         "model_registry_connected": model_registry_engine is not None,
     }
 
-@app.get("/models/{model_id_str}/health")
-async def model_health(model_id_str: str, token_payload: dict = Depends(verify_model_access)):
-    model_record = token_payload["model_api"]
+@app.get("/models/{version_id}/health")
+async def model_health(version_id: str, token_payload: dict = Depends(verify_model_access)):
+    model_record = token_payload["model_record"]
     worker_url = resolve_worker_url(model_record, "/health")
     
     try:
@@ -267,15 +234,15 @@ async def model_health(model_id_str: str, token_payload: dict = Depends(verify_m
             content={"status": "unhealthy", "model_loaded": False, "error": f"Cannot reach worker pod: {exc}"}
         )
 
-@app.post("/models/{model_id_str}/predict")
+@app.post("/models/{version_id}/predict")
 async def predict(
-    model_id_str: str,
+    version_id: str,
     request: Request,
     payload: InferenceRequest,
     background_tasks: BackgroundTasks,
     token_payload: dict = Depends(verify_model_access),
 ):
-    model_record = token_payload["model_api"]
+    model_record = token_payload["model_record"]
     worker_url = resolve_worker_url(model_record, "/predict")
     features_dict = payload.features
     tenant_id = model_record["tenant_id"]
@@ -284,7 +251,7 @@ async def predict(
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            worker_payload = {"features": features_dict, "model_id": int(resolved_model_id)}
+            worker_payload = {"features": features_dict, "model_id": resolved_model_id}
             response = await client.post(worker_url, json=worker_payload)
             
             if response.status_code != 200:

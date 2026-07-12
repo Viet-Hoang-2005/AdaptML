@@ -1,4 +1,4 @@
-# test_api.py: Kiểm thử độ chính xác của mô hình trả về từ API
+# predict.py: Kiểm thử độ chính xác của mô hình trả về từ API
 import os
 import pandas as pd
 import requests

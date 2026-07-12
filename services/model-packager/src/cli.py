@@ -111,7 +111,7 @@ def find_label_mapping_file(root: Path) -> Path | None:
 
 def webhook_headers() -> dict[str, str]:
     secret = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "").strip()
-    return {"X-Build-Webhook-Secret": secret} if secret else {}
+    return {"X-Control-Plane-Secret": secret} if secret else {}
 
 def post_webhook(webhook_url: str, payload: dict) -> None:
     if not webhook_url:
@@ -514,9 +514,9 @@ def setup_logger(model_id: str):
     return logger
 
 def main():
-    model_id = os.environ.get("MODEL_HASHID") or os.environ.get("MODEL_ID")
+    model_id = os.environ.get("MODEL_ID")
     if not model_id:
-        print("Missing MODEL_HASHID or MODEL_ID")
+        print("Missing MODEL_ID")
         sys.exit(1)
 
     logger = setup_logger(model_id)

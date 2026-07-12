@@ -169,11 +169,14 @@ def get_model_drift_thresholds() -> dict:
 
     try:
         with engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT model_api_id, trigger_threshold FROM authentication_driftmonitoringjob WHERE status = 'active'")
-            )
+            result = conn.execute(text("""
+                SELECT version.public_id, monitor.trigger_threshold
+                FROM drift_driftmonitor AS monitor
+                INNER JOIN registry_modelversion AS version ON version.id = monitor.version_id
+                WHERE monitor.is_active = TRUE
+            """))
             return {str(row[0]): row[1] for row in result.fetchall()}
     except Exception as e:
-        if "relation \"authentication_driftmonitoringjob\" does not exist" not in str(e):
+        if "relation \"drift_driftmonitor\" does not exist" not in str(e):
             print(f"Error getting drift thresholds: {e}")
         return {}

@@ -69,7 +69,7 @@ src/
 | `BUILD_ENGINE` | `docker` (local) hoặc `kaniko` (production) |
 | `BUILD_WORKSPACE_DIR` | Đường dẫn shared volume với Kaniko (mặc định: `/workspace`) |
 | `MODEL_ID` | ID mô hình cần build |
-| `MODEL_HASHID` | Hashid của model (dùng làm tag image) |
+| `MODEL_ID` | UUID của model version, dùng làm tag image |
 | `TENANT_ID` | Tenant sở hữu model |
 | `FLAVOR` | Loại model (`bento` hoặc standard) |
 | `SOURCE_DOWNLOAD_URL` | Presigned GET URL cho artifact model hoặc training archive |

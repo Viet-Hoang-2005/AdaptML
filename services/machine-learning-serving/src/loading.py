@@ -7,9 +7,9 @@ from typing import Any, Dict
 from fastapi import HTTPException
 
 MODEL_CACHE_DIR = os.environ.get("MODEL_CACHE_DIR", "/tmp/mlops_paas_models")
-MODEL_CACHE: Dict[int, Dict[str, Any]] = {}
+MODEL_CACHE: Dict[str, Dict[str, Any]] = {}
 
-def download_model_artifact(model_id: int, model_uri: str) -> Path:
+def download_model_artifact(model_id: str, model_uri: str) -> Path:
     prebuilt_dir = Path("/app/model_artifact")
     if prebuilt_dir.exists() and any(prebuilt_dir.iterdir()):
         if (prebuilt_dir / "source").exists():
@@ -35,7 +35,7 @@ def resolve_mlflow_model_dir(source_dir: Path) -> Path:
         raise FileNotFoundError("MLmodel file was not found in the model artifact.")
     return candidates[0].parent
 
-def load_model_from_uri(model_id: int, model_uri: str, version_marker: str = "latest") -> Dict[str, Any]:
+def load_model_from_uri(model_id: str, model_uri: str, version_marker: str = "latest") -> Dict[str, Any]:
     cached = MODEL_CACHE.get(model_id)
     if cached and cached.get("version_marker") == version_marker:
         return cached
@@ -115,7 +115,7 @@ def load_model_from_uri(model_id: int, model_uri: str, version_marker: str = "la
     return MODEL_CACHE[model_id]
 
 def load_model_for_record(model_record: Dict[str, Any]) -> Dict[str, Any]:
-    model_id = int(model_record["id"])
+    model_id = str(model_record["id"])
     model_uri = model_record.get("model_uri")
     version_marker = str(model_record.get("updated_at", "latest"))
     return load_model_from_uri(model_id, model_uri, version_marker)

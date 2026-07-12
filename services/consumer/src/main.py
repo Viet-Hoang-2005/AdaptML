@@ -12,7 +12,7 @@ from src.database import save_dataframe_to_db, get_production_data_count_by_mode
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
 EVIDENTLY_TRIGGER_THRESHOLD = int(os.environ.get('EVIDENTLY_TRIGGER_THRESHOLD', '100'))
-CONTROL_PLANE_WEBHOOK_URL = os.environ.get("CONTROL_PLANE_WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/trigger-drift-job")
+CONTROL_PLANE_WEBHOOK_URL = os.environ.get("CONTROL_PLANE_WEBHOOK_URL", "").strip()
 WEBHOOK_SECRET = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key")
 
 # Cờ báo hiệu trạng thái hoạt động
@@ -26,6 +26,8 @@ def handle_sigterm(*args):
 
 # Hàm gửi Webhook cảnh báo về Django Control Plane để kích hoạt Argo Workflows / Celery
 def trigger_django_webhook(model_name: str, count: int):
+    if not CONTROL_PLANE_WEBHOOK_URL:
+        return
     print(f"[{model_name}] Triggering Django webhook for drift check...")
 
     headers = {

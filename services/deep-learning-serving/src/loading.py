@@ -3,7 +3,7 @@ from pathlib import Path
 
 MODEL_CACHE_DIR = os.environ.get("MODEL_CACHE_DIR", "/tmp/mlops_paas_models")
 
-def download_model_artifact(model_id: int, model_uri: str) -> Path:
+def download_model_artifact(model_id: str, model_uri: str) -> Path:
     prebuilt_dir = Path("/app/model_artifact")
     if prebuilt_dir.exists() and any(prebuilt_dir.iterdir()):
         if (prebuilt_dir / "source").exists():

@@ -303,13 +303,12 @@ def log_to_mlflow(
         if not exp_name:
             exp_name = f"tenant-{tenant_id}" if tenant_id else "default-tenant"
         artifact_root = os.environ.get("MLFLOW_ARTIFACT_ROOT", "").strip()
+        if not artifact_root:
+            raise RuntimeError("MLFLOW_ARTIFACT_ROOT is required for job-scoped MLflow artifacts")
         try:
             exp = mlflow.get_experiment_by_name(exp_name)
             if not exp:
-                if artifact_root:
-                    mlflow.create_experiment(exp_name, artifact_location=artifact_root)
-                else:
-                    mlflow.create_experiment(exp_name)
+                mlflow.create_experiment(exp_name, artifact_location=artifact_root)
         except Exception as exc:
             pass
         mlflow.set_experiment(exp_name)
@@ -322,8 +321,7 @@ def log_to_mlflow(
                 mlflow.set_tag("tenant_id", tenant_id)
             if model_version:
                 mlflow.set_tag("model_version", model_version)
-            if artifact_root:
-                mlflow.set_tag("mlflow_artifact_root", artifact_root)
+            mlflow.set_tag("mlflow_artifact_root", artifact_root)
             mlflow.set_tag("entry_point", entry_point)
             mlflow.set_tag("status", status)
 
@@ -728,30 +726,49 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
     log(f"Running training entry point: {entry_point}")
     stop_metrics = threading.Event()
     start_metric_emitter(stop_metrics)
-    stdout_lines = []
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
+
+    def stream_lines(stream, output, lines):
+        if stream is None:
+            return
+        for line in iter(stream.readline, ""):
+            print(line, end="", file=output, flush=True)
+            log_to_redis(line.rstrip("\n"))
+            lines.append(line)
+
     try:
         process = subprocess.Popen(
             [sys.executable, str(entry_point_path)],
             cwd=str(SOURCE_DIR),
             env=env,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
         )
-        if process.stdout:
-            for line in iter(process.stdout.readline, ""):
-                print(line, end="", flush=True)
-                log_to_redis(line.rstrip("\n"))
-                stdout_lines.append(line)
+        stdout_thread = threading.Thread(
+            target=stream_lines,
+            args=(process.stdout, sys.stdout, stdout_lines),
+            name="training-stdout",
+        )
+        stderr_thread = threading.Thread(
+            target=stream_lines,
+            args=(process.stderr, sys.stderr, stderr_lines),
+            name="training-stderr",
+        )
+        stdout_thread.start()
+        stderr_thread.start()
         process.wait()
+        stdout_thread.join()
+        stderr_thread.join()
     finally:
         stop_metrics.set()
     return subprocess.CompletedProcess(
         args=[sys.executable, str(entry_point_path)],
         returncode=process.returncode,
         stdout="".join(stdout_lines),
-        stderr="",
+        stderr="".join(stderr_lines),
     )
 
 

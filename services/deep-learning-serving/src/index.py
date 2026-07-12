@@ -20,7 +20,7 @@ class DeepLearningModelService:
         
         try:
             if model_uri:
-                model_id = int(model_id_str) if model_id_str and model_id_str != "unknown" and model_id_str.isdigit() else 0
+                model_id = model_id_str if model_id_str and model_id_str != "unknown" else "unknown"
                 source_dir = download_model_artifact(model_id, model_uri)
                 model_dir = str(resolve_mlflow_model_dir(source_dir))
             elif not os.path.exists(model_dir):

@@ -24,7 +24,7 @@ app.add_middleware(
 
 class InferenceRequest(BaseModel):
     features: Dict[str, Any]
-    model_id: int | None = None
+    model_id: str | None = None
 
 @app.get("/")
 async def health_check():
@@ -46,7 +46,7 @@ async def model_health():
         }
         
     try:
-        model_id = int(resolved_id_str)
+        model_id = resolved_id_str
         model_uri = os.environ.get("MODEL_URI", "")
         version_marker = os.environ.get("MODEL_VERSION", "latest")
         if not model_uri:
@@ -80,10 +80,7 @@ async def predict(payload: InferenceRequest):
     if not resolved_id_str or resolved_id_str == "unknown":
         raise HTTPException(status_code=400, detail="Missing model_id in request or environment.")
         
-    try:
-        model_id = int(resolved_id_str)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid model_id: {resolved_id_str}")
+    model_id = resolved_id_str
 
     model_uri = os.environ.get("MODEL_URI", "")
     version_marker = os.environ.get("MODEL_VERSION", "latest")
