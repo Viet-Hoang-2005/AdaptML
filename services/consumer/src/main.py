@@ -11,6 +11,7 @@ from src.database import save_dataframe_to_db, get_production_data_count_by_mode
 # Lấy biến môi trường
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
+KAFKA_TOPIC_RETRY_SECONDS = max(1, int(os.environ.get("KAFKA_TOPIC_RETRY_SECONDS", "5")))
 EVIDENTLY_TRIGGER_THRESHOLD = int(os.environ.get('EVIDENTLY_TRIGGER_THRESHOLD', '100'))
 CONTROL_PLANE_WEBHOOK_URL = os.environ.get("CONTROL_PLANE_WEBHOOK_URL", "").strip()
 WEBHOOK_SECRET = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key")
@@ -128,9 +129,14 @@ def main():
             if msg.error():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
                     continue
-                else:
-                    print(msg.error())
-                    break
+                if msg.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART or msg.error().retriable():
+                    print(
+                        f"Kafka topic '{KAFKA_TOPIC}' is temporarily unavailable; "
+                        f"retrying in {KAFKA_TOPIC_RETRY_SECONDS}s: {msg.error()}"
+                    )
+                    time.sleep(KAFKA_TOPIC_RETRY_SECONDS)
+                    continue
+                raise RuntimeError(f"Kafka consumer error: {msg.error()}")
                     
             try:
                 # Đọc payload từ API và parse lại thành Dictionary

@@ -61,7 +61,17 @@ class ArgoTrainingBackend(_ArgoBackend):
     def run(self, job):
         runtime_name = f"training-{str(job.public_id).lower()}"
         job.external_job_id = runtime_name
-        job.save(update_fields=["external_job_id", "updated_at"])
+        job.tracking = {
+            **job.tracking,
+            "runtime": {
+                "backend": "argo",
+                "namespace": "default",
+                "pytorch_job_name": runtime_name,
+                "workflow_selector": f"mlops.io/training-job-id={job.public_id}",
+                "pod_selector": f"mlops.io/training-job-id={job.public_id}",
+            },
+        }
+        job.save(update_fields=["external_job_id", "tracking", "updated_at"])
         return self.trigger(
             {
                 "job_id": str(job.public_id),

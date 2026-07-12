@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +9,26 @@ import runner
 
 
 class RunnerMetadataBundleTests(unittest.TestCase):
+    def test_training_artifacts_require_presigned_http_urls(self):
+        runner.validate_presigned_url("https://bucket.s3.amazonaws.com/object?signature=example")
+
+        with self.assertRaisesRegex(RuntimeError, "presigned HTTP"):
+            runner.validate_presigned_url("s3://mlops-paas-artifacts/input/source.zip")
+
+    def test_mlflow_artifact_uri_is_proxied_through_tracking_server(self):
+        uri = runner.mlflow_proxy_artifact_uri(
+            "s3://mlops-paas-artifacts/users/T-user/models/project/training/jobs/job/mlflow/"
+        )
+
+        self.assertEqual(
+            uri,
+            "mlflow-artifacts:/users/T-user/models/project/training/jobs/job/mlflow/",
+        )
+
+    def test_mlflow_artifact_uri_requires_s3_location(self):
+        with self.assertRaisesRegex(RuntimeError, "Invalid S3 URI"):
+            runner.mlflow_proxy_artifact_uri("https://example.test/artifacts")
+
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())
         self.original_paths = {

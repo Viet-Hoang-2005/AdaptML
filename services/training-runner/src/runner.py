@@ -7,13 +7,10 @@ import sys
 import tarfile
 import threading
 import time
-import boto3
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
-from urllib import request as urlrequest
-from urllib.error import URLError
 
 WORKSPACE = Path("/workspace")
 SOURCE_DIR = WORKSPACE / "source"
@@ -305,10 +302,11 @@ def log_to_mlflow(
         artifact_root = os.environ.get("MLFLOW_ARTIFACT_ROOT", "").strip()
         if not artifact_root:
             raise RuntimeError("MLFLOW_ARTIFACT_ROOT is required for job-scoped MLflow artifacts")
+        artifact_proxy_root = mlflow_proxy_artifact_uri(artifact_root)
         try:
             exp = mlflow.get_experiment_by_name(exp_name)
             if not exp:
-                mlflow.create_experiment(exp_name, artifact_location=artifact_root)
+                mlflow.create_experiment(exp_name, artifact_location=artifact_proxy_root)
         except Exception as exc:
             pass
         mlflow.set_experiment(exp_name)
@@ -348,6 +346,14 @@ def log_to_mlflow(
         log("Successfully logged training job parameters, metrics, and artifacts to MLflow")
     except Exception as exc:
         log(f"Warning: MLflow logging encountered an error: {exc}")
+
+
+def mlflow_proxy_artifact_uri(artifact_root: str) -> str:
+    """Map a job's durable S3 URI to MLflow's server-proxied artifact URI."""
+    parsed = urlparse(artifact_root)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        raise RuntimeError(f"Invalid S3 URI for MLflow artifacts: {artifact_root!r}")
+    return f"mlflow-artifacts:/{parsed.path.lstrip('/')}"
 
 
 def write_mlops_bundle(
@@ -414,91 +420,36 @@ def require_env(name: str) -> str:
     return value
 
 
-def parse_s3_uri(uri: str) -> tuple[str, str]:
+def validate_presigned_url(uri: str) -> None:
     parsed = urlparse(uri)
-    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
-        raise RuntimeError(f"Invalid S3 URI for {uri!r}")
-    return parsed.netloc, parsed.path.lstrip("/")
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise RuntimeError("Training runner requires a presigned HTTP(S) URL.")
 
 
-def s3_client():
-    return boto3.client("s3", region_name=os.environ.get("AWS_DEFAULT_REGION"))
-
-
-def _imds_request(path: str, token: str | None = None, method: str = "GET", timeout: float = 1.0) -> str:
-    headers = {}
-    if token:
-        headers["X-aws-ec2-metadata-token"] = token
-    if method == "PUT" and path.lstrip("/") == "api/token":
-        headers["X-aws-ec2-metadata-token-ttl-seconds"] = "21600"
-    req = urlrequest.Request(
-        f"http://169.254.169.254/latest/{path.lstrip('/')}",
-        headers=headers,
-        method=method,
-    )
-    with urlrequest.urlopen(req, timeout=timeout) as response:
-        return response.read().decode("utf-8").strip()
-
-
-def tag_current_ec2_instance(training_job_id: str) -> None:
-    if not training_job_id:
-        return
-    try:
-        token = _imds_request(
-            "api/token",
-            method="PUT",
-            timeout=1.0,
-        )
-    except (OSError, URLError):
-        token = None
-
-    try:
-        instance_id = _imds_request("meta-data/instance-id", token=token)
-        availability_zone = _imds_request("meta-data/placement/availability-zone", token=token)
-    except (OSError, URLError) as exc:
-        log(f"Skipping EC2 Name tag update because instance metadata is unavailable: {exc}")
-        return
-
-    region = availability_zone[:-1]
-    instance_name = f"mlops-training-{training_job_id}"
-    try:
-        boto3.client("ec2", region_name=region).create_tags(
-            Resources=[instance_id],
-            Tags=[{"Key": "Name", "Value": instance_name}],
-        )
-        log(f"Tagged EC2 instance {instance_id} as {instance_name}")
-    except Exception as exc:
-        log(f"Skipping EC2 Name tag update for {instance_id}: {exc}")
-
-
-def download_s3(uri: str, destination: Path) -> None:
+def download_presigned_url(uri: str, destination: Path) -> None:
+    validate_presigned_url(uri)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if uri.startswith("http://") or uri.startswith("https://"):
-        log(f"Downloading presigned URL to {destination}")
-        import requests
-        with requests.get(uri, stream=True, timeout=300) as response:
-            response.raise_for_status()
-            with open(destination, "wb") as out_file:
-                for chunk in response.iter_content(chunk_size=8192):
-                    out_file.write(chunk)
-    else:
-        bucket, key = parse_s3_uri(uri)
-        log(f"Downloading s3://{bucket}/{key} to {destination}")
-        s3_client().download_file(bucket, key, str(destination))
+    log(f"Downloading presigned URL to {destination}")
+    import requests
+
+    with requests.get(uri, stream=True, timeout=300) as response:
+        response.raise_for_status()
+        with open(destination, "wb") as out_file:
+            for chunk in response.iter_content(chunk_size=8192):
+                out_file.write(chunk)
 
 
-def upload_s3(source: Path, uri: str) -> None:
-    if uri.startswith("http://") or uri.startswith("https://"):
-        log(f"Uploading {source} via presigned PUT URL")
-        import requests
-        with open(source, "rb") as f:
-            res = requests.put(uri, data=f, timeout=300)
-        if res.status_code not in (200, 201, 204):
-            raise RuntimeError(f"Presigned PUT upload failed with HTTP status {res.status_code}: {res.text}")
-    else:
-        bucket, key = parse_s3_uri(uri)
-        log(f"Uploading model artifact to s3://{bucket}/{key}")
-        s3_client().upload_file(str(source), bucket, key)
+def upload_presigned_url(source: Path, uri: str) -> None:
+    validate_presigned_url(uri)
+    log(f"Uploading {source} via presigned PUT URL")
+    import requests
+
+    with open(source, "rb") as handle:
+        response = requests.put(uri, data=handle, timeout=300)
+    if response.status_code not in (200, 201, 204):
+        raise RuntimeError(
+            f"Presigned PUT upload failed with HTTP status {response.status_code}: {response.text}"
+        )
 
 
 def safe_extract_zip(zip_path: Path, destination: Path) -> None:
@@ -797,8 +748,6 @@ def main() -> None:
     training_job_id = os.environ.get("TRAINING_JOB_ID", "").strip()
     requirements_uri = os.environ.get("S3_REQUIREMENTS_URI", "").strip()
 
-    tag_current_ec2_instance(training_job_id)
-
     log("Preparing workspace")
     if WORKSPACE.exists():
         shutil.rmtree(WORKSPACE)
@@ -812,10 +761,10 @@ def main() -> None:
     requirements_path = SOURCE_DIR / "requirements.txt"
     model_archive_path = OUTPUT_DIR / "model.tar.gz"
 
-    download_s3(source_uri, source_zip_path)
-    download_s3(training_data_uri, train_csv_path)
+    download_presigned_url(source_uri, source_zip_path)
+    download_presigned_url(training_data_uri, train_csv_path)
     if requirements_uri:
-        download_s3(requirements_uri, requirements_path)
+        download_presigned_url(requirements_uri, requirements_path)
 
     log("Extracting source zip")
     safe_extract_zip(source_zip_path, SOURCE_DIR)
@@ -848,7 +797,7 @@ def main() -> None:
     if result.returncode != 0:
         raise RuntimeError(f"Training entry point failed with exit code {result.returncode}")
     create_model_archive(model_archive_path)
-    upload_s3(model_archive_path, output_uri)
+    upload_presigned_url(model_archive_path, output_uri)
     log("Training job completed successfully")
 
 

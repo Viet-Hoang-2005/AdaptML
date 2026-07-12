@@ -293,12 +293,21 @@ spec:
               metadata:
                 generateName: train-model-job-
                 namespace: default
+                labels:
+                  app.kubernetes.io/part-of: mlops-paas
+                  app.kubernetes.io/component: training
+                  app.kubernetes.io/managed-by: argo-events
+                  mlops.io/training-job-id: ""
+                  mlops.io/project-id: ""
+                  mlops.io/tenant-id: ""
               spec:
                 workflowTemplateRef:
                   name: mlops-paas-training-pipeline-template
                 arguments:
                   parameters:
                     - name: job_id
+                      value: ""
+                    - name: project_id
                       value: ""
                     - name: tenant_id
                       value: ""
@@ -335,67 +344,76 @@ spec:
                     - name: mlflow_artifact_root
                       value: ""
           parameters:
+            # Escape the dot so Argo Events updates the literal `mlops.io/...` label key.
+            - src: { dependencyName: train-dep, dataKey: body.job_id }
+              dest: 'metadata.labels.mlops\.io/training-job-id'
+            - src: { dependencyName: train-dep, dataKey: body.project_id }
+              dest: 'metadata.labels.mlops\.io/project-id'
+            - src: { dependencyName: train-dep, dataKey: body.tenant_id }
+              dest: 'metadata.labels.mlops\.io/tenant-id'
             - src: { dependencyName: train-dep, dataKey: body.job_id }
               dest: spec.arguments.parameters.0.value
-            - src: { dependencyName: train-dep, dataKey: body.tenant_id }
+            - src: { dependencyName: train-dep, dataKey: body.project_id }
               dest: spec.arguments.parameters.1.value
-            - src: { dependencyName: train-dep, dataKey: body.job_name }
+            - src: { dependencyName: train-dep, dataKey: body.tenant_id }
               dest: spec.arguments.parameters.2.value
-            - src: { dependencyName: train-dep, dataKey: body.namespace }
+            - src: { dependencyName: train-dep, dataKey: body.job_name }
               dest: spec.arguments.parameters.3.value
-            - src: { dependencyName: train-dep, dataKey: body.vcpu }
+            - src: { dependencyName: train-dep, dataKey: body.namespace }
               dest: spec.arguments.parameters.4.value
-            - src: { dependencyName: train-dep, dataKey: body.memory }
+            - src: { dependencyName: train-dep, dataKey: body.vcpu }
               dest: spec.arguments.parameters.5.value
-            - src: { dependencyName: train-dep, dataKey: body.accelerator_type }
+            - src: { dependencyName: train-dep, dataKey: body.memory }
               dest: spec.arguments.parameters.6.value
+            - src: { dependencyName: train-dep, dataKey: body.accelerator_type }
+              dest: spec.arguments.parameters.7.value
             - src:
                 { dependencyName: train-dep, dataKey: body.accelerator_count }
-              dest: spec.arguments.parameters.7.value
-            - src: { dependencyName: train-dep, dataKey: body.s3_source_uri }
               dest: spec.arguments.parameters.8.value
+            - src: { dependencyName: train-dep, dataKey: body.s3_source_uri }
+              dest: spec.arguments.parameters.9.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.s3_training_data_uri,
                 }
-              dest: spec.arguments.parameters.9.value
-            - src: { dependencyName: train-dep, dataKey: body.s3_output_uri }
               dest: spec.arguments.parameters.10.value
-            - src: { dependencyName: train-dep, dataKey: body.entry_point }
+            - src: { dependencyName: train-dep, dataKey: body.s3_output_uri }
               dest: spec.arguments.parameters.11.value
-            - src: { dependencyName: train-dep, dataKey: body.model_version }
+            - src: { dependencyName: train-dep, dataKey: body.entry_point }
               dest: spec.arguments.parameters.12.value
+            - src: { dependencyName: train-dep, dataKey: body.model_version }
+              dest: spec.arguments.parameters.13.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.control_plane_webhook_url,
                 }
-              dest: spec.arguments.parameters.13.value
+              dest: spec.arguments.parameters.14.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.requirements_text,
                 }
-              dest: spec.arguments.parameters.14.value
+              dest: spec.arguments.parameters.15.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.mlflow_tracking_uri,
                 }
-              dest: spec.arguments.parameters.15.value
+              dest: spec.arguments.parameters.16.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.mlflow_experiment_name,
                 }
-              dest: spec.arguments.parameters.16.value
+              dest: spec.arguments.parameters.17.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.mlflow_artifact_root,
                 }
-              dest: spec.arguments.parameters.17.value
+              dest: spec.arguments.parameters.18.value
 
     - template:
         name: cancel-train-workflow-trigger
