@@ -74,7 +74,7 @@ jobs:
           }
           configs = {
               "frontend": {"name": "Frontend Web", "id": "frontend", "context": "web", "image": "mlops-paas-web"},
-              "control_plane": {"name": "Control Plane", "id": "control_plane", "context": "services/control-plane", "image": "mlops-paas-django"},
+              "control_plane": {"name": "Control Plane", "id": "control_plane", "context": "services/control-plane", "image": "mlops-paas-control-plane"},
               "consumer": {"name": "Redpanda Consumer", "id": "consumer", "context": "services/consumer", "image": "mlops-paas-consumer"},
               "packager": {"name": "Model Packager", "id": "packager", "context": "services/model-packager", "image": "mlops-paas-model-packager"},
               "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"},
@@ -202,7 +202,7 @@ jobs:
           fi
           
           if [ "${{ needs.detect-changes.outputs.control_plane }}" == "true" ]; then
-            kustomize edit set image mlops-paas-django=$REG/mlops-paas-django:$SHA
+            kustomize edit set image mlops-paas-control-plane=$REG/mlops-paas-control-plane:$SHA
           fi
           
           if [ "${{ needs.detect-changes.outputs.consumer }}" == "true" ]; then
@@ -257,7 +257,7 @@ jobs:
           fi
           
           if [ "${{ needs.detect-changes.outputs.control_plane }}" == "true" ]; then
-            DJANGO_TAG="$REG/mlops-paas-django:$SHA"
+            DJANGO_TAG="$REG/mlops-paas-control-plane:$SHA"
           fi
           
           if [ "${{ needs.detect-changes.outputs.consumer }}" == "true" ]; then
@@ -298,7 +298,7 @@ jobs:
           | Service | Image Tag |
           | :--- | :--- |
           | **Frontend Web** (\`mlops-paas-web\`) | \`$WEB_TAG\` |
-          | **Control Plane** (\`mlops-paas-django\`) | \`$DJANGO_TAG\` |
+          | **Control Plane** (\`mlops-paas-control-plane\`) | \`$DJANGO_TAG\` |
           | **Redpanda Consumer** (\`mlops-paas-consumer\`) | \`$CONSUMER_TAG\` |
           | **Model Packager** (\`mlops-paas-model-packager\`) | \`$PACKAGER_TAG\` |
           | **Evidently Drift** (\`mlops-paas-evidently\`) | \`$EVIDENTLY_TAG\` |

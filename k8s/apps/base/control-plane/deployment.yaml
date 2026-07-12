@@ -38,7 +38,7 @@ spec:
           emptyDir: {}
       initContainers:
         - name: db-migrate
-          image: mlops-paas-django:latest
+          image: mlops-paas-control-plane:latest
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
@@ -67,7 +67,7 @@ spec:
               mountPath: /app/staticfiles
       containers:
         - name: control-plane
-          image: mlops-paas-django:latest
+          image: mlops-paas-control-plane:latest
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:

@@ -19,7 +19,7 @@ spec:
         workload-type: worker
       containers:
         - name: worker
-          image: mlops-paas-django:latest
+          image: mlops-paas-control-plane:latest
           imagePullPolicy: IfNotPresent
           command: ["celery"]
           args: ["-A", "config", "worker", "--loglevel=INFO", "--concurrency=2"]
