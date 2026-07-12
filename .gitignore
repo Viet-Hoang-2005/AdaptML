@@ -7,6 +7,7 @@ env/
 # IDE
 .vscode/
 .idea/
+.codex/
 *.swp
 *.swo
 *~
@@ -15,6 +16,7 @@ env/
 __pycache__/
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -25,7 +27,7 @@ dist/
 build/
 
 # Django static files
-services/control-plane/src/staticfiles/
+services/control-plane/staticfiles/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -63,9 +65,6 @@ logs/
 *.run.xml
 *.synctex.gz
 *.toc
-
-# Docker
-.dockerignore
 
 # OS
 .DS_Store
