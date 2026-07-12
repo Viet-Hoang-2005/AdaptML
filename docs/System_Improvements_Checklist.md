@@ -67,7 +67,7 @@ Với hướng hiện tại, lỗi dependency/model artifact xảy ra sớm ở 
 - [x] Tách runtime ML truyền thống sang `machine-learning-serving`.
 - [x] Tách runtime Deep Learning sang `deep-learning-serving`.
 - [x] Dùng BentoML cho Deep Learning serving.
-- [x] Route public endpoint qua contract chung `/models/{hashid}/predict` và `/models/{hashid}/health`.
+- [x] Route public endpoint qua contract chung `/models/{version_uuid}/predict` và `/models/{version_uuid}/health`.
 - [x] Build pipeline chọn runtime dựa trên flavor/model type hiện có.
 - [x] Deploy workflow chỉ tạo worker Deployment/Service, không tạo ingress riêng cho từng model.
 - [ ] Bật batching nâng cao cho DL khi payload/schema đã ổn định.
@@ -130,8 +130,8 @@ Cách này có lợi hơn vì:
 Kiến trúc hiện tại đã tạo nền tốt cho pipeline vì mọi model đều có contract public thống nhất qua gateway:
 
 ```text
-/models/{hashid}/predict
-/models/{hashid}/health
+/models/{version_uuid}/predict
+/models/{version_uuid}/health
 ```
 
 Khi làm pipeline sau này, executor có thể gọi gateway hoặc gọi service nội bộ tùy yêu cầu bảo mật/hiệu năng.

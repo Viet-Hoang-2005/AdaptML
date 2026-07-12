@@ -67,7 +67,7 @@ Thay vì build Docker image riêng, chuyển sang mô hình **"Init Container + 
 
 **Những gì cần hoàn thiện:**
 
-1. **Control Plane:** Cần thêm trường `runtime_type` (hoặc `flavor`) vào model `ModelAPI` để phân biệt ML vs DL. Khi user chọn "Deep Learning" trên giao diện, Control Plane sẽ truyền `FLAVOR=bentoml` xuống model-packager.
+1. **Control Plane:** `ModelProject` và `ModelVersion` lưu `model_type`/`flavor` để phân biệt ML với DL. Khi user chọn "Deep Learning", Control Plane truyền flavor tương ứng xuống model-packager.
 2. **Deploy Adapter:** Cần sửa [deploy_adapter.py](file:///d:/AI%20Models/mlops-nids-system/services/control-plane/src/deployment/deploy_adapter.py) để chọn đúng base image (FastAPI vs BentoML) dựa trên `runtime_type`.
 3. **Kaniko Pipeline:** Cần tạo thêm 1 variant của [build-workflowtemplate.yaml](file:///d:/AI%20Models/mlops-nids-system/k8s/argo-workflows/build-workflowtemplate.yaml) hoặc thêm parameter `RUNTIME_TYPE` để chọn base image phù hợp.
 4. **Frontend:** Thêm dropdown cho user chọn loại model khi upload.
@@ -251,7 +251,7 @@ steps:
 
 **Endpoint Prometheus API mẫu:**
 ```
-GET /api/v1/query_range?query=container_cpu_usage_seconds_total{pod=~"endpoint-T-xxx-.*"}&start=...&end=...&step=60s
+GET <Prometheus query_range endpoint>?query=container_cpu_usage_seconds_total{pod=~"endpoint-.*"}&start=...&end=...&step=60s
 ```
 
 ---
