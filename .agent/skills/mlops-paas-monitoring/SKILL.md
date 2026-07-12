@@ -1,80 +1,46 @@
 ---
 name: mlops-paas-monitoring
-description: Giám sát Data Drift bằng Evidently AI qua Argo Workflows, xử lý Schema Drift bằng JSONB, Text Label Mapping, và production data logging qua Redpanda.
+description: "Observability và data drift hiện tại: model-server gateway metrics, Redpanda production events, consumer, Evidently DriftRun, Prometheus và Control Plane observability API. Dùng khi thay đổi monitoring, event logging hoặc drift."
 ---
 
-# Giám sát Data Drift & Production Logging (AI PaaS)
+# Monitoring, Production Data và Drift
 
-> Đọc skill `mlops-paas-architecture` trước để nắm kiến trúc tổng thể.
+Đọc `services/model-server/src/`, `services/consumer/src/`, `apps/drift/`, `apps/observability/` và `k8s/monitoring/` trước khi thay đổi. Phân biệt contract hiện tại với roadmap.
 
----
+## Production inference events
 
-## 1. Production Data Logging (Redpanda → PostgreSQL)
-
-Luồng log dữ liệu inference không đồng bộ:
-
-```
-model-server (FastAPI)
-  → Kafka Producer
-  → Redpanda topic: mlops_paas_production_data
-  → consumer service (batch consume)
-  → PostgreSQL (JSONB features + TEXT prediction)
+```text
+model-server gateway
+  -> Redpanda topic mlops_paas_production_data
+  -> consumer
+  -> PostgreSQL production data
 ```
 
-**Lý do dùng JSONB cho features**: Mỗi model của mỗi tenant có số lượng features khác nhau (Schema Drift). JSONB cho phép lưu động mà không cần thay đổi schema database.
+Gateway emit tenant, model/version context, timestamp, input features và prediction sau inference. Consumer chịu trách nhiệm persist/batch processing. Giữ schema event backward-compatible; thay đổi schema cần migration/read compatibility và test consumer.
 
-Cấu trúc bản ghi log:
-```json
-{
-  "tenant_id": "T-123",
-  "model_id": "M-ABC",
-  "timestamp": "2024-05-11T...",
-  "features": { "feature_1": 0.5, "feature_2": 1.2, "...": "..." },
-  "prediction": "DDoS"
-}
-```
+Gateway expose Prometheus metric cho prediction count, status và latency theo tenant/model. Control Plane expose:
 
-`prediction` lưu dạng `TEXT` để hỗ trợ Label Mapping string ("DDoS", "BENIGN") thay vì số nguyên.
+- `/health/live`, `/health/ready`, `/health/metrics`
+- `/api/observability/models/{project_uuid}/`
 
----
+Model observability API tổng hợp traffic, resource và health từ Prometheus/endpoint metadata. Dùng selector tenant-scoped trước khi query project.
 
-## 2. Drift Detection Pipeline (Evidently AI + Argo Workflows)
+## Drift contract
 
-**Kích hoạt:**
-- Tenant bấm Manual Run từ Dashboard, hoặc
-- Lập lịch định kỳ (cấu hình trong DriftJob)
-- Control Plane POST webhook `/drift` tới Argo Events
+1. `DriftMonitor` liên kết immutable model version với reference `WorkspaceAsset`.
+2. `POST /api/drift-monitors/{monitor_uuid}/runs/` tạo `DriftRun` và enqueue Celery.
+3. Docker/Argo Evidently worker đọc reference qua presigned S3 URL và production data từ PostgreSQL.
+4. Worker ghi `report.html`, `report.json`, `summary.json` vào prefix của run.
+5. Callback `/internal/webhooks/drift-runs/{run_uuid}/` ghi summary, drift score và `has_drift`.
 
-**evidently-workflowtemplate (`k8s/argo-workflows/evidently-workflowtemplate.yaml`):**
-1. Pull Reference Data từ S3 (URL presigned, do Control Plane tạo)
-2. Query Production Logs từ PostgreSQL theo `model_id` và `tenant_id`
-3. Flatten JSONB `features` → Pandas DataFrame
-4. Chạy `DataDriftPreset` Evidently AI
-5. Xuất:
-   - `report.html` → upload lên S3 (`drift-reports/{job_id}/report.html`)
-   - `summary.json` → upload lên S3
-6. POST webhook callback về Control Plane với `drift_score`, `html_url`, `summary_url`
+Chỉ gọi một run là completed khi callback đã qua shared-secret validation. Không dùng report Redis/cache làm nguồn sự thật.
 
-**Control Plane:**
-- Cập nhật `DriftJob.status` (drifted / no_drift)
-- Lưu report URLs vào DB để Tenant xem từ Dashboard
+## Giới hạn hiện tại
 
----
+- Có data drift và data-quality report; prediction drift chuẩn hóa chưa hoàn chỉnh.
+- Chưa có ground-truth feedback API hoặc accuracy/precision/recall/F1 theo thời gian.
+- Frontend chưa có chart time-series observability đầy đủ.
+- GPU metrics cần DCGM exporter, hiện không phải contract.
+- KEDA chỉ scale consumer theo Kafka lag, không scale model worker endpoint về zero.
 
-## 3. Schema Isolation PostgreSQL
-
-Database `mlops_paas_db` có 2 schema:
-- `control_plane` — Django ORM: User, Tenant, ModelAPI, TrainingJob, DriftJob
-- `mlflow` — MLflow tự quản lý: Runs, Experiments, Registered Models
-
-**Không còn** schema `fastapi_schema` hay `django_schema` (đặt tên cũ, đã được thay bằng `control_plane`).
-
----
-
-## 4. Infrastructure Monitoring
-
-- **Prometheus + Grafana**: Giám sát metrics K8s cluster, HTTP request counts, resource usage
-- **KEDA ScaledObject**: Scale model-server Pods theo số lượng HTTP requests hoặc Kafka consumer lag
-  - Scale-to-Zero khi không có traffic (tiết kiệm tài nguyên)
-  - Scale-Out khi traffic tăng cao
-- **Alertmanager**: Cảnh báo khi Tenant gây đột biến tài nguyên (CPU > 90% kéo dài)
+Khi thêm một metric/drift capability, cập nhật gateway labels, Prometheus query, API serializer, frontend type/view và alert rule cùng nhau. Tránh label cardinality không giới hạn như raw request ID, payload hoặc user input.

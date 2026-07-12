@@ -1,92 +1,70 @@
 ---
 name: mlops-paas-training
-description: Quy trình điều phối huấn luyện mô hình: TRAINING_BACKEND=local (docker-compose) và TRAINING_BACKEND=kubeflow (K3s). Bao gồm Argo Workflows, Kubeflow PyTorchJob, Karpenter Scale-to-Zero, Redis log streaming.
+description: Quy trình training hiện tại dùng TrainingJob snapshot, Celery, Docker local hoặc Argo/Kubeflow production, training-runner, S3 presigned URLs và MLflow. Dùng khi thay đổi training API, runner, workflow, GPU scheduling hoặc artifact metadata.
 ---
 
-# Kiến trúc Điều phối Huấn luyện Mô hình
+# Training Orchestration
 
-> Đọc skill `mlops-paas-architecture` trước để nắm kiến trúc tổng thể.
+Đọc `apps/training/`, `infrastructure/execution/`, `services/training-runner/src/runner.py` và `k8s/argo-workflows/training-workflowtemplate.yaml` trước khi thay đổi.
 
----
+## Backend contract
 
-## 1. Biến môi trường quyết định backend
+`TRAINING_BACKEND` nhận `docker` hoặc `argo` (kế thừa `EXECUTION_BACKEND` nếu không override):
 
-`TRAINING_BACKEND` env var:
-- `local` — Local docker-compose: Control Plane chạy training script trực tiếp qua subprocess
-- `kubeflow` — Production K3s: Control Plane kích hoạt Argo Workflow → Kubeflow PyTorchJob
+- `docker`: Celery chạy image `mlops-paas-training-runner` qua Docker SDK.
+- `argo`: Celery gửi webhook `/train`; Argo tạo Kubeflow `PyTorchJob` trong namespace `user-jobs`.
 
-> **Không còn sử dụng** `sagemaker` hay `batch`.
+Không chạy user training script trực tiếp trong process Control Plane và không dùng giá trị `local` hoặc `kubeflow` trong settings.
 
----
+## Lifecycle
 
-## 2. Luồng Local Training (`TRAINING_BACKEND=local`)
+```text
+POST /api/training-jobs/
+  -> create_job: snapshot workspace hoặc nhận source/data upload
+  -> PostgreSQL TrainingJob + S3 input/output/mlflow URIs
+POST /api/training-jobs/{job_uuid}/submit/
+  -> transaction.on_commit -> Celery execute_training_job
+  -> Docker container | Argo PyTorchJob
+  -> internal webhook -> status, TrainingOutput, event
+```
 
-Control Plane tạo Virtual Environment, `pip install -r requirements.txt`, thiết lập biến môi trường SageMaker-compatible:
-- `SM_CHANNEL_TRAIN=/workspace/input/train`
-- `SM_MODEL_DIR=/workspace/model`
-- `SM_OUTPUT_DIR=/workspace/output`
+Job API có detail, `submit/`, `cancel/`, `events/` và `download/`. Sử dụng UUID `job_uuid` ở mọi route/callback.
 
-Chạy entry point script qua `subprocess.run`, sau đó tự động đóng gói `model.tar.gz` và upload S3.
+## Training runner contract
 
----
+Runner chỉ nhận presigned HTTP(S) URL cho `S3_SOURCE_URI`, `S3_TRAINING_DATA_URI`, `S3_OUTPUT_URI`. Nó:
 
-## 3. Luồng Kubeflow Training (`TRAINING_BACKEND=kubeflow`)
+1. Download source ZIP và dataset, kiểm tra zip path traversal, giải nén vào `/workspace/source`.
+2. Viết/cài `requirements.txt` từ `REQUIREMENTS_TEXT` nếu có.
+3. Chạy `ENTRY_POINT` trong subprocess, với `SM_CHANNEL_TRAIN`, `SM_MODEL_DIR`, `SM_OUTPUT_DIR`.
+4. Stream stdout/stderr vào Redis nếu cấu hình được cung cấp; đồng thời lưu trong metadata bundle.
+5. Đọc `METRIC_JSON:` từ stdout và `metrics.json`/`params.json` trong output.
+6. Ghi `_mlops/` gồm manifest, metrics, params, stdout/stderr, warnings và training summary.
+7. Log experiment/artifact theo job vào MLflow khi `MLFLOW_TRACKING_URI` được cấu hình.
+8. Đóng gói `SM_MODEL_DIR` thành `model.tar.gz` rồi PUT qua presigned URL.
 
-**Kích hoạt:**
-1. Tenant tạo Training Job từ Dashboard (chọn vCPU, memory, GPU, dataset S3 URI, training script)
-2. Control Plane POST webhook `/train` tới Argo Events
-3. Argo Sensor kích hoạt `training-workflowtemplate`
+Đừng buộc user script import MLflow. Dùng runner để chuẩn hóa metadata và MLflow integration.
 
-**WorkflowTemplate (`k8s/argo-workflows/training-workflowtemplate.yaml`):**
-- Chọn template `cpu-pytorch-job` hoặc `gpu-pytorch-job` dựa vào `accelerator_type` và `accelerator_count`
-- Tạo CRD `PyTorchJob` (`kubeflow.org/v1`) trong namespace `user-jobs`
-- `onExit: report-status` — template `report-status` luôn chạy khi workflow xong/fail, POST webhook callback về Control Plane
+## CPU/GPU production
 
-**Kubeflow PyTorchJob:**
-- Master replica 1, chạy container `mlops-paas-training-runner`
-- Pull image từ Harbor (imagePullSecret: `harbor-registry-pull-secret`)
-- `nodeSelector: mlops-paas/nodepool: training-cpu` hoặc `training-gpu`
+Argo chọn template CPU/GPU theo `accelerator_type` và `accelerator_count`. GPU workload có node selector/toleration/resource limit để Karpenter cấp node. Karpenter NodePool/EC2NodeClass nằm ở `k8s/karpenter/`.
 
----
+Đừng hứa tenant quota, max concurrent job, TFJob/XGBoostJob/MPIJob hoặc GPU dashboard: chúng chưa hoàn thiện.
 
-## 4. Karpenter Autoscaling (Scale-to-Zero)
+## Cancel và callback
 
-- Khi PyTorchJob Pod ở trạng thái `Pending` do thiếu node, Karpenter phát hiện và tự động tạo EC2 Instance phù hợp (CPU/GPU)
-- Khi Job hoàn tất và Pod bị xóa, Karpenter thực hiện Consolidation → thu hồi EC2 node
-- **Chi phí = $0 khi không có job đang chạy**
-- NodePool và EC2NodeClass định nghĩa trong `k8s/karpenter/`
+- Cancel API enqueue Celery `cancel_training_job`; backend hủy container hoặc gửi Argo cancel workflow.
+- Callback là `POST /internal/webhooks/training-jobs/{job_uuid}/` với shared secret.
+- Dùng `Idempotency-Key` cho callback có thể lặp; terminal state không được ghi đè.
 
----
+## Kiểm tra tối thiểu
 
-## 5. Training Runner (`services/training-runner`)
+```bash
+cd services/control-plane
+python -m pytest src/apps/training
 
-Container `runner.py` chạy trong PyTorchJob:
-1. Nhận env vars: `S3_SOURCE_URI`, `S3_TRAINING_DATA_URI`, `S3_OUTPUT_URI`, `ENTRY_POINT`, `MODEL_VERSION`, `TRAINING_JOB_ID`, `TENANT_ID`
-2. Tải source code và training data từ S3
-3. Cài đặt requirements nếu có
-4. Chạy `ENTRY_POINT` script của Tenant
-5. Đóng gói `model.tar.gz` → upload về `S3_OUTPUT_URI`
-6. Ghi metadata bundle vào `SM_MODEL_DIR/_mlops/` (metrics.json, params.json, training_summary.json)
+cd ../training-runner
+python -m unittest discover -s src -p 'test_*.py' -v
+```
 
-Training code của Tenant KHÔNG cần import MLflow. Để expose metrics, print dòng `METRIC_JSON:{"accuracy":0.95}`.
-
----
-
-## 6. Log Streaming qua Redis
-
-- Training Runner và Build step ghi log liên tục vào Redis List:
-  - Training: `training_logs:{job_id}`
-  - Build: `build_logs:{model_id}`
-- React Frontend HTTP Polling mỗi 3 giây: `GET /api/training-jobs/{id}/logs/?offset=<N>`
-- Control Plane trả về log mới kèm `next_offset`
-- **Không dùng WebSocket** để tránh overhead và lỗi rớt mạng
-
----
-
-## 7. Hủy Training Job
-
-1. User bấm Cancel trên Dashboard
-2. Control Plane POST webhook `/cancel-train` tới Argo Events
-3. `training-cancel-workflowtemplate` dùng Argo Resource Template với `action: delete` để xóa CRD `PyTorchJob`
-4. Khi CRD bị xóa, Kubeflow Training Operator tự động kill toàn bộ Pod Master/Worker
-5. Karpenter phát hiện Pod biến mất → thu hồi node
+Khi thay đổi artifact metadata, chạy thêm `scripts/validate_training_artifact.py` và cập nhật test metadata của runner.

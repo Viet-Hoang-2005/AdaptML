@@ -1,85 +1,47 @@
 ---
 name: mlops-paas-security
-description: Bảo mật nền tảng AI PaaS Multi-Tenant: Asymmetric JWT, Kaniko Rootless Build (thay Docker Socket), AWS IAM Role (thay Access Key tĩnh), External Secrets Operator, và Tenant Isolation.
+description: "Bảo mật hiện tại của MLOps PaaS: tenant-scoped UUID API, JWT RS256/JWKS, project API key, internal webhook secret, S3 presigned URL, Kaniko, IAM và External Secrets. Dùng khi thay đổi auth, permissions, callback hoặc secret/infrastructure access."
 ---
 
-# Bảo mật Nền tảng AI PaaS
+# Security và Tenant Isolation
 
-> Đọc skill `mlops-paas-architecture` trước để nắm kiến trúc tổng thể.
+Đọc `common/api/permissions.py`, `apps/auth/`, `apps/access/`, selectors của domain liên quan, `services/model-server/src/` và `k8s/secrets/` trước khi thay đổi.
 
----
+## Identity và inference access
 
-## 1. Xác thực Bất Đối Xứng (JWT RS256)
+- Control Plane phát access/refresh token RS256 tại `/api/auth/token/` và expose JWKS tại `/api/auth/.well-known/jwks.json`.
+- Gateway verify signature, `kid`, audience `mlops-paas` và `tenant_id` trước khi route worker.
+- Public model có thể không cần credential. Private model yêu cầu Bearer JWT hoặc `X-API-Key` active và scope được project owner chấp nhận.
+- `UserAPIKey` chỉ lưu hash; secret chỉ trả một lần khi create/regenerate.
 
-- Django Control Plane ký JWT bằng **Private Key** (RS256)
-- FastAPI Model Server xác thực Token bằng **Public Key** lấy từ JWKS endpoint
-- **Ưu điểm**: Không cần gọi network về Control Plane khi verify — loại bỏ Network Overhead
-- JWT payload chứa `tenant_id` và `model_id` để đảm bảo cô lập
+Đừng đặt model ID vào JWT như một authorization shortcut. Resolve version/project và enforce tenant/API-key scope ở gateway + tenant-scoped Control Plane query.
 
-Env vars liên quan: `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` (trong `.env` và `mlops/production-secrets` trên AWS)
+## API và callback boundary
 
----
+1. Public resource URL dùng UUID `public_id`; integer PK là internal-only.
+2. Selector phải scope tenant/user trước mọi retrieve/update/delete.
+3. Internal callback dùng `X-Control-Plane-Secret` hoặc `Authorization: Bearer <secret>`; permission so sánh constant-time.
+4. Dùng `Idempotency-Key` khi source callback có thể retry; không ghi đè terminal state.
+5. Dùng presigned S3 GET/PUT URL với TTL giới hạn cho runner/worker thay vì truyền AWS secret cho user workload.
 
-## 2. Kaniko Rootless Build — Loại bỏ Docker Socket
+## Secrets và workload credentials
 
-**Vấn đề cũ**: Mount `/var/run/docker.sock` vào container cho phép container đó leo thang đặc quyền (root trên host node) — nguy hiểm trong môi trường Multi-Tenant.
+- Local có thể lấy AWS/Harbor/test credential từ `.env`; không log hoặc commit giá trị.
+- Production dùng EC2 IAM role và External Secrets Operator từ AWS Secrets Manager.
+- K8s secrets quan trọng: `mlops-paas-secret`, `harbor-registry-secret`, `harbor-registry-dockerconfig`, pull secret trong `user-jobs`.
+- Không đọc `.env` để hiển thị, copy vào issue, test output hay tài liệu.
 
-**Giải pháp hiện tại (Production K3s)**:
-- Dùng `gcr.io/kaniko-project/executor` — build image trong user-space, không cần Docker Daemon
-- Kaniko đọc `Dockerfile` từ `emptyDir` volume được chia sẻ giữa các bước
-- Xác thực với Harbor qua Secret `harbor-registry-dockerconfig` (dockerconfigjson) mount vào `/kaniko/.docker/`
+## Build và runtime hardening
 
-File: `k8s/argo-workflows/build-workflowtemplate.yaml` — không còn `hostPath: /var/run/docker.sock`
+- Local Docker build có Docker socket mount vì đó là development adapter; không đưa mount này vào K8s workload.
+- Production build dùng Kaniko và dockerconfig secret trong `/kaniko/.docker/`.
+- Training runner chỉ extract ZIP sau khi chặn path traversal và chỉ download/upload bằng presigned HTTP(S) URL.
+- Worker runtime nằm sau gateway; không tạo public ingress riêng cho model.
 
----
+## Checklist thay đổi nhạy cảm
 
-## 3. AWS IAM Role — Loại bỏ Access Key tĩnh trên Production
-
-**Production K3s (EC2 với IAM Policy)**:
-- EC2 worker nodes được gắn IAM Role với policy cho phép truy cập S3 và Secrets Manager
-- `boto3` tự động dùng Instance Metadata Service (IMDS) → không cần `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` trong environment của container
-
-**Local (docker-compose)**:
-- `AWS_ACCESS_KEY_ID` và `AWS_SECRET_ACCESS_KEY` lấy từ file `.env`
-- `build_adapter.py` và `deploy_adapter.py` chỉ inject các biến này vào container khi chúng thực sự tồn tại trong environment (tránh truyền chuỗi rỗng `""` làm boto3 lỗi InvalidAccessKeyId)
-
----
-
-## 4. External Secrets Operator (ESO)
-
-- Không lưu secrets trong Git — chỉ lưu định nghĩa `ExternalSecret` referencing AWS Secrets Manager keys
-- ESO tự động đồng bộ secrets mỗi 1 giờ
-- 3 kho AWS Secrets Manager:
-  - `mlops/aws-secrets` — AWS Credentials (local dev only)
-  - `mlops/github-actions-secrets` — Harbor Robot Account, Cosign Keys
-  - `mlops/production-secrets` — DB, JWT keys, OAuth, Harbor, Webhook secrets
-
----
-
-## 5. Tenant Isolation
-
-**ORM Layer**: Tất cả Django query đều filter theo `request.user.tenant` — không tenant nào có thể truy cập tài nguyên của tenant khác.
-
-**K8s Layer**:
-- Mỗi model endpoint là Deployment/Service/IngressRoute riêng biệt
-- Training jobs chạy trong namespace `user-jobs` với ResourceQuota
-- Traefik IngressRoute route theo `/{tenant_id}/models/{hashid}/...` — cô lập bằng URL path
-
-**Harbor Registry**:
-- Image của mỗi tenant được tag theo pattern: `{tenant_id}-model-{model_hashid}:latest`
-- Lưu trong project `user-images` trên Harbor
-
----
-
-## 6. Webhook Validation
-
-Tất cả internal webhook callback đều được xác thực bằng HMAC `X-Webhook-Secret` header:
-- `CONTROL_PLANE_WEBHOOK_SECRET` trong Secret `mlops-paas-secret`
-- Áp dụng cho: build-webhook, training-webhook, drift-webhook
-
----
-
-## 7. Image Signing (Cosign)
-
-CI/CD pipeline (GitHub Actions) dùng Cosign để ký Docker Images sau khi push lên Harbor.
-- `COSIGN_PRIVATE_KEY` và `COSIGN_PASSWORD` lưu trong `mlops/github-actions-secrets`
+- Viết test tenant A không thể đọc/ghi resource tenant B.
+- Test API key chỉ scope project cùng owner.
+- Test missing/invalid callback secret trả 403/401 phù hợp.
+- Không thêm secret, token, private key hoặc presigned URL vào source, log hoặc fixture.
+- Kiểm tra NetworkPolicy/RBAC/IAM scope khi thêm K8s resource hay AWS action.

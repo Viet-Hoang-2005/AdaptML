@@ -1,109 +1,62 @@
 ---
 name: mlops-paas-testing
-description: Phương pháp kiểm thử AI PaaS: Tenant Isolation, JWT RS256 validation, Build Pipeline (Docker/Kaniko), Training Job flow, và Drift Detection.
+description: Quy trình kiểm thử hiện tại của MLOps PaaS cho Django Control Plane, training runner, frontend, tenant isolation, callback idempotency và manifest. Dùng khi thêm tính năng, sửa bug hoặc xác minh thay đổi cross-service.
 ---
 
-# Phương pháp Kiểm thử Nền tảng AI PaaS
+# Testing MLOps PaaS
 
-> Đọc skill `mlops-paas-architecture` trước để nắm kiến trúc tổng thể.
+Chọn kiểm tra nhỏ nhất bao phủ thay đổi, sau đó chạy suite liên quan. Không khẳng định E2E production nếu chưa chạy trên cluster.
 
----
+## Quality gates hiện có
 
-## 1. Kiểm thử Cách Ly Người Dùng (Tenant Isolation)
-
-**Data Isolation**:
-- Đăng nhập với Tenant A, thử truy cập API với `model_id` thuộc Tenant B → phải nhận `403 Forbidden`
-- Verify Django ORM filter đúng theo `tenant_id` trong mọi ViewSet
-
-**Endpoint Isolation**:
-- Tenant A dùng API Key (JWT) của mình gọi endpoint của Tenant B → phải nhận `401 Unauthorized`
-- FastAPI model-server verify `model_id` trong JWT payload phải khớp với model đang chạy
-
-**K8s Resource Isolation**:
-- Mỗi model deployment có `resources.requests` và `resources.limits` riêng
-- Tenant A không thể ảnh hưởng tài nguyên của Tenant B (Noisy Neighbor protection)
-
----
-
-## 2. Kiểm thử JWT RS256
-
-Kiểm thử end-to-end:
-1. Lấy `access_token` từ `POST /api/auth/login/`
-2. Dùng token đó gọi `POST /{tenant_id}/models/{hashid}/{version}/predict`
-3. Verify response 200
-
-Kiểm thử các trường hợp biên:
-- Token hết hạn (`exp` đã qua) → 401
-- Token bị chỉnh sửa (signature lỗi) → 401
-- Token `model_id` không khớp endpoint đang phục vụ → 403
-- JWKS endpoint không khả dụng → FastAPI phải dùng cached public key (fallback)
-
----
-
-## 3. Kiểm thử Build Pipeline
-
-**Local (BUILD_STRATEGY=docker)**:
 ```bash
-# Test DockerBuildAdapter trực tiếp
-POST /api/models/ (upload model ZIP)
-# Kiểm tra container model-packager được spawn
-docker ps | grep build_
-# Kiểm tra webhook callback
-GET /api/models/{id}/ → status="ready"
-```
-
-**Production (BUILD_STRATEGY=argo)**:
-```bash
-# Xem Argo Workflow được kích hoạt
-kubectl get workflows -n default
-# Xem từng bước của pipeline
-kubectl get pods -n default | grep build-model-job
-# Verify 3 bước: prepare-package, kaniko-build, notify-success
-```
-
----
-
-## 4. Kiểm thử Training Job
-
-**Local (TRAINING_BACKEND=local)**:
-- Submit training job với script đơn giản (ví dụ trong `examples/training/nids-xgboost/`)
-- Verify log stream qua `GET /api/training-jobs/{id}/logs/`
-- Verify file `model.tar.gz` được upload lên S3 sau khi hoàn tất
-
-**Production (TRAINING_BACKEND=kubeflow)**:
-- Verify Argo Workflow được tạo sau khi submit Training Job
-- Verify PyTorchJob CRD xuất hiện trong namespace `user-jobs`
-- Verify Karpenter provision node khi Job đang Pending (nếu không có node sẵn)
-- Verify webhook callback cập nhật status về Control Plane
-
----
-
-## 5. Kiểm thử Drift Detection
-
-- Kích hoạt Drift Job từ Dashboard
-- Verify Argo Workflow `evidently-job-*` được tạo
-- Verify HTML report và JSON summary được upload lên S3
-- Verify webhook callback cập nhật DriftJob status
-- Test với dataset có drift rõ ràng → `drift_score >= threshold`
-- Test với dataset tương tự reference → `drift_score < threshold`
-
----
-
-## 6. Stress Test (Noisy Neighbor)
-
-Dùng Locust để tạo traffic lớn vào model của Tenant A:
-- Đo latency của Tenant B → phải không bị ảnh hưởng đáng kể
-- Kiểm tra Pod của Tenant A bị OOMKilled (nếu cố tình dùng quá memory limit) nhưng Pod của Tenant B vẫn chạy bình thường
-- Verify KEDA Scale-Out hoạt động đúng khi traffic tăng cao
-
----
-
-## 7. Test Script Django (Unit Tests)
-
-Chạy test suite của Control Plane:
-```bash
+# Django Control Plane
 cd services/control-plane
-docker compose run control-plane python manage.py test
+python -m ruff check .
+python -m pytest
+python manage.py check --settings=config.settings.test
+python manage.py makemigrations --check --dry-run --settings=config.settings.test
+
+# Storage path tests không nằm trong testpaths mặc định
+python -m pytest src/infrastructure/storage/tests
+
+# Training runner
+cd ../training-runner
+python -m unittest discover -s src -p 'test_*.py' -v
+
+# Frontend
+cd ../../web
+pnpm lint
+pnpm build
 ```
 
-File test: `services/control-plane/src/registry/tests.py`
+## Test theo boundary
+
+| Thay đổi | Phải test |
+| --- | --- |
+| Domain API/service | tenant selector, serializer validation, UUID route, state transition |
+| Webhook | missing secret, duplicate/idempotency, terminal callback, retry/failure |
+| Execution backend | correct adapter selection từ `docker|argo`, payload/env và cancel |
+| S3 path/artifact | tenant/project/job/version prefix, traversal reject, presigned URL contract |
+| Gateway/auth | RS256 JWT, tenant mismatch, API-key project scope, public access |
+| Training runner | source URL validation, ZIP safety, failure logs, metadata bundle, MLflow artifact URI |
+| K8s/IaC | Kustomize build, Kubeconform và Terraform fmt/validate |
+
+## Invariant quan trọng
+
+- Mọi public ID là UUID; integer và route legacy phải bị từ chối.
+- Tenant A không đọc, mutate hay generate API key cho resource tenant B.
+- Callback chỉ chấp nhận secret hợp lệ và phải an toàn khi replay.
+- Worker failure phải chuyển đúng status/error/event, không bỏ qua output metadata.
+- API endpoint không được bypass service/selector để gọi infrastructure.
+
+## E2E local có chủ đích
+
+Sau khi `docker compose up --build` và frontend `pnpm dev` chạy, kiểm tra:
+
+1. `/health/ready` báo PostgreSQL/Redis healthy.
+2. Tạo project, upload workspace, tạo/submit training job và đọc events.
+3. Register version, tạo build/deployment và gọi inference qua gateway path UUID.
+4. Tạo DriftMonitor/run, xác minh callback và S3 report.
+
+Chỉ chạy Docker/Kubernetes integration khi thay đổi thật sự chạm adapter, image hoặc manifest. Ghi rõ phần nào dùng mock/unit test, local Docker và production cluster.
