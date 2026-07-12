@@ -107,20 +107,31 @@ MLOps-paas-system/
 │
 ├── services/
 │   ├── control-plane/                        # Django: AI PaaS Control Plane API
+│   │   ├── manage.py
+│   │   ├── requirements.txt                  # Runtime và quality tooling dependencies
+│   │   ├── pyproject.toml                    # Pytest, Ruff và mypy configuration
+│   │   ├── Dockerfile
 │   │   └── src/
-│   │       ├── authentication/               # Quản lý Tenant, User, RS256 JWT + JWKS Endpoint
-│   │       ├── registry/                     # Quản lý vòng đời Model: Upload, Build, Deploy
-│   │       ├── training/                     # Điều phối Training Jobs: Kubeflow/Local Adapter
-│   │       ├── drift/                        # Giám sát Drift: Trigger & Webhook Handler
-│   │       ├── deployment/                   # Deploy Adapter: Tạo/xóa Traefik IngressRoute
-│   │       └── realtime/                     # Stream Log từ Redis cho UI HTTP Polling
+│   │       ├── config/                       # Settings, root URLs, ASGI/WSGI, Celery
+│   │       ├── common/                       # API policy, middleware, logging, metrics
+│   │       ├── infrastructure/               # S3, Docker, Argo, Harbor, HTTP, Redis, Redpanda
+│   │       └── apps/                         # Domain apps; each owns api/, services/, migrations/, tests/
+│   │           ├── auth/                     # User, tenant, JWT, OAuth, OTP, profile
+│   │           ├── access/                   # Project-scoped API keys
+│   │           ├── catalog/                  # ModelProject and workspace code/data assets
+│   │           ├── registry/                 # Immutable versions, artifacts, metrics, aliases
+│   │           ├── training/                 # Training jobs, events, outputs, snapshots
+│   │           ├── deployment/               # Builds, deployments, runtime endpoints
+│   │           ├── drift/                    # Drift monitors and runs
+│   │           └── observability/            # Health, metrics, outbox, model telemetry
 │   │
-│   ├── model-server/                         # FastAPI inference gateway & dynamic execution
+│   ├── model-server/                         # Gateway container: Traefik + FastAPI serving (per-tenant)
+│   ├── machine-learning-serving/             # Machine Learning Serving container: Scikit-learn / XGBoost
+│   ├── deep-learning-serving/                # Deep Learning Serving container: PyTorch / TensorFlow / Keras
 │   ├── model-packager/                       # Đóng gói model artifact thành container service
 │   ├── consumer/                             # Redpanda Consumer: Đọc Kafka topic & ghi batch vào DB
 │   ├── evidently/                            # Evidently AI: Container chạy Drift Detection Job
 │   ├── training-runner/                      # Container runtime cho Kubeflow / Argo Workflows training
-│   ├── bento-model-server/                   # BentoML serving container (per-tenant)
 │   └── test/                                 # Integration & End-to-End Test suites
 │
 ├── k8s/

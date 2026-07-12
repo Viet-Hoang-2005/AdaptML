@@ -56,7 +56,7 @@ flowchart TB
     BROWSER -->|"Quản lý Model / Job"| ALB
     ALB --> TRAEFIK
     TRAEFIK --> CTRL
-    TRAEFIK -->|"/tenant_id/models/hashid/version/predict"| MODEL_SVC
+    TRAEFIK -->|"/tenant_id/models/project_uuid/version_uuid/predict"| MODEL_SVC
 
     CTRL -->|"Webhook → Argo Events"| EVT
     EVT -->|"Trigger"| WF
@@ -153,14 +153,14 @@ flowchart TB
     subgraph K8S["K3s Cluster"]
         DEP["Deployment\nModel Endpoint Pod"]
         SVC["Service\n:5000"]
-        INGRESS["Traefik IngressRoute\n/:tenant_id/models/:hashid/:version/predict"]
+        INGRESS["Traefik IngressRoute\n/:tenant_id/models/:project_uuid/:version_uuid/predict"]
     end
 
     CLIENT["Tenant"] -->|"POST /predict"| INGRESS
     INGRESS -->|"RewritePath"| SVC --> DEP
 ```
 
-**Chiến lược cô lập:** Mỗi mô hình được deploy thành một Pod riêng biệt với tên container theo pattern `{tenant_id}-model-{hashid}`. Traefik IngressRoute định tuyến dựa trên đường dẫn URL, đảm bảo tenant không thể truy nhập endpoint của nhau.
+**Chiến lược cô lập:** Mỗi deployment có runtime riêng theo UUID. Traefik định tuyến qua model-server gateway, còn gateway kiểm tra tenant và resolve `version_uuid` tới endpoint khỏe mạnh.
 
 ---
 
@@ -211,7 +211,7 @@ flowchart TB
     end
 
     subgraph DRIFT_PIPELINE["Evidently Drift Pipeline (Argo Workflows)"]
-        EV["Evidently Container\n(detect_drift.py)"]
+        EV["Evidently Container\n(main.py)"]
         EV --> LOAD["Tải Production Data\n+ Reference Data (S3 / DB)"]
         LOAD --> ANALYSIS["Phân tích Drift\n(DataDrift + DataQuality)"]
         ANALYSIS --> REPORT["Tạo HTML Report\n+ JSON Summary → S3"]
@@ -264,11 +264,12 @@ Hệ thống sử dụng **PostgreSQL** với Schema isolation theo module:
 ```
 PostgreSQL (mlops_paas_db)
 ├── Schema: control_plane (Django ORM)
-│   ├── authentication_user        - Thông tin tài khoản + tenant_id
-│   ├── authentication_tenantprofile - Tenant metadata, quota, tier
-│   ├── authentication_modelapi    - Vòng đời mô hình (upload → build → deploy)
-│   ├── training_trainingjob       - Lịch sử huấn luyện, status, hyperparams
-│   └── drift_driftjob             - Lịch sử drift detection, report URLs
+│   ├── identity_customuser        - Tài khoản và tenant boundary
+│   ├── catalog_modelproject - Model workspace
+│   ├── registry_modelversion      - Immutable registry versions
+│   ├── training_trainingjob       - Training snapshots và execution state
+│   ├── deployment_deployment      - Build, deployment và endpoint state
+│   └── drift_driftmonitor         - Drift configuration và run history
 │
 └── Schema: mlflow
     └── (MLflow tự quản lý - Runs, Experiments, Registered Models)
@@ -389,10 +390,10 @@ sequenceDiagram
     USER->>CP: POST /api/models/{id}/deploy/
     CP->>ARGO: Webhook /deploy (image_name, container_name)
     ARGO->>TRAEFIK: kubectl apply Deployment + Service + IngressRoute
-    CP-->>USER: endpoint_url: /tenant_id/models/hashid/v1/predict
+    CP-->>USER: endpoint_url: /tenant_id/models/project_uuid/version_uuid/predict
 
     Note over USER,ENDPOINT: Bước 3 - Inference
-    USER->>TRAEFIK: POST /tenant_id/models/hashid/v1/predict
-    TRAEFIK->>ENDPOINT: Rewrite path → /models/hashid/predict
+    USER->>TRAEFIK: POST /tenant_id/models/project_uuid/version_uuid/predict
+    TRAEFIK->>ENDPOINT: Rewrite path to /models/version_uuid/predict
     ENDPOINT-->>USER: Kết quả suy luận (JSON)
 ```

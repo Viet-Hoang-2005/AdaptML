@@ -75,7 +75,7 @@ mlops-paas-artifacts/
 ├── training-data/                          # Training datasets
 ├── training-artifacts/{job_id}/            # model.tar.gz output từ Training Runner
 ├── drift-reports/{job_id}/                 # HTML + JSON drift reports từ Evidently
-└── users/{tenant_id}/models/{hashid}/...  # MLflow artifact store
+└── users/{tenant_id}/models/{project_uuid}/training/jobs/{job_uuid}/mlflow/...
 ```
 
 ### ALB (`modules/alb/`)
