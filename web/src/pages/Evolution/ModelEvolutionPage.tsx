@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { RefreshCw, Component } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { getRegistryFamilies, getRegistryVersion, getRegistryVersions } from '../../lib/api';
-import type { RegistryFamily, RegistryVersion } from '../../types/modelApi';
+import type { RegistryFamily, RegistryVersion } from '../../types/models';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
 

@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
-import type { ModelAPI } from '../types/modelApi';
+import type { ModelProject } from '../types/models';
 
-export type DashboardModel = ModelAPI;
+export type DashboardModel = ModelProject;
 
 export interface ModelSelectionContextValue {
   models: DashboardModel[];

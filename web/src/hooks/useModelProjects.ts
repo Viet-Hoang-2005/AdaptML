@@ -1,32 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  buildModelAPI,
-  createModelAPI,
-  deleteModelAPI,
-  listModelAPIs,
-  updateModelAPI,
+  buildModelProject,
+  createModelProject,
+  deleteModelProject,
+  listModelProjects,
+  updateModelProject,
 } from '../lib/api';
 import { getApiErrorMessage } from '../lib/apiError';
 import { queryKeys } from '../lib/queryKeys';
 import { toast } from '../lib/toast';
-import type { ModelAPIFormValues } from '../types/modelApi';
+import type { ModelProjectFormValues } from '../types/models';
 
-export function useModelAPIs() {
+export function useModelProjects() {
   return useQuery({
-    queryKey: queryKeys.modelApis,
-    queryFn: listModelAPIs,
+    queryKey: queryKeys.modelProjects,
+    queryFn: listModelProjects,
   });
 }
 
-export function useModelAPIMutations() {
+export function useModelProjectMutations() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const invalidateModels = () => queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+  const invalidateModels = () => queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
 
   const createMutation = useMutation({
-    mutationFn: createModelAPI,
+    mutationFn: createModelProject,
     onSuccess: async () => {
       await invalidateModels();
       toast.success('Model API uploaded successfully.');
@@ -37,7 +37,7 @@ export function useModelAPIMutations() {
   });
 
   const buildMutation = useMutation({
-    mutationFn: buildModelAPI,
+    mutationFn: buildModelProject,
     onSuccess: async (model) => {
       await invalidateModels();
       toast.success('MLflow package built and deployed successfully.');
@@ -49,8 +49,8 @@ export function useModelAPIMutations() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ modelId, payload }: { modelId: string; payload: ModelAPIFormValues }) =>
-      updateModelAPI(modelId, payload),
+    mutationFn: ({ modelId, payload }: { modelId: string; payload: ModelProjectFormValues }) =>
+      updateModelProject(modelId, payload),
     onSuccess: async () => {
       await invalidateModels();
       toast.success('Model API updated successfully.');
@@ -61,7 +61,7 @@ export function useModelAPIMutations() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (modelId: string) => deleteModelAPI(modelId, true),
+    mutationFn: (modelId: string) => deleteModelProject(modelId, true),
     onSuccess: async () => {
       await invalidateModels();
       toast.success('Model API disabled successfully.');
@@ -73,10 +73,10 @@ export function useModelAPIMutations() {
   });
 
   return {
-    createModelAPI: createMutation.mutateAsync,
-    buildModelAPI: buildMutation.mutateAsync,
-    updateModelAPI: updateMutation.mutateAsync,
-    deleteModelAPI: deleteMutation.mutateAsync,
+    createModelProject: createMutation.mutateAsync,
+    buildModelProject: buildMutation.mutateAsync,
+    updateModelProject: updateMutation.mutateAsync,
+    deleteModelProject: deleteMutation.mutateAsync,
     creating: createMutation.isPending,
     building: buildMutation.isPending,
     updating: updateMutation.isPending,

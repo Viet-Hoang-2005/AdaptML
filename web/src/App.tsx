@@ -12,13 +12,13 @@ import GitHubCallbackPage from './pages/Auth/Login/GitHubCallbackPage';
 import { ProtectedRoute } from './pages/Dashboard/ProtectedRoute';
 import DashboardLayout from './pages/Dashboard/DashboardLayout';
 import HomeLayout from './pages/Home/HomeLayout';
-import ModelApiPage from './pages/Home/Api/ModelApiPage';
+import ModelProjectPage from './pages/Home/Api/ModelProjectPage';
 import ModelTestingPage from './pages/Home/Test/ModelTestingPage';
 import APIManagementPage from './pages/Management/APIManagementPage';
 import TrainModelPage from './pages/Training/TrainModelPage';
 import TrainingJobDetailPage from './pages/Training/TrainingJobDetailPage';
 import CreateTrainingJobPage from './pages/Training/CreateTrainingJobPage';
-import ModelAPIFormPage from './pages/Management/Upload/UploadModelPage';
+import ModelProjectFormPage from './pages/Management/Upload/UploadModelPage';
 import ModelDetailPage from './pages/Management/Detail/ModelDetailPage';
 import DeveloperSettingPage from './pages/Settings/Developer/DeveloperSettingPage';
 import ProfileSettingPage from './pages/Settings/Profile/ProfileSettingPage';
@@ -56,14 +56,14 @@ const router = createBrowserRouter(
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="home/model-api" replace />} />
+        <Route index element={<Navigate to="home/models" replace />} />
         
         {/* Home Routes */}
         <Route path="home" element={<HomeLayout />}>
-          <Route index element={<Navigate to="model-api" replace />} />
-          <Route path="model-api">
-            <Route index element={<ModelApiPage />} />
-            <Route path=":modelId" element={<ModelApiPage />} />
+          <Route index element={<Navigate to="models" replace />} />
+          <Route path="models">
+            <Route index element={<ModelProjectPage />} />
+            <Route path=":modelId" element={<ModelProjectPage />} />
           </Route>
           <Route path="model-testing">
             <Route index element={<ModelTestingPage />} />
@@ -98,8 +98,8 @@ const router = createBrowserRouter(
         {/* API Management Routes */}
         <Route path="api-management" element={<APIManagementPage />} />
         <Route path="api-management/upload" element={<Navigate to="build-package" replace />} />
-        <Route path="api-management/upload/build-package" element={<ModelAPIFormPage />} />
-        <Route path="api-management/upload/mlflow-zip" element={<ModelAPIFormPage />} />
+        <Route path="api-management/upload/build-package" element={<ModelProjectFormPage />} />
+        <Route path="api-management/upload/mlflow-zip" element={<ModelProjectFormPage />} />
         <Route path="api-management/:modelId" element={<Navigate to="information" replace />} />
         <Route path="api-management/:modelId/:tab" element={<ModelDetailPage />} />
         
@@ -113,7 +113,7 @@ const router = createBrowserRouter(
         </Route>
         <Route path="settings/developer/api-keys/create" element={<ApiKeyPage />} />
         <Route path="settings/developer/api-keys/:keyId" element={<ApiKeyPage />} />
-        <Route path="*" element={<Navigate to="/dashboard/home/model-api" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard/home/models" replace />} />
       </Route>
 
       {/* Default Redirect */}

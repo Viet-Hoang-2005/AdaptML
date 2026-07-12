@@ -5,13 +5,13 @@ import type { TableProps } from 'antd';
 import { Button } from '../../../components/ui/Button';
 import { ApiModal } from '../../../components/ui/ApiModal';
 import { useDeveloperSettings } from '../../../hooks/useDeveloperSettings';
-import { useModelAPIs } from '../../../hooks/useModelAPIs';
+import { useModelProjects } from '../../../hooks/useModelProjects';
 import type { APIKeyRecord } from '../../../types/auth';
 import { PageContent } from '../../../components/layout/PageContent';
 
 export default function DeveloperSettingPage() {
   const navigate = useNavigate();
-  const { data: modelsData } = useModelAPIs();
+  const { data: modelsData } = useModelProjects();
   const models = modelsData?.models ?? [];
   const modelIdToName = Object.fromEntries(models.map(m => [m.id, m.name]));
 

@@ -2,13 +2,13 @@ import { Bot, FileArchive } from 'lucide-react';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation, useBlocker } from 'react-router-dom';
 import { ConfirmModal } from '../../../components/ui/ConfirmModal';
-import { deleteModelAPI as deleteModelAPICore } from '../../../lib/api';
-import type { ModelAPIFormValues, ModelBuildFormValues } from '../../../types/modelApi';
+import { deleteModelProject as deleteModelProjectCore } from '../../../lib/api';
+import type { ModelProjectFormValues, ModelBuildFormValues } from '../../../types/models';
 import BuildPackagePage from './BuildPackagePage';
 import MLflowZipPage from './MLflowZipPage';
 import { PageHeader } from '../../../components/layout/PageHeader';
 
-const emptyAdvancedForm: ModelAPIFormValues = {
+const emptyAdvancedForm: ModelProjectFormValues = {
   name: '',
   description: '',
   model_info: '',
@@ -40,10 +40,10 @@ export default function UploadModelPage() {
   const mode = location.pathname.includes('mlflow-zip') ? 'advanced' : 'builder';
   
   const [createdModelId, setCreatedModelId] = useState<string | null>(null);
-  const [advancedForm, setAdvancedForm] = useState<ModelAPIFormValues>(emptyAdvancedForm);
+  const [advancedForm, setAdvancedForm] = useState<ModelProjectFormValues>(emptyAdvancedForm);
   const [buildForm, setBuildForm] = useState<ModelBuildFormValues>(emptyBuildForm);
 
-  const setAdvancedField = (field: keyof ModelAPIFormValues, value: string | File | null) => {
+  const setAdvancedField = (field: keyof ModelProjectFormValues, value: string | File | null) => {
     setAdvancedForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -93,7 +93,7 @@ export default function UploadModelPage() {
         confirmText="Leave and Discard"
         onConfirm={async () => {
           if (createdModelId) {
-            await deleteModelAPICore(createdModelId, true).catch(() => {});
+            await deleteModelProjectCore(createdModelId, true).catch(() => {});
           }
           setAdvancedForm(emptyAdvancedForm);
           setBuildForm(emptyBuildForm);

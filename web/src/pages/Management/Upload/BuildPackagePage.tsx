@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryKeys';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import type { ModelBuildFormValues, ModelFlavor } from '../../../types/modelApi';
+import type { ModelBuildFormValues, ModelFlavor } from '../../../types/models';
 import { SummaryItem } from './UploadModelPage';
 import { StepTitle } from '../../../components/ui/StepTitle';
 import { FileDropzone } from '../../../components/ui/FileDropzone';
@@ -14,7 +14,7 @@ import { AccessModePicker } from '../../../components/ui/Picker';
 import { toast } from '../../../lib/toast';
 import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
 import { LineSteps } from '../../../components/ui/LineSteps';
-import { buildModelAPI, cancelBuildAPI, getApiErrorMessage, deployModelAPI, checkModelEndpointHealth } from '../../../lib/api';
+import { buildModelProject, cancelBuildAPI, getApiErrorMessage, deployModelProject, checkModelEndpointHealth } from '../../../lib/api';
 
 const wizardSteps = [
   { id: 1, label: 'Metadata', icon: FileCode2 },
@@ -82,7 +82,7 @@ export default function BuildPackagePage({
       setLoading(true);
       onSubmitting(true);
       try {
-        await deployModelAPI(createdModelId);
+        await deployModelProject(createdModelId);
 
         let isDeployed = false;
         let attempts = 0;
@@ -107,7 +107,7 @@ export default function BuildPackagePage({
           toast.error("Deployment is taking longer than expected. Please check model status later.");
         }
 
-        await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
         navigate(`/dashboard/api-management`);
       } catch (e) {
         onSubmitting(false);
@@ -422,7 +422,7 @@ function DeployStep({
 
   const startBuild = async () => {
     try {
-      const model = await buildModelAPI(form);
+      const model = await buildModelProject(form);
       setModelId(model.id);
     } catch (e) {
       const msg = getApiErrorMessage(e, "Failed to start build process.");

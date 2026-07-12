@@ -5,7 +5,7 @@ import { ConfirmModal } from '../../../components/ui/ConfirmModal';
 import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
 import { Button } from '../../../components/ui/Button';
 import { useModelSelection } from '../../../hooks/useModelSelection';
-import { predictWithModelAPI } from '../../../lib/api';
+import { predictWithModelProject } from '../../../lib/api';
 import { getApiErrorMessage } from '../../../lib/apiError';
 import { toast } from '../../../lib/toast';
 import { FileDropzone } from '../../../components/ui/FileDropzone';
@@ -241,7 +241,7 @@ export default function ModelTestingPage() {
       if (expectedLabel !== undefined) currentSummary.withExpected += 1;
 
       try {
-        const response = await predictWithModelAPI(selectedModel.endpoint_url, features);
+        const response = await predictWithModelProject(selectedModel.endpoint_url, features);
         const prediction = formatPrediction(response.prediction);
         const confidence = response.confidence == null ? '' : ` | confidence=${response.confidence}%`;
         const isCorrect = expectedLabel !== undefined && prediction.toLowerCase() === expectedLabel.toLowerCase();

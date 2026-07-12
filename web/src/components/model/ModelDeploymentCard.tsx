@@ -14,7 +14,6 @@ import {
   Rocket,
   Settings,
   TerminalSquare,
-  WifiOff,
   XCircle,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -23,11 +22,11 @@ import { Button } from '../ui/Button';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { BuildLogsPanel } from './BuildLogsPanel';
 import { toast } from '../../lib/toast';
-import type { ModelAPI } from '../../types/modelApi';
+import type { ModelProject } from '../../types/models';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function isActiveModel(model: ModelAPI) {
+function isActiveModel(model: ModelProject) {
   return (
     model.build_status === 'building' ||
     model.endpoint_status === 'deploying' ||
@@ -47,22 +46,22 @@ function LiveBadge() {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export interface ModelDeploymentCardProps {
-  model: ModelAPI;
+  model: ModelProject;
   variant?: 'full' | 'compact';
-  onCheckHealth?: (model: ModelAPI) => void;
+  onCheckHealth?: (model: ModelProject) => void;
   isCheckingHealth?: boolean;
-  onRedeploy?: (model: ModelAPI) => void;
+  onRedeploy?: (model: ModelProject) => void;
   isRedeploying?: boolean;
-  onStop?: (model: ModelAPI) => void;
+  onStop?: (model: ModelProject) => void;
   isStopping?: boolean;
-  onCleanup?: (model: ModelAPI) => void;
+  onCleanup?: (model: ModelProject) => void;
   isCleaningUp?: boolean;
-  onOpenLogs?: (model: ModelAPI) => void;
-  onTestPrediction?: (model: ModelAPI) => void;
-  onOpenApiManagement?: (model: ModelAPI) => void;
-  onDeploy?: (model: ModelAPI) => void;
+  onOpenLogs?: (model: ModelProject) => void;
+  onTestPrediction?: (model: ModelProject) => void;
+  onOpenApiManagement?: (model: ModelProject) => void;
+  onDeploy?: (model: ModelProject) => void;
   isDeploying?: boolean;
-  onBuild?: (model: ModelAPI) => void;
+  onBuild?: (model: ModelProject) => void;
   isBuilding?: boolean;
 }
 

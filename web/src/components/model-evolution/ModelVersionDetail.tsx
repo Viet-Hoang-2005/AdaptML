@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { DriftSummary, RegistryFamily, RegistryModelInsightItem, RegistryVersion } from '../../types/modelApi';
+import type { DriftSummary, RegistryFamily, RegistryModelInsightItem, RegistryVersion } from '../../types/models';
 import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck, Package, Rocket, HeartPulse, Play, BarChart3, Activity } from 'lucide-react';
 import { formatVersion } from '../../lib/formatters';
 import { Button } from '../../components/ui/Button';
@@ -176,7 +176,7 @@ function withoutTechnicalDetail(value: unknown): unknown {
 // ---------------------------------------------------------------------------
 interface DriftSummaryCardProps {
   driftSummary?: DriftSummary;
-  modelApiHashid?: string;
+  modelProjectId?: string;
 }
 
 function driftStatusBadge(status?: string) {
@@ -205,11 +205,11 @@ function driftStatusLabel(status?: string) {
   }
 }
 
-function DriftSummaryCard({ driftSummary, modelApiHashid }: DriftSummaryCardProps) {
+function DriftSummaryCard({ driftSummary, modelProjectId }: DriftSummaryCardProps) {
   const navigate = useNavigate();
   const ds = driftSummary;
-  const fallbackUrl = modelApiHashid
-    ? `/dashboard/drift-monitoring/${modelApiHashid}`
+  const fallbackUrl = modelProjectId
+    ? `/dashboard/drift-monitoring/${modelProjectId}`
     : '/dashboard/drift-monitoring';
   const reportPageUrl = ds?.report_page_url || ds?.reportPageUrl || fallbackUrl;
   const driftPercent = ds?.drift_percent ?? ds?.driftPercent ?? null;
@@ -860,7 +860,10 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
             </div>
 
             {/* F. Drift Summary Card */}
-            <DriftSummaryCard driftSummary={version.drift_summary || version.driftSummary} modelApiHashid={typeof version.model_api === 'string' ? version.model_api : undefined} />
+            <DriftSummaryCard
+              driftSummary={version.drift_summary || version.driftSummary}
+              modelProjectId={version.project_id}
+            />
 
             <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
               <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">

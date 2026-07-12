@@ -2,7 +2,7 @@ import { Activity, Boxes, Cpu, GitBranch, LineChart, Rocket, UploadCloud } from 
 import Placeholder from '../../components/layout/Placeholder';
 
 export const homePlaceholders = {
-  modelApi: (
+  modelProject: (
     <Placeholder
       title="Model API"
       description="Upload an MLflow MLmodel package, connect it to FastAPI, and monitor endpoint status from this workspace."

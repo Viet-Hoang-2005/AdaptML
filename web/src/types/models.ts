@@ -1,5 +1,5 @@
 export type ModelAccessMode = 'private' | 'public';
-export type ModelAPIStatus =
+export type ModelProjectStatus =
   | 'registered'
   | 'ready'
   | 'uploading'
@@ -11,40 +11,42 @@ export type ModelAPIStatus =
   | 'archived'
   | 'error'
   | 'disabled';
-export type ModelBuildStatus = 'not_started' | 'building' | 'ready' | 'error';
+export type ModelBuildStatus = 'not_started' | 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled' | 'error';
 export type ModelEndpointStatus = 'not_deployed' | 'deploying' | 'healthy' | 'unhealthy' | 'deploy_failed' | 'stopped';
 export type ModelFlavor = 'sklearn' | 'xgboost' | 'pytorch' | 'tensorflow';
 export type ModelSourceType = 'manual_upload' | 'training_job';
 
-export interface ModelAPI {
+export interface ModelProject {
   id: string;
   name: string;
-  version: string;
   description: string;
-  model_info: string;
   access_mode: ModelAccessMode;
-  source_type: ModelSourceType;
-  source_training_job: number | null;
-  source_artifact_uri: string;
-  model_uri: string;
-  endpoint_url: string;
-  health_url: string;
-  status: ModelAPIStatus;
-  error_message: string;
-  endpoint_status: ModelEndpointStatus;
-  endpoint_error: string;
-  endpoint_last_checked_at: string | null;
-  endpoint_container_name: string;
-  endpoint_image_name: string;
-  endpoint_public_path: string;
-  endpoint_internal_path: string;
-  source_artifact: string;
-  flavor: ModelFlavor | '';
+  model_type: 'ml' | 'dl';
   requirements_text: string;
-  package_manifest: Record<string, unknown>;
-  package_preview_tree: string[];
-  build_status: ModelBuildStatus;
-  build_error: string;
+  is_active: boolean;
+  version?: string;
+  model_info?: string;
+  source_type?: ModelSourceType;
+  source_training_job?: string | null;
+  source_artifact_uri?: string;
+  model_uri?: string;
+  endpoint_url?: string;
+  health_url?: string;
+  status?: ModelProjectStatus;
+  error_message?: string;
+  endpoint_status?: ModelEndpointStatus;
+  endpoint_error?: string;
+  endpoint_last_checked_at?: string | null;
+  endpoint_container_name?: string;
+  endpoint_image_name?: string;
+  endpoint_public_path?: string;
+  endpoint_internal_path?: string;
+  source_artifact?: string;
+  flavor?: ModelFlavor | '';
+  package_manifest?: Record<string, unknown>;
+  package_preview_tree?: string[];
+  build_status?: ModelBuildStatus;
+  build_error?: string;
   metrics_summary?: Record<string, unknown>;
   params_summary?: Record<string, unknown>;
   model_insights_summary?: RegistryModelInsightsSummary;
@@ -56,11 +58,58 @@ export interface ModelAPI {
   updated_at: string;
 }
 
-export interface ModelAPIListResponse {
-  models: ModelAPI[];
+export interface ModelProjectListResponse {
+  models: ModelProject[];
 }
 
-export interface ModelAPIFormValues {
+export interface ModelVersion {
+  id: string;
+  project_id: string;
+  version: string;
+  description: string;
+  source_job_id: string | null;
+  requirements_snapshot: string;
+  flavor: ModelFlavor | '';
+  stage: RegistryStage;
+  deployability: RegistryDeployabilityStatus;
+  deployability_reason: string;
+  metrics_summary: Record<string, unknown>;
+  params_summary: Record<string, unknown>;
+  insights_summary: RegistryModelInsightsSummary;
+  artifacts: Array<{ id: string; kind: string; name: string; uri: string }>;
+  registered_at: string;
+}
+
+export interface Build {
+  id: string;
+  version_id: string;
+  backend: 'docker' | 'argo';
+  status: 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled';
+  image_uri: string;
+  package_uri: string;
+  logs: string;
+  error_message: string;
+}
+
+export interface Deployment {
+  id: string;
+  version_id: string;
+  build_id: string;
+  backend: 'docker' | 'argo';
+  status: 'pending' | 'deploying' | 'healthy' | 'unhealthy' | 'failed' | 'stopped';
+  error_message: string;
+}
+
+export interface Endpoint {
+  id: string;
+  deployment_id: string;
+  version_id: string;
+  public_url: string;
+  internal_url: string;
+  health_status: string;
+}
+
+export interface ModelProjectFormValues {
   name: string;
   description: string;
   model_info: string;
@@ -89,14 +138,6 @@ export interface ModelBuildFormValues {
   flavor: ModelFlavor;
   requirements_text: string;
   requirements_file?: File | null;
-}
-
-export interface PackagePreviewResponse {
-  model_id: string;
-  package_manifest: Record<string, unknown>;
-  package_preview_tree: string[];
-  build_status: ModelBuildStatus;
-  build_error: string;
 }
 
 export interface ModelEndpointLogsResponse {
@@ -180,12 +221,10 @@ export interface RoutingAlias {
   status: string;
   promoted_at: string | null;
   promotedAt?: string | null;
-  family_id?: number;
-  familyId?: number;
-  target_version_id?: number;
-  targetVersionId?: number;
-  target_model_api_id?: number | null;
-  targetModelApiId?: number | null;
+  family_id?: string;
+  familyId?: string;
+  target_version_id?: string;
+  targetVersionId?: string;
 }
 
 export interface PromoteAliasResponse {
@@ -198,13 +237,13 @@ export interface PromoteAliasResponse {
 }
 
 export interface RegistryVersion {
-  id: number;
+  id: string;
+  project_id: string;
   tenant?: number | string;
   family?: number;
   version: string;
-  model_api?: string | number | null;
-  source_training_job?: number | null;
-  source_training_job_id?: number | null;
+  source_training_job?: string | null;
+  source_training_job_id?: string | null;
   source_training_job_name?: string;
   source_training_job_status?: string;
   source_training_job_backend?: string;
@@ -347,18 +386,18 @@ export interface RegistryVersionCompareResponse {
 }
 
 export interface RegistryFamily {
-  id: number;
+  id: string;
   tenant?: number | string;
   name: string;
   display_name: string;
   description: string;
   current_production_version: RegistryVersion | null;
-  production_alias_version_id?: number | null;
-  productionAliasVersionId?: number | null;
-  latest_alias_version_id?: number | null;
-  latestAliasVersionId?: number | null;
-  champion_alias_version_id?: number | null;
-  championAliasVersionId?: number | null;
+  production_alias_version_id?: string | null;
+  productionAliasVersionId?: string | null;
+  latest_alias_version_id?: string | null;
+  latestAliasVersionId?: string | null;
+  champion_alias_version_id?: string | null;
+  championAliasVersionId?: string | null;
   version_count?: number;
   is_active: boolean;
   created_at: string;
@@ -366,7 +405,7 @@ export interface RegistryFamily {
 }
 
 export interface RegistryMetric {
-  id: number;
+  id: string;
   metric_name: string;
   value: number;
   step: number;
@@ -376,7 +415,7 @@ export interface RegistryMetric {
 }
 
 export interface RegistryHistory {
-  id: number;
+  id: string;
   action: string;
   status: RegistryHistoryStatus;
   version: string;
@@ -388,18 +427,21 @@ export interface RegistryHistory {
   extra?: Record<string, unknown>;
 }
 
-export type TrainingJobStatus = 'pending' | 'uploading' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TrainingJobStatus = 'pending' | 'queued' | 'uploading' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type TrainingAcceleratorType = 'none' | 'gpu' | 'tpu' | 'trainium';
 
 export interface TrainingJob {
-  id: number;
+  id: string;
+  project_id: string;
   name: string;
   model_version: string;
   entry_point: string;
   requirements_text: string;
   training_backend: 'kubeflow' | 'local';
+  backend: 'docker' | 'argo' | 'kubeflow' | 'local';
   vcpu: number;
   memory: number;
+  memory_mb: number;
   max_runtime_seconds: number;
   accelerator_type: TrainingAcceleratorType;
   accelerator_count: number;
@@ -408,21 +450,25 @@ export interface TrainingJob {
   training_data: string;
   s3_source_uri: string;
   s3_training_data_uri: string;
+  code_snapshot_uri: string;
+  data_snapshot_uri: string;
   sagemaker_job_name: string;
   external_job_id: string;
   output_s3_uri: string;
+  output_uri: string;
   model_artifact_uri: string;
   status: TrainingJobStatus;
   error_message: string;
   training_logs: string;
+  tracking: Record<string, unknown>;
   started_at: string | null;
   completed_at: string | null;
   runtime_seconds: number;
   stop_reason: string;
-  retry_of: number | null;
+  retry_of: string | null;
   deleted_at: string | null;
   is_deleted: boolean;
-  registered_model: ModelAPI | null;
+  registered_model: ModelProject | null;
   registered_model_id: string | null;
   created_at: string;
   updated_at: string;
@@ -453,6 +499,7 @@ export interface TrainingJobFormValues {
   source_zip: File | null;
   training_data: File | null;
   registered_model_id?: string;
+  project_id?: string;
 }
 
 export interface TrainingJobDownloadURLResponse {
@@ -460,8 +507,8 @@ export interface TrainingJobDownloadURLResponse {
 }
 
 export interface TrainingJobLogsResponse {
-  job_id: number;
-  training_job_id: number;
+  job_id: string;
+  training_job_id: string;
   status: TrainingJobStatus;
   logs: string | string[];
   text: string;
@@ -487,8 +534,8 @@ export interface TrainingMetricPoint {
 }
 
 export interface TrainingJobMetricsResponse {
-  job_id: number;
-  training_job_id: number;
+  job_id: string;
+  training_job_id: string;
   status: TrainingJobStatus;
   metrics_available: boolean;
   latest: TrainingMetricPoint | null;
@@ -499,8 +546,8 @@ export interface TrainingJobMetricsResponse {
 }
 
 export interface TrainingJobEvent {
-  id: number;
-  training_job: number;
+  id: string;
+  training_job?: string;
   event_type: string;
   message: string;
   metadata: Record<string, unknown>;

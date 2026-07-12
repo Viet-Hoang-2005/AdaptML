@@ -16,10 +16,11 @@ import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
 import { formatDuration } from '../../lib/formatDuration';
 import { useModelSelection } from '../../hooks/useModelSelection';
-import type { TrainingJob, TrainingJobStatus } from '../../types/modelApi';
+import type { TrainingJob, TrainingJobStatus } from '../../types/models';
 
 const statusLabels: Record<TrainingJobStatus, string> = {
   pending: 'Pending',
+  queued: 'Queued',
   uploading: 'Uploading',
   running: 'Running',
   completed: 'Completed',
@@ -65,10 +66,11 @@ type JobSortMode = 'newest' | 'oldest' | 'status' | 'name';
 const statusRank: Record<TrainingJobStatus, number> = {
   running: 0,
   uploading: 1,
-  pending: 2,
-  failed: 3,
-  cancelled: 4,
-  completed: 5,
+  queued: 2,
+  pending: 3,
+  failed: 4,
+  cancelled: 5,
+  completed: 6,
 };
 
 const sortTrainingJobs = (jobs: TrainingJob[], sortMode: JobSortMode) => {
@@ -77,7 +79,7 @@ const sortTrainingJobs = (jobs: TrainingJob[], sortMode: JobSortMode) => {
     return nextJobs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }
   if (sortMode === 'status') {
-    return nextJobs.sort((a, b) => statusRank[a.status] - statusRank[b.status] || b.id - a.id);
+    return nextJobs.sort((a, b) => statusRank[a.status] - statusRank[b.status] || b.id.localeCompare(a.id));
   }
   if (sortMode === 'name') {
     return nextJobs.sort((a, b) => `${a.name} ${a.model_version}`.localeCompare(`${b.name} ${b.model_version}`));
@@ -101,11 +103,11 @@ export default function TrainModelPage() {
   const navigate = useNavigate();
   const { selectedModel } = useModelSelection();
 
-  const [refreshingJobId, setRefreshingJobId] = useState<number | null>(null);
+  const [refreshingJobId, setRefreshingJobId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'retry'; job: TrainingJob } | null>(null);
   const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
   const [sortMode, setSortMode] = useState<JobSortMode>('newest');
-  const statusNotificationRef = useRef<Record<number, TrainingJobStatus>>({});
+  const statusNotificationRef = useRef<Record<string, TrainingJobStatus>>({});
   const {
     data,
     error: jobsError,
@@ -124,7 +126,7 @@ export default function TrainModelPage() {
   });
   const allTrainingJobs = useMemo(() => data?.training_jobs ?? [], [data?.training_jobs]);
   const activeTrainingJobs = useMemo(
-    () => allTrainingJobs.filter((job) => !job.is_deleted && job.id > 0 && isActiveJob(job)),
+    () => allTrainingJobs.filter((job) => !job.is_deleted && Boolean(job.id) && isActiveJob(job)),
     [allTrainingJobs],
   );
   const activeUsageCount = usage?.active_jobs_count ?? usage?.running_jobs_count ?? 0;
@@ -526,9 +528,9 @@ function TrainingJobRow({
   retrying,
 }: {
   job: TrainingJob;
-  onRefresh: (id: number) => void;
+  onRefresh: (id: string) => void;
   refreshing: boolean;
-  onDownload: (id: number) => void;
+  onDownload: (id: string) => void;
   downloading: boolean;
   onCancel: () => void;
   cancelling: boolean;

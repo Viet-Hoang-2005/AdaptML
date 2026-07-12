@@ -1,14 +1,14 @@
 import { ArrowLeft, Trash2, Download, Bot, Rocket, Database, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useMemo } from 'react';
-import type { ModelAPI } from '../../../types/modelApi';
+import type { ModelProject } from '../../../types/models';
 import { Button } from '../../../components/ui/Button';
-import { useModelAPIMutations } from '../../../hooks/useModelAPIs';
-import type { ModelAPIFormValues } from '../../../types/modelApi';
+import { useModelProjectMutations } from '../../../hooks/useModelProjects';
+import type { ModelProjectFormValues } from '../../../types/models';
 import { PageTabs } from '../../../components/layout/PageTabs';
 import { ConfirmModal } from '../../../components/ui/ConfirmModal';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { useModelAPIs } from '../../../hooks/useModelAPIs';
+import { useModelProjects } from '../../../hooks/useModelProjects';
 
 // Import sub-pages
 import { ModelInformationPage } from './ModelInformationPage';
@@ -18,7 +18,7 @@ import { ModelStatus } from './ModelStatus';
 
 export default function ModelDetailPage() {
   const { modelId } = useParams();
-  const { data } = useModelAPIs();
+  const { data } = useModelProjects();
   const model = useMemo(() => data?.models.find((item) => item.id === modelId) ?? null, [data?.models, modelId]);
 
   if (!model) {
@@ -28,7 +28,7 @@ export default function ModelDetailPage() {
   return <ModelDetailPageContent model={model} />;
 }
 
-export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
+export function ModelDetailPageContent({ model }: { model: ModelProject }) {
   const { tab } = useParams();
   const navigate = useNavigate();
 
@@ -40,8 +40,8 @@ export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
 
   const [editing, setEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const { deleteModelAPI, deleting } = useModelAPIMutations();
-  const { updateModelAPI, updating } = useModelAPIMutations();
+  const { deleteModelProject, deleting } = useModelProjectMutations();
+  const { updateModelProject, updating } = useModelProjectMutations();
 
   const [sourceCodeDirty, setSourceCodeDirty] = useState(false);
   const [referenceDataDirty, setReferenceDataDirty] = useState(false);
@@ -51,7 +51,7 @@ export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
     ({ currentLocation, nextLocation }) => isAnyDirty && currentLocation.pathname !== nextLocation.pathname
   );
 
-  const [form, setForm] = useState<ModelAPIFormValues>({
+  const [form, setForm] = useState<ModelProjectFormValues>({
     name: model.name || '',
     description: model.description || '',
     model_info: model.model_info || '',
@@ -76,7 +76,7 @@ export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
 
   const handleSave = async () => {
     if (!isFormDirty) return;
-    await updateModelAPI({ modelId: model.id, payload: form });
+    await updateModelProject({ modelId: model.id, payload: form });
     setEditing(false);
   };
 
@@ -90,7 +90,7 @@ export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
     setEditing(false);
   };
 
-  const setField = (field: keyof ModelAPIFormValues, value: string) => {
+  const setField = (field: keyof ModelProjectFormValues, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -221,9 +221,9 @@ export function ModelDetailPageContent({ model }: { model: ModelAPI }) {
         tone="danger"
         loading={deleting}
         onConfirm={async () => {
-          await deleteModelAPI(model.id);
+          await deleteModelProject(model.id);
           setShowDeleteConfirm(false);
-          // navigate is already handled in useModelAPIs hooks onSuccess
+          // navigate is already handled in useModelProjects hooks onSuccess
         }}
         onCancel={() => setShowDeleteConfirm(false)}
       />

@@ -5,13 +5,13 @@ import { Button } from '../ui/Button';
 import { getModelEndpointLogs } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import { toast } from '../../lib/toast';
-import type { ModelAPI } from '../../types/modelApi';
+import type { ModelProject } from '../../types/models';
 
 export function EndpointLogsModal({
   model,
   onClose,
 }: {
-  model: ModelAPI;
+  model: ModelProject;
   onClose: () => void;
 }) {
   const logsRef = useRef<HTMLPreElement>(null);

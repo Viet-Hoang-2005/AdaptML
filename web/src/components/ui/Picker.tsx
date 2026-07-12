@@ -1,4 +1,4 @@
-import type { ModelAccessMode } from '../../types/modelApi';
+import type { ModelAccessMode } from '../../types/models';
 
 export function AccessModePicker({
   value,

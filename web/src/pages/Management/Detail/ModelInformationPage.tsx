@@ -1,21 +1,21 @@
 import { Edit3 } from 'lucide-react';
-import type { ModelAPI, ModelAPIFormValues } from '../../../types/modelApi';
+import type { ModelProject, ModelProjectFormValues } from '../../../types/models';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { AccessModePicker } from '../../../components/ui/Picker';
 
 interface ModelInformationPageProps {
-  model: ModelAPI;
+  model: ModelProject;
   editing: boolean;
-  form: ModelAPIFormValues;
+  form: ModelProjectFormValues;
   isFormDirty: boolean;
   updating: boolean;
   readOnlyFieldClass: string;
   handleCancelEdit: () => void;
   handleSave: () => void;
   setEditing: (editing: boolean) => void;
-  setField: (field: keyof ModelAPIFormValues, value: string) => void;
-  setForm: (form: ModelAPIFormValues) => void;
+  setField: (field: keyof ModelProjectFormValues, value: string) => void;
+  setForm: (form: ModelProjectFormValues) => void;
 }
 
 export function ModelInformationPage({

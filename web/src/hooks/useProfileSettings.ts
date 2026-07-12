@@ -167,7 +167,7 @@ export function useProfileSettings() {
     await updateAvatarMutation.mutateAsync({ remove_avatar: true });
   };
 
-  const handleSelectAvatar = async (avatarId: number) => {
+  const handleSelectAvatar = async (avatarId: string) => {
     await selectAvatarMutation.mutateAsync(avatarId);
   };
 

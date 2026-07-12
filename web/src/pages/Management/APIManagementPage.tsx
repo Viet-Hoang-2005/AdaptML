@@ -6,18 +6,18 @@ import type { TableProps } from 'antd';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import Placeholder from '../../components/layout/Placeholder';
-import { useModelAPIs, useModelAPIMutations } from '../../hooks/useModelAPIs';
-import type { ModelAPI } from '../../types/modelApi';
+import { useModelProjects, useModelProjectMutations } from '../../hooks/useModelProjects';
+import type { ModelProject } from '../../types/models';
 import EditModelModal from './EditModelModal';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageContent } from '../../components/layout/PageContent';
 
 export default function APIManagementPage() {
   const navigate = useNavigate();
-  const { data, isLoading } = useModelAPIs();
-  const { deleteModelAPI } = useModelAPIMutations();
+  const { data, isLoading } = useModelProjects();
+  const { deleteModelProject } = useModelProjectMutations();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedModel, setSelectedModel] = useState<ModelAPI | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelProject | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   
   const models = data?.models ?? [];
@@ -25,19 +25,19 @@ export default function APIManagementPage() {
     model.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const columns: TableProps<ModelAPI>['columns'] = [
+  const columns: TableProps<ModelProject>['columns'] = [
     {
       title: '#',
       dataIndex: 'index',
       align: 'center',
       key: 'index',
-      render: (_text: unknown, _record: ModelAPI, index: number) => index + 1,
+      render: (_text: unknown, _record: ModelProject, index: number) => index + 1,
     },
     {
       title: 'Name',
       dataIndex: 'name',
       key: 'name',
-      render: (text: string, record: ModelAPI) => (
+      render: (text: string, record: ModelProject) => (
         <a 
           className="font-medium text-black! hover:opacity-60!" 
           onClick={(e) => {
@@ -89,7 +89,7 @@ export default function APIManagementPage() {
       title: 'Action',
       align: 'center',
       key: 'action',
-      render: (_: unknown, record: ModelAPI) => (
+      render: (_: unknown, record: ModelProject) => (
         <Space size="middle">
           <AntButton 
             type="text" 
@@ -112,7 +112,7 @@ export default function APIManagementPage() {
           <Popconfirm
             title="Delete the model API"
             description="Are you sure to delete this model API?"
-            onConfirm={() => deleteModelAPI(record.id)}
+            onConfirm={() => deleteModelProject(record.id)}
             okText="Yes"
             cancelText="No"
             okButtonProps={{ className: 'bg-red-500! hover:bg-red-600! border-none! text-white!' }}

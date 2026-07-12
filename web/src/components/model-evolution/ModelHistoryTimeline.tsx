@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getRegistryHistory } from '../../lib/api';
 import { formatVersion } from '../../lib/formatters';
-import type { RegistryHistory } from '../../types/modelApi';
+import type { RegistryHistory } from '../../types/models';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
 import { GitCommit, ArrowUpRight, RotateCcw, Package, CheckCircle, XCircle, Trash2, Activity } from 'lucide-react';
@@ -10,7 +10,7 @@ import { GitCommit, ArrowUpRight, RotateCcw, Package, CheckCircle, XCircle, Tras
 const classNames = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(' ');
 
 interface Props {
-  familyId: number;
+  familyId: string;
 }
 
 export function ModelHistoryTimeline({ familyId }: Props) {

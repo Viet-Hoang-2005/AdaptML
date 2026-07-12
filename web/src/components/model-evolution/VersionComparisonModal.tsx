@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AlertTriangle, GitCompare, X } from 'lucide-react';
 import { Button } from './../ui/Button';
-import type { RegistryFamily, RegistryVersion, RegistryVersionCompareResponse } from '../../types/modelApi';
+import type { RegistryFamily, RegistryVersion, RegistryVersionCompareResponse } from '../../types/models';
 import { compareRegistryVersions } from '../../lib/api';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { formatVersion } from '../../lib/formatters';
@@ -51,8 +51,8 @@ function DeployabilityPill({ status }: { status?: string }) {
 }
 
 export function VersionComparisonModal({ family, versions, onClose }: Props) {
-  const [leftId, setLeftId] = useState<number>(versions[0]?.id);
-  const [rightId, setRightId] = useState<number>(versions[1]?.id || versions[0]?.id);
+  const [leftId, setLeftId] = useState<string>(versions[0]?.id ?? '');
+  const [rightId, setRightId] = useState<string>(versions[1]?.id || versions[0]?.id || '');
   const [loading, setLoading] = useState(false);
   const [comparison, setComparison] = useState<RegistryVersionCompareResponse | null>(null);
 
@@ -110,7 +110,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
             <select
               className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-blue-500"
               value={leftId}
-              onChange={(event) => setLeftId(Number(event.target.value))}
+              onChange={(event) => setLeftId(event.target.value)}
             >
               {versions.map(version => (
                 <option key={version.id} value={version.id}>Left: {formatVersion(version.version)} {version.stage === 'production' ? '(Production)' : ''}</option>
@@ -119,7 +119,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
             <select
               className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-blue-500"
               value={rightId}
-              onChange={(event) => setRightId(Number(event.target.value))}
+              onChange={(event) => setRightId(event.target.value)}
             >
               {versions.map(version => (
                 <option key={version.id} value={version.id}>Right: {formatVersion(version.version)} {version.stage === 'production' ? '(Production)' : ''}</option>

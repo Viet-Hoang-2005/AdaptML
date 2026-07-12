@@ -51,7 +51,7 @@ export interface UserProfile {
 }
 
 export interface AvatarRecord {
-  id: number;
+  id: string;
   url: string;
   is_current: boolean;
   created_at: string;
@@ -84,27 +84,27 @@ export interface CreateAPIKeyRequest {
   name: string;
   description: string;
   scope: string;
-  allowed_models: number[];
+  allowed_models: string[];
 }
 
 export interface CreatedAPIKeyResponse {
   message: string;
   api_key: string;
   key_prefix: string;
-  id: number;
+  id: string;
   name: string;
   description: string;
   scope: string;
-  allowed_models: number[];
+  allowed_models: string[];
   created_at?: string;
 }
 
 export interface APIKeyRecord {
-  id: number;
+  id: string;
   name: string;
   description: string;
   scope: string;
-  allowed_models: number[];
+  allowed_models: string[];
   key_prefix: string;
   created_at: string;
 }

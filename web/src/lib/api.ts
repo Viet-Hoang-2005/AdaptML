@@ -22,13 +22,15 @@ import type {
   UserProfile,
 } from '../types/auth';
 import type {
-  ModelAPI,
+  ModelProject,
+  Build,
+  Deployment,
+  ModelVersion,
   ModelBuildFormValues,
-  ModelAPIFormValues,
-  ModelAPIListResponse,
+  ModelProjectFormValues,
+  ModelProjectListResponse,
   ModelEndpointLogsResponse,
   ModelPredictionResponse,
-  PackagePreviewResponse,
   TrainingJob,
   TrainingJobDownloadURLResponse,
   TrainingJobEventsResponse,
@@ -47,7 +49,7 @@ import type {
   RoutingAliasName,
   RegistryVersion,
   RegistryVersionCompareResponse,
-} from '../types/modelApi';
+} from '../types/models';
 
 const normalizeApiBaseURL = (url: string) => url.replace(/\/+$/, '').replace(/\/auth$/, '');
 
@@ -133,12 +135,12 @@ export const resetForgottenPassword = async (resetToken: string, newPassword: st
 
 // Profile
 export const getProfile = async (): Promise<UserProfile> => {
-  const { data } = await axiosInstance.get<UserProfile>('/auth/profile/me/');
+  const { data } = await axiosInstance.get<UserProfile>('/auth/profile/');
   return data;
 };
 
 export const updateProfile = async (payload: UpdateProfileRequest): Promise<MessageResponse> => {
-  const { data } = await axiosInstance.put<MessageResponse>('/auth/profile/me/', payload);
+  const { data } = await axiosInstance.put<MessageResponse>('/auth/profile/', payload);
   return data;
 };
 
@@ -153,7 +155,7 @@ export const updateProfileAvatar = async (payload: UpdateProfileAvatarRequest): 
     formData.append('remove_avatar', 'true');
   }
 
-  const { data } = await axiosInstance.put<MessageResponse>('/auth/profile/me/', formData, {
+  const { data } = await axiosInstance.put<MessageResponse>('/auth/profile/', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
@@ -166,7 +168,7 @@ export const listProfileAvatars = async (): Promise<AvatarHistoryResponse> => {
   return data;
 };
 
-export const selectProfileAvatar = async (avatarId: number): Promise<MessageResponse> => {
+export const selectProfileAvatar = async (avatarId: string): Promise<MessageResponse> => {
   const { data } = await axiosInstance.post<MessageResponse>(`/auth/profile/avatars/${avatarId}/select/`);
   return data;
 };
@@ -200,185 +202,172 @@ export const completePasswordChange = async (
 };
 
 export const createAPIKey = async (payload: CreateAPIKeyRequest): Promise<CreatedAPIKeyResponse> => {
-  const { data } = await axiosInstance.post<CreatedAPIKeyResponse>('/auth/profile/api-key/', payload);
-  return data;
+  const { data } = await axiosInstance.post<{ id: string; name: string; description: string; key: string; key_prefix: string; allowed_projects: string[]; created_at: string }>(controlPlaneURL('/api-keys/'), { name: payload.name, description: payload.description, allowed_projects: payload.allowed_models });
+  return { message: 'API key created.', api_key: data.key, key_prefix: data.key_prefix, id: data.id, name: data.name, description: data.description, scope: 'specific', allowed_models: data.allowed_projects, created_at: data.created_at };
 };
 
 export const listAPIKeys = async (): Promise<APIKeyListResponse> => {
-  const { data } = await axiosInstance.get<APIKeyListResponse>('/auth/profile/api-key/');
+  const { data } = await axiosInstance.get<{ results?: Array<{ id: string; name: string; description: string; key_prefix: string; allowed_projects: string[]; created_at: string }> }>(controlPlaneURL('/api-keys/'));
+  return { tenant_id: '', api_keys: (data.results ?? []).map((key) => ({ ...key, scope: 'specific', allowed_models: key.allowed_projects })) };
+};
+
+export const updateAPIKey = async (keyId: string, payload: CreateAPIKeyRequest): Promise<APIKeyRecord & MessageResponse> => {
+  const { data } = await axiosInstance.put<{ id: string; name: string; description: string; key_prefix: string; allowed_projects: string[]; created_at: string }>(controlPlaneURL(`/api-keys/${keyId}/`), { name: payload.name, description: payload.description, allowed_projects: payload.allowed_models });
+  return { ...data, scope: 'specific', allowed_models: data.allowed_projects, message: 'API key updated.' };
+};
+
+export const deleteAPIKey = async (keyId: string): Promise<MessageResponse> => {
+  await axiosInstance.delete(controlPlaneURL(`/api-keys/${keyId}/`));
+  return { message: 'API key revoked.' };
+};
+
+export const regenerateAPIKey = async (keyId: string): Promise<CreatedAPIKeyResponse> => {
+  const { data } = await axiosInstance.post<{ id: string; name: string; description: string; key: string; key_prefix: string; allowed_projects: string[]; created_at: string }>(controlPlaneURL(`/api-keys/${keyId}/regenerate/`));
+  return { message: 'API key regenerated.', api_key: data.key, key_prefix: data.key_prefix, id: data.id, name: data.name, description: data.description, scope: 'specific', allowed_models: data.allowed_projects, created_at: data.created_at };
+};
+
+export const listModelProjects = async (): Promise<ModelProjectListResponse> => {
+  const { data } = await axiosInstance.get<{ results?: ModelProject[] } | ModelProject[]>(controlPlaneURL('/models/'));
+  return { models: Array.isArray(data) ? data : (data.results ?? []) };
+};
+
+export const getModelProject = async (modelId: string): Promise<ModelProject> => {
+  const { data } = await axiosInstance.get<ModelProject>(controlPlaneURL(`/models/${modelId}/`));
   return data;
 };
 
-export const updateAPIKey = async (keyId: number, payload: CreateAPIKeyRequest): Promise<APIKeyRecord & MessageResponse> => {
-  const { data } = await axiosInstance.put<APIKeyRecord & MessageResponse>(`/auth/profile/api-key/${keyId}/`, payload);
-  return data;
-};
-
-export const deleteAPIKey = async (keyId: number): Promise<MessageResponse> => {
-  const { data } = await axiosInstance.delete<MessageResponse>(`/auth/profile/api-key/${keyId}/`);
-  return data;
-};
-
-export const regenerateAPIKey = async (keyId: number): Promise<CreatedAPIKeyResponse> => {
-  const { data } = await axiosInstance.post<CreatedAPIKeyResponse>(`/auth/profile/api-key/${keyId}/regenerate/`);
-  return data;
-};
-
-// Model APIs
-const modelFormData = (payload: ModelAPIFormValues) => {
-  const formData = new FormData();
-  formData.append('name', payload.name);
-  formData.append('description', payload.description);
-  formData.append('model_info', payload.model_info);
-  formData.append('access_mode', payload.access_mode);
-  formData.append('version', payload.version || 'v1');
+export const createModelProject = async (payload: ModelProjectFormValues): Promise<ModelProject> => {
+  const { data } = await axiosInstance.post<ModelProject>(controlPlaneURL('/models/'), {
+    name: payload.name,
+    description: payload.description,
+    access_mode: payload.access_mode,
+  });
+  if (payload.source_code_file) await uploadSourceCodeFile(data.id, payload.source_code_file, payload.source_code_file.name);
+  if (payload.reference_data_file) await uploadReferenceFile(data.id, payload.reference_data_file, payload.reference_data_file.name);
   if (payload.artifact) {
-    formData.append('artifact', payload.artifact);
+    const versionData = new FormData();
+    versionData.append('version', payload.version || '1');
+    versionData.append('source_artifact', payload.artifact);
+    await axiosInstance.post(controlPlaneURL(`/registry/models/${data.id}/versions/`), versionData);
   }
-  if (payload.source_code_file) {
-    formData.append('source_code_file', payload.source_code_file);
-  }
-  if (payload.reference_data_file) {
-    formData.append('reference_data_file', payload.reference_data_file);
-  }
-  return formData;
-};
-
-const modelBuildFormData = (payload: ModelBuildFormValues) => {
-  const formData = new FormData();
-  formData.append('name', payload.name);
-  formData.append('description', payload.description);
-  formData.append('model_info', payload.model_info);
-  formData.append('access_mode', payload.access_mode);
-  formData.append('version', payload.version || 'v1');
-  formData.append('flavor', payload.flavor);
-  formData.append('requirements_text', payload.requirements_text);
-  if (payload.source_artifact) {
-    formData.append('source_artifact', payload.source_artifact);
-  }
-  if (payload.source_code_file) {
-    formData.append('source_code_file', payload.source_code_file);
-  }
-  if (payload.reference_data_file) {
-    formData.append('reference_data_file', payload.reference_data_file);
-  }
-  if (payload.label_mapping_file) {
-    formData.append('label_mapping_file', payload.label_mapping_file);
-  }
-  if (payload.metrics_file) {
-    formData.append('metrics_file', payload.metrics_file);
-  }
-  if (payload.params_file) {
-    formData.append('params_file', payload.params_file);
-  }
-  if (payload.model_insights_file) {
-    formData.append('model_insights_file', payload.model_insights_file);
-  }
-  if (payload.feature_importance_file) {
-    formData.append('feature_importance_file', payload.feature_importance_file);
-  }
-  if (payload.input_schema_file) {
-    formData.append('input_schema_file', payload.input_schema_file);
-  }
-  if (payload.requirements_file) {
-    formData.append('requirements_file', payload.requirements_file);
-  }
-  return formData;
-};
-
-export const listModelAPIs = async (): Promise<ModelAPIListResponse> => {
-  const { data } = await axiosInstance.get<ModelAPIListResponse>(controlPlaneURL('/models/'));
   return data;
 };
 
-export const getModelAPI = async (modelId: string): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.get<ModelAPI>(controlPlaneURL(`/models/${modelId}/`));
-  return data;
-};
-
-export const createModelAPI = async (payload: ModelAPIFormValues): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL('/models/'), modelFormData(payload), {
-    headers: { 'Content-Type': 'multipart/form-data' },
+export const buildModelProject = async (payload: ModelBuildFormValues): Promise<ModelProject> => {
+  const { data: project } = await axiosInstance.post<ModelProject>(controlPlaneURL('/models/'), {
+    name: payload.name,
+    description: payload.description,
+    access_mode: payload.access_mode,
+    requirements_text: payload.requirements_text,
   });
-  return data;
-};
-
-export const buildModelAPI = async (payload: ModelBuildFormValues): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL('/models/build/'), modelBuildFormData(payload), {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  if (payload.source_code_file) await uploadSourceCodeFile(project.id, payload.source_code_file, payload.source_code_file.name);
+  if (payload.reference_data_file) await uploadReferenceFile(project.id, payload.reference_data_file, payload.reference_data_file.name);
+  const versionData = new FormData();
+  versionData.append('version', payload.version || '1');
+  versionData.append('flavor', payload.flavor);
+  if (payload.source_artifact) versionData.append('source_artifact', payload.source_artifact);
+  const { data: version } = await axiosInstance.post<ModelVersion>(
+    controlPlaneURL(`/registry/models/${project.id}/versions/`),
+    versionData,
+  );
+  const { data: build } = await axiosInstance.post<Build>(controlPlaneURL('/builds/'), {
+    version: version.id,
   });
-  return data;
+  return { ...project, version: version.version, flavor: version.flavor, build_status: build.status };
 };
 
-export const deployModelAPI = async (modelId: string): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/deploy/`));
-  return data;
+export const deployModelProject = async (modelId: string): Promise<ModelProject> => {
+  const project = await getModelProject(modelId);
+  const versions = await getProjectVersions(modelId);
+  const builds = await listBuilds();
+  const versionIds = new Set(versions.map((version) => version.id));
+  const build = builds.find((item) => versionIds.has(item.version_id) && item.status === 'ready');
+  if (!build) throw new Error('No ready build is available for this project.');
+  const { data: deployment } = await axiosInstance.post<Deployment>(controlPlaneURL('/deployments/'), {
+    build: build.id,
+  });
+  return { ...project, status: 'deploying', endpoint_status: deployment.status === 'healthy' ? 'healthy' : 'deploying' };
 };
 
-export const redeployModelAPI = async (modelId: string): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/redeploy/`));
-  return data;
+export const redeployModelProject = async (modelId: string): Promise<ModelProject> => {
+  return deployModelProject(modelId);
 };
 
-export const stopModelEndpoint = async (modelId: string): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/stop-endpoint/`));
-  return data;
+export const stopModelEndpoint = async (modelId: string): Promise<ModelProject> => {
+  const project = await getModelProject(modelId);
+  const deployments = await listDeployments();
+  const versions = await getProjectVersions(modelId);
+  const versionIds = new Set(versions.map((version) => version.id));
+  const deployment = deployments.find((item) => versionIds.has(item.version_id) && item.status !== 'stopped');
+  if (deployment) await axiosInstance.post(controlPlaneURL(`/deployments/${deployment.id}/stop/`));
+  return { ...project, status: 'stopped', endpoint_status: 'stopped' };
 };
 
-export const checkModelEndpointHealth = async (modelId: string): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/check-health/`));
-  return data;
+export const checkModelEndpointHealth = async (modelId: string): Promise<ModelProject> => {
+  const project = await getModelProject(modelId);
+  const { data } = await axiosInstance.get<{ results?: Array<{ version_id: string; public_url: string; health_status: string }> }>(controlPlaneURL('/endpoints/'));
+  const versions = await getProjectVersions(modelId);
+  const versionIds = new Set(versions.map((version) => version.id));
+  const endpoint = (data.results ?? []).find((item) => versionIds.has(item.version_id));
+  return { ...project, endpoint_url: endpoint?.public_url ?? '', endpoint_status: endpoint?.health_status === 'healthy' ? 'healthy' : 'unhealthy' };
 };
 
 export const getModelEndpointLogs = async (modelId: string): Promise<ModelEndpointLogsResponse> => {
-  const { data } = await axiosInstance.get<ModelEndpointLogsResponse>(controlPlaneURL(`/models/${modelId}/endpoint-logs/`));
-  return data;
-};
-
-export const cleanupModelResources = async (modelId: string, removeImages = false): Promise<{ removed: unknown; model: ModelAPI }> => {
-  const { data } = await axiosInstance.post<{ removed: unknown; model: ModelAPI }>(
-    controlPlaneURL(`/models/${modelId}/cleanup/`),
-    { remove_images: removeImages },
+  const versions = await getProjectVersions(modelId);
+  const versionIds = new Set(versions.map((version) => version.id));
+  const { data: endpointPage } = await axiosInstance.get<
+    { results?: Array<{ id: string; version_id: string; runtime_name: string }> }
+  >(controlPlaneURL('/endpoints/'));
+  const endpoint = (endpointPage.results ?? []).find((item) => versionIds.has(item.version_id));
+  if (!endpoint) return { model_id: modelId, container_name: '', logs: '' };
+  const { data } = await axiosInstance.get<{ runtime_name: string; logs: string }>(
+    controlPlaneURL(`/endpoints/${endpoint.id}/logs/`),
   );
-  return data;
+  return { model_id: modelId, container_name: data.runtime_name, logs: data.logs };
 };
 
-export const triggerModelAPIBuild = async (modelId: string): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/models/${modelId}/build/`));
-  return data;
+export const triggerModelProjectBuild = async (modelId: string): Promise<ModelProject> => {
+  const project = await getModelProject(modelId);
+  const versions = await getProjectVersions(modelId);
+  if (!versions[0]) throw new Error('Register a version before building.');
+  const { data } = await axiosInstance.post<Build>(controlPlaneURL('/builds/'), { version: versions[0].id });
+  return { ...project, build_status: data.status };
 };
 
-export const updateModelAPI = async (modelId: string, payload: ModelAPIFormValues): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.put<ModelAPI>(controlPlaneURL(`/models/${modelId}/`), {
+export const updateModelProject = async (modelId: string, payload: ModelProjectFormValues): Promise<ModelProject> => {
+  const { data } = await axiosInstance.put<ModelProject>(controlPlaneURL(`/models/${modelId}/`), {
     name: payload.name,
     description: payload.description,
-    model_info: payload.model_info,
     access_mode: payload.access_mode,
-    ...(payload.version ? { version: payload.version } : {}),
   });
   return data;
 };
 
-export const deleteModelAPI = async (modelId: string, force: boolean = false): Promise<MessageResponse> => {
+export const deleteModelProject = async (modelId: string, force: boolean = false): Promise<MessageResponse> => {
   const { data } = await axiosInstance.delete<MessageResponse>(controlPlaneURL(`/models/${modelId}/` + (force ? '?force=true' : '')));
   return data;
 };
 
-export const getModelPackagePreview = async (modelId: string): Promise<PackagePreviewResponse> => {
-  const { data } = await axiosInstance.get<PackagePreviewResponse>(controlPlaneURL(`/models/${modelId}/package-preview/`));
-  return data;
-};
-
 export const getBuildLogs = async (modelId: string, offset: number): Promise<{logs: string[], next_offset: number, build_status: string, build_error: string}> => {
-  const { data } = await axiosInstance.get(controlPlaneURL(`/models/${modelId}/build-logs/?offset=${offset}`));
-  return data;
+  const versions = await getProjectVersions(modelId);
+  const builds = await listBuilds();
+  const versionIds = new Set(versions.map((version) => version.id));
+  const build = builds.find((item) => versionIds.has(item.version_id));
+  const lines = build?.logs ? build.logs.split('\n') : [];
+  return { logs: lines.slice(offset), next_offset: lines.length, build_status: build?.status ?? 'pending', build_error: build?.error_message ?? '' };
 };
 
 export const cancelBuildAPI = async (modelId: string): Promise<void> => {
-  await axiosInstance.post(controlPlaneURL(`/models/${modelId}/cancel-build/`));
+  const versions = await getProjectVersions(modelId);
+  const builds = await listBuilds();
+  const versionIds = new Set(versions.map((version) => version.id));
+  const build = builds.find(
+    (item) => versionIds.has(item.version_id) && !['ready', 'failed', 'cancelled'].includes(item.status),
+  );
+  if (build) await axiosInstance.post(controlPlaneURL(`/builds/${build.id}/cancel/`));
 };
 
-export const predictWithModelAPI = async (
+export const predictWithModelProject = async (
   endpointUrl: string,
   features: Record<string, unknown>,
 ): Promise<ModelPredictionResponse> => {
@@ -386,14 +375,33 @@ export const predictWithModelAPI = async (
   return data;
 };
 
+const pageResults = <T>(data: { results?: T[] } | T[]): T[] => (Array.isArray(data) ? data : (data.results ?? []));
+
+export const getProjectVersions = async (projectId: string): Promise<ModelVersion[]> => {
+  const { data } = await axiosInstance.get<{ results?: ModelVersion[] } | ModelVersion[]>(
+    controlPlaneURL(`/registry/models/${projectId}/versions/`),
+  );
+  return pageResults(data);
+};
+
+export const listBuilds = async (): Promise<Build[]> => {
+  const { data } = await axiosInstance.get<{ results?: Build[] } | Build[]>(controlPlaneURL('/builds/'));
+  return pageResults(data);
+};
+
+export const listDeployments = async (): Promise<Deployment[]> => {
+  const { data } = await axiosInstance.get<{ results?: Deployment[] } | Deployment[]>(controlPlaneURL('/deployments/'));
+  return pageResults(data);
+};
+
 const trainingJobFormData = (payload: TrainingJobFormValues) => {
   const formData = new FormData();
   formData.append('name', payload.name);
-  formData.append('model_version', payload.model_version);
+  formData.append('project', payload.registered_model_id || payload.project_id || '');
   formData.append('entry_point', payload.entry_point || 'train.py');
   formData.append('requirements_text', payload.requirements_text);
   formData.append('vcpu', String(payload.vcpu));
-  formData.append('memory', String(payload.memory));
+  formData.append('memory_mb', String(payload.memory));
   formData.append('max_runtime_seconds', String(payload.max_runtime_seconds));
   formData.append('accelerator_type', payload.accelerator_type);
   formData.append('accelerator_count', String(payload.accelerator_count));
@@ -410,192 +418,233 @@ const trainingJobFormData = (payload: TrainingJobFormValues) => {
 };
 
 export const createTrainingJob = async (payload: TrainingJobFormValues): Promise<TrainingJob> => {
-  const { data } = await axiosInstance.post<TrainingJob>(
-    controlPlaneURL('/training/jobs/'),
+  const { data: job } = await axiosInstance.post<TrainingJob>(
+    controlPlaneURL('/training-jobs/'),
     trainingJobFormData(payload),
     { headers: { 'Content-Type': 'multipart/form-data' } },
   );
+  const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training-jobs/${job.id}/submit/`));
   return data;
 };
 
-export const updateModelRequirements = async (modelId: string, requirementsText: string): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.patch<ModelAPI>(
-    controlPlaneURL(`/models/${modelId}/`),
+export const updateModelRequirements = async (modelId: string, requirementsText: string): Promise<ModelProject> => {
+  const { data } = await axiosInstance.patch<ModelProject>(
+    controlPlaneURL(`/models/${modelId}/requirements/`),
     { requirements_text: requirementsText },
   );
   return data;
 };
 
 export const listTrainingJobs = async (includeDeleted = false): Promise<TrainingJobListResponse> => {
-  const { data } = await axiosInstance.get<TrainingJobListResponse>(
-    controlPlaneURL(`/training/jobs/${includeDeleted ? '?include_deleted=true' : ''}`),
-  );
-  return data;
+  void includeDeleted;
+  const { data } = await axiosInstance.get<{ results?: TrainingJob[] } | TrainingJob[]>(controlPlaneURL('/training-jobs/'));
+  return { training_jobs: pageResults(data) };
 };
 
 export const getTrainingUsage = async (): Promise<TrainingUsageResponse> => {
-  const { data } = await axiosInstance.get<TrainingUsageResponse>(controlPlaneURL('/training/usage/'));
+  const { training_jobs: jobs } = await listTrainingJobs();
+  const monthlyRuntime = jobs.reduce((total, job) => total + job.runtime_seconds, 0);
+  const trainingBackend = ['argo', 'kubeflow'].includes(jobs[0]?.backend ?? '') ? 'kubeflow' : 'local';
+  return { training_backend: trainingBackend, monthly_quota_seconds: 0, monthly_runtime_seconds: monthlyRuntime, remaining_seconds: 0, active_jobs_count: jobs.filter((job) => ['queued', 'running'].includes(job.status)).length, running_jobs_count: jobs.filter((job) => job.status === 'running').length, completed_jobs_count: jobs.filter((job) => job.status === 'completed').length, failed_jobs_count: jobs.filter((job) => job.status === 'failed').length, current_month_start: '', current_month_end: '' };
+};
+
+export const getTrainingJob = async (jobId: string): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.get<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/`));
   return data;
 };
 
-export const getTrainingJob = async (jobId: number): Promise<TrainingJob> => {
-  const { data } = await axiosInstance.get<TrainingJob>(controlPlaneURL(`/training/jobs/${jobId}/`));
-  return data;
+export const refreshTrainingJobStatus = async (jobId: string): Promise<TrainingJob> => {
+  return getTrainingJob(jobId);
 };
 
-export const refreshTrainingJobStatus = async (jobId: number): Promise<TrainingJob> => {
-  const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training/jobs/${jobId}/refresh-status/`));
-  return data;
-};
-
-export const getTrainingJobDownloadUrl = async (jobId: number): Promise<TrainingJobDownloadURLResponse> => {
+export const getTrainingJobDownloadUrl = async (jobId: string): Promise<TrainingJobDownloadURLResponse> => {
   const { data } = await axiosInstance.get<TrainingJobDownloadURLResponse>(
-    controlPlaneURL(`/training/jobs/${jobId}/download-url/`),
+    controlPlaneURL(`/training-jobs/${jobId}/download/`),
   );
   return data;
 };
 
 export const registerTrainingJobModel = async (
-  jobId: number,
+  jobId: string,
   payload: TrainingJobRegisterModelValues,
-): Promise<ModelAPI> => {
-  const { data } = await axiosInstance.post<ModelAPI>(controlPlaneURL(`/training/jobs/${jobId}/register-model/`), payload);
-  return data;
+): Promise<ModelProject> => {
+  const job = await getTrainingJob(jobId);
+  const project = await getModelProject(job.project_id);
+  await axiosInstance.post(controlPlaneURL(`/registry/models/${job.project_id}/versions/`), {
+    version: payload.model_version || '1',
+    description: payload.description || '',
+    flavor: payload.flavor || '',
+    source_job: job.id,
+  });
+  return project;
 };
 
-export const getTrainingJobLogs = async (jobId: number, offset: number = 0): Promise<TrainingJobLogsResponse> => {
-  const { data } = await axiosInstance.get<TrainingJobLogsResponse>(controlPlaneURL(`/training/jobs/${jobId}/logs/?offset=${offset}`));
-  return data;
+export const getTrainingJobLogs = async (jobId: string, offset: number = 0): Promise<TrainingJobLogsResponse> => {
+  const job = await getTrainingJob(jobId);
+  const logs = String(job.tracking?.logs_tail ?? job.error_message ?? '');
+  return { job_id: job.id, training_job_id: job.id, status: job.status, logs: logs.slice(offset), text: logs.slice(offset), next_offset: logs.length };
 };
 
-export const getTrainingJobMetrics = async (jobId: number): Promise<TrainingJobMetricsResponse> => {
-  const { data } = await axiosInstance.get<TrainingJobMetricsResponse>(controlPlaneURL(`/training/jobs/${jobId}/metrics/`));
-  return data;
+export const getTrainingJobMetrics = async (jobId: string): Promise<TrainingJobMetricsResponse> => {
+  const job = await getTrainingJob(jobId);
+  return { job_id: job.id, training_job_id: job.id, status: job.status, metrics_available: false, latest: null, history: [], log_stream_name: '', message: 'Runtime metrics are not available for this backend.', updated_at: job.updated_at };
 };
 
-export const getTrainingJobEvents = async (jobId: number): Promise<TrainingJobEventsResponse> => {
-  const { data } = await axiosInstance.get<TrainingJobEventsResponse>(controlPlaneURL(`/training/jobs/${jobId}/events/`));
-  return data;
+export const getTrainingJobEvents = async (jobId: string): Promise<TrainingJobEventsResponse> => {
+  const { data } = await axiosInstance.get<TrainingJobEventsResponse['events']>(controlPlaneURL(`/training-jobs/${jobId}/events/`));
+  return { events: data };
 };
 
-export const cancelTrainingJob = async (jobId: number): Promise<TrainingJob> => {
+export const cancelTrainingJob = async (jobId: string): Promise<TrainingJob> => {
   const { data } = await axiosInstance.post<TrainingJob | { training_job: TrainingJob }>(
-    controlPlaneURL(`/training/jobs/${jobId}/cancel/`),
+    controlPlaneURL(`/training-jobs/${jobId}/cancel/`),
   );
   return 'training_job' in data ? data.training_job : data;
 };
 
-export const retryTrainingJob = async (jobId: number): Promise<TrainingJob> => {
-  const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training/jobs/${jobId}/retry/`));
+export const retryTrainingJob = async (jobId: string): Promise<TrainingJob> => {
+  const previous = await getTrainingJob(jobId);
+  const { data: job } = await axiosInstance.post<TrainingJob>(controlPlaneURL('/training-jobs/'), {
+    project: previous.project_id,
+    name: previous.name,
+    entry_point: previous.entry_point,
+    requirements_text: previous.requirements_text,
+    code_snapshot_uri: previous.code_snapshot_uri,
+    data_snapshot_uri: previous.data_snapshot_uri,
+    backend: previous.backend,
+    vcpu: previous.vcpu,
+    memory_mb: previous.memory_mb,
+    max_runtime_seconds: previous.max_runtime_seconds,
+    accelerator_type: previous.accelerator_type,
+    accelerator_count: previous.accelerator_count,
+  });
+  const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training-jobs/${job.id}/submit/`));
   return data;
 };
 
-export const deleteTrainingJob = async (jobId: number): Promise<TrainingJob> => {
-  const { data } = await axiosInstance.delete<TrainingJob>(controlPlaneURL(`/training/jobs/${jobId}/`));
+export const deleteTrainingJob = async (jobId: string): Promise<TrainingJob> => {
+  const { data } = await axiosInstance.delete<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/`));
   return data;
 };
 
-export const restoreTrainingJob = async (jobId: number): Promise<TrainingJob> => {
-  const { data } = await axiosInstance.post<TrainingJob>(controlPlaneURL(`/training/jobs/${jobId}/restore/`));
-  return data;
+export const restoreTrainingJob = async (jobId: string): Promise<TrainingJob> => {
+  return getTrainingJob(jobId);
 };
 
 export const getRegistryFamilies = async (): Promise<RegistryFamily[]> => {
-  const { data } = await axiosInstance.get<RegistryFamily[]>(controlPlaneURL('/registry/families/'));
-  return data;
+  const { models } = await listModelProjects();
+  return models.map((project) => ({
+    id: project.id,
+    name: project.name,
+    display_name: project.name,
+    description: project.description,
+    current_production_version: null,
+    is_active: project.is_active,
+    created_at: project.created_at,
+    updated_at: project.updated_at,
+  }));
 };
 
-export const getRegistryVersions = async (familyId: number): Promise<RegistryVersion[]> => {
-  const { data } = await axiosInstance.get<RegistryVersion[]>(controlPlaneURL(`/registry/families/${familyId}/versions/`));
-  return data;
+const asRegistryVersion = (version: ModelVersion): RegistryVersion => ({
+  id: version.id,
+  project_id: version.project_id,
+  version: version.version,
+  source_type: version.source_job_id ? 'training_job' : 'manual_upload',
+  source_training_job: version.source_job_id,
+  source_training_job_id: version.source_job_id,
+  artifact_uri: version.artifacts[0]?.uri ?? '',
+  image_name: '',
+  endpoint_url: '',
+  stage: version.stage,
+  metrics_summary: version.metrics_summary,
+  params_summary: version.params_summary,
+  model_insights_summary: version.insights_summary,
+  deployability_status: version.deployability,
+  deployability_reason: version.deployability_reason,
+  can_build: ['unknown', 'deployable'].includes(version.deployability),
+  can_deploy: version.deployability === 'deployable',
+  created_at: version.registered_at,
+  updated_at: version.registered_at,
+});
+
+export const getRegistryVersions = async (familyId: string): Promise<RegistryVersion[]> => {
+  return (await getProjectVersions(familyId)).map(asRegistryVersion);
 };
 
-export const getRegistryVersion = async (versionId: number): Promise<RegistryVersion> => {
-  const { data } = await axiosInstance.get<RegistryVersion>(controlPlaneURL(`/registry/versions/${versionId}/`));
-  return data;
+export const getRegistryVersion = async (versionId: string): Promise<RegistryVersion> => {
+  const { data } = await axiosInstance.get<ModelVersion>(controlPlaneURL(`/registry/versions/${versionId}/`));
+  return asRegistryVersion(data);
 };
 
 export const getRegistryMetrics = async (
-  familyId: number,
-  versionId: number,
+  familyId: string,
+  versionId: string,
 ): Promise<Record<string, RegistryMetric[]>> => {
-  const { data } = await axiosInstance.get<Record<string, RegistryMetric[]>>(
-    controlPlaneURL(`/registry/families/${familyId}/versions/${versionId}/metrics/`),
-  );
-  return data;
+  void familyId;
+  const { data } = await axiosInstance.get<ModelVersion & { metrics?: Array<{ id: string; name: string; value: number; step: number | null; timestamp: string | null; metadata: Record<string, unknown> }> }>(controlPlaneURL(`/registry/versions/${versionId}/`));
+  return { metrics: (data.metrics ?? []).map((metric) => ({ id: metric.id, metric_name: metric.name, value: metric.value, step: metric.step ?? 0, source: 'registry', created_at: metric.timestamp ?? data.registered_at, extra: metric.metadata })) };
 };
 
-export const getRegistryHistory = async (familyId: number): Promise<RegistryHistory[]> => {
-  const { data } = await axiosInstance.get<RegistryHistory[]>(controlPlaneURL(`/registry/families/${familyId}/history/`));
-  return data;
+export const getRegistryHistory = async (familyId: string): Promise<RegistryHistory[]> => {
+  const versions = await getProjectVersions(familyId);
+  return versions.flatMap((version) => ((version as ModelVersion & { events?: Array<{ id: string; event_type: string; from_state: string; to_state: string; created_at: string }> }).events ?? []).map((event) => ({ id: event.id, action: event.event_type, status: 'success', version: version.version, from_stage: event.from_state, to_stage: event.to_state, message: event.event_type, actor: '', created_at: event.created_at })));
 };
 
 export const compareRegistryVersions = async (
-  familyId: number,
-  leftVersionId: number,
-  rightVersionId: number,
+  familyId: string,
+  leftVersionId: string,
+  rightVersionId: string,
 ): Promise<RegistryVersionCompareResponse> => {
-  const { data } = await axiosInstance.get<RegistryVersionCompareResponse>(
-    controlPlaneURL(`/registry/families/${familyId}/compare/?left=${leftVersionId}&right=${rightVersionId}`),
-  );
-  return data;
+  const [left, right] = await Promise.all([getRegistryVersion(leftVersionId), getRegistryVersion(rightVersionId)]);
+  const family = (await getRegistryFamilies()).find((item) => item.id === familyId);
+  if (!family) throw new Error('Model project not found.');
+  return { family, left, right, metrics_diff: [], params_diff: [], artifact_diff: { added: [], removed: [], changed: [], unchanged_count: 0 }, deployability_diff: { left: { status: left.deployability_status ?? 'unknown', reason: left.deployability_reason ?? '' }, right: { status: right.deployability_status ?? 'unknown', reason: right.deployability_reason ?? '' } }, deployment_diff: { left_stage: left.stage, right_stage: right.stage, left_endpoint_url: left.endpoint_url, right_endpoint_url: right.endpoint_url, left_deployed: false, right_deployed: false, left_image_name: left.image_name, right_image_name: right.image_name }, recommendation: { winner: 'unknown', confidence: 'low', reason: 'Compare metrics to choose a version.', warnings: [] } };
 };
 
 export const promoteRegistryVersion = async (
-  familyId: number,
-  versionId: number,
+  familyId: string,
+  versionId: string,
   alias: RoutingAliasName = 'production',
 ): Promise<PromoteAliasResponse> => {
-  const { data } = await axiosInstance.post<PromoteAliasResponse>(
-    controlPlaneURL(`/registry/families/${familyId}/versions/${versionId}/promote/`),
-    { alias },
-  );
-  return data;
+  await axiosInstance.post(controlPlaneURL(`/registry/models/${familyId}/aliases/`), { name: alias, version: versionId });
+  return { success: true, message: `Alias ${alias} now points to the selected version.` };
 };
 
 export const predictViaRoutingAlias = async (
-  familyId: number,
+  familyId: string,
   alias: RoutingAliasName,
   payload: unknown,
 ): Promise<unknown> => {
   const { data } = await axiosInstance.post(
-    controlPlaneURL(`/registry/families/${familyId}/aliases/${alias}/predict/`),
+    controlPlaneURL(`/registry/models/${familyId}/aliases/${alias}/predict/`),
     payload,
   );
   return data;
 };
 
-export const rollbackRegistryFamily = async (familyId: number, versionId: number): Promise<RegistryVersion> => {
-  const { data } = await axiosInstance.post<RegistryVersion>(
-    controlPlaneURL(`/registry/families/${familyId}/rollback/`),
-    { version_id: versionId },
-  );
-  return data;
+export const rollbackRegistryFamily = async (familyId: string, versionId: string): Promise<RegistryVersion> => {
+  await promoteRegistryVersion(familyId, versionId, 'production');
+  return getRegistryVersion(versionId);
 };
 
-export const buildRegistryVersionPackage = async (versionId: number): Promise<RegistryVersion> => {
-  const { data } = await axiosInstance.post<RegistryVersion>(
-    controlPlaneURL(`/registry/versions/${versionId}/build-package/`),
-  );
-  return data;
+export const buildRegistryVersionPackage = async (versionId: string): Promise<RegistryVersion> => {
+  await axiosInstance.post(controlPlaneURL('/builds/'), { version: versionId });
+  return getRegistryVersion(versionId);
 };
 
-export const deployRegistryVersion = async (versionId: number): Promise<RegistryVersion> => {
-  const { data } = await axiosInstance.post<RegistryVersion>(
-    controlPlaneURL(`/registry/versions/${versionId}/deploy/`),
-  );
-  return data;
+export const deployRegistryVersion = async (versionId: string): Promise<RegistryVersion> => {
+  const build = (await listBuilds()).find((item) => item.version_id === versionId && item.status === 'ready');
+  if (!build) throw new Error('No ready build exists for this version.');
+  await axiosInstance.post(controlPlaneURL('/deployments/'), { build: build.id });
+  return getRegistryVersion(versionId);
 };
 
-export const checkRegistryVersionHealth = async (versionId: number): Promise<RegistryVersion> => {
-  const { data } = await axiosInstance.post<RegistryVersion>(
-    controlPlaneURL(`/registry/versions/${versionId}/check-health/`),
-  );
-  return data;
+export const checkRegistryVersionHealth = async (versionId: string): Promise<RegistryVersion> => {
+  return getRegistryVersion(versionId);
 };
 
 export const smokeTestRegistryVersion = async (
-  versionId: number,
+  versionId: string,
   payload: RegistrySmokeTestRequest,
 ): Promise<RegistrySmokeTestResponse> => {
   const { data } = await axiosInstance.post<RegistrySmokeTestResponse>(
@@ -622,17 +671,17 @@ export interface S3File {
 }
 
 export const listSourceCodeFiles = async (modelIdStr: string): Promise<S3File[]> => {
-  const { data } = await axiosInstance.get<S3File[]>(controlPlaneURL(`/models/${modelIdStr}/source-code-files/`));
-  return data;
+  const { data } = await axiosInstance.get<Array<{ relative_path: string; size_bytes: number; updated_at: string; download_url: string }>>(controlPlaneURL(`/models/${modelIdStr}/workspace/code/files/`));
+  return data.map((file) => ({ key: file.relative_path, relative_path: file.relative_path, size: file.size_bytes, last_modified: file.updated_at, download_url: file.download_url }));
 };
 
 export const uploadSourceCodeFile = async (modelIdStr: string, file: File, path: string): Promise<{ message: string }> => {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('path', path);
+  formData.append('relative_path', path);
   
-  const { data } = await axiosInstance.put<{ message: string }>(
-    controlPlaneURL(`/models/${modelIdStr}/source-code-upload/`),
+  const { data } = await axiosInstance.post<{ message: string }>(
+    controlPlaneURL(`/models/${modelIdStr}/workspace/code/files/`),
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } }
   );
@@ -641,32 +690,32 @@ export const uploadSourceCodeFile = async (modelIdStr: string, file: File, path:
 
 export const deleteSourceCodeFile = async (modelId: string, path: string): Promise<MessageResponse> => {
   const { data } = await axiosInstance.delete<MessageResponse>(
-    controlPlaneURL(`/models/${modelId}/source-code-upload/`),
-    { data: { path } }
+    controlPlaneURL(`/models/${modelId}/workspace/code/files/`),
+    { data: { relative_path: path } }
   );
   return data;
 };
 
 export const deleteReferenceFile = async (modelId: string, path: string): Promise<MessageResponse> => {
   const { data } = await axiosInstance.delete<MessageResponse>(
-    controlPlaneURL(`/drift/models/${modelId}/reference-data/`),
-    { data: { path } }
+    controlPlaneURL(`/models/${modelId}/workspace/data/files/`),
+    { data: { relative_path: path } }
   );
   return data;
 };
 
 export const listReferenceFiles = async (modelIdStr: string): Promise<S3File[]> => {
-  const { data } = await axiosInstance.get<S3File[]>(controlPlaneURL(`/drift/models/${modelIdStr}/reference-files/`));
-  return data;
+  const { data } = await axiosInstance.get<Array<{ relative_path: string; size_bytes: number; updated_at: string; download_url: string }>>(controlPlaneURL(`/models/${modelIdStr}/workspace/data/files/`));
+  return data.map((file) => ({ key: file.relative_path, relative_path: file.relative_path, size: file.size_bytes, last_modified: file.updated_at, download_url: file.download_url }));
 };
 
 export const uploadReferenceFile = async (modelIdStr: string, file: File, path: string): Promise<{ message: string }> => {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('path', path);
+  formData.append('relative_path', path);
 
   const { data } = await axiosInstance.post<{ message: string }>(
-    controlPlaneURL(`/drift/models/${modelIdStr}/reference-data/`),
+    controlPlaneURL(`/models/${modelIdStr}/workspace/data/files/`),
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } }
   );

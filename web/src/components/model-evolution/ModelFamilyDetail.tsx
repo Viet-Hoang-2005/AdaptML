@@ -1,4 +1,4 @@
-import type { RegistryFamily, RegistryVersion } from '../../types/modelApi';
+import type { RegistryFamily, RegistryVersion } from '../../types/models';
 import { Layers, Star, Info, FileCode2, Activity, ArrowRight, GitCommit } from 'lucide-react';
 import { formatVersion } from '../../lib/formatters';
 
@@ -8,11 +8,11 @@ interface Props {
   family: RegistryFamily;
   versions: RegistryVersion[];
   loading: boolean;
-  selectedVersionId?: number;
+  selectedVersionId?: string;
   onSelectVersion: (v: RegistryVersion) => void;
 }
 
-function VersionLineage({ versions, selectedVersionId, onSelectVersion }: { versions: RegistryVersion[], selectedVersionId?: number, onSelectVersion: (v: RegistryVersion) => void }) {
+function VersionLineage({ versions, selectedVersionId, onSelectVersion }: { versions: RegistryVersion[], selectedVersionId?: string, onSelectVersion: (v: RegistryVersion) => void }) {
   if (versions.length === 0) return null;
   // Sort oldest to newest for chronological lineage
   const chronological = [...versions].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());

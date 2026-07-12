@@ -3,7 +3,7 @@ import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';
 import { promoteRegistryVersion } from '../../lib/api';
 import { getApiErrorMessage } from '../../lib/apiError';
-import type { RegistryFamily, RegistryVersion, RoutingAliasName } from '../../types/modelApi';
+import type { RegistryFamily, RegistryVersion, RoutingAliasName } from '../../types/models';
 import { AlertCircle, ArrowUpCircle } from 'lucide-react';
 import { formatVersion } from '../../lib/formatters';
 

@@ -13,7 +13,7 @@ export function useApiKeyForm(initialData?: APIKeyRecord | null) {
   const [apiKeyName, setApiKeyName] = useState(initialData?.name || '');
   const [apiKeyDescription, setApiKeyDescription] = useState(initialData?.description || '');
   const [apiKeyScope, setApiKeyScope] = useState(initialData?.scope || 'all');
-  const [apiKeyModels, setApiKeyModels] = useState<number[]>(initialData?.allowed_models || []);
+  const [apiKeyModels, setApiKeyModels] = useState<string[]>(initialData?.allowed_models || []);
   const [createdApiKey, setCreatedApiKey] = useState<CreatedAPIKeyResponse | null>(null);
 
   const [prevInitialData, setPrevInitialData] = useState(initialData);
@@ -46,7 +46,7 @@ export function useApiKeyForm(initialData?: APIKeyRecord | null) {
   });
 
   const updateAPIKeyMutation = useMutation({
-    mutationFn: ({ id, name, description, scope, allowed_models }: { id: number; name: string; description: string, scope: string, allowed_models: number[] }) =>
+    mutationFn: ({ id, name, description, scope, allowed_models }: { id: string; name: string; description: string, scope: string, allowed_models: string[] }) =>
       updateAPIKey(id, { name, description, scope, allowed_models }),
     onSuccess: async () => {
       toast.success('API key updated successfully.');

@@ -1,12 +1,12 @@
 import { Copy, ExternalLink, UploadCloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../../../components/ui/Button';
 import Placeholder from '../../../components/layout/Placeholder';
-import { toast } from '../../../lib/toast';
-import { useModelSelection } from '../../../hooks/useModelSelection';
 import { PageContent } from '../../../components/layout/PageContent';
+import { Button } from '../../../components/ui/Button';
+import { useModelSelection } from '../../../hooks/useModelSelection';
+import { toast } from '../../../lib/toast';
 
-export default function ModelApiPage() {
+export default function ModelProjectPage() {
   const navigate = useNavigate();
   const { selectedModel, loading } = useModelSelection();
 
@@ -16,15 +16,13 @@ export default function ModelApiPage() {
     toast.success('Endpoint copied.');
   };
 
-  if (loading) {
-    return <section className="flex-1 rounded-lg border border-gray-300 bg-white p-8" />;
-  }
+  if (loading) return <section className="flex-1 rounded-lg border border-gray-300 bg-white p-8" />;
 
   if (!selectedModel) {
     return (
       <Placeholder
-        title="No model API yet"
-        description="You haven't uploaded any models to generate prediction endpoints yet. Start by uploading an MLflow package."
+        title="No model project yet"
+        description="Upload a model or create a training job to start a model project."
         icon={<UploadCloud className="h-6 w-6" />}
         action={<Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>Upload model</Button>}
       />

@@ -1,8 +1,8 @@
-import type { ModelAPI } from '../../../types/modelApi';
+import type { ModelProject } from '../../../types/models';
 import { PackagePreview } from '../../../components/ui/PackagePreview';
 
 interface ModelDeploymentPageProps {
-  model: ModelAPI;
+  model: ModelProject;
   zipFile: string;
 }
 

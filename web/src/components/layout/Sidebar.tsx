@@ -8,7 +8,7 @@ interface DashboardSidebarProps {
 }
 
 const topItems = [
-  { label: 'Home', to: '/dashboard/home/model-api', icon: Home, match: '/dashboard/home' },
+  { label: 'Home', to: '/dashboard/home/models', icon: Home, match: '/dashboard/home' },
   { label: 'Drift Monitoring', to: '/dashboard/drift-monitoring', icon: LineChart, match: '/dashboard/drift-monitoring' },
   { label: 'Model Training', to: '/dashboard/model-training', icon: BrainCircuit, match: '/dashboard/model-training' },
   { label: 'Model Evolution', to: '/dashboard/model-evolution', icon: GitBranch, match: '/dashboard/model-evolution' },

@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate, matchPath } from 'react-router-dom';
-import { useModelAPIs } from '../../hooks/useModelAPIs';
+import { useModelProjects } from '../../hooks/useModelProjects';
 import { ModelSelectionContext } from '../../hooks/useModelSelection';
 import type { ModelSelectionContextValue } from '../../hooks/useModelSelection';
 
@@ -11,7 +11,7 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
 
   // Try to parse modelId from URL
   const match = useMemo(() => {
-    return matchPath("/dashboard/home/model-api/:modelId", location.pathname) ||
+    return matchPath("/dashboard/home/models/:modelId", location.pathname) ||
       matchPath("/dashboard/home/model-testing/:modelId", location.pathname) ||
       matchPath("/dashboard/drift-monitoring/:modelId", location.pathname) ||
       matchPath("/dashboard/model-training/:modelId", location.pathname) ||
@@ -22,7 +22,7 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
   const urlModelId = match?.params.modelId ? match.params.modelId : null;
 
   const [localModelId, setLocalModelId] = useState<string | null>(() => {
-    const stored = localStorage.getItem('selected_model_api_id');
+    const stored = localStorage.getItem('selected_model_project_id');
     return stored ? stored : null;
   });
 
@@ -30,10 +30,10 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
   if (urlModelId && urlModelId !== prevUrlModelId) {
     setPrevUrlModelId(urlModelId);
     setLocalModelId(urlModelId);
-    localStorage.setItem('selected_model_api_id', String(urlModelId));
+    localStorage.setItem('selected_model_project_id', String(urlModelId));
   }
 
-  const { data, isLoading } = useModelAPIs();
+  const { data, isLoading } = useModelProjects();
   const models = useMemo(() => data?.models ?? [], [data?.models]);
 
   const activeModelId = urlModelId || localModelId;
@@ -46,13 +46,13 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
       selectedModel,
       selectModel: (modelId: string) => {
         setLocalModelId(modelId);
-        localStorage.setItem('selected_model_api_id', String(modelId));
+        localStorage.setItem('selected_model_project_id', String(modelId));
         
         if (match) {
           const basePath = location.pathname.substring(0, location.pathname.lastIndexOf('/'));
           navigate(`${basePath}/${modelId}${location.search}${location.hash}`);
         } else {
-          const supportedBases = ['/dashboard/home/model-api', '/dashboard/home/model-testing', '/dashboard/drift-monitoring', '/dashboard/model-training', '/dashboard/model-evolution'];
+          const supportedBases = ['/dashboard/home/models', '/dashboard/home/model-testing', '/dashboard/drift-monitoring', '/dashboard/model-training', '/dashboard/model-evolution'];
           const base = supportedBases.find(b => location.pathname === b || location.pathname === `${b}/`);
           if (base) {
              navigate(`${base}/${modelId}${location.search}${location.hash}`);
@@ -69,7 +69,7 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
     if (!selectedModel) return;
     
     const supportedBases = [
-      '/dashboard/home/model-api',
+      '/dashboard/home/models',
       '/dashboard/home/model-testing',
       '/dashboard/drift-monitoring',
       '/dashboard/model-training',

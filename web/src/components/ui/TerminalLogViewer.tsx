@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Terminal, Play, Square, Loader2, Clipboard } from 'lucide-react';
-import { getBuildLogs, getModelAPI } from '../../lib/api';
+import { getBuildLogs, getModelProject } from '../../lib/api';
 import { toast } from '../../lib/toast';
 
 export function TerminalLogViewer({
@@ -79,7 +79,7 @@ export function TerminalLogViewer({
           setBuilding(false);
           if (data.build_status === 'ready') {
              toast.success('Build completed successfully!');
-             const finalModel = await getModelAPI(modelId);
+             const finalModel = await getModelProject(modelId);
              onBuildSuccess?.(finalModel.id, finalModel.package_preview_tree || []);
           } else {
              setErrorMsg(data.build_error || 'Build failed.');
@@ -93,7 +93,7 @@ export function TerminalLogViewer({
           setBuildStatus('ready');
           setBuilding(false);
           toast.success('Build completed successfully!');
-          const finalModel = await getModelAPI(modelId);
+          const finalModel = await getModelProject(modelId);
           onBuildSuccess?.(finalModel.id, finalModel.package_preview_tree || []);
         }
       } catch {

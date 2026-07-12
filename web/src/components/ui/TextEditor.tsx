@@ -3,19 +3,19 @@ import { Editor } from '@monaco-editor/react';
 import { Trash2, RotateCcw, Upload, Save, FileArchive } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { updateModelRequirements } from '../../lib/api';
-import type { ModelAPI } from '../../types/modelApi';
+import type { ModelProject } from '../../types/models';
 
 export interface TextEditorProps {
-  modelApi: ModelAPI;
+  modelProject: ModelProject;
   onDirtyChange?: (isDirty: boolean) => void;
   onContentChange?: (content: string) => void;
-  /** Called after requirements are successfully persisted to the server (ModelAPI.requirements_text updated). */
+  /** Called after requirements are successfully persisted to the server (ModelProject.requirements_text updated). */
   onSaveSuccess?: () => void;
 }
 
-export function TextEditor({ modelApi, onDirtyChange, onContentChange, onSaveSuccess }: TextEditorProps) {
-  const [content, setContent] = useState<string>(modelApi.requirements_text ?? '');
-  const [originalContent, setOriginalContent] = useState<string>(modelApi.requirements_text ?? '');
+export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSaveSuccess }: TextEditorProps) {
+  const [content, setContent] = useState<string>(modelProject.requirements_text ?? '');
+  const [originalContent, setOriginalContent] = useState<string>(modelProject.requirements_text ?? '');
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,10 +32,10 @@ export function TextEditor({ modelApi, onDirtyChange, onContentChange, onSaveSuc
   }, [content, onContentChange]);
 
   // Reset editor when a different model is selected
-  const [prevModelId, setPrevModelId] = useState(modelApi.id);
-  if (prevModelId !== modelApi.id) {
-    setPrevModelId(modelApi.id);
-    const fresh = modelApi.requirements_text ?? '';
+  const [prevModelId, setPrevModelId] = useState(modelProject.id);
+  if (prevModelId !== modelProject.id) {
+    setPrevModelId(modelProject.id);
+    const fresh = modelProject.requirements_text ?? '';
     setContent(fresh);
     setOriginalContent(fresh);
   }
@@ -63,7 +63,7 @@ export function TextEditor({ modelApi, onDirtyChange, onContentChange, onSaveSuc
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await updateModelRequirements(modelApi.id, content);
+      await updateModelRequirements(modelProject.id, content);
       setOriginalContent(content);
       onSaveSuccess?.();
       toast.success('requirements.txt saved successfully.');
@@ -72,7 +72,7 @@ export function TextEditor({ modelApi, onDirtyChange, onContentChange, onSaveSuc
     } finally {
       setSaving(false);
     }
-  }, [modelApi.id, content, onSaveSuccess]);
+  }, [modelProject.id, content, onSaveSuccess]);
 
   const isEmpty = content.trim() === '';
 

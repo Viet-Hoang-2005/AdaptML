@@ -1,14 +1,14 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { getRegistryMetrics } from '../../lib/api';
-import type { RegistryMetric } from '../../types/modelApi';
+import type { RegistryMetric } from '../../types/models';
 import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
 import { BarChart2 } from 'lucide-react';
 
 interface Props {
-  familyId: number;
-  versionId: number;
+  familyId: string;
+  versionId: string;
 }
 
 export function ModelMetricsPanel({ familyId, versionId }: Props) {

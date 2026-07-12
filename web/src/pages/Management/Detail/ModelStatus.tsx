@@ -1,13 +1,5 @@
-import type { ModelAPI } from '../../../types/modelApi';
+import type { ModelProject } from '../../../types/models';
 import { Activity, CheckCircle2, Circle, Info, Loader2, PauseCircle, XCircle } from 'lucide-react';
-
-function isActiveModel(model: ModelAPI) {
-  return (
-    model.build_status === 'building' ||
-    model.endpoint_status === 'deploying' ||
-    model.endpoint_status === 'unhealthy'
-  );
-}
 
 function TrackerStep({ label, state }: { label: string; state: string }) {
   const isCompleted = state === 'completed';
@@ -53,7 +45,7 @@ function TrackerLine({ state }: { state: 'completed' | 'pending' }) {
   );
 }
 
-export function ModelStatus({ model }: { model: ModelAPI }) {
+export function ModelStatus({ model }: { model: ModelProject }) {
   const endpointStatus = model.endpoint_status || 'not_deployed';
   const isBuildingState = model.build_status === 'building';
   const isDeployingState = endpointStatus === 'deploying';

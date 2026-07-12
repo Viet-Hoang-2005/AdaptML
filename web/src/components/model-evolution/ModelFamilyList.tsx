@@ -1,4 +1,4 @@
-import type { RegistryFamily } from '../../types/modelApi';
+import type { RegistryFamily } from '../../types/models';
 import { Box, CheckCircle } from 'lucide-react';
 
 const classNames = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(' ');
@@ -6,7 +6,7 @@ const classNames = (...classes: (string | undefined | null | false)[]) => classe
 interface Props {
   families: RegistryFamily[];
   loading: boolean;
-  selectedFamilyId?: number;
+  selectedFamilyId?: string;
   selectedFamilyVersionCount?: number;
   onSelect: (family: RegistryFamily) => void;
 }

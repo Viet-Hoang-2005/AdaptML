@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { toast } from '../../lib/toast';
 import { rollbackRegistryFamily } from '../../lib/api';
-import type { RegistryFamily, RegistryVersion } from '../../types/modelApi';
+import type { RegistryFamily, RegistryVersion } from '../../types/models';
 import { AlertCircle, RotateCcw } from 'lucide-react';
 import { formatVersion } from '../../lib/formatters';
 

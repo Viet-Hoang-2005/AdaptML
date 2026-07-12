@@ -78,7 +78,7 @@ export default function ProfileSettingPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [avatarModal, setAvatarModal] = useState<AvatarModalState>('closed');
   const [cropImage, setCropImage] = useState('');
-  const [selectingAvatarId, setSelectingAvatarId] = useState<number | null>(null);
+  const [selectingAvatarId, setSelectingAvatarId] = useState<string | null>(null);
   const initials = useMemo(() => getInitials(profile), [profile]);
   const avatarPreview = profile?.avatar || '';
 
@@ -132,7 +132,7 @@ export default function ProfileSettingPage() {
     setAvatarModal('closed');
   };
 
-  const selectAvatar = async (avatarId: number) => {
+  const selectAvatar = async (avatarId: string) => {
     setSelectingAvatarId(avatarId);
     try {
       await handleSelectAvatar(avatarId);

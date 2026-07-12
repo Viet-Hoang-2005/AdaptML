@@ -37,11 +37,11 @@ import {
   restoreTrainingJob,
   refreshTrainingJobStatus,
   registerTrainingJobModel,
-  triggerModelAPIBuild,
-  deployModelAPI,
+  triggerModelProjectBuild,
+  deployModelProject,
   checkModelEndpointHealth,
   getModelEndpointLogs,
-  redeployModelAPI,
+  redeployModelProject,
   stopModelEndpoint,
 } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
@@ -55,7 +55,7 @@ import type {
   TrainingJobEvent,
   TrainingJobMetricsResponse,
   TrainingJobStatus,
-} from '../../types/modelApi';
+} from '../../types/models';
 
 import { ModelDeploymentCard } from '../../components/model/ModelDeploymentCard';
 
@@ -69,6 +69,7 @@ const formatMegabytes = (mb: number) => {
 
 const statusLabels: Record<TrainingJobStatus, string> = {
   pending: 'Pending',
+  queued: 'Queued',
   uploading: 'Uploading',
   running: 'Running',
   completed: 'Completed',
@@ -96,7 +97,7 @@ export default function TrainingJobDetailPage() {
   const [endpointLogs, setEndpointLogs] = useState('');
   const [endpointLogsOpen, setEndpointLogsOpen] = useState(false);
 
-  const parsedJobId = Number(jobId);
+  const parsedJobId = jobId ?? '';
   const [liveElapsed, setLiveElapsed] = useState<number | null>(null);
   const lastToastedStatus = useRef<string | null>(null);
 
@@ -109,7 +110,7 @@ export default function TrainingJobDetailPage() {
   } = useQuery({
     queryKey: [...queryKeys.trainingJobs, 'detail', parsedJobId],
     queryFn: () => getTrainingJob(parsedJobId),
-    enabled: !isNaN(parsedJobId),
+    enabled: Boolean(parsedJobId),
     refetchInterval: (query) => {
       const data = query.state.data;
       if (data && ACTIVE_STATUSES.includes(data.status)) return AUTO_SYNC_INTERVAL_MS;
@@ -273,7 +274,7 @@ export default function TrainingJobDetailPage() {
         current ? { ...current, registered_model: model, registered_model_id: model.id } : current,
       );
       await queryClient.invalidateQueries({ queryKey: queryKeys.trainingJobs });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
       await refetchEvents();
     },
     onError: (err) => {
@@ -282,13 +283,13 @@ export default function TrainingJobDetailPage() {
   });
 
   const buildRegisteredModelMutation = useMutation({
-    mutationFn: (modelId: string) => triggerModelAPIBuild(modelId),
+    mutationFn: (modelId: string) => triggerModelProjectBuild(modelId),
     onSuccess: async (model) => {
       toast.success(`Build started for ${model.name} ${model.version || 'v1'}.`);
       queryClient.setQueryData([...queryKeys.trainingJobs, 'detail', parsedJobId], (current: TrainingJob | undefined) =>
         current ? { ...current, registered_model: model, registered_model_id: model.id } : current,
       );
-      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
       await refetchJob();
     },
     onError: (err) => {
@@ -298,7 +299,7 @@ export default function TrainingJobDetailPage() {
 
   const deployRegisteredModelMutation = useMutation({
     mutationFn: async (modelId: string) => {
-      const res = await deployModelAPI(modelId);
+      const res = await deployModelProject(modelId);
       let isDeployed = false;
       let attempts = 0;
       while (!isDeployed && attempts < 30) {
@@ -318,7 +319,7 @@ export default function TrainingJobDetailPage() {
     },
     onSuccess: async () => {
       toast.success('Model deployed successfully!');
-      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
       await refetchJob();
     },
     onError: (err) => {
@@ -332,7 +333,7 @@ export default function TrainingJobDetailPage() {
       toast[model.endpoint_status === 'healthy' ? 'success' : 'warning'](
         model.endpoint_status === 'healthy' ? 'Endpoint is healthy.' : 'Endpoint is unhealthy.',
       );
-      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
       await refetchJob();
     },
     onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to check endpoint health.')),
@@ -340,7 +341,7 @@ export default function TrainingJobDetailPage() {
 
   const redeployMutation = useMutation({
     mutationFn: async (modelId: string) => {
-      const res = await redeployModelAPI(modelId);
+      const res = await redeployModelProject(modelId);
       let isDeployed = false;
       let attempts = 0;
       while (!isDeployed && attempts < 30) {
@@ -360,7 +361,7 @@ export default function TrainingJobDetailPage() {
     },
     onSuccess: async () => {
       toast.success('Model redeployed successfully!');
-      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
       await refetchJob();
     },
     onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to redeploy endpoint.')),
@@ -370,7 +371,7 @@ export default function TrainingJobDetailPage() {
     mutationFn: (modelId: string) => stopModelEndpoint(modelId),
     onSuccess: async () => {
       toast.success('Endpoint stopped.');
-      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
       await refetchJob();
     },
     onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to stop endpoint.')),
@@ -413,7 +414,7 @@ export default function TrainingJobDetailPage() {
     setRegisterModalOpen(true);
   };
 
-  if (isNaN(parsedJobId)) {
+  if (!parsedJobId) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <p className="text-gray-500 text-lg font-medium">Invalid Job ID</p>

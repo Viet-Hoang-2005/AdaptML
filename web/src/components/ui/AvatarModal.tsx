@@ -7,11 +7,11 @@ interface AvatarModalProps {
   avatarPreview: string;
   avatarHistory?: AvatarRecord[];
   historyLoading?: boolean;
-  selectingAvatarId?: number | null;
+  selectingAvatarId?: string | null;
   onClose: () => void;
   onRemove?: () => void;
   onChange: () => void;
-  onSelectAvatar?: (avatarId: number) => void;
+  onSelectAvatar?: (avatarId: string) => void;
 }
 
 export function AvatarModal({

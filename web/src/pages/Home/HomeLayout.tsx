@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
 
 const homeTabs = [
-  { label: 'Model API', to: '/dashboard/home/model-api', icon: UploadCloud },
+  { label: 'Models', to: '/dashboard/home/models', icon: UploadCloud },
   { label: 'Model Testing', to: '/dashboard/home/model-testing', icon: FlaskConical },
 ];
 

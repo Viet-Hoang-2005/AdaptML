@@ -1,9 +1,9 @@
 import { FileCode2, Database } from 'lucide-react';
-import type { ModelAPI } from '../../../types/modelApi';
+import type { ModelProject } from '../../../types/models';
 import { SourceEditor } from '../../../components/ui/SourceEditor';
 
 interface ModelSourcePageProps {
-  model: ModelAPI;
+  model: ModelProject;
   setSourceCodeDirty: (dirty: boolean) => void;
   setReferenceDataDirty: (dirty: boolean) => void;
 }

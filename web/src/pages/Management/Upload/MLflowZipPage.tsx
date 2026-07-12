@@ -2,9 +2,9 @@ import { Trash2, Rocket } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { useState } from 'react';
-import type { ModelAPIFormValues } from '../../../types/modelApi';
-import { useModelAPIMutations } from '../../../hooks/useModelAPIs';
-import { deployModelAPI, deleteModelAPI, cancelBuildAPI, getApiErrorMessage, checkModelEndpointHealth } from '../../../lib/api';
+import type { ModelProjectFormValues } from '../../../types/models';
+import { useModelProjectMutations } from '../../../hooks/useModelProjects';
+import { deployModelProject, deleteModelProject, cancelBuildAPI, getApiErrorMessage, checkModelEndpointHealth } from '../../../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryKeys';
 import { toast } from '../../../lib/toast';
@@ -21,21 +21,21 @@ export default function MLflowZipPage({
   onSubmitting,
   onModelCreated,
 }: {
-  form: ModelAPIFormValues;
-  setField: (field: keyof ModelAPIFormValues, value: string | File | null) => void;
+  form: ModelProjectFormValues;
+  setField: (field: keyof ModelProjectFormValues, value: string | File | null) => void;
   onSubmitting: (val: boolean) => void;
   onModelCreated: (id: string | null) => void;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { createModelAPI } = useModelAPIMutations();
+  const { createModelProject } = useModelProjectMutations();
   const [createdModelId, setCreatedModelId] = useState<string | null>(null);
   const [isBuildSuccess, setIsBuildSuccess] = useState(false);
 
   const submitAdvanced = async () => {
     onSubmitting(true);
     try {
-      const model = await createModelAPI(form);
+      const model = await createModelProject(form);
       setCreatedModelId(model.id);
       onModelCreated(model.id);
     } catch (e) {
@@ -60,7 +60,7 @@ export default function MLflowZipPage({
     if (createdModelId) {
       onSubmitting(true);
       try {
-        await deleteModelAPI(createdModelId, true);
+        await deleteModelProject(createdModelId, true);
       } catch (e) {
         const msg = getApiErrorMessage(e, "Failed to delete model");
         toast.error(msg);
@@ -83,7 +83,7 @@ export default function MLflowZipPage({
     if (!createdModelId) return;
     onSubmitting(true);
     try {
-      await deployModelAPI(createdModelId);
+      await deployModelProject(createdModelId);
       
       let isDeployed = false;
       let attempts = 0;
@@ -108,7 +108,7 @@ export default function MLflowZipPage({
         toast.error("Deployment is taking longer than expected. Please check model status later.");
       }
 
-      await queryClient.invalidateQueries({ queryKey: queryKeys.modelApis });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
       navigate(`/dashboard/api-management`);
     } catch (e) {
       const msg = getApiErrorMessage(e, "Deployment failed.");

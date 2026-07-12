@@ -16,7 +16,7 @@ import { toast } from '../../lib/toast';
 import { useModelSelection } from '../../hooks/useModelSelection';
 import { SourceEditor } from '../../components/ui/SourceEditor';
 import { Slider } from '../../components/ui/Slider';
-import type { TrainingJobFormValues, TrainingAcceleratorType } from '../../types/modelApi';
+import type { TrainingJobFormValues, TrainingAcceleratorType } from '../../types/models';
 
 const wizardSteps = [
   { id: 1, label: 'Sources', icon: FileCode2 },
@@ -86,7 +86,7 @@ export default function CreateTrainingJobPage() {
     training_data: null,
   });
 
-  const [trainingJobId, setTrainingJobId] = useState<number | null>(null);
+  const [trainingJobId, setTrainingJobId] = useState<string | null>(null);
   const [trainingLogs, setTrainingLogs] = useState<string[]>([]);
   const [isTraining, setIsTraining] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -134,7 +134,7 @@ export default function CreateTrainingJobPage() {
     ));
   }, []);
 
-  /** Called by TextEditor after a successful Save (PATCH ModelAPI) */
+  /** Called by TextEditor after a successful Save (PATCH ModelProject) */
   const handleRequirementsSaved = useCallback(() => {
     setRequirementsDirty(false);
   }, []);
@@ -180,10 +180,10 @@ export default function CreateTrainingJobPage() {
       const payload: TrainingJobFormValues = {
         ...form,
         name: selectedModel.name,
-        model_version: `v${(parseInt(selectedModel.version.replace('v', '')) || 0) + 1}`,
+        model_version: `v${(parseInt((selectedModel.version ?? '0').replace('v', '')) || 0) + 1}`,
         registered_model_id: selectedModel.id,
         // Intentionally omit requirements_text here — backend will read from
-        // ModelAPI.requirements_text (the last saved value) as source of truth.
+        // ModelProject.requirements_text (the last saved value) as source of truth.
         requirements_text: undefined as unknown as string,
       };
 
@@ -207,7 +207,7 @@ export default function CreateTrainingJobPage() {
     setIsTraining(false);
     setTrainingLogs(prev => [...prev, '[SYSTEM] Training tracking cancelled by user.']);
   };
-  const startLogPolling = (jobId: number) => {
+  const startLogPolling = (jobId: string) => {
     if (pollIntervalRef.current) window.clearInterval(pollIntervalRef.current);
     
     pollIntervalRef.current = window.setInterval(async () => {
@@ -284,7 +284,7 @@ export default function CreateTrainingJobPage() {
 
             {selectedModel && (
               <TextEditor
-                modelApi={selectedModel}
+                modelProject={selectedModel}
                 onDirtyChange={setRequirementsDirty}
                 onContentChange={setRequirementsText}
                 onSaveSuccess={handleRequirementsSaved}

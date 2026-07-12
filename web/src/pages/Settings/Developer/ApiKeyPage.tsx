@@ -6,11 +6,11 @@ import { Input } from '../../../components/ui/Input';
 import { ApiModal } from '../../../components/ui/ApiModal';
 import { useApiKeyForm } from '../../../hooks/useApiKeyForm';
 import { useDeveloperSettings } from '../../../hooks/useDeveloperSettings';
-import { useModelAPIs } from '../../../hooks/useModelAPIs';
+import { useModelProjects } from '../../../hooks/useModelProjects';
 import { toast } from '../../../lib/toast';
 import { Table } from 'antd';
 import type { TableProps } from 'antd';
-import type { ModelAPI } from '../../../types/modelApi';
+import type { ModelProject } from '../../../types/models';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { PageContent } from '../../../components/layout/PageContent';
 
@@ -21,7 +21,7 @@ export default function ApiKeyPage() {
   
   const editingKey = useMemo(() => {
     if (!keyId) return null;
-    return apiKeys.find((k) => k.id === parseInt(keyId, 10)) || null;
+    return apiKeys.find((key) => key.id === keyId) || null;
   }, [keyId, apiKeys]);
 
   const {
@@ -38,7 +38,7 @@ export default function ApiKeyPage() {
     saving,
   } = useApiKeyForm(editingKey);
 
-  const { data: modelsData } = useModelAPIs();
+  const { data: modelsData } = useModelProjects();
 
   const handleCopyCreatedKey = async () => {
     if (!createdApiKey?.api_key) return;
@@ -60,7 +60,7 @@ export default function ApiKeyPage() {
     return models.filter(m => m.access_mode === 'private');
   }, [modelsData?.models]);
 
-  const columns: TableProps<ModelAPI>['columns'] = [
+  const columns: TableProps<ModelProject>['columns'] = [
     {
       title: 'Name',
       dataIndex: 'name',
@@ -76,11 +76,11 @@ export default function ApiKeyPage() {
     },
   ];
 
-  const rowSelection: TableProps<ModelAPI>['rowSelection'] = {
+  const rowSelection: TableProps<ModelProject>['rowSelection'] = {
     selectedRowKeys: apiKeyModels,
     columnWidth: 100,
     onChange: (selectedRowKeys) => {
-      setApiKeyModels(selectedRowKeys as number[]);
+      setApiKeyModels(selectedRowKeys.map(String));
       setApiKeyScope('specific');
     },
   };

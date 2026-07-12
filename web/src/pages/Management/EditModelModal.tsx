@@ -4,20 +4,20 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { TextArea } from '../../components/ui/TextArea';
 import { AccessModePicker } from '../../components/ui/Picker';
-import type { ModelAPI, ModelAPIFormValues } from '../../types/modelApi';
-import { useModelAPIMutations } from '../../hooks/useModelAPIs';
+import type { ModelProject, ModelProjectFormValues } from '../../types/models';
+import { useModelProjectMutations } from '../../hooks/useModelProjects';
 
 export default function EditModelModal({
   model,
   visible,
   onClose,
 }: {
-  model: ModelAPI | null;
+  model: ModelProject | null;
   visible: boolean;
   onClose: () => void;
 }) {
-  const { updateModelAPI, updating } = useModelAPIMutations();
-  const [form, setForm] = useState<ModelAPIFormValues>({
+  const { updateModelProject, updating } = useModelProjectMutations();
+  const [form, setForm] = useState<ModelProjectFormValues>({
     name: model?.name || '',
     description: model?.description || '',
     model_info: model?.model_info || '',
@@ -39,19 +39,19 @@ export default function EditModelModal({
 
   if (!visible || !model) return null;
 
-  const setField = (field: keyof ModelAPIFormValues, value: string) => {
+  const setField = (field: keyof ModelProjectFormValues, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const isDirty = 
     form.name !== model.name ||
     form.description !== model.description ||
-    form.model_info !== model.model_info ||
+    form.model_info !== (model.model_info ?? '') ||
     form.access_mode !== model.access_mode;
 
   const handleSave = () => {
     if (!isDirty) return;
-    updateModelAPI({ modelId: model.id, payload: form });
+    updateModelProject({ modelId: model.id, payload: form });
     onClose();
   };
 
@@ -59,7 +59,7 @@ export default function EditModelModal({
     setForm({
       name: model.name,
       description: model.description,
-      model_info: model.model_info,
+      model_info: model.model_info ?? '',
       access_mode: model.access_mode,
     });
     onClose();
