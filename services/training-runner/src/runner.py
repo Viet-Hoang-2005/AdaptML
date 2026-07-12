@@ -256,7 +256,7 @@ def build_artifact_manifest(model_dir: Path) -> list[dict]:
         if not item.is_file():
             continue
         resolved = item.resolve()
-        if not str(resolved).startswith(str(root)):
+        if not resolved.is_relative_to(root):
             continue
         relative_path = item.relative_to(model_dir)
         manifest.append(
@@ -307,7 +307,7 @@ def log_to_mlflow(
             exp = mlflow.get_experiment_by_name(exp_name)
             if not exp:
                 mlflow.create_experiment(exp_name, artifact_location=artifact_proxy_root)
-        except Exception as exc:
+        except Exception:
             pass
         mlflow.set_experiment(exp_name)
 
@@ -457,8 +457,9 @@ def safe_extract_zip(zip_path: Path, destination: Path) -> None:
     with zipfile.ZipFile(zip_path) as archive:
         destination_root = destination.resolve()
         for member in archive.infolist():
-            member_path = destination / member.filename
-            if not str(member_path.resolve()).startswith(str(destination_root)):
+            member_path = (destination / member.filename).resolve()
+            is_symlink = (member.external_attr >> 16) & 0o170000 == 0o120000
+            if not member_path.is_relative_to(destination_root) or is_symlink:
                 raise RuntimeError("Source zip contains an unsafe path.")
         archive.extractall(destination)
 

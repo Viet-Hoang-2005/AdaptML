@@ -1,13 +1,12 @@
-from unittest.mock import patch
-
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import override_settings
-from infrastructure.execution.factory import deployment_backend
+from infrastructure.execution import factory
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ModelProject
 from apps.deployment.models import Build
+from apps.deployment.services import builds as build_service
 from apps.registry.models import ModelVersion
 
 
@@ -38,24 +37,25 @@ def test_internal_webhook_rejects_integer_identifier():
 
 
 @pytest.mark.django_db
-def test_build_cancel_is_tenant_scoped(django_capture_on_commit_callbacks):
+def test_build_cancel_is_tenant_scoped(django_capture_on_commit_callbacks, monkeypatch):
     owner = get_user_model().objects.create_user("owner-cancel@example.com", "password123")
     other = get_user_model().objects.create_user("other@example.com", "password123")
     project = ModelProject.objects.create(owner=owner, name="cancel project")
     version = ModelVersion.objects.create(project=project, version="1")
     build = Build.objects.create(version=version, status="building")
-    with patch("apps.deployment.services.builds.cancel_build.delay") as enqueue:
-        client = APIClient()
-        client.force_authenticate(other)
+    enqueued = []
+    monkeypatch.setattr(build_service.cancel_build, "delay", lambda build_id: enqueued.append(build_id))
+    client = APIClient()
+    client.force_authenticate(other)
 
-        denied = client.post(f"/api/builds/{build.public_id}/cancel/")
-        assert denied.status_code == 404
+    denied = client.post(f"/api/builds/{build.public_id}/cancel/")
+    assert denied.status_code == 404
 
-        client.force_authenticate(owner)
-        with django_capture_on_commit_callbacks(execute=True):
-            accepted = client.post(f"/api/builds/{build.public_id}/cancel/")
+    client.force_authenticate(owner)
+    with django_capture_on_commit_callbacks(execute=True):
+        accepted = client.post(f"/api/builds/{build.public_id}/cancel/")
 
-        enqueue.assert_called_once_with(str(build.public_id))
+    assert enqueued == [str(build.public_id)]
     build.refresh_from_db()
 
     assert accepted.status_code == 202
@@ -63,14 +63,26 @@ def test_build_cancel_is_tenant_scoped(django_capture_on_commit_callbacks):
 
 
 @override_settings(BUILD_BACKEND="docker", DEPLOYMENT_BACKEND="argo")
-@patch("infrastructure.execution.factory.ArgoDeploymentBackend")
-def test_deployment_backend_uses_its_own_setting(argo_backend):
-    deployment_backend()
-    argo_backend.assert_called_once_with()
+def test_deployment_backend_uses_its_own_setting(monkeypatch):
+    created = []
+
+    def create_argo_backend():
+        created.append("argo")
+        return object()
+
+    monkeypatch.setattr(factory, "ArgoDeploymentBackend", create_argo_backend)
+    factory.deployment_backend()
+    assert created == ["argo"]
 
 
 @override_settings(BUILD_BACKEND="argo", DEPLOYMENT_BACKEND="docker")
-@patch("infrastructure.execution.factory.DockerDeploymentBackend")
-def test_deployment_backend_does_not_follow_build_backend(docker_backend):
-    deployment_backend()
-    docker_backend.assert_called_once_with()
+def test_deployment_backend_does_not_follow_build_backend(monkeypatch):
+    created = []
+
+    def create_docker_backend():
+        created.append("docker")
+        return object()
+
+    monkeypatch.setattr(factory, "DockerDeploymentBackend", create_docker_backend)
+    factory.deployment_backend()
+    assert created == ["docker"]

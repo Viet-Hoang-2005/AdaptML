@@ -83,6 +83,17 @@ def build_batch_dataframe(records: list[dict]) -> pd.DataFrame:
             df[column] = pd.to_datetime(df[column], utc=True, errors="coerce")
     return df
 
+
+def flush_batch(consumer, records: list[dict], last_triggered_counts: dict) -> tuple[bool, dict]:
+    """Persist one batch and commit Kafka offsets only after a successful write."""
+    if not records:
+        return True, last_triggered_counts
+    dataframe = build_batch_dataframe(records)
+    if not save_dataframe_to_db(dataframe, "paas_production_logs"):
+        return False, last_triggered_counts
+    consumer.commit()
+    return True, check_threshold_and_trigger(last_triggered_counts, dataframe)
+
 # Hàm main để chạy Consumer liên tục lắng nghe Redpanda và xử lý dữ liệu
 def main():
     # Đăng ký handler cho SIGTERM và SIGINT
@@ -116,12 +127,11 @@ def main():
             # Cơ chế "Flush on Idle": Nếu không có message mới nào trong 1 giây, tự động flush batch hiện tại vào DB.
             if msg is None:
                 if len(current_batch) > 0:
-                    df = build_batch_dataframe(current_batch)
-                    # Chuyển đổi chuỗi text created_at (isoformat) lại thành DateTime object chuẩn pandas
-                    if save_dataframe_to_db(df, "paas_production_logs"):
-                        consumer.commit() # Chỉ commit khi đã lưu thẳng vào Database thành công
+                    saved, last_triggered_counts = flush_batch(
+                        consumer, current_batch, last_triggered_counts
+                    )
+                    if saved:
                         print(f"Flushed {len(current_batch)} records to DB due to idle time.")
-                        last_triggered_counts = check_threshold_and_trigger(last_triggered_counts, df)
                     current_batch = []
                 continue
                 
@@ -146,11 +156,11 @@ def main():
                 
                 # Gom đủ một hộp (BATCH) thì mang đi phân phối
                 if len(current_batch) >= BATCH_SIZE:
-                    df = build_batch_dataframe(current_batch)
-                    if save_dataframe_to_db(df, "paas_production_logs"):
-                        consumer.commit()
+                    saved, last_triggered_counts = flush_batch(
+                        consumer, current_batch, last_triggered_counts
+                    )
+                    if saved:
                         print(f"Completed batch delivery: {len(current_batch)} records to DB.")
-                        last_triggered_counts = check_threshold_and_trigger(last_triggered_counts, df)
                     current_batch = []
                     
             except Exception as parse_e:
@@ -161,10 +171,7 @@ def main():
     finally:
         # Trước khi đóng Consumer, nếu còn dữ liệu trong batch thì cũng nên flush nốt vào DB để tránh mất mát dữ liệu cuối cùng.
         if len(current_batch) > 0:
-            df = build_batch_dataframe(current_batch)
-            if save_dataframe_to_db(df, "paas_production_logs"):
-                consumer.commit()
-                last_triggered_counts = check_threshold_and_trigger(last_triggered_counts, df)
+            _, last_triggered_counts = flush_batch(consumer, current_batch, last_triggered_counts)
         consumer.close()
         print("Consumer cleaned up safely.")
 

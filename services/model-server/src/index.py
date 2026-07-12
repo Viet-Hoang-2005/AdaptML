@@ -24,8 +24,42 @@ JWKS_URL = os.environ.get("JWKS_URL", "http://control-plane:8000/api/auth/.well-
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "redpanda:9092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/1")
+
+
+def create_redis_client():
+    try:
+        client = redis.from_url(REDIS_URL)
+        client.ping()
+        print(f"Redis Connected: {REDIS_URL}")
+        return client
+    except Exception as exc:
+        print(f"Failed to connect to Redis: {exc}")
+        return None
+
+
+def create_kafka_producer():
+    try:
+        producer = Producer({
+            "bootstrap.servers": REDPANDA_BROKERS,
+            "client.id": "central-model-server",
+            "linger.ms": 5,
+        })
+        print(f"Redpanda Connected: {REDPANDA_BROKERS} - Topic: {KAFKA_TOPIC}")
+        return producer
+    except Exception as exc:
+        print(f"Failed to setup Redpanda producer: {exc}")
+        return None
+
+
+redis_client = None
+kafka_producer = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global redis_client, kafka_producer
+    redis_client = create_redis_client()
+    kafka_producer = create_kafka_producer()
     yield
     if kafka_producer:
         kafka_producer.flush(timeout=5.0)
@@ -58,25 +92,6 @@ paas_latency_histogram = Histogram(
 )
 
 Instrumentator().instrument(app).expose(app)
-
-try:
-    redis_client = redis.from_url(REDIS_URL)
-    redis_client.ping()
-    print(f"Redis Connected: {REDIS_URL}")
-except Exception as exc:
-    print(f"Failed to connect to Redis: {exc}")
-    redis_client = None
-
-try:
-    kafka_producer = Producer({
-        "bootstrap.servers": REDPANDA_BROKERS,
-        "client.id": "central-model-server",
-        "linger.ms": 5,
-    })
-    print(f"Redpanda Connected: {REDPANDA_BROKERS} - Topic: {KAFKA_TOPIC}")
-except Exception as exc:
-    print(f"Failed to setup Redpanda producer: {exc}")
-    kafka_producer = None
 
 JWKS_CACHE: Dict[str, Any] = {}
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)

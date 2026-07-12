@@ -15,7 +15,7 @@ import requests
 import mlflow.pyfunc
 
 from pathlib import Path
-from core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
+from src.core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
 
 SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
 PREFERRED_MODEL_FILENAMES = ("model.pkl", "model.joblib", "model.xgb")
@@ -66,7 +66,7 @@ def safe_extract_tar(archive_path: Path, destination: Path) -> None:
     with tarfile.open(archive_path, "r:gz") as archive:
         for member in archive.getmembers():
             resolved = (destination / member.name).resolve()
-            if not str(resolved).startswith(str(destination_root)):
+            if not resolved.is_relative_to(destination_root):
                 raise ValueError("Training artifact contains an unsafe path.")
             if member.islnk() or member.issym():
                 raise ValueError("Training artifact contains links, which are not supported.")
@@ -78,7 +78,7 @@ def safe_extract_zip(archive_path: Path, destination: Path) -> None:
     with zipfile.ZipFile(archive_path, "r") as archive:
         for member in archive.infolist():
             resolved = (destination / member.filename).resolve()
-            if not str(resolved).startswith(str(destination_root)):
+            if not resolved.is_relative_to(destination_root):
                 raise ValueError("Model package contains an unsafe path.")
         archive.extractall(destination)
 

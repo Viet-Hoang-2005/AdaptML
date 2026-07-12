@@ -21,8 +21,3 @@ celery[redis]==5.4.0
 gunicorn==22.0.0
 prometheus-client==0.20.0
 google-auth==2.29.0
-pytest==8.2.2
-pytest-django==4.8.0
-ruff==0.5.1
-mypy==1.10.1
-django-stubs==5.0.2

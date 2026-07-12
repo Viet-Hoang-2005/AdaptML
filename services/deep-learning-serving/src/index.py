@@ -8,6 +8,17 @@ from src.loading import download_model_artifact, resolve_mlflow_model_dir
 
 logger = logging.getLogger("bentoml.paas_service")
 
+
+def load_runtime_model(model_id: str, model_uri: str | None):
+    model_dir = "/app/model_artifact"
+    if model_uri:
+        source_dir = download_model_artifact(model_id, model_uri)
+        model_dir = str(resolve_mlflow_model_dir(source_dir))
+    elif not os.path.exists(model_dir):
+        model_dir = "."
+    logger.info("Loading Deep Learning model from %s...", model_dir)
+    return mlflow.pyfunc.load_model(model_dir)
+
 @bentoml.service(
     resources={"cpu": "2"},
     traffic={"timeout": 60},
@@ -16,21 +27,12 @@ class DeepLearningModelService:
     def __init__(self):
         model_id_str = os.environ.get("MODEL_ID")
         model_uri = os.environ.get("MODEL_URI")
-        model_dir = "/app/model_artifact"
-        
+        model_id = model_id_str if model_id_str and model_id_str != "unknown" else "unknown"
         try:
-            if model_uri:
-                model_id = model_id_str if model_id_str and model_id_str != "unknown" else "unknown"
-                source_dir = download_model_artifact(model_id, model_uri)
-                model_dir = str(resolve_mlflow_model_dir(source_dir))
-            elif not os.path.exists(model_dir):
-                model_dir = "."
-            
-            logger.info(f"Loading Deep Learning model from {model_dir}...")
-            self.model = mlflow.pyfunc.load_model(model_dir)
+            self.model = load_runtime_model(model_id, model_uri)
             logger.info("Model loaded successfully via mlflow.pyfunc!")
         except Exception as exc:
-            logger.error(f"Error loading DL model from {model_dir or model_uri}: {exc}")
+            logger.error("Error loading DL model for %s: %s", model_id, exc)
             self.model = None
 
     @bentoml.api(route="/predict", batchable=False)

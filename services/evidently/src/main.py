@@ -5,6 +5,8 @@ import json
 import mlflow
 import zipfile
 import shutil
+import tempfile
+from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
@@ -46,14 +48,13 @@ SUMMARY_JSON_UPLOAD_URL = os.getenv("SUMMARY_JSON_UPLOAD_URL", "")
 DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD", "0.6"))
 MAX_SAMPLES = int(os.getenv("MAX_SAMPLES", "100000"))
 MIN_SAMPLES = int(os.getenv("MIN_SAMPLES", "100"))
+TEMP_ROOT = Path(os.getenv("MLOPS_TEMP_DIR", tempfile.gettempdir()))
 
-if not 0 <= DRIFT_THRESHOLD <= 1:
-    print("CRITICAL ERROR: DRIFT_THRESHOLD must be between 0 and 1.")
-    sys.exit(1)
-
-if not TENANT_ID or not MODEL_ID:
-    print("CRITICAL ERROR: TENANT_ID and MODEL_ID must be set!")
-    sys.exit(1)
+def validate_runtime_config():
+    if not 0 <= DRIFT_THRESHOLD <= 1:
+        raise ValueError("DRIFT_THRESHOLD must be between 0 and 1.")
+    if not TENANT_ID or not MODEL_ID:
+        raise ValueError("TENANT_ID and MODEL_ID must be set.")
 
 # 1. Tải Reference Data
 def load_reference_data():
@@ -62,10 +63,10 @@ def load_reference_data():
 
     ref_path = urlparse(REFERENCE_DATA_URL).path.lower()
     is_csv = ref_path.endswith(".csv")
-    local_filename = f"/tmp/reference_{MODEL_ID}.csv" if is_csv else f"/tmp/reference_{MODEL_ID}.parquet"
+    local_filename = str(TEMP_ROOT / (f"reference_{MODEL_ID}.csv" if is_csv else f"reference_{MODEL_ID}.parquet"))
 
     if REFERENCE_DATA_URL.startswith("http"):
-        print(f"[2/4] Downloading reference data from presigned URL...")
+        print("[2/4] Downloading reference data from presigned URL...")
         response = requests.get(REFERENCE_DATA_URL)
         if response.status_code != 200:
             raise FileNotFoundError(f"Storage returned HTTP {response.status_code}: {response.text[:150]}")
@@ -101,7 +102,7 @@ def load_production_data():
 
     if len(raw_df) < MIN_SAMPLES:
         print(f"Skipping Drift Analysis: Not enough production samples ({len(raw_df)} < {MIN_SAMPLES})")
-        sys.exit(0)
+        return pd.DataFrame()
 
     # Schema Drift Defense: Flatten JSONB
     if "features" in raw_df.columns:
@@ -127,7 +128,7 @@ def resolve_model_dir(model_uri):
                 return root
         return model_uri
 
-    cache_dir = f"/tmp/model_cache_{MODEL_ID}"
+    cache_dir = str(TEMP_ROOT / f"model_cache_{MODEL_ID}")
     os.makedirs(cache_dir, exist_ok=True)
     zip_path = os.path.join(cache_dir, "model.zip")
     extract_dir = os.path.join(cache_dir, "extracted")
@@ -143,14 +144,25 @@ def resolve_model_dir(model_uri):
         return model_uri
 
     if os.path.exists(zip_path) and zipfile.is_zipfile(zip_path):
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(extract_dir)
+        safe_extract_zip(zip_path, extract_dir)
         for root, dirs, files in os.walk(extract_dir):
             if "MLmodel" in files:
                 return root
         return extract_dir
 
     return model_uri
+
+
+def safe_extract_zip(zip_path, destination):
+    destination_path = Path(destination)
+    destination_path.mkdir(parents=True, exist_ok=True)
+    destination_root = destination_path.resolve()
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        for member in archive.infolist():
+            resolved = (destination_path / member.filename).resolve()
+            if not resolved.is_relative_to(destination_root):
+                raise ValueError("Model archive contains an unsafe path.")
+        archive.extractall(destination_path)
 
 # 3. Trích xuất column mapping từ MLFlow
 def get_column_mapping(reference_df, production_df):
@@ -294,7 +306,7 @@ def run_drift_analysis(reference_df, production_df, column_mapping):
 # 6. Lưu báo cáo drift
 def save_drift_report(report, result_dict, summary):
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    report_dir = f"/tmp/drift_reports/{TENANT_ID}/{MODEL_NAME}/{run_id}"
+    report_dir = str(TEMP_ROOT / "drift_reports" / str(TENANT_ID) / str(MODEL_NAME) / run_id)
     os.makedirs(report_dir, exist_ok=True)
 
     html_path = os.path.join(report_dir, "report.html")
@@ -339,7 +351,7 @@ def save_drift_report(report, result_dict, summary):
         "summary_json_s3_uri": SUMMARY_JSON_S3_URI,
         "html_url": HTML_PUBLIC_URL,
     })
-    print(f"Drift report uploaded.")
+    print("Drift report uploaded.")
 
     summary_with_artifacts = {**summary, "report_artifacts": artifacts}
     with open(summary_json_path, "w", encoding="utf-8") as fp:
@@ -392,16 +404,22 @@ def trigger_django_webhook(drift_summary):
         print(f"Failed to send webhook: {e}")
 
 
-if __name__ == "__main__":
+def main():
+    try:
+        validate_runtime_config()
+    except ValueError as exc:
+        print(f"CRITICAL ERROR: {exc}")
+        return 1
+
     try:
         production_df = load_production_data()
     except Exception as e:
         print(f"Failed to load Production Data: {e}")
-        sys.exit(1)
+        return 1
 
     if len(production_df) < MIN_SAMPLES:
         print(f"Only {len(production_df)} production samples available. Skipping drift analysis.")
-        sys.exit(0)
+        return 0
 
     try:
         reference_df = load_reference_data()
@@ -417,6 +435,11 @@ if __name__ == "__main__":
         drift_summary = run_drift_analysis(reference_df, production_df, column_mapping)
     except Exception as e:
         print(f"Drift analysis failed: {e}")
-        sys.exit(1)
+        return 1
 
     trigger_django_webhook(drift_summary)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
