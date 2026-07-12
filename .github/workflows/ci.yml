@@ -163,6 +163,60 @@ jobs:
           cat pylint_report.txt
           score=$(grep -oP 'Your code has been rated at \K[0-9.]+/10' pylint_report.txt || echo "N/A")
           echo "score=$score" >> $GITHUB_OUTPUT
+  
+  frontend-build:
+    name: "Frontend Typecheck and Build"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        working-directory: web
+        run: pnpm run build
+
+  control-plane-quality:
+    name: "Control Plane Tests and Migration Gate"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.control_plane == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: services/control-plane/requirements.txt
+      - name: Install dependencies
+        working-directory: services/control-plane
+        run: pip install -r requirements.txt
+      - name: Ruff
+        working-directory: services/control-plane
+        run: python -m ruff check .
+      - name: Type check
+        working-directory: services/control-plane
+        run: python -m mypy src/apps src/common src/infrastructure
+      - name: Django system check
+        working-directory: services/control-plane
+        run: python manage.py check --settings=config.settings.test
+      - name: Migration drift check
+        working-directory: services/control-plane
+        run: python manage.py makemigrations --check --dry-run --settings=config.settings.test
+      - name: Tests
+        working-directory: services/control-plane
+        run: python -m pytest
 
   lint-infra:
     name: "Infrastructure Validation (Kustomize & Kubeconform)"
@@ -193,7 +247,7 @@ jobs:
 
   build-and-scan:
     name: "Build & Scan (${{ matrix.target.name }})"
-    needs: [detect-changes, lint-frontend, lint-backend, lint-infra, secret-scan]
+    needs: [detect-changes, lint-frontend, lint-backend, control-plane-quality, frontend-build, lint-infra, secret-scan]
     if: always() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.matrix_targets != '[]'
     runs-on: ubuntu-latest
     strategy:
@@ -226,7 +280,7 @@ jobs:
 
   ci-summary:
     name: "CI Pipeline Summary Table"
-    needs: [detect-changes, secret-scan, lint-frontend, lint-backend, lint-infra, build-and-scan]
+    needs: [detect-changes, secret-scan, lint-frontend, lint-backend, control-plane-quality, frontend-build, lint-infra, build-and-scan]
     if: always()
     runs-on: ubuntu-latest
     steps:
