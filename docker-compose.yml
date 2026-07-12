@@ -14,7 +14,6 @@ services:
       - mlops_paas_pgdata:/var/lib/postgresql/data
     networks:
       - mlops_paas_network
-    # Đợi PostgreSQL thực sự sẵn sàng nhận connection trước khi API start
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
       interval: 5s
@@ -22,7 +21,7 @@ services:
       retries: 5
       start_period: 10s
 
-  # 1.1 Init Container để tạo schema riêng cho Control Plane và MLflow
+  # 1.1 Init Container để tạo schema cho Control Plane và MLflow
   schema-init:
     image: postgres:15-alpine
     container_name: mlops_paas_schema_init
@@ -36,6 +35,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    tmpfs:
+      - /var/lib/postgresql/data
     networks:
       - mlops_paas_network
 
@@ -49,6 +50,8 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
     ports:
       - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
     depends_on:
       postgres:
         condition: service_healthy
@@ -134,6 +137,7 @@ services:
     networks:
       - mlops_paas_network
 
+  # 2.1 Celery Worker for Django Control Plane
   control-plane-worker:
     image: mlops-paas-control-plane
     container_name: mlops_paas_control_plane_worker
@@ -207,7 +211,7 @@ services:
       DB_NAME: ${DB_NAME}
       CONTROL_PLANE_DB_SCHEMA: ${DB_SCHEMA:-control_plane}
       REDPANDA_BROKERS: redpanda:9092
-      KAFKA_TOPIC: mlops_paas_production_data
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_data}
       REDIS_URL: redis://redis:6379/1
       JWKS_URL: http://control-plane:8000/api/auth/.well-known/jwks.json
     labels:
@@ -227,7 +231,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 3.1 Base Image Machine Learning Serving Engine
+  # 3.1 Machine Learning Serving Engine (Base Image)
   machine-learning-serving:
     build:
       context: ./services/machine-learning-serving
@@ -239,7 +243,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 3.2 Base Image Deep Learning Serving Engine
+  # 3.2 Deep Learning Serving Engine (Base Image)
   deep-learning-serving:
     build:
       context: ./services/deep-learning-serving
@@ -251,7 +255,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 3.3 Traefik API Gateway cho Model Server
+  # 3.3 Traefik API Gateway for Model Server
   traefik:
     image: traefik:latest
     container_name: mlops_paas_traefik
@@ -269,7 +273,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 4. Internal MLflow Package Builder
+  # 4. Model Package (Image Builder)
   model-packager:
     build:
       context: ./services/model-packager
@@ -297,40 +301,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 6. PaaS Log Consumer (đứng giữa Redpanda và PostgreSQL)
-  consumer:
-    build:
-      context: ./services/consumer
-      dockerfile: Dockerfile
-    image: mlops-paas-consumer
-    container_name: mlops_paas_consumer
-    restart: unless-stopped
-    environment:
-      PYTHONUNBUFFERED: 1
-      DB_HOST_RW: postgres
-      DB_HOST_RO: postgres
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME}
-      REDPANDA_BROKERS: redpanda:9092
-      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_data}
-      EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
-      CONTROL_PLANE_WEBHOOK_SECRET: ${CONTROL_PLANE_WEBHOOK_SECRET:-super-secret-key}
-      GITHUB_REPO: ${GITHUB_REPO}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
-    volumes:
-      - ./services/consumer:/app
-    command: python -m src.main
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redpanda:
-        condition: service_started
-    networks:
-      - mlops_paas_network
-
-  # 7. Redpanda Kafka Broker
+  # 6. Redpanda Kafka Broker
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: mlops_paas_redpanda
@@ -353,7 +324,66 @@ services:
     networks:
       - mlops_paas_network
 
-  # 7.1 Redpanda Console UI
+  # 6.1 Redpanda Init Kafka Topic
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: mlops_paas_redpanda_init
+    restart: "no"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        until rpk topic create "$$KAFKA_TOPIC" \
+          --if-not-exists \
+          --partitions "$$KAFKA_TOPIC_PARTITIONS" \
+          --replicas 1 \
+          -X brokers=redpanda:9092; do
+          echo "Waiting for Redpanda Kafka API to become ready..."
+          sleep 2
+        done
+    environment:
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_data}
+      KAFKA_TOPIC_PARTITIONS: ${KAFKA_TOPIC_PARTITIONS:-3}
+    depends_on:
+      redpanda:
+        condition: service_started
+    networks:
+      - mlops_paas_network
+
+  # 6.2 Kafka Consumer
+  consumer:
+    build:
+      context: ./services/consumer
+      dockerfile: Dockerfile
+    image: mlops-paas-consumer
+    container_name: mlops_paas_consumer
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: 1
+      DB_HOST_RW: postgres
+      DB_HOST_RO: postgres
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      REDPANDA_BROKERS: redpanda:9092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_data}
+      KAFKA_TOPIC_RETRY_SECONDS: ${KAFKA_TOPIC_RETRY_SECONDS:-5}
+      EVIDENTLY_TRIGGER_THRESHOLD: ${EVIDENTLY_TRIGGER_THRESHOLD:-100}
+      CONTROL_PLANE_WEBHOOK_SECRET: ${CONTROL_PLANE_WEBHOOK_SECRET:-super-secret-key}
+      GITHUB_REPO: ${GITHUB_REPO}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+    volumes:
+      - ./services/consumer:/app
+    command: python -m src.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    networks:
+      - mlops_paas_network
+
+  # 6.3 Redpanda Console UI
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:latest
     container_name: mlops_paas_redpanda_console
@@ -366,7 +396,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 8. Redis (Cache)
+  # 7. Redis
   redis:
     image: redis:7-alpine
     container_name: mlops_paas_redis
@@ -376,7 +406,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 9. MLflow Tracking Server
+  # 8. MLflow Tracking Server
   mlflow:
     build:
       context: ./services/mlflow
@@ -388,7 +418,9 @@ services:
       mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT:-5432}/${DB_NAME}?options=-csearch_path%3Dmlflow
+      --backend-store-uri postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT:-5432}/${DB_NAME}?options=-c%20search_path%3Dmlflow
+      --serve-artifacts
+      --artifacts-destination s3://${AWS_BUCKET_NAME:-mlops-paas-artifacts}
     ports:
       - "5003:5000"
     environment:
@@ -396,6 +428,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
       DB_PORT: ${DB_PORT:-5432}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-mlops-paas-artifacts}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-1}
@@ -405,8 +438,6 @@ services:
         condition: service_healthy
       schema-init:
         condition: service_completed_successfully
-    volumes:
-      - mlflow-data:/mlflow
     networks:
       - mlops_paas_network
 
@@ -422,7 +453,5 @@ volumes:
     name: ${POSTGRES_VOLUME_NAME:-mlops_paas_pgdata}
   redpanda_data:
     name: mlops_paas_redpanda_data
-  mlflow-data:
-    name: mlops_paas_mlflow_data
-  pip-cache:
-    name: mlops_paas_pip_cache
+  pgadmin-data:
+    name: mlops_paas_pgadmin_data
