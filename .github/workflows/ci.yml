@@ -163,7 +163,6 @@ jobs:
           cat pylint_report.txt
           score=$(grep -oP 'Your code has been rated at \K[0-9.]+/10' pylint_report.txt || echo "N/A")
           echo "score=$score" >> $GITHUB_OUTPUT
-  
   frontend-build:
     name: "Frontend Typecheck and Build"
     needs: detect-changes
