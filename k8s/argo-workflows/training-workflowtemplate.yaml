@@ -292,19 +292,17 @@ spec:
     - name: report-status
       container:
         image: curlimages/curl:latest
-        command: [sh, -c]
         args:
-          - |
-            STATUS="completed"
-            if [ "{{workflow.status}}" != "Succeeded" ]; then
-              STATUS="failed"
-            fi
-            MODEL_ARTIFACT_URI="{{workflow.parameters.s3_output_uri}}"
-            OUTPUT_S3_URI="${MODEL_ARTIFACT_URI%/model.tar.gz}/"
-            curl -X POST -H "Content-Type: application/json" \
-                 -H "X-Training-Webhook-Secret: ${CONTROL_PLANE_WEBHOOK_SECRET}" \
-                 -d "{\"status\": \"${STATUS}\", \"workflow_status\": \"{{workflow.status}}\", \"model_artifact_uri\": \"${MODEL_ARTIFACT_URI}\", \"output_s3_uri\": \"${OUTPUT_S3_URI}\"}" \
-                 "{{workflow.parameters.control_plane_webhook_url}}"
+          - -sS
+          - -X
+          - POST
+          - "{{workflow.parameters.control_plane_webhook_url}}"
+          - -H
+          - "Content-Type: application/json"
+          - -H
+          - "X-Control-Plane-Secret: $(CONTROL_PLANE_WEBHOOK_SECRET)"
+          - --data
+          - '{"status":"{{workflow.status}}","workflow_status":"{{workflow.status}}","output_uri":"{{workflow.parameters.s3_output_uri}}"}'
         env:
           - name: CONTROL_PLANE_WEBHOOK_SECRET
             valueFrom:

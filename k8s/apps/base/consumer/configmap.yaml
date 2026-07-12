@@ -6,7 +6,7 @@ metadata:
     app: mlops-paas-consumer
 data:
   KAFKA_TOPIC: "mlops_paas_production_data"
-  CONTROL_PLANE_WEBHOOK_URL: "http://mlops-paas-control-plane:8000/api/drift/internal/trigger-drift-job"
+  CONTROL_PLANE_WEBHOOK_URL: ""
   REDPANDA_BROKERS: "redpanda-service:9092"
   EVIDENTLY_TRIGGER_THRESHOLD: "100"
   GITHUB_REPO: "Viet-Hoang-2005/MLOps-paas-system"

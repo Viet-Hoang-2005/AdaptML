@@ -44,9 +44,9 @@ spec:
                   name: mlops-paas-model-packager-template
                 arguments:
                   parameters:
-                    - name: model_id
+                    - name: build_id
                       value: ""
-                    - name: model_hashid
+                    - name: version_id
                       value: ""
                     - name: tenant_id
                       value: ""
@@ -54,28 +54,22 @@ spec:
                       value: ""
                     - name: requirements_text
                       value: ""
-                    - name: source_key
+                    - name: source_artifact_name
                       value: ""
-                    - name: source_type
+                    - name: source_download_url
                       value: ""
-                    - name: training_artifact_uri
-                      value: ""
-                    - name: output_key
-                      value: ""
-                    - name: task_type
-                      value: ""
-                    - name: label_mapping_key
+                    - name: output_upload_url
                       value: ""
                     - name: control_plane_webhook_url
                       value: ""
           parameters:
             - src:
                 dependencyName: build-dep
-                dataKey: body.model_id
+                dataKey: body.build_id
               dest: spec.arguments.parameters.0.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.model_hashid
+                dataKey: body.version_id
               dest: spec.arguments.parameters.1.value
             - src:
                 dependencyName: build-dep
@@ -91,32 +85,20 @@ spec:
               dest: spec.arguments.parameters.4.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_key
+                dataKey: body.source_artifact_name
               dest: spec.arguments.parameters.5.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_type
+                dataKey: body.source_download_url
               dest: spec.arguments.parameters.6.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.training_artifact_uri
+                dataKey: body.output_upload_url
               dest: spec.arguments.parameters.7.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.output_key
-              dest: spec.arguments.parameters.8.value
-            - src:
-                dependencyName: build-dep
-                dataKey: body.task_type
-              dest: spec.arguments.parameters.9.value
-            - src:
-                dependencyName: build-dep
-                dataKey: body.label_mapping_key
-              dest: spec.arguments.parameters.10.value
-            - src:
-                dependencyName: build-dep
                 dataKey: body.control_plane_webhook_url
-              dest: spec.arguments.parameters.11.value
+              dest: spec.arguments.parameters.8.value
     - template:
         name: deploy-workflow-trigger
         conditions: "deploy-dep"
@@ -138,13 +120,17 @@ spec:
                       value: ""
                     - name: model_id
                       value: ""
-                    - name: hashid
-                      value: ""
                     - name: version
                       value: ""
                     - name: image_name
                       value: ""
                     - name: container_name
+                      value: ""
+                    - name: model_type
+                      value: "ml"
+                    - name: target_port
+                      value: "5001"
+                    - name: model_uri
                       value: ""
           parameters:
             - src:
@@ -157,20 +143,28 @@ spec:
               dest: spec.arguments.parameters.1.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.hashid
+                dataKey: body.version
               dest: spec.arguments.parameters.2.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.version
+                dataKey: body.image_name
               dest: spec.arguments.parameters.3.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.image_name
+                dataKey: body.container_name
               dest: spec.arguments.parameters.4.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.container_name
+                dataKey: body.model_type
               dest: spec.arguments.parameters.5.value
+            - src:
+                dependencyName: deploy-dep
+                dataKey: body.target_port
+              dest: spec.arguments.parameters.6.value
+            - src:
+                dependencyName: deploy-dep
+                dataKey: body.model_uri
+              dest: spec.arguments.parameters.7.value
 
     - template:
         name: drift-workflow-trigger

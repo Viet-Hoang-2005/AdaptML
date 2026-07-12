@@ -8,13 +8,10 @@ spec:
   entrypoint: deploy-model
   templates:
     - name: deploy-model
-      nodeSelector:
-        workload-type: worker
       inputs:
         parameters:
           - name: tenant_id
           - name: model_id
-          - name: hashid
           - name: version
           - name: image_name
           - name: container_name
@@ -24,14 +21,39 @@ spec:
             default: "5001"
           - name: model_uri
             default: ""
-      script:
-        image: bitnami/kubectl:latest
-        command: [bash]
-        source: |
-          set -e
-          kubectl delete middleware rewrite-{{inputs.parameters.container_name}} --ignore-not-found
-          kubectl delete ingressroute ingressroute-{{inputs.parameters.container_name}} --ignore-not-found
-          cat <<'EOF' | kubectl apply -f -
+      steps:
+        - - name: deployment
+            template: apply-deployment
+            arguments:
+              parameters:
+                - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
+                - {name: model_id, value: "{{inputs.parameters.model_id}}"}
+                - {name: version, value: "{{inputs.parameters.version}}"}
+                - {name: image_name, value: "{{inputs.parameters.image_name}}"}
+                - {name: container_name, value: "{{inputs.parameters.container_name}}"}
+                - {name: target_port, value: "{{inputs.parameters.target_port}}"}
+                - {name: model_uri, value: "{{inputs.parameters.model_uri}}"}
+        - - name: service
+            template: apply-service
+            arguments:
+              parameters:
+                - {name: container_name, value: "{{inputs.parameters.container_name}}"}
+                - {name: model_type, value: "{{inputs.parameters.model_type}}"}
+                - {name: target_port, value: "{{inputs.parameters.target_port}}"}
+
+    - name: apply-deployment
+      inputs:
+        parameters:
+          - name: tenant_id
+          - name: model_id
+          - name: version
+          - name: image_name
+          - name: container_name
+          - name: target_port
+          - name: model_uri
+      resource:
+        action: apply
+        manifest: |
           apiVersion: apps/v1
           kind: Deployment
           metadata:
@@ -65,36 +87,29 @@ spec:
                       - configMapRef:
                           name: mlops-paas-control-plane-config
                     env:
-                      - name: TENANT_ID
-                        value: "{{inputs.parameters.tenant_id}}"
-                      - name: MODEL_ID
-                        value: "{{inputs.parameters.model_id}}"
-                      - name: MODEL_HASHID
-                        value: "{{inputs.parameters.hashid}}"
-                      - name: MODEL_VERSION
-                        value: "{{inputs.parameters.version}}"
-                      - name: MODEL_URI
-                        value: "{{inputs.parameters.model_uri}}"
-                      - name: PYTHONPATH
-                        value: "/app/libs:/app"
+                      - {name: MODEL_ID, value: "{{inputs.parameters.model_id}}"}
+                      - {name: MODEL_VERSION, value: "{{inputs.parameters.version}}"}
+                      - {name: MODEL_URI, value: "{{inputs.parameters.model_uri}}"}
+                      - {name: PYTHONPATH, value: "/app/libs:/app"}
                     volumeMounts:
-                      - name: dynamic-libs
-                        mountPath: /app/libs
-                      - name: pip-cache
-                        mountPath: /root/.cache/pip
+                      - {name: dynamic-libs, mountPath: /app/libs}
+                      - {name: pip-cache, mountPath: /root/.cache/pip}
                     resources:
-                      requests:
-                        cpu: 250m
-                        memory: 512Mi
-                      limits:
-                        cpu: 1000m
-                        memory: 1Gi
+                      requests: {cpu: 250m, memory: 512Mi}
+                      limits: {cpu: 1000m, memory: 1Gi}
                 volumes:
-                  - name: dynamic-libs
-                    emptyDir: {}
-                  - name: pip-cache
-                    emptyDir: {}
-          ---
+                  - {name: dynamic-libs, emptyDir: {}}
+                  - {name: pip-cache, emptyDir: {}}
+
+    - name: apply-service
+      inputs:
+        parameters:
+          - name: container_name
+          - name: model_type
+          - name: target_port
+      resource:
+        action: apply
+        manifest: |
           apiVersion: v1
           kind: Service
           metadata:
@@ -111,5 +126,3 @@ spec:
                 protocol: TCP
                 port: {{inputs.parameters.target_port}}
                 targetPort: {{inputs.parameters.target_port}}
-          EOF
-          echo "Worker deployment successfully created: {{inputs.parameters.container_name}} using image {{inputs.parameters.image_name}}"
