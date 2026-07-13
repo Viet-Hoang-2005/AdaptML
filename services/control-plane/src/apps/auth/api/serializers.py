@@ -66,6 +66,7 @@ class UserSerializer(serializers.ModelSerializer):
             "avatar",
             "field_of_work",
             "country",
+            "auth_provider",
             "date_joined",
         )
         read_only_fields = ("email", "tenant_id", "date_joined")
