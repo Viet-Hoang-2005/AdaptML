@@ -226,7 +226,7 @@ jobs:
           
           # 2. Update Argo Workflow Templates (packager and evidently)
           if [ "${{ needs.detect-changes.outputs.packager }}" == "true" ]; then
-            yq e -i '(.spec.templates[] | select(.name == "prepare-package-step" or .name == "notify-success-step") | .container.image) = "'$REG'/mlops-paas-model-packager:'$SHA'"' k8s/argo-workflows/build-workflowtemplate.yaml
+            yq e -i '(.spec.templates[] | select(.name == "prepare-package" or .name == "notify-success") | .container.image) = "'$REG'/mlops-paas-model-packager:'$SHA'"' k8s/argo-workflows/build-workflowtemplate.yaml
           fi
           
           if [ "${{ needs.detect-changes.outputs.evidently }}" == "true" ]; then

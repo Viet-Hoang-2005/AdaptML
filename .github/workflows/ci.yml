@@ -376,6 +376,7 @@ jobs:
         with:
           context: ${{ matrix.target.context }}
           push: false
+          load: true
           tags: ${{ matrix.target.image }}:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
