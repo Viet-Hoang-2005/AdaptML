@@ -15,10 +15,10 @@ legacy aliases.
 | Versions | `/api/registry/models/{project_uuid}/versions/`, `/api/registry/versions/{version_uuid}/`, `/{version_uuid}/smoke-test/` |
 | Aliases | `/api/registry/models/{project_uuid}/aliases/`, `/api/registry/models/{project_uuid}/aliases/{alias}/predict/` |
 | Training | `/api/training-jobs/`, `/{job_uuid}/`, `/{job_uuid}/submit/`, `/{job_uuid}/cancel/`, `/{job_uuid}/events/`, `/{job_uuid}/download/` |
-| Builds | `/api/builds/`, `/api/builds/{build_uuid}/`, `/api/builds/{build_uuid}/cancel/` |
-| Deployments | `/api/deployments/`, `/{deployment_uuid}/`, `/{deployment_uuid}/stop/` |
+| Builds | `/api/builds/`, `/api/builds/{build_uuid}/`, `/api/builds/{build_uuid}/logs/?offset={n}`, `/api/builds/{build_uuid}/cancel/` |
+| Deployments | `/api/deployments/`, `/{deployment_uuid}/`, `/{deployment_uuid}/logs/?offset={n}`, `/{deployment_uuid}/stop/` |
 | Endpoints | `/api/endpoints/`, `/api/endpoints/{endpoint_uuid}/logs/` |
-| Drift | `/api/drift-monitors/`, `/{monitor_uuid}/`, `/{monitor_uuid}/runs/` |
+| Drift | `/api/drift-monitors/`, `/{monitor_uuid}/`, `/{monitor_uuid}/runs/`, `/api/drift-monitors/runs/{run_uuid}/logs/?offset={n}` |
 | Observability | `/api/observability/models/{project_uuid}/` |
 | Operations | `/health/live`, `/health/ready`, `/health/metrics` |
 

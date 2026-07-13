@@ -1,9 +1,11 @@
 from django.conf import settings
 from rest_framework import generics, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.drift.selectors import monitor_for_user, monitors_for_user
+from apps.drift.selectors import monitor_for_user, monitors_for_user, run_for_user
+from apps.drift.services.logs import drift_run_logs
 from apps.drift.services.runs import request_run
 
 from .serializers import DriftMonitorSerializer, DriftRunSerializer
@@ -33,3 +35,25 @@ class DriftRunEndpoint(APIView):
         monitor = monitor_for_user(request.user, monitor_id)
         run = request_run(monitor, request.headers.get("Idempotency-Key"))
         return Response(DriftRunSerializer(run).data, status=status.HTTP_202_ACCEPTED)
+
+
+class DriftRunLogsEndpoint(APIView):
+    def get(self, request, run_id):
+        try:
+            offset = int(request.query_params.get("offset", "0"))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({"offset": "Must be a non-negative integer."}) from exc
+        if offset < 0:
+            raise ValidationError({"offset": "Must be a non-negative integer."})
+
+        run = run_for_user(request.user, run_id)
+        logs, next_offset = drift_run_logs(run, offset)
+        return Response(
+            {
+                "run_id": str(run.public_id),
+                "logs": logs,
+                "next_offset": next_offset,
+                "status": run.status,
+                "error_message": run.error_message,
+            }
+        )

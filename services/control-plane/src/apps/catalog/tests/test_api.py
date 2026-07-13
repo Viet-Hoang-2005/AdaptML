@@ -21,3 +21,21 @@ def test_project_api_uses_uuid_and_tenant_scope():
     response = client.get(f"/api/models/{project.public_id}/")
     assert response.status_code == 200
     assert uuid.UUID(response.data["id"]) == project.public_id
+
+
+@pytest.mark.django_db
+def test_duplicate_project_name_returns_conflict_with_clear_message():
+    owner = get_user_model().objects.create_user("duplicate-owner@example.com", "password123")
+    ModelProject.objects.create(owner=owner, name="NIDS")
+    client = APIClient()
+    client.force_authenticate(owner)
+
+    response = client.post("/api/models/", {"name": "NIDS", "access_mode": "public"}, format="json")
+
+    assert response.status_code == 409
+    assert response.data == {
+        "error": {
+            "code": "conflict",
+            "detail": "A model project named NIDS already exists.",
+        }
+    }

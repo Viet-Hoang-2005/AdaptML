@@ -137,9 +137,14 @@ class DockerTrainingBackend:
 
 
 class DockerDeploymentBackend:
-    def __init__(self, docker_client=None, http=None):
+    def __init__(self, docker_client=None, http=None, log_sink=None):
         self.docker = docker_client or DockerClient()
         self.http = http or HttpClient(timeout=(3.05, 10))
+        self.log_sink = log_sink
+
+    def _log(self, message):
+        if self.log_sink:
+            self.log_sink(message)
 
     def deploy(self, deployment):
         from apps.deployment.models import Endpoint
@@ -154,6 +159,7 @@ class DockerDeploymentBackend:
         public_path = f"/{project.owner.tenant_id}/models/{project.public_id}/{deployment.version.public_id}"
         public_url = f"{settings.MODEL_SERVER_PUBLIC_URL}{public_path}"
         labels = {"traefik.enable": "false"}
+        self._log(f"Creating runtime container {container_name}.")
         container = self.docker.run(
             image=image,
             name=container_name,
@@ -173,14 +179,17 @@ class DockerDeploymentBackend:
                 "health_status": "unknown",
             },
         )
+        self._log("Runtime container created; waiting for model worker health endpoint.")
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
             healthy, _ = self.health(deployment)
             if healthy:
+                self._log("Model worker health endpoint responded successfully.")
                 endpoint.health_status = "healthy"
                 endpoint.last_checked_at = timezone.now()
                 endpoint.save(update_fields=["health_status", "last_checked_at", "updated_at"])
                 return endpoint
+            self._log("Model worker is not healthy yet; checking again in 5 seconds.")
             time.sleep(5)
         raise RuntimeError("Endpoint did not become healthy before timeout.")
 
@@ -243,6 +252,8 @@ class DockerDriftBackend:
                 f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/webhooks/" f"drift-runs/{drift_run.public_id}/"
             ),
             "CONTROL_PLANE_WEBHOOK_SECRET": settings.CONTROL_PLANE_WEBHOOK_SECRET,
+            "DRIFT_RUN_ID": str(drift_run.public_id),
+            "REDIS_URL": settings.REDIS_URL,
             "DB_HOST_RO": os.environ.get("DB_HOST_RO", "postgres"),
             "DB_USER": os.environ.get("DB_USER", "postgres"),
             "DB_PASSWORD": os.environ.get("DB_PASSWORD", ""),

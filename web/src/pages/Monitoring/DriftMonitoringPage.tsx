@@ -10,6 +10,7 @@ import { PageContent } from '../../components/layout/PageContent';
 import { StepTitle } from '../../components/ui/StepTitle';
 import { SummaryCard } from '../../components/ui/SummaryCard';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { TerminalLogViewer } from '../../components/ui/TerminalLogViewer';
 import { 
   useDriftMonitoringJobs, 
   useDriftMonitoringResults, 
@@ -25,11 +26,18 @@ export default function DriftMonitoringPage() {
   const { data: jobs, isLoading: isLoadingJobs } = useDriftMonitoringJobs(modelId);
   const activeJob = jobs?.find(j => j.status === 'active');
   
-  const { data: results, isLoading: isLoadingResults } = useDriftMonitoringResults(activeJob?.id);
+  const { data: results, isLoading: isLoadingResults, refetch: refetchResults } = useDriftMonitoringResults(activeJob?.id);
   const { mutate: deleteJob, isPending: isDeleting } = useDeleteDriftMonitoringJob();
-  const { mutate: runJob, isPending: isRunning } = useRunDriftMonitoringJob();
+  const { mutateAsync: runJob, isPending: isRunning } = useRunDriftMonitoringJob();
   
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+
+  const handleRunNow = async () => {
+    if (!modelId || !activeJob) return;
+    const run = await runJob({ id: activeJob.id, model_id: modelId });
+    setActiveRunId(run.id);
+  };
 
   const handleViewReport = (reportUrl: string) => {
     navigate(`/dashboard/drift-monitoring/${modelId}/report`, { 
@@ -127,7 +135,7 @@ export default function DriftMonitoringPage() {
               
               <Button 
                 size="md"
-                onClick={() => runJob({ id: activeJob.id, model_id: modelId! })}
+                onClick={handleRunNow}
                 disabled={isRunning}
                 className="flex items-center ml-2 gap-2"
               >
@@ -154,6 +162,15 @@ export default function DriftMonitoringPage() {
         </div>
 
         <div className="border-t border-gray-200 pt-6 space-y-4">
+          {activeRunId && (
+            <TerminalLogViewer
+              key={activeRunId}
+              modelId={modelId}
+              driftRunId={activeRunId}
+              title="Evidently Drift Run Console"
+              onCompleted={() => { void refetchResults(); }}
+            />
+          )}
           <StepTitle title="Monitoring History" />
           <Table 
             dataSource={results} 

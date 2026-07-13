@@ -46,7 +46,9 @@ export interface ModelProject {
   package_manifest?: Record<string, unknown>;
   package_preview_tree?: string[];
   build_status?: ModelBuildStatus;
+  build_id?: string;
   build_error?: string;
+  deployment_id?: string;
   metrics_summary?: Record<string, unknown>;
   params_summary?: Record<string, unknown>;
   model_insights_summary?: RegistryModelInsightsSummary;

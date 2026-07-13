@@ -1,4 +1,5 @@
 import json
+import logging
 import zipfile
 import pandas as pd
 import pytest
@@ -32,6 +33,33 @@ def test_validate_runtime_config(monkeypatch):
     monkeypatch.setattr(main, "MODEL_ID", None)
     with pytest.raises(ValueError, match="TENANT_ID and MODEL_ID"):
         main.validate_runtime_config()
+
+
+def test_redis_log_handler_writes_run_scoped_stream(monkeypatch):
+    class FakeRedis:
+        def __init__(self):
+            self.calls = []
+
+        def delete(self, key):
+            self.calls.append(("delete", key))
+
+        def rpush(self, key, value):
+            self.calls.append(("rpush", key, value))
+
+        def expire(self, key, ttl):
+            self.calls.append(("expire", key, ttl))
+
+    fake = FakeRedis()
+    monkeypatch.setattr(main.redis, "from_url", lambda _url: fake)
+    handler = main.RedisLogHandler("redis://unit", "run-uuid")
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    handler.emit(logging.LogRecord("drift", logging.INFO, __file__, 1, "running report", (), None))
+
+    assert fake.calls == [
+        ("delete", "drift_logs:run-uuid"),
+        ("rpush", "drift_logs:run-uuid", "running report"),
+        ("expire", "drift_logs:run-uuid", 3600),
+    ]
 
 
 def test_load_reference_local_csv(monkeypatch, tmp_path):

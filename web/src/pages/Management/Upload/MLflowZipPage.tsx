@@ -4,11 +4,11 @@ import { Input } from '../../../components/ui/Input';
 import { useState } from 'react';
 import type { ModelProjectFormValues } from '../../../types/models';
 import { useModelProjectMutations } from '../../../hooks/useModelProjects';
-import { deployModelProject, deleteModelProject, cancelBuildAPI, getApiErrorMessage, checkModelEndpointHealth } from '../../../lib/api';
+import { deployModelProject, deleteModelProject, cancelBuildAPI, triggerModelProjectBuild } from '../../../lib/api';
+import { getApiErrorMessage } from '../../../lib/apiError';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryKeys';
 import { toast } from '../../../lib/toast';
-import { useNavigate } from 'react-router-dom';
 import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
 import { StepTitle } from '../../../components/ui/StepTitle';
 import { AccessModePicker } from '../../../components/ui/Picker';
@@ -27,16 +27,24 @@ export default function MLflowZipPage({
   onModelCreated: (id: string | null) => void;
 }) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { createModelProject } = useModelProjectMutations();
   const [createdModelId, setCreatedModelId] = useState<string | null>(null);
+  const [createdBuildId, setCreatedBuildId] = useState<string | null>(null);
+  const [deploymentId, setDeploymentId] = useState<string | null>(null);
   const [isBuildSuccess, setIsBuildSuccess] = useState(false);
 
   const submitAdvanced = async () => {
     onSubmitting(true);
     try {
+      if (createdModelId) {
+        const build = await triggerModelProjectBuild(createdModelId);
+        setCreatedBuildId(build.build_id || null);
+        return;
+      }
       const model = await createModelProject(form);
+      const build = await triggerModelProjectBuild(model.id);
       setCreatedModelId(model.id);
+      setCreatedBuildId(build.build_id || null);
       onModelCreated(model.id);
     } catch (e) {
       const msg = getApiErrorMessage(e, "Failed to create model");
@@ -68,6 +76,8 @@ export default function MLflowZipPage({
         onSubmitting(false);
       }
       setCreatedModelId(null);
+      setCreatedBuildId(null);
+      setDeploymentId(null);
       onModelCreated(null);
     }
     setField('name', '');
@@ -83,33 +93,9 @@ export default function MLflowZipPage({
     if (!createdModelId) return;
     onSubmitting(true);
     try {
-      await deployModelProject(createdModelId);
-      
-      let isDeployed = false;
-      let attempts = 0;
-      const maxAttempts = 30; // 60 seconds timeout
-      
-      while (!isDeployed && attempts < maxAttempts) {
-        attempts++;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        try {
-          const status = await checkModelEndpointHealth(createdModelId);
-          if (status.status === 'deployed') {
-            isDeployed = true;
-          }
-        } catch (err) {
-          toast.error(getApiErrorMessage(err, "Endpoint is not healthy yet."));
-        }
-      }
-
-      if (isDeployed) {
-        toast.success("Model deployed successfully!");
-      } else {
-        toast.error("Deployment is taking longer than expected. Please check model status later.");
-      }
-
-      await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
-      navigate(`/dashboard/api-management`);
+      const model = await deployModelProject(createdModelId);
+      setDeploymentId(model.deployment_id || null);
+      onSubmitting(false);
     } catch (e) {
       const msg = getApiErrorMessage(e, "Deployment failed.");
       toast.error(msg);
@@ -190,8 +176,9 @@ export default function MLflowZipPage({
 
         <p className="mt-6 text-sm font-semibold text-gray-900">MLflow Package Build</p>
         <TerminalLogViewer 
-          key={createdModelId || 'idle'}
+          key={createdBuildId || 'idle'}
           modelId={createdModelId}
+          buildId={createdBuildId}
           onRebuild={submitAdvanced}
           onCancel={cancelBuild}
           buildDisabled={!form.artifact || !form.name.trim()}
@@ -200,6 +187,15 @@ export default function MLflowZipPage({
             toast.success("Build successful! You can now deploy.");
           }}
         />
+        {deploymentId && (
+          <TerminalLogViewer
+            key={deploymentId}
+            modelId={createdModelId}
+            deploymentId={deploymentId}
+            title="Deployment Console"
+            onCompleted={() => { void queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects }); }}
+          />
+        )}
       </div>
 
       <div className="flex items-center gap-4 border-t border-gray-200 pt-6">
@@ -218,10 +214,10 @@ export default function MLflowZipPage({
           variant="primary"
           size="md"
           icon={<Rocket className="h-4 w-4" />}
-          disabled={!isBuildSuccess}
+          disabled={!isBuildSuccess || Boolean(deploymentId)}
           onClick={handleDeploy}
         >
-          Deploy
+          {deploymentId ? 'Deployment running' : 'Deploy'}
         </Button>
       </div>
     </div>

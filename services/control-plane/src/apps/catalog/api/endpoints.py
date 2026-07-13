@@ -1,3 +1,5 @@
+from common.api.exceptions import Conflict
+from django.db import IntegrityError, transaction
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,7 +18,14 @@ class ModelProjectListCreateEndpoint(generics.ListCreateAPIView):
         return ModelProject.objects.filter(owner=self.request.user, is_active=True)
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        try:
+            with transaction.atomic():
+                serializer.save(owner=self.request.user)
+        except IntegrityError as exc:
+            if "project_owner_name_unique" in str(exc):
+                name = serializer.validated_data["name"]
+                raise Conflict(f"A model project named {name} already exists.") from exc
+            raise
 
 
 class ModelProjectDetailEndpoint(generics.RetrieveUpdateDestroyAPIView):

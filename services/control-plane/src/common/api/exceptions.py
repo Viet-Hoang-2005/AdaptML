@@ -19,6 +19,8 @@ def exception_handler(exc, context):
     if response is None:
         return response
     detail = response.data
+    if isinstance(detail, dict) and set(detail) == {"detail"}:
+        detail = detail["detail"]
     response.data = {
         "error": {
             "code": getattr(exc, "default_code", "request_failed"),

@@ -1,27 +1,39 @@
 import axios from 'axios';
 
-type ApiErrorBody = {
-  error?: string;
-  detail?: string;
-  message?: string;
-  [key: string]: unknown;
-};
+const preferredErrorKeys = ['error', 'detail', 'message'];
 
-const getFieldErrorMessage = (data: ApiErrorBody) => {
-  for (const value of Object.values(data)) {
-    if (Array.isArray(value) && typeof value[0] === 'string') {
-      return value[0];
-    }
+const asMessage = (value: unknown, field?: string): string | null => {
+  if (typeof value === 'string') {
+    const message = value.trim();
+    return message ? (field ? `${field}: ${message}` : message) : null;
+  }
 
-    if (typeof value === 'string') {
-      return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = asMessage(item, field);
+      if (message) return message;
     }
+    return null;
+  }
+
+  if (!value || typeof value !== 'object') return null;
+
+  const data = value as Record<string, unknown>;
+  for (const key of preferredErrorKeys) {
+    const message = asMessage(data[key]);
+    if (message) return message;
+  }
+
+  for (const [key, item] of Object.entries(data)) {
+    if (key === 'code') continue;
+    const message = asMessage(item, key);
+    if (message) return message;
   }
 
   return null;
 };
 
-export const getApiErrorMessage = (error: unknown, fallback: string) => {
+export const getApiErrorMessage = (error: unknown, fallback: string): string => {
   if (!axios.isAxiosError<unknown>(error)) {
     return error instanceof Error ? error.message : fallback;
   }
@@ -35,6 +47,5 @@ export const getApiErrorMessage = (error: unknown, fallback: string) => {
     return error.message || fallback;
   }
 
-  const body = data as ApiErrorBody;
-  return body.error || body.detail || body.message || getFieldErrorMessage(body) || error.message || fallback;
+  return asMessage(data) || error.message || fallback;
 };

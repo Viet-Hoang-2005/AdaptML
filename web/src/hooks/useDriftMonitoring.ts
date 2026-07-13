@@ -126,9 +126,10 @@ export function useRunDriftMonitoringJob() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { id: string; model_id: string }) => {
-      await axiosInstance.post(controlPlaneURL(`/drift-monitors/${payload.id}/runs/`), undefined, {
+      const { data } = await axiosInstance.post<DriftMonitoringResult>(controlPlaneURL(`/drift-monitors/${payload.id}/runs/`), undefined, {
         headers: { 'Idempotency-Key': crypto.randomUUID() },
       });
+      return data;
     },
     onSuccess: (_, variables) => {
       toast.success('Drift monitoring run queued');

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { FileCode2, UploadCloud, FlaskConical, FileArchive, Rocket, ArrowLeft, ArrowRight, Database } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryKeys';
 import { Button } from '../../../components/ui/Button';
@@ -14,7 +13,8 @@ import { AccessModePicker } from '../../../components/ui/Picker';
 import { toast } from '../../../lib/toast';
 import { TerminalLogViewer } from '../../../components/ui/TerminalLogViewer';
 import { LineSteps } from '../../../components/ui/LineSteps';
-import { buildModelProject, cancelBuildAPI, getApiErrorMessage, deployModelProject, checkModelEndpointHealth } from '../../../lib/api';
+import { buildModelProject, cancelBuildAPI, deployModelProject, triggerModelProjectBuild } from '../../../lib/api';
+import { getApiErrorMessage } from '../../../lib/apiError';
 
 const wizardSteps = [
   { id: 1, label: 'Metadata', icon: FileCode2 },
@@ -39,10 +39,9 @@ export default function BuildPackagePage({
   onModelCreated: (id: string) => void;
 }) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-
   const [step, setStep] = useState(1);
   const [createdModelId, setCreatedModelId] = useState<string | null>(null);
+  const [deploymentId, setDeploymentId] = useState<string | null>(null);
   const [realPreview, setRealPreview] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -82,33 +81,10 @@ export default function BuildPackagePage({
       setLoading(true);
       onSubmitting(true);
       try {
-        await deployModelProject(createdModelId);
-
-        let isDeployed = false;
-        let attempts = 0;
-        const maxAttempts = 30; // 60 seconds
-
-        while (!isDeployed && attempts < maxAttempts) {
-          attempts++;
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          try {
-            const status = await checkModelEndpointHealth(createdModelId);
-            if (status.status === 'deployed') {
-              isDeployed = true;
-            }
-          } catch (err) {
-            toast.error(getApiErrorMessage(err, "Endpoint is not healthy yet."));
-          }
-        }
-
-        if (isDeployed) {
-          toast.success("Model deployed successfully!");
-        } else {
-          toast.error("Deployment is taking longer than expected. Please check model status later.");
-        }
-
-        await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
-        navigate(`/dashboard/api-management`);
+        const model = await deployModelProject(createdModelId);
+        setDeploymentId(model.deployment_id || null);
+        setLoading(false);
+        onSubmitting(false);
       } catch (e) {
         onSubmitting(false);
         setLoading(false);
@@ -122,6 +98,13 @@ export default function BuildPackagePage({
     setCreatedModelId(modelId);
     onModelCreated(modelId);
     setRealPreview(previewTree);
+  };
+
+  const handleDeploymentCompleted = async (status: string) => {
+    setLoading(false);
+    onSubmitting(false);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.modelProjects });
+    if (status === 'healthy') toast.success('Model deployed successfully!');
   };
 
   return (
@@ -145,7 +128,14 @@ export default function BuildPackagePage({
           <RequirementsStep form={form} setField={setField} readRequirementsFile={readRequirementsFile} />
         )}
         {step === 6 && (
-          <DeployStep form={form} preview={preview} onBuildSuccess={handleBuildSuccess} canContinue={canContinue()} />
+          <DeployStep
+            form={form}
+            preview={preview}
+            onBuildSuccess={handleBuildSuccess}
+            canContinue={canContinue()}
+            deploymentId={deploymentId}
+            onDeploymentCompleted={handleDeploymentCompleted}
+          />
         )}
 
         <div className="mt-8 grid gap-3 pt-5 border-t border-gray-200 sm:grid-cols-2">
@@ -171,11 +161,11 @@ export default function BuildPackagePage({
             <Button
               size="md"
               icon={<Rocket className="h-4 w-4" />}
-              disabled={!canContinue() || !form.name.trim()}
+              disabled={!canContinue() || !form.name.trim() || Boolean(deploymentId)}
               loading={loading}
               onClick={submitBuild}
             >
-              Deploy model
+              {deploymentId ? 'Deployment running' : 'Deploy model'}
             </Button>
           )}
         </div>
@@ -412,18 +402,24 @@ function RequirementsStep({
 function DeployStep({
   form,
   onBuildSuccess,
+  deploymentId,
+  onDeploymentCompleted,
 }: {
   form: ModelBuildFormValues;
   preview: string[];
   onBuildSuccess: (modelId: string, previewTree: string[]) => void;
   canContinue: boolean;
+  deploymentId: string | null;
+  onDeploymentCompleted: (status: string) => void;
 }) {
   const [modelId, setModelId] = useState<string | null>(null);
+  const [buildId, setBuildId] = useState<string | null>(null);
 
   const startBuild = async () => {
     try {
       const model = await buildModelProject(form);
       setModelId(model.id);
+      setBuildId(model.build_id || null);
     } catch (e) {
       const msg = getApiErrorMessage(e, "Failed to start build process.");
       toast.error(msg);
@@ -445,10 +441,13 @@ function DeployStep({
     if (modelId) {
       try {
         await cancelBuildAPI(modelId);
+        const model = await triggerModelProjectBuild(modelId);
+        setBuildId(model.build_id || null);
       } catch (e) {
-        const msg = getApiErrorMessage(e, "Failed to cancel build process.");
+        const msg = getApiErrorMessage(e, "Failed to restart build process.");
         toast.error(msg);
       }
+      return;
     }
     await startBuild();
   };
@@ -468,8 +467,9 @@ function DeployStep({
       </div>
 
       <TerminalLogViewer
-        key={modelId || 'idle'}
+        key={buildId || 'idle'}
         modelId={modelId}
+        buildId={buildId}
         onBuildSuccess={(id, previewTree) => {
           onBuildSuccess(id, previewTree);
         }}
@@ -477,6 +477,15 @@ function DeployStep({
         onCancel={cancelBuild}
         buildDisabled={!form.source_artifact}
       />
+      {deploymentId && (
+        <TerminalLogViewer
+          key={deploymentId}
+          modelId={modelId}
+          deploymentId={deploymentId}
+          title="Deployment Console"
+          onCompleted={onDeploymentCompleted}
+        />
+      )}
     </div>
   );
 }

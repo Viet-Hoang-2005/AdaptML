@@ -5,6 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 from infrastructure.execution import build_backend, deployment_backend
 
+from apps.deployment.services.logs import append_deployment_log, reset_deployment_logs
 from apps.observability.services.outbox import enqueue_event
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ def _mark_deployment_healthy(deployment):
     Endpoint.objects.filter(deployment=deployment).update(
         health_status="healthy", last_checked_at=timezone.now()
     )
+    append_deployment_log(deployment, "Endpoint passed health checks; deployment is healthy.")
     enqueue_event(
         topic="deployment.events",
         aggregate_type="deployment",
@@ -90,15 +92,23 @@ def execute_deployment(self, deployment_id):
         )
         if deployment.status in {"healthy", "stopped"}:
             return deployment.status
+        starting = deployment.status == "pending"
         deployment.status = "deploying"
         deployment.celery_task_id = self.request.id or deployment.celery_task_id
         deployment.error_message = ""
         deployment.save(update_fields=["status", "celery_task_id", "error_message", "updated_at"])
+    if starting:
+        reset_deployment_logs(deployment, "Starting deployment process.")
+    append_deployment_log(deployment, f"Dispatching {deployment.backend} deployment backend.")
     try:
-        endpoint = deployment_backend(deployment.backend).deploy(deployment)
+        backend = deployment_backend(deployment.backend)
+        backend.log_sink = lambda message: append_deployment_log(deployment, message)
+        endpoint = backend.deploy(deployment)
     except Exception as exc:
         Deployment.objects.filter(pk=deployment.pk).update(status="failed", error_message=str(exc)[:12000])
+        append_deployment_log(deployment, f"Deployment failed: {exc}")
         raise
+    append_deployment_log(deployment, "Runtime resource created; waiting for endpoint health check.")
     if endpoint.health_status == "healthy":
         _mark_deployment_healthy(deployment)
         return "healthy"
@@ -126,7 +136,9 @@ def check_deployment_health(self, deployment_id):
         Deployment.objects.filter(pk=deployment.pk).update(
             status="unhealthy", error_message="Endpoint health check timed out."
         )
+        append_deployment_log(deployment, "Endpoint health check timed out.")
         return "unhealthy"
+    append_deployment_log(deployment, "Endpoint is not healthy yet; retrying health check.")
     raise self.retry(countdown=min(10 + self.request.retries * 2, 60))
 
 
@@ -137,6 +149,7 @@ def stop_deployment(self, deployment_id):
     deployment = Deployment.objects.select_related("version", "build").get(public_id=deployment_id)
     deployment_backend(deployment.backend).stop(deployment)
     Deployment.objects.filter(pk=deployment.pk).update(status="stopped", stopped_at=timezone.now())
+    append_deployment_log(deployment, "Deployment stopped.")
     enqueue_event(
         topic="deployment.events",
         aggregate_type="deployment",

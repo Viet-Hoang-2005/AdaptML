@@ -1,6 +1,4 @@
 import axiosInstance from './axios';
-import { AxiosError } from 'axios';
-import type { ApiErrorResponse } from '../types/api';
 import type {
   LoginCredentials,
   SignUpRequest,
@@ -248,7 +246,9 @@ export const createModelProject = async (payload: ModelProjectFormValues): Promi
     const versionData = new FormData();
     versionData.append('version', payload.version || '1');
     versionData.append('source_artifact', payload.artifact);
-    await axiosInstance.post(controlPlaneURL(`/registry/models/${data.id}/versions/`), versionData);
+    await axiosInstance.post(controlPlaneURL(`/registry/models/${data.id}/versions/`), versionData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
   }
   return data;
 };
@@ -269,11 +269,18 @@ export const buildModelProject = async (payload: ModelBuildFormValues): Promise<
   const { data: version } = await axiosInstance.post<ModelVersion>(
     controlPlaneURL(`/registry/models/${project.id}/versions/`),
     versionData,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
   );
   const { data: build } = await axiosInstance.post<Build>(controlPlaneURL('/builds/'), {
     version: version.id,
   });
-  return { ...project, version: version.version, flavor: version.flavor, build_status: build.status };
+  return {
+    ...project,
+    version: version.version,
+    flavor: version.flavor,
+    build_id: build.id,
+    build_status: build.status,
+  };
 };
 
 export const deployModelProject = async (modelId: string): Promise<ModelProject> => {
@@ -286,7 +293,12 @@ export const deployModelProject = async (modelId: string): Promise<ModelProject>
   const { data: deployment } = await axiosInstance.post<Deployment>(controlPlaneURL('/deployments/'), {
     build: build.id,
   });
-  return { ...project, status: 'deploying', endpoint_status: deployment.status === 'healthy' ? 'healthy' : 'deploying' };
+  return {
+    ...project,
+    deployment_id: deployment.id,
+    status: 'deploying',
+    endpoint_status: deployment.status === 'healthy' ? 'healthy' : 'deploying',
+  };
 };
 
 export const redeployModelProject = async (modelId: string): Promise<ModelProject> => {
@@ -331,7 +343,7 @@ export const triggerModelProjectBuild = async (modelId: string): Promise<ModelPr
   const versions = await getProjectVersions(modelId);
   if (!versions[0]) throw new Error('Register a version before building.');
   const { data } = await axiosInstance.post<Build>(controlPlaneURL('/builds/'), { version: versions[0].id });
-  return { ...project, build_status: data.status };
+  return { ...project, build_id: data.id, build_status: data.status };
 };
 
 export const updateModelProject = async (modelId: string, payload: ModelProjectFormValues): Promise<ModelProject> => {
@@ -348,13 +360,49 @@ export const deleteModelProject = async (modelId: string, force: boolean = false
   return data;
 };
 
-export const getBuildLogs = async (modelId: string, offset: number): Promise<{logs: string[], next_offset: number, build_status: string, build_error: string}> => {
-  const versions = await getProjectVersions(modelId);
-  const builds = await listBuilds();
-  const versionIds = new Set(versions.map((version) => version.id));
-  const build = builds.find((item) => versionIds.has(item.version_id));
-  const lines = build?.logs ? build.logs.split('\n') : [];
-  return { logs: lines.slice(offset), next_offset: lines.length, build_status: build?.status ?? 'pending', build_error: build?.error_message ?? '' };
+export const getBuildLogs = async (buildId: string, offset: number): Promise<{logs: string[], next_offset: number, build_status: string, build_error: string}> => {
+  const { data } = await axiosInstance.get<{
+    logs: string[];
+    next_offset: number;
+    status: string;
+    error_message: string;
+  }>(controlPlaneURL(`/builds/${buildId}/logs/`), { params: { offset } });
+  return {
+    logs: data.logs,
+    next_offset: data.next_offset,
+    build_status: data.status,
+    build_error: data.error_message,
+  };
+};
+
+export const getDeploymentLogs = async (deploymentId: string, offset: number): Promise<{logs: string[], next_offset: number, build_status: string, build_error: string}> => {
+  const { data } = await axiosInstance.get<{
+    logs: string[];
+    next_offset: number;
+    status: string;
+    error_message: string;
+  }>(controlPlaneURL(`/deployments/${deploymentId}/logs/`), { params: { offset } });
+  return {
+    logs: data.logs,
+    next_offset: data.next_offset,
+    build_status: data.status,
+    build_error: data.error_message,
+  };
+};
+
+export const getDriftRunLogs = async (runId: string, offset: number): Promise<{logs: string[], next_offset: number, build_status: string, build_error: string}> => {
+  const { data } = await axiosInstance.get<{
+    logs: string[];
+    next_offset: number;
+    status: string;
+    error_message: string;
+  }>(controlPlaneURL(`/drift-monitors/runs/${runId}/logs/`), { params: { offset } });
+  return {
+    logs: data.logs,
+    next_offset: data.next_offset,
+    build_status: data.status,
+    build_error: data.error_message,
+  };
 };
 
 export const cancelBuildAPI = async (modelId: string): Promise<void> => {
@@ -653,14 +701,6 @@ export const smokeTestRegistryVersion = async (
   );
   return data;
 };
-
-export function getApiErrorMessage(e: unknown, defaultMessage = 'An unexpected error occurred'): string {
-  const axiosError = e as AxiosError<ApiErrorResponse>;
-  return axiosError.response?.data?.error 
-      || axiosError.response?.data?.message 
-      || axiosError.message 
-      || defaultMessage;
-}
 
 export interface S3File {
   key: string;

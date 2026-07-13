@@ -1,5 +1,7 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from infrastructure.storage.s3 import StoredObject
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.test import APIClient
 
@@ -30,6 +32,39 @@ def test_registration_maps_training_outputs_and_requirements_snapshot():
 
     assert version.requirements_snapshot == "xgboost==2.0.3"
     assert version.artifacts.get().uri == job.output_uri
+
+
+@pytest.mark.django_db
+def test_version_endpoint_accepts_multipart_source_artifact(monkeypatch):
+    user = get_user_model().objects.create_user("artifact-owner@example.com", "password123")
+    project = ModelProject.objects.create(owner=user, name="Artifact upload")
+
+    class FakeStorage:
+        def put(self, key, body, content_type):
+            return StoredObject(
+                key=key,
+                uri=f"s3://test-bucket/{key}",
+                checksum="checksum",
+                size_bytes=len(body.read()),
+                content_type=content_type,
+            )
+
+    monkeypatch.setattr("apps.registry.services.versions.S3Storage", FakeStorage)
+    client = APIClient()
+    client.force_authenticate(user)
+    response = client.post(
+        f"/api/registry/models/{project.public_id}/versions/",
+        {
+            "version": "v1",
+            "flavor": "sklearn",
+            "source_artifact": SimpleUploadedFile("model.pkl", b"model-bytes", "application/octet-stream"),
+        },
+        format="multipart",
+    )
+
+    assert response.status_code == 201
+    assert response.data["version"] == "v1"
+    assert ModelVersion.objects.get(project=project).artifacts.get().name == "model.pkl"
 
 
 @pytest.mark.django_db

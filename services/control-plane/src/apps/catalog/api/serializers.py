@@ -1,3 +1,4 @@
+from common.api.exceptions import Conflict
 from rest_framework import serializers
 
 from apps.catalog.models import ModelProject, WorkspaceAsset
@@ -20,6 +21,12 @@ class ModelProjectSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("is_active", "created_at", "updated_at")
+
+    def validate_name(self, value):
+        request = self.context.get("request")
+        if request and ModelProject.objects.filter(owner=request.user, name=value).exists():
+            raise Conflict(f"A model project named {value} already exists.")
+        return value
 
 
 class WorkspaceAssetSerializer(serializers.ModelSerializer):

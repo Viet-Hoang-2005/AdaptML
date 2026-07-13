@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+import logging
 import mlflow
 import zipfile
 import shutil
@@ -10,6 +11,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
+import redis
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -40,6 +42,8 @@ HTML_S3_URI = os.getenv("HTML_S3_URI", "")
 REPORT_JSON_S3_URI = os.getenv("REPORT_JSON_S3_URI", "")
 SUMMARY_JSON_S3_URI = os.getenv("SUMMARY_JSON_S3_URI", "")
 HTML_PUBLIC_URL = os.getenv("HTML_PUBLIC_URL", "")
+DRIFT_RUN_ID = os.getenv("DRIFT_RUN_ID", os.getenv("JOB_ID", ""))
+REDIS_URL = os.getenv("REDIS_URL", "")
 
 HTML_UPLOAD_URL = os.getenv("HTML_UPLOAD_URL", "")
 REPORT_JSON_UPLOAD_URL = os.getenv("REPORT_JSON_UPLOAD_URL", "")
@@ -49,6 +53,60 @@ DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD", "0.6"))
 MAX_SAMPLES = int(os.getenv("MAX_SAMPLES", "100000"))
 MIN_SAMPLES = int(os.getenv("MIN_SAMPLES", "100"))
 TEMP_ROOT = Path(os.getenv("MLOPS_TEMP_DIR", tempfile.gettempdir()))
+
+
+class RedisLogHandler(logging.Handler):
+    """Mirror Evidently stdout/stderr into the per-run Redis log stream."""
+
+    def __init__(self, redis_url: str, run_id: str):
+        super().__init__()
+        self.redis_client = redis.from_url(redis_url)
+        self.log_key = f"drift_logs:{run_id}"
+        self.redis_client.delete(self.log_key)
+
+    def emit(self, record):
+        try:
+            self.redis_client.rpush(self.log_key, self.format(record))
+            self.redis_client.expire(self.log_key, 3600)
+        except Exception:
+            # Logging must never stop a drift run when Redis is unavailable.
+            pass
+
+
+def setup_logger(run_id: str):
+    if not run_id or not REDIS_URL:
+        return None
+
+    logger = logging.getLogger(f"drift-{run_id}")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(stdout_handler)
+    try:
+        redis_handler = RedisLogHandler(REDIS_URL, run_id)
+        redis_handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(redis_handler)
+    except Exception as exc:
+        logger.warning("Could not connect to Redis for drift log streaming: %s", exc)
+
+    class StreamToLogger:
+        def __init__(self, target, level):
+            self.target = target
+            self.level = level
+
+        def write(self, buffer):
+            for line in buffer.splitlines():
+                if line := line.rstrip():
+                    self.target.log(self.level, line)
+
+        def flush(self):
+            pass
+
+    sys.stdout = StreamToLogger(logger, logging.INFO)
+    sys.stderr = StreamToLogger(logger, logging.ERROR)
+    return logger
 
 def validate_runtime_config():
     if not 0 <= DRIFT_THRESHOLD <= 1:
@@ -405,6 +463,7 @@ def trigger_django_webhook(drift_summary):
 
 
 def main():
+    setup_logger(DRIFT_RUN_ID)
     try:
         validate_runtime_config()
     except ValueError as exc:

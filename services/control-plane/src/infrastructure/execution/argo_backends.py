@@ -128,12 +128,18 @@ class ArgoDeploymentBackend(_ArgoBackend):
     def __init__(self, client=None, storage=None, http=None):
         super().__init__(client=client, storage=storage)
         self.http = http or HttpClient(timeout=(3.05, 10))
+        self.log_sink = None
+
+    def _log(self, message):
+        if self.log_sink:
+            self.log_sink(message)
 
     def deploy(self, deployment):
         version = deployment.version
         project = version.project
         container_name = f"endpoint-{str(deployment.public_id).lower()}"
         target_port = 3000 if project.model_type == "dl" else 5001
+        self._log(f"Submitting Argo deployment workflow for runtime {container_name}.")
         self.trigger(
             {
                 "deployment_id": str(deployment.public_id),
@@ -157,6 +163,7 @@ class ArgoDeploymentBackend(_ArgoBackend):
                 ),
             }
         )
+        self._log("Argo workflow submitted; waiting for the Kubernetes service health endpoint.")
         public_url = (
             f"{settings.MODEL_SERVER_PUBLIC_URL}/{project.owner.tenant_id}/models/"
             f"{project.public_id}/{version.public_id}"
