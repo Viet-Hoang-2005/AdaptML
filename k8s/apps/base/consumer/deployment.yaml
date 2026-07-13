@@ -52,11 +52,6 @@ spec:
                 secretKeyRef:
                   name: mlops-paas-secret
                   key: CONTROL_PLANE_WEBHOOK_SECRET
-            - name: GITHUB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: github-secrets
-                  key: GITHUB_TOKEN
             - name: DB_USER
               valueFrom:
                 secretKeyRef:

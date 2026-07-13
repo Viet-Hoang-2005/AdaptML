@@ -3,4 +3,4 @@ kind: Kustomization
 
 resources:
   - cluster.yaml
-  - podmonitor.yaml
+  - pod-monitor.yaml

@@ -124,7 +124,7 @@ Sau khi Ansible đã cài xong K3s cluster, apply Kustomize root:
 
 ```bash
 # Từ máy local, sau khi có kubeconfig của cluster
-kubectl apply -k k8s/
+kustomize build --enable-helm k8s/ | kubectl apply -f -
 
 # Hoặc để ArgoCD tự sync (nếu đã cài ArgoCD)
 # ArgoCD sẽ tự động sync toàn bộ k8s/ theo cấu hình trong k8s/argocd/
