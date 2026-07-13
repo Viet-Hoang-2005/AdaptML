@@ -1,0 +1,123 @@
+@import '@fontsource/inter/latin.css';
+@import 'tailwindcss';
+@import './tokens.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    min-width: 320px;
+    background: var(--background);
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 25%, transparent);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in var(--duration-normal) ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in var(--duration-fast) ease-out;
+}
+
+.custom-scrollbar {
+  scrollbar-color: #475569 transparent;
+  scrollbar-width: thin;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #475569;
+}
+
+/* Temporary compatibility mapping while legacy pages migrate to semantic utilities. */
+.dark .bg-white { background-color: var(--surface); }
+.dark .bg-gray-50,
+.dark .bg-slate-50 { background-color: var(--muted); }
+.dark .bg-gray-100 { background-color: var(--surface-elevated); }
+.dark .text-gray-950,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-slate-900 { color: var(--foreground); }
+.dark .text-gray-700,
+.dark .text-gray-600,
+.dark .text-gray-500,
+.dark .text-slate-600 { color: var(--muted-foreground); }
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300,
+.dark .border-slate-200 { border-color: var(--border); }
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-gray-50:hover { background-color: var(--surface-elevated); }
+.dark .hover\:text-black:hover,
+.dark .hover\:text-gray-900:hover { color: var(--foreground); }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
