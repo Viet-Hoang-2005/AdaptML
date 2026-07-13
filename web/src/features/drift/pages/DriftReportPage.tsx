@@ -69,9 +69,9 @@ export default function DriftReportPage() {
         )}
       </PageHeader>
       
-      <PageContent className="flex-1 overflow-hidden bg-gray-50 flex items-center justify-center relative p-0 border-t border-gray-200 min-h-0">
+      <PageContent className="flex-1 overflow-hidden bg-muted flex items-center justify-center relative p-0 border-t border-border min-h-0">
         {loading ? (
-          <div className="flex flex-col items-center justify-center text-gray-500">
+          <div className="flex flex-col items-center justify-center text-muted-foreground">
             <Loader2 className="w-8 h-8 animate-spin mb-2" />
             <p>Loading report...</p>
           </div>

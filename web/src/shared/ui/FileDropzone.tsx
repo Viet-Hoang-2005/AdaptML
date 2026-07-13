@@ -12,10 +12,10 @@ export function FileDropzone({
   onChange: (file: File | null) => void;
 }) {
   return (
-    <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 text-center hover:border-black">
-      <UploadCloud className="mb-3 h-6 w-6 text-gray-500" />
-      <span className="max-w-full truncate text-sm font-semibold text-gray-900">{title}</span>
-      <span className="mt-1 text-xs text-gray-500">{subtitle}</span>
+    <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted px-4 text-center hover:border-primary">
+      <UploadCloud className="mb-3 h-6 w-6 text-muted-foreground" />
+      <span className="max-w-full truncate text-sm font-semibold text-foreground">{title}</span>
+      <span className="mt-1 text-xs text-muted-foreground">{subtitle}</span>
       <input
         type="file"
         accept={accept}

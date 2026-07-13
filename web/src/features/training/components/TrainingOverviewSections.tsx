@@ -1,6 +1,7 @@
 import type { ElementType } from 'react';
 import type { TrainingJobEvent } from '@/features/training/types';
 import { Badge } from '@/shared/ui/Badge';
+import { useTranslation } from 'react-i18next';
 
 export type MilestoneState = 'pending' | 'active' | 'completed' | 'failed' | 'cancelled' | 'skipped';
 
@@ -23,7 +24,8 @@ export function MetadataRow({ label, value, monospace = false }: { label: string
 }
 
 export function LiveStatusBadge() {
-  return <Badge variant="success"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />Live polling</Badge>;
+  const { t } = useTranslation('training');
+  return <Badge variant="success"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />{t('runtime.livePolling')}</Badge>;
 }
 
 const milestoneTone: Record<MilestoneState, string> = {
@@ -36,8 +38,9 @@ const milestoneTone: Record<MilestoneState, string> = {
 };
 
 export function MilestoneTracker({ milestones }: { milestones: TrainingMilestone[] }) {
+  const { t } = useTranslation('training');
   return (
-    <ol className="flex min-w-150 w-full items-start justify-between" aria-label="Training progress">
+    <ol className="flex min-w-150 w-full items-start justify-between" aria-label={t('runtime.progress')}>
       {milestones.map((milestone, index) => {
         const Icon = milestone.icon;
         const isLast = index === milestones.length - 1;
@@ -63,12 +66,13 @@ export function MilestoneTracker({ milestones }: { milestones: TrainingMilestone
 }
 
 export function TrainingEventHistory({ events }: { events: TrainingJobEvent[] }) {
+  const { t } = useTranslation('training');
   if (!events.length) {
-    return <div className="mt-6 rounded-xl border border-dashed border-border bg-muted/50 p-4 text-sm text-muted-foreground">Event history will appear as the backend records lifecycle updates.</div>;
+    return <div className="mt-6 rounded-xl border border-dashed border-border bg-muted/50 p-4 text-sm text-muted-foreground">{t('runtime.eventEmpty')}</div>;
   }
   return (
     <section className="mt-6 rounded-xl border border-border bg-muted/50 p-4" aria-labelledby="training-event-history-title">
-      <h3 id="training-event-history-title" className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Event history</h3>
+      <h3 id="training-event-history-title" className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('runtime.eventHistory')}</h3>
       <ol className="space-y-3">
         {events.map((event) => (
           <li key={event.id} className="flex gap-3 text-sm">

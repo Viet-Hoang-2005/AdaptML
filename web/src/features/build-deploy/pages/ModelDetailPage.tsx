@@ -22,7 +22,7 @@ export default function ModelDetailPage() {
   const model = useMemo(() => data?.models.find((item) => item.id === modelId) ?? null, [data?.models, modelId]);
 
   if (!model) {
-    return <div className="p-8 text-center text-gray-500">Model not found or loading...</div>;
+    return <div className="p-8 text-center text-muted-foreground">Model not found or loading...</div>;
   }
 
   return <ModelDetailPageContent model={model} />;
@@ -94,7 +94,7 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const readOnlyFieldClass = 'cursor-default hover:border-gray-300 focus:border-gray-300';
+  const readOnlyFieldClass = 'cursor-default hover:border-border focus:border-border';
 
   return (
     <>
@@ -108,13 +108,13 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
         onCancel={() => blocker.reset?.()}
       />
       <section className="flex flex-col h-full gap-6">
-        <div className="flex flex-col gap-4 border-b border-gray-300 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-border md:flex-row md:items-end md:justify-between">
           <div className="mb-2">
-            <Link to="/dashboard/api-management" className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-black">
+            <Link to="/dashboard/api-management" className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-4 w-4" />
               Back to API Management
             </Link>
-            <h1 className="text-xl font-bold text-gray-900">Model Details</h1>
+            <h1 className="text-xl font-bold text-foreground">Model Details</h1>
           </div>
           
           <PageTabs
@@ -147,7 +147,7 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
           />
         </div>
 
-        <div className="rounded-lg border border-gray-300 bg-white p-6 lg:p-8 flex flex-col flex-1">
+        <div className="rounded-lg border border-border bg-surface p-6 lg:p-8 flex flex-col flex-1">
           <div className="flex flex-col flex-1">
             {activeTab === '1' && (
               <ModelInformationPage 
@@ -185,7 +185,7 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
             )}
           </div>
 
-          <div className="mt-12 flex flex-col sm:flex-row items-center gap-4 border-t border-gray-200 pt-6 shrink-0">
+          <div className="mt-12 flex flex-col sm:flex-row items-center gap-4 border-t border-border pt-6 shrink-0">
             <Button
               className="w-full justify-center"
               variant="danger"

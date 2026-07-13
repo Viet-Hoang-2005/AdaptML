@@ -2,7 +2,7 @@
 
 ## Product direction
 
-MLdrift uses a light-first enterprise technical style with moderate information density. Blue communicates primary action and cyan is a restrained brand accent. Dark mode is a first-class theme, not a color inversion applied at page level.
+MLdrift preserves the original product's restrained black-and-white visual language in light mode: white surfaces, gray borders, compact page chrome, and black primary actions. Dark mode is a first-class theme with slate surfaces and blue primary actions, not a page-level color inversion. Cyan remains a restrained brand accent in the MLdrift identity.
 
 ## Token layers
 
@@ -10,88 +10,55 @@ Tokens live in `src/app/styles/tokens.css` and follow three layers:
 
 1. Primitive tokens define raw palette values.
 2. Semantic tokens describe intent: background, surface, foreground, muted, primary, success, warning, danger, border, input, and focus ring.
-3. Component tokens define control heights, radii, shadows, and motion duration.
+3. Component tokens define control heights, radii, shadows, auth glass, and motion duration.
 
-New page and feature code should use Tailwind semantic utilities such as `bg-surface`, `text-foreground`, and `border-border`, or the corresponding CSS variable when an arbitrary value is required. Do not introduce new hexadecimal color values in a page.
+Feature code must use semantic utilities such as `bg-surface`, `text-foreground`, and `border-border`. Fixed dark palettes are reserved for terminals, code samples, syntax highlighting, crop canvases, and modal overlays.
 
-Core palette:
+| Intent | Light | Dark |
+| --- | --- | --- |
+| Primary | `#000000` | `#60A5FA` |
+| Primary hover | `#374151` | `#93C5FD` |
+| Brand accent | `#06B6D4` | `#22D3EE` |
+| Background | `#F9FAFB` | `#020617` |
+| Surface | `#FFFFFF` | `#0F172A` |
+| Foreground | `#111827` | `#F8FAFC` |
+| Border | `#D1D5DB` | `#334155` |
 
-| Intent | Light value |
-| --- | --- |
-| Primary | `#2563EB` |
-| Primary hover | `#1D4ED8` |
-| Brand accent | `#06B6D4` |
-| Background | `#F8FAFC` |
-| Surface | `#FFFFFF` |
-| Foreground | `#0F172A` |
-| Success | `#16A34A` |
-| Warning | `#D97706` |
-| Danger | `#DC2626` |
-
-## Typography, spacing, and motion
+## Typography and components
 
 - Inter is self-hosted with `@fontsource/inter`.
-- Spacing follows a 4 px grid.
-- Standard radii are 8 px and 12 px; large overlays may use 16 px.
-- Interaction transitions are 150–200 ms.
-- Global styles honor `prefers-reduced-motion`.
-
-## Shared primitives
-
-Use components in `src/shared/ui` for:
-
-- buttons and icon buttons
-- inputs and text areas
-- cards, badges, skeletons, empty/error states
-- dialogs, confirmation dialogs, toast notifications, and tooltips
-- data tables
-- lazy code editing and runtime-log viewing
-
-Domain components may combine primitives, but should not clone their interaction behavior. Every primitive must cover default, hover, focus-visible, active, loading, disabled, and error states where applicable.
+- Spacing follows a 4 px grid; interaction transitions use 150–200 ms.
+- Buttons use 32/40/48 px heights and 12/16 px radii.
+- Form inputs default to 56 px height and 16 px radius.
+- Page surfaces use an 8 px radius, a visible neutral border, and no decorative card shadow.
+- The auth card uses the original translucent white glass in light mode and a near-opaque semantic surface in dark mode.
+- Shared interactions use Tailwind, Radix primitives, CVA, and TanStack Table. Ant Design is forbidden.
 
 ## Application shell
 
-Navigation follows the model lifecycle:
+Navigation keeps the original product vocabulary and grouping:
 
-1. Overview
-2. Build & Deploy
-3. Training
-4. Registry
-5. Monitoring
+1. Home
+2. Drift Monitoring
+3. Model Training
+4. Model Evolution
+5. Management
 
-Notifications and Settings form the secondary group. The header contains page context, model selection, create action, theme, notifications, and profile access.
+Notification and Setting form the secondary group. The header keeps the original logo-left, model-selector-center, actions-right composition while retaining searchable model selection, the real theme menu, notifications, and profile access.
 
-Responsive behavior:
+- 1280 px and wider: 224 px sidebar, collapsible to a 68 px rail.
+- 768–1279 px: 68 px icon rail.
+- Below 768 px: drawer navigation with essential actions preserved.
 
-- 1280 px and wider: 256 px sidebar, collapsible to a 72 px rail.
-- 768–1279 px: 72 px icon rail.
-- Below 768 px: drawer navigation with essential status and actions preserved.
+## Accessibility and theme
 
-## Page anatomy
-
-A standard page uses:
-
-1. Breadcrumb or clear lifecycle context
-2. Title and short description
-3. One primary action
-4. Summary/status content
-5. Task-oriented sections
-6. Contextual actions near the data they affect
-
-Use skeletons for initial loading. Empty states explain why no data exists and offer the next useful action. Recoverable API errors include retry or corrective guidance.
-
-## Accessibility
-
-- Keyboard order follows visual order.
-- Focus indicators remain visible on every interactive element.
-- Icon-only buttons have an accessible label and usually a tooltip.
+- Keyboard order follows visual order and every interactive element keeps a visible focus indicator.
 - Status includes text or an icon and never relies on color alone.
-- Dialog focus is trapped by Radix primitives and returns to the trigger when closed.
-- Validate layouts at 200% zoom and common responsive breakpoints.
-- Maintain WCAG AA contrast in light and dark themes.
+- Dialog focus is managed by Radix and returns to the trigger.
+- Layouts must work at 200% zoom and meet WCAG AA contrast in light and dark themes.
+- Global styles honor `prefers-reduced-motion`.
+- `ThemeProvider` supports `light`, `dark`, and `system`, persists the preference, and tracks operating-system changes.
 
-## Theme and copy
+## Localization
 
-`ThemeProvider` supports `light`, `dark`, and `system`, persists the preference, and tracks operating-system changes while in system mode.
-
-The current product language is English. Copy is separated into `common`, `auth`, `catalog`, `buildDeploy`, `training`, `registry`, `drift`, and `settings` namespaces so localization can be added without another component migration.
+English resources are owned by `common`, `auth`, `catalog`, `buildDeploy`, `training`, `registry`, `drift`, `settings`, and `notifications` namespaces. User-visible copy, validation, toast, dialog, tooltip, and accessibility labels belong in those resources. Raw backend error detail remains unchanged. No language selector is exposed until a second locale is available.

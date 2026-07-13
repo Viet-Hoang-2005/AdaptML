@@ -4,8 +4,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { getGitHubOAuthConfig } from '@/features/auth/lib/oauth';
 import { toast } from '@/shared/ui/toastStore';
+import { useTranslation } from 'react-i18next';
 
 export default function GitHubCallbackPage() {
+  const { t } = useTranslation('auth');
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { loginWithGitHubCode } = useAuth();
@@ -24,25 +26,25 @@ export default function GitHubCallbackPage() {
     localStorage.removeItem('github_oauth_state');
 
     if (!code) {
-      toast.error('GitHub did not return an authorization code.');
+      toast.error(t('github.missingCode'));
       navigate('/login', { replace: true });
       return;
     }
 
     if (!returnedState || !expectedState || returnedState !== expectedState) {
-      toast.error('GitHub OAuth state is invalid. Please try again.');
+      toast.error(t('github.invalidState'));
       navigate('/login', { replace: true });
       return;
     }
 
     const { redirectUri } = getGitHubOAuthConfig();
     void loginWithGitHubCode(code, redirectUri);
-  }, [loginWithGitHubCode, navigate, searchParams]);
+  }, [loginWithGitHubCode, navigate, searchParams, t]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground">
       <LoaderCircle className="mb-4 h-8 w-8 animate-spin text-foreground" />
-      <p className="text-sm font-medium">Completing GitHub sign in...</p>
+      <p className="text-sm font-medium">{t('github.completing')}</p>
     </div>
   );
 }

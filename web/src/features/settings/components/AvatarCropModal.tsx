@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Cropper, { type Area, type Point } from 'react-easy-crop';
 import { X } from 'lucide-react';
 import { Button } from '@/shared/ui/Button';
+import { useTranslation } from 'react-i18next';
 
 const createImage = (url: string) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
@@ -65,6 +66,7 @@ export function AvatarCropModal({
   onConfirm,
   onError,
 }: AvatarCropModalProps) {
+  const { t } = useTranslation('settings');
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
@@ -94,14 +96,14 @@ export function AvatarCropModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-xl rounded-xl border border-gray-300 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <h2 className="text-xl font-bold text-gray-900">Crop avatar</h2>
+      <div className="w-full max-w-xl rounded-xl border border-border bg-surface shadow-xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-xl font-bold text-foreground">{t('avatarDialog.crop')}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-black"
-            aria-label="Close crop modal"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={t('avatarDialog.closeCrop')}
           >
             <X className="h-6 w-6" />
           </button>
@@ -120,8 +122,8 @@ export function AvatarCropModal({
               onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels)}
             />
           </div>
-          <label htmlFor="avatar-zoom" className="flex flex-col gap-2 text-sm font-medium text-gray-700">
-            Zoom
+          <label htmlFor="avatar-zoom" className="flex flex-col gap-2 text-sm font-medium text-foreground">
+            {t('avatarDialog.zoom')}
             <input
               id="avatar-zoom"
               type="range"
@@ -130,15 +132,15 @@ export function AvatarCropModal({
               step="0.1"
               value={zoom}
               onChange={(event) => setZoom(Number(event.target.value))}
-              className="w-full accent-black"
+              className="w-full accent-primary"
             />
           </label>
           <div className="flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
+              {t('avatarDialog.cancel')}
             </Button>
             <Button type="button" loading={loading || internalLoading} onClick={handleConfirm}>
-              Use avatar
+              {t('avatarDialog.use')}
             </Button>
           </div>
         </div>

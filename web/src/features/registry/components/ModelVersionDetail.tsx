@@ -82,28 +82,28 @@ function numericMetricValue(value: unknown): number | null {
 function deployabilityBadge(status?: string) {
   switch (status) {
     case 'deployable':
-      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      return 'bg-success-subtle text-success border-success/20';
     case 'track_only':
-      return 'bg-amber-100 text-amber-800 border-amber-200';
+      return 'bg-warning-subtle text-warning border-warning/20';
     case 'invalid':
-      return 'bg-red-100 text-red-800 border-red-200';
+      return 'bg-danger-subtle text-danger border-danger/20';
     default:
-      return 'bg-gray-100 text-gray-700 border-gray-200';
+      return 'bg-muted text-foreground border-border';
   }
 }
 
 function trackingBadge(status?: string) {
   switch (status) {
     case 'completed':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      return 'bg-success-subtle text-success border-success/20';
     case 'skipped':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
+      return 'bg-primary-subtle text-primary border-primary/20';
     case 'failed':
-      return 'bg-amber-100 text-amber-800 border-amber-200';
+      return 'bg-warning-subtle text-warning border-warning/20';
     case 'ingesting':
-      return 'bg-violet-100 text-violet-700 border-violet-200';
+      return 'bg-primary-subtle text-primary border-primary/20';
     default:
-      return 'bg-gray-100 text-gray-600 border-gray-200';
+      return 'bg-muted text-muted-foreground border-border';
   }
 }
 
@@ -311,18 +311,18 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   };
 
   return (
-    <div className="flex flex-col border border-gray-200 rounded-xl bg-white shadow-sm overflow-hidden">
+    <div className="flex flex-col border border-border rounded-xl bg-surface shadow-sm overflow-hidden">
       
       {/* Tab Navigation */}
-      <div className="flex border-b border-gray-200 bg-gray-50 px-4 pt-3">
+      <div className="flex border-b border-border bg-muted px-4 pt-3">
         {(['details', 'insights', 'metrics', 'history'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-semibold capitalize border-b-2 transition-colors ${
               activeTab === tab 
-                ? 'border-blue-600 text-blue-600' 
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
             }`}
           >
             {tab}
@@ -338,7 +338,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
             {/* A. Version Control Header */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
               <div>
-                <h3 className="text-3xl font-extrabold text-gray-900 flex items-center gap-3">
+                <h3 className="text-3xl font-extrabold text-foreground flex items-center gap-3">
                   Version {formatVersion(version.version)}
                   {isProd && (
                     <span className="bg-emerald-500 text-white text-xs px-2.5 py-0.5 rounded uppercase tracking-wider font-bold shadow-sm">
@@ -346,12 +346,12 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     </span>
                   )}
                   {!isProd && (
-                    <span className="bg-gray-100 text-gray-600 text-xs px-2.5 py-0.5 rounded uppercase tracking-wider font-bold">
+                    <span className="bg-muted text-muted-foreground text-xs px-2.5 py-0.5 rounded uppercase tracking-wider font-bold">
                       {version.stage}
                     </span>
                   )}
                 </h3>
-                <p className="text-sm text-gray-500 mt-2 font-medium">
+                <p className="text-sm text-muted-foreground mt-2 font-medium">
                   Source: {version.source_type.replace('_', ' ')} {version.source_training_job_id ? `· Job ID: ${version.source_training_job_id}` : ''}
                 </p>
               </div>
@@ -390,7 +390,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 </Button>
                 
                 {isProd ? (
-                  <div className="flex items-center px-4 py-2 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <div className="flex items-center px-4 py-2 text-sm font-bold text-success bg-success-subtle border border-success/20 rounded-lg">
                     Registry production active
                   </div>
                 ) : (
@@ -410,19 +410,19 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
 
             {/* C. Production Semantics Callout */}
             {isProd && (
-              <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-4 flex flex-col gap-1 text-emerald-800">
+              <div className="bg-success-subtle border border-success/20 rounded-lg p-4 flex flex-col gap-1 text-success">
                 <div className="text-sm">
                   <strong>Registry production marker is active.</strong> Stable alias routing is available through the production alias endpoint when configured.
                 </div>
-                <div className="text-xs text-emerald-700/80">
+                <div className="text-xs text-success/80">
                   Version-specific endpoints remain unchanged.
                 </div>
               </div>
             )}
 
             <div className="grid lg:grid-cols-2 gap-6">
-              <div className="flex flex-col gap-4 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">
+              <div className="flex flex-col gap-4 bg-surface border border-border rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
                   <span className="inline-flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-blue-500" />
                     Tracking Status
@@ -434,47 +434,47 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     {trackingLabel(version.tracking_status)}
                   </span>
                 </h4>
-                <p className="text-sm text-gray-600 leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   {trackingDescription(version.tracking_status)}
                 </p>
                 {version.tracking_status === 'completed' && (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  <div className="rounded-lg border border-success/20 bg-success-subtle p-3 text-sm text-success">
                     Completed: metadata is available in Model Evolution and internal MLflow.
                   </div>
                 )}
                 {version.tracking_status === 'skipped' && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                  <div className="rounded-lg border border-primary/20 bg-primary-subtle p-3 text-sm text-primary">
                     MLflow Disabled: Native Registry summaries are still available for metrics, params, insights, compare, and deploy review.
                   </div>
                 )}
                 {version.tracking_status === 'failed' && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="rounded-lg border border-warning/20 bg-warning-subtle p-3 text-sm text-warning">
                     Native Registry Ingested: MLflow logging failed, but captured metadata was retained.
                   </div>
                 )}
                 {version.tracking_ingested_at && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ingested At</p>
-                    <p className="text-sm text-gray-800 font-medium">{new Date(version.tracking_ingested_at).toLocaleString()}</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Ingested At</p>
+                    <p className="text-sm text-foreground font-medium">{new Date(version.tracking_ingested_at).toLocaleString()}</p>
                   </div>
                 )}
                 {version.tracking_error && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="rounded-lg border border-warning/20 bg-warning-subtle p-3 text-sm text-warning">
                     {version.tracking_error}
                   </div>
                 )}
                 {version.mlflow_run_id && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Internal Lineage Run</p>
-                    <code className="text-xs font-mono text-gray-700 bg-gray-50 border border-gray-200 px-2 py-1 rounded break-all block select-all">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Internal Lineage Run</p>
+                    <code className="text-xs font-mono text-foreground bg-muted border border-border px-2 py-1 rounded break-all block select-all">
                       {version.mlflow_run_id}
                     </code>
                   </div>
                 )}
               </div>
 
-              <div className="flex flex-col gap-4 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">
+              <div className="flex flex-col gap-4 bg-surface border border-border rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
                   Deployability
                   <span className={classNames(
                     "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border",
@@ -483,30 +483,30 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     {version.deployability_status || 'unknown'}
                   </span>
                 </h4>
-                <p className="text-sm text-gray-600 leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   {version.deployability_reason || 'Deployability has not been computed for this version yet.'}
                 </p>
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Artifacts</p>
-                    <p className="text-xl font-bold text-gray-900">{artifactEntries.length}</p>
+                  <div className="rounded-lg bg-muted border border-border p-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Artifacts</p>
+                    <p className="text-xl font-bold text-foreground">{artifactEntries.length}</p>
                   </div>
-                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Metrics</p>
-                    <p className="text-xl font-bold text-gray-900">{metricEntries.length}</p>
+                  <div className="rounded-lg bg-muted border border-border p-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Metrics</p>
+                    <p className="text-xl font-bold text-foreground">{metricEntries.length}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col gap-5 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-gray-100 pb-4">
+            <div className="flex flex-col gap-5 bg-surface border border-border rounded-xl p-5 shadow-sm">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-border pb-4">
                 <div>
-                  <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
                     <Rocket className="h-4 w-4 text-blue-500" />
                     Deployment Actions
                   </h4>
-                  <p className="mt-2 text-sm text-gray-600 max-w-3xl">
+                  <p className="mt-2 text-sm text-muted-foreground max-w-3xl">
                     Deployment is available only for versions with a supported serving artifact. Track-only versions can still be reviewed and compared.
                   </p>
                 </div>
@@ -563,7 +563,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 </div>
 
                 {(!version.can_build || !version.can_deploy) && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="rounded-lg border border-warning/20 bg-warning-subtle p-3 text-sm text-warning">
                     {!version.can_build
                       ? (version.build_disabled_reason || version.deployability_reason || 'Build is disabled for this version.')
                       : (version.deploy_disabled_reason || 'Build package before deploying this version.')}
@@ -571,26 +571,26 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 )}
 
                 <div className="grid gap-3 text-sm md:grid-cols-3">
-                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Build Status</p>
-                    <p className="font-semibold text-gray-900">{version.build_status || '-'}</p>
+                  <div className="rounded-lg bg-muted border border-border p-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Build Status</p>
+                    <p className="font-semibold text-foreground">{version.build_status || '-'}</p>
                   </div>
-                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Endpoint Status</p>
-                    <p className="font-semibold text-gray-900">{version.endpoint_status || version.deployment_status || '-'}</p>
+                  <div className="rounded-lg bg-muted border border-border p-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Endpoint Status</p>
+                    <p className="font-semibold text-foreground">{version.endpoint_status || version.deployment_status || '-'}</p>
                   </div>
-                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Deployability</p>
-                    <p className="font-semibold text-gray-900">{version.deployability_status || 'unknown'}</p>
+                  <div className="rounded-lg bg-muted border border-border p-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Deployability</p>
+                    <p className="font-semibold text-foreground">{version.deployability_status || 'unknown'}</p>
                   </div>
                 </div>
 
                 {(version.build_error || version.endpoint_error || actionResult) && (
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 break-words">
+                  <div className="rounded-lg border border-border bg-muted p-4 text-sm text-foreground break-words">
                     <p>{actionResult || version.endpoint_error || version.build_error}</p>
                     {technicalDetail && (
-                      <details className="mt-3 rounded border border-gray-200 bg-white p-2 text-xs text-gray-500">
-                        <summary className="cursor-pointer font-semibold text-gray-600">Technical detail</summary>
+                      <details className="mt-3 rounded border border-border bg-surface p-2 text-xs text-muted-foreground">
+                        <summary className="cursor-pointer font-semibold text-muted-foreground">Technical detail</summary>
                         <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono">
                           {technicalDetail}
                         </pre>
@@ -599,26 +599,26 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   </div>
                 )}
 
-                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                <div className="rounded-xl border border-border bg-muted/60 p-4">
                   <div className="mb-3">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Smoke Test</p>
-                    <p className="text-xs text-gray-500 mt-1">Uses the existing predict schema.</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Smoke Test</p>
+                    <p className="text-xs text-muted-foreground mt-1">Uses the existing predict schema.</p>
                   </div>
                   <div className="grid gap-4 2xl:grid-cols-2">
                     <textarea
                       value={smokePayload}
                       onChange={(event) => setSmokePayload(event.target.value)}
-                      className="min-h-40 w-full rounded-lg border border-gray-200 bg-[#111827] p-3 font-mono text-xs text-emerald-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className="min-h-40 w-full rounded-lg border border-border bg-[#111827] p-3 font-mono text-xs text-emerald-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                       spellCheck={false}
                     />
-                    <div className="min-h-40 rounded-lg border border-gray-200 bg-white p-3">
-                      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">Response</p>
+                    <div className="min-h-40 rounded-lg border border-border bg-surface p-3">
+                      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Response</p>
                       {smokeResult !== null ? (
                         <pre className="max-h-72 overflow-auto rounded-lg border border-gray-800 bg-[#111827] p-3 text-xs text-gray-100">
                           {JSON.stringify(withoutTechnicalDetail(smokeResult), null, 2)}
                         </pre>
                       ) : (
-                        <div className="flex min-h-28 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500">
+                        <div className="flex min-h-28 items-center justify-center rounded-lg border border-dashed border-border bg-muted text-sm text-muted-foreground">
                           Run a smoke test to see the endpoint response.
                         </div>
                       )}
@@ -629,57 +629,57 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
             </div>
 
             <div className="grid xl:grid-cols-3 gap-6">
-              <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
+              <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-2">
                   <Gauge className="h-4 w-4 text-emerald-500" />
                   Metrics
                 </h4>
                 {metricEntries.length > 0 ? (
                   <div className="grid gap-2">
                     {metricEntries.map(([name, value]) => (
-                      <div key={name} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
-                        <span className="text-sm font-medium text-gray-600 truncate" title={name}>{name}</span>
-                        <span className="text-sm font-mono font-semibold text-gray-900">{formatValue(value)}</span>
+                      <div key={name} className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2">
+                        <span className="text-sm font-medium text-muted-foreground truncate" title={name}>{name}</span>
+                        <span className="text-sm font-mono font-semibold text-foreground">{formatValue(value)}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     No metrics captured. Training scripts can write SM_OUTPUT_DIR/metrics.json or print METRIC_JSON lines.
                   </p>
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
+              <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-2">
                   <SlidersHorizontal className="h-4 w-4 text-purple-500" />
                   Params
                 </h4>
                 {paramEntries.length > 0 ? (
                   <div className="grid gap-2">
                     {paramEntries.map(([name, value]) => (
-                      <div key={name} className="flex items-start justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
-                        <span className="text-sm font-medium text-gray-600 break-all">{name}</span>
-                        <span className="text-sm font-mono text-gray-900 text-right break-all">{formatValue(value)}</span>
+                      <div key={name} className="flex items-start justify-between gap-3 rounded-lg bg-muted px-3 py-2">
+                        <span className="text-sm font-medium text-muted-foreground break-all">{name}</span>
+                        <span className="text-sm font-mono text-foreground text-right break-all">{formatValue(value)}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     No params captured. Training scripts can write SM_OUTPUT_DIR/params.json.
                   </p>
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
-                  <FileText className="h-4 w-4 text-slate-500" />
+              <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
                   Source Training Job
                 </h4>
                 {version.source_training_job_id ? (
                   <div className="grid gap-3 text-sm">
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Job</p>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Job</p>
                       <a
                         href={`/dashboard/model-training/${version.source_training_job_id}`}
                         className="font-semibold text-blue-600 hover:text-blue-800"
@@ -689,29 +689,29 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Status</p>
-                        <p className="font-medium text-gray-800">{version.source_training_job_status || '-'}</p>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Status</p>
+                        <p className="font-medium text-foreground">{version.source_training_job_status || '-'}</p>
                       </div>
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Backend</p>
-                        <p className="font-medium text-gray-800">{version.source_training_job_backend || '-'}</p>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Backend</p>
+                        <p className="font-medium text-foreground">{version.source_training_job_backend || '-'}</p>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">This version was not registered from a training job.</p>
+                  <p className="text-sm text-muted-foreground">This version was not registered from a training job.</p>
                 )}
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
+            <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
+              <h4 className="text-sm font-bold text-foreground uppercase tracking-wider border-b border-border pb-2">
                 Artifacts / Weights
               </h4>
               {artifactEntries.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-100 text-sm">
-                    <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <table className="min-w-full divide-y divide-border text-sm">
+                    <thead className="bg-muted text-xs uppercase text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold">Path</th>
                         <th className="px-3 py-2 text-left font-semibold">Kind</th>
@@ -719,24 +719,24 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                         <th className="px-3 py-2 text-left font-semibold">SHA256</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-border">
                       {artifactEntries.map((item, index) => (
                         <tr key={`${item.path}-${index}`}>
-                          <td className="px-3 py-2 font-mono text-xs text-gray-800 break-all">{item.path}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-foreground break-all">{item.path}</td>
                           <td className="px-3 py-2">
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-foreground">
                               {item.kind || 'other'}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-right font-mono text-xs text-gray-600">{formatBytes(item.size_bytes)}</td>
-                          <td className="px-3 py-2 font-mono text-xs text-gray-500">{item.sha256 ? `${item.sha256.slice(0, 12)}...` : '-'}</td>
+                          <td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground">{formatBytes(item.size_bytes)}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{item.sha256 ? `${item.sha256.slice(0, 12)}...` : '-'}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">No artifact manifest available yet.</p>
+                <p className="text-sm text-muted-foreground">No artifact manifest available yet.</p>
               )}
             </div>
 
@@ -746,8 +746,8 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
               modelProjectId={version.project_id}
             />
 
-            <div className="flex flex-col gap-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">
+            <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
+              <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
                 <span className="inline-flex items-center gap-2">
                   <Terminal className="h-4 w-4 text-indigo-500" />
                   Routing Aliases
@@ -763,22 +763,22 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                     const endpointUrl = alias.endpoint_url || alias.endpointUrl || '';
                     const promotedAt = alias.promoted_at || alias.promotedAt;
                     return (
-                      <div key={`${aliasName}-${endpointUrl}`} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                      <div key={`${aliasName}-${endpointUrl}`} className="rounded-lg border border-border bg-muted p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
                                 {aliasName}
                               </span>
-                              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-emerald-700">
+                              <span className="rounded-full bg-success-subtle px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-success">
                                 {alias.status || 'active'}
                               </span>
                             </div>
-                            <code className="mt-3 block break-all rounded border border-gray-200 bg-white px-3 py-2 text-xs font-mono text-gray-700">
+                            <code className="mt-3 block break-all rounded border border-border bg-surface px-3 py-2 text-xs font-mono text-foreground">
                               {endpointUrl || 'Alias endpoint unavailable'}
                             </code>
                             {promotedAt && (
-                              <p className="mt-2 text-xs text-gray-500">
+                              <p className="mt-2 text-xs text-muted-foreground">
                                 Promoted at {new Date(promotedAt).toLocaleString()}
                               </p>
                             )}
@@ -799,7 +799,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   No alias points to this version yet. Promote this version to production, latest, or champion to create a stable alias endpoint.
                 </p>
               )}
@@ -807,33 +807,33 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
 
             <div className="grid md:grid-cols-2 gap-6 mt-2">
               {/* D. Deployment Info */}
-              <div className="flex flex-col gap-4 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">
+              <div className="flex flex-col gap-4 bg-surface border border-border rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
                   Deployment Info
                   {version.endpoint_url ? (
-                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Ready</span>
+                    <span className="text-[10px] bg-primary-subtle text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Ready</span>
                   ) : (
-                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">No Endpoint</span>
+                    <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">No Endpoint</span>
                   )}
                 </h4>
                 
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Image Name</p>
-                  <p className="text-sm font-mono text-gray-800 break-all">{version.image_name || 'N/A'}</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Image Name</p>
+                  <p className="text-sm font-mono text-foreground break-all">{version.image_name || 'N/A'}</p>
                 </div>
                 
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase flex items-center gap-2 mb-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-2 mb-1">
                     <Terminal className="h-3 w-3" /> Endpoint URL
                   </p>
                   <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 px-3 py-2 rounded flex-1 truncate select-all">
+                    <code className="text-xs font-mono text-foreground bg-muted border border-border px-3 py-2 rounded flex-1 truncate select-all">
                       {version.endpoint_url || 'N/A'}
                     </code>
                     {version.endpoint_url && (
-                      <Button size="sm" variant="secondary" onClick={copyEndpoint} className="shrink-0 flex items-center gap-1.5 px-3 py-2 border border-gray-300">
-                        {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-gray-500" />}
-                        <span className={copied ? "text-emerald-700" : "text-gray-700"}>{copied ? 'Copied' : 'Copy'}</span>
+                      <Button size="sm" variant="secondary" onClick={copyEndpoint} className="shrink-0 flex items-center gap-1.5 px-3 py-2 border border-border">
+                        {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
+                        <span className={copied ? "text-emerald-700" : "text-foreground"}>{copied ? 'Copied' : 'Copy'}</span>
                       </Button>
                     )}
                   </div>
@@ -841,24 +841,24 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
               </div>
 
               {/* E. Artifact Info */}
-              <div className="flex flex-col gap-4 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">Artifact Info</h4>
+              <div className="flex flex-col gap-4 bg-surface border border-border rounded-xl p-5 shadow-sm">
+                <h4 className="text-sm font-bold text-foreground uppercase tracking-wider border-b border-border pb-2">Artifact Info</h4>
                 
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Artifact URI</p>
-                  <p className="text-sm font-mono text-gray-800 break-all">{version.artifact_uri || 'N/A'}</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Artifact URI</p>
+                  <p className="text-sm font-mono text-foreground break-all">{version.artifact_uri || 'N/A'}</p>
                 </div>
 
                 {/* Optional internal MLflow lineage. Native Registry remains the primary product flow. */}
-                <div className="border-t border-gray-100 pt-4">
+                <div className="border-t border-border pt-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">MLflow Run</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">MLflow Run</p>
                     {version.mlflow_run_url ? (
                       <a
                         href={version.mlflow_run_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1 rounded-full transition-colors"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-hover bg-primary-subtle border border-primary/20 px-3 py-1 rounded-full transition-colors"
                         title="Open in MLflow (internal/admin tool)"
                       >
                         <ExternalLink className="h-3 w-3" />
@@ -870,29 +870,29 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   {version.mlflow_run_id ? (
                     <div className="flex flex-col gap-2">
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase mb-0.5">Run ID</p>
-                        <code className="text-xs font-mono text-gray-700 bg-gray-50 border border-gray-200 px-2 py-1 rounded break-all block select-all">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-0.5">Run ID</p>
+                        <code className="text-xs font-mono text-foreground bg-muted border border-border px-2 py-1 rounded break-all block select-all">
                           {version.mlflow_run_id}
                         </code>
                       </div>
                       {version.mlflow_model_uri && (
                         <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase mb-0.5">Model URI</p>
-                          <code className="text-xs font-mono text-gray-700 bg-gray-50 border border-gray-200 px-2 py-1 rounded break-all block">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase mb-0.5">Model URI</p>
+                          <code className="text-xs font-mono text-foreground bg-muted border border-border px-2 py-1 rounded break-all block">
                             {version.mlflow_model_uri}
                           </code>
                         </div>
                       )}
-                      <p className="text-[11px] text-gray-400 leading-relaxed mt-1">
+                      <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
                         Model Evolution displays metrics, params, insights, and deployability from the Native Registry.
                         MLflow lineage is optional internal metadata for audit and artifact deep dives.{' '}
                         <span className="font-medium text-amber-600">Opening MLflow is not required for normal review or deployment.</span>
                       </p>
                     </div>
                   ) : (
-                    <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-3 flex flex-col gap-1">
-                      <p className="text-xs font-semibold text-gray-500">No MLflow run linked</p>
-                      <p className="text-[11px] text-gray-400 leading-relaxed">
+                    <div className="bg-muted border border-dashed border-border rounded-lg p-3 flex flex-col gap-1">
+                      <p className="text-xs font-semibold text-muted-foreground">No MLflow run linked</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
                         Model Evolution still uses Native Registry summaries from the ingested training artifact.
                       </p>
                     </div>
@@ -901,12 +901,12 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
 
                 <div className="grid grid-cols-2 gap-4 mt-2">
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Created</p>
-                    <p className="text-sm text-gray-800 font-medium">{new Date(version.created_at).toLocaleString()}</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Created</p>
+                    <p className="text-sm text-foreground font-medium">{new Date(version.created_at).toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Updated</p>
-                    <p className="text-sm text-gray-800 font-medium">{new Date(version.updated_at).toLocaleString()}</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Updated</p>
+                    <p className="text-sm text-foreground font-medium">{new Date(version.updated_at).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -918,55 +918,55 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
         {activeTab === 'insights' && (
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
-              <h3 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
+              <h3 className="text-2xl font-extrabold text-foreground flex items-center gap-3">
                 <BarChart3 className="h-6 w-6 text-blue-500" />
                 Model Insights
               </h3>
-              <p className="text-sm text-gray-600 max-w-3xl">
+              <p className="text-sm text-muted-foreground max-w-3xl">
                 Feature importance, coefficients, and lightweight model summaries are captured from optional training artifacts and visualized inside Model Evolution.
               </p>
             </div>
 
             {insightItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-                <BarChart3 className="mx-auto h-10 w-10 text-gray-300" />
-                <h4 className="mt-3 text-base font-bold text-gray-800">No model insights were logged for this version.</h4>
-                <p className="mt-2 text-sm text-gray-500">
+              <div className="rounded-xl border border-dashed border-border bg-muted p-8 text-center">
+                <BarChart3 className="mx-auto h-10 w-10 text-muted-foreground" />
+                <h4 className="mt-3 text-base font-bold text-foreground">No model insights were logged for this version.</h4>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Log feature importance or coefficient data as model_insights.json to visualize it here.
                 </p>
               </div>
             ) : (
               <div className="flex flex-col gap-6">
                 <div className="grid gap-3 md:grid-cols-4">
-                  <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Kind</p>
-                    <p className="mt-1 text-sm font-bold capitalize text-gray-900">{insightKind.replace('_', ' ')}</p>
+                  <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kind</p>
+                    <p className="mt-1 text-sm font-bold capitalize text-foreground">{insightKind.replace('_', ' ')}</p>
                   </div>
-                  <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Items</p>
-                    <p className="mt-1 text-sm font-bold text-gray-900">{insightItemCount}</p>
+                  <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Items</p>
+                    <p className="mt-1 text-sm font-bold text-foreground">{insightItemCount}</p>
                   </div>
-                  <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Top Feature</p>
-                    <p className="mt-1 truncate text-sm font-bold text-gray-900" title={topInsightItem?.name}>{topInsightItem?.name || '-'}</p>
+                  <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Top Feature</p>
+                    <p className="mt-1 truncate text-sm font-bold text-foreground" title={topInsightItem?.name}>{topInsightItem?.name || '-'}</p>
                   </div>
-                  <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Source</p>
-                    <p className="mt-1 truncate text-sm font-bold text-gray-900">{modelInsights.source || 'training_artifact'}</p>
+                  <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Source</p>
+                    <p className="mt-1 truncate text-sm font-bold text-foreground">{modelInsights.source || 'training_artifact'}</p>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-                  <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-3">
+                <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                  <div className="flex items-start justify-between gap-4 border-b border-border pb-3">
                     <div>
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-gray-900">
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-foreground">
                         {insightKind === 'coefficients' ? 'Top Coefficients' : 'Top Feature Importance'}
                       </h4>
-                      <p className="mt-1 text-xs text-gray-500">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Showing top {topInsightItems.length} of {modelInsights.feature_count || insightItems.length} captured items.
                       </p>
                     </div>
-                    <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700">
+                    <span className="rounded-full border border-primary/20 bg-primary-subtle px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
                       {insightKind.replace('_', ' ')}
                     </span>
                   </div>
@@ -979,10 +979,10 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                       return (
                         <div key={`${item.rank || item.name}-${item.name}-${item.class_name || ''}`} className="grid items-center gap-3 md:grid-cols-[minmax(160px,260px)_1fr_96px]">
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-gray-700" title={item.name}>{item.name}</p>
-                            {item.class_name && <p className="truncate text-[11px] text-gray-400">{item.class_name}</p>}
+                            <p className="truncate text-sm font-semibold text-foreground" title={item.name}>{item.name}</p>
+                            {item.class_name && <p className="truncate text-[11px] text-muted-foreground">{item.class_name}</p>}
                           </div>
-                          <div className="h-6 overflow-hidden rounded-md bg-gray-100 ring-1 ring-gray-100">
+                          <div className="h-6 overflow-hidden rounded-md bg-muted ring-1 ring-border">
                             <div
                               className={classNames(
                                 "h-6 rounded-md shadow-sm",
@@ -991,7 +991,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                               style={{ width: `${width}%` }}
                             />
                           </div>
-                          <p className="text-right font-mono text-sm font-semibold text-gray-800">
+                          <p className="text-right font-mono text-sm font-semibold text-foreground">
                             {formatInsightValue(item.value)}
                           </p>
                         </div>
@@ -1000,13 +1000,13 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-                  <h4 className="border-b border-gray-100 pb-3 text-sm font-bold uppercase tracking-wider text-gray-900">
+                <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                  <h4 className="border-b border-border pb-3 text-sm font-bold uppercase tracking-wider text-foreground">
                     Insight Table
                   </h4>
                   <div className="mt-4 max-h-[560px] overflow-auto">
-                    <table className="min-w-full divide-y divide-gray-100 text-sm">
-                      <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500">
+                    <table className="min-w-full divide-y divide-border text-sm">
+                      <thead className="sticky top-0 z-10 bg-muted text-xs uppercase text-muted-foreground">
                         <tr>
                           <th className="px-3 py-2 text-right font-semibold">Rank</th>
                           <th className="px-3 py-2 text-left font-semibold">Feature</th>
@@ -1017,14 +1017,14 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                           <th className="px-3 py-2 text-right font-semibold">Absolute</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-border">
                         {insightItems.slice(0, 500).map((item, index) => (
-                          <tr key={`${item.name}-${item.class_name || ''}-${index}`} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-500">{item.rank || index + 1}</td>
-                            <td className="px-3 py-2 font-medium text-gray-800">{item.name}</td>
-                            {insightKind === 'coefficients' && <td className="px-3 py-2 text-gray-600">{item.class_name || '-'}</td>}
-                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-800">{formatInsightValue(item.value)}</td>
-                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-500">{formatInsightValue(item.abs_value ?? Math.abs(item.value))}</td>
+                          <tr key={`${item.name}-${item.class_name || ''}-${index}`} className="hover:bg-muted">
+                            <td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground">{item.rank || index + 1}</td>
+                            <td className="px-3 py-2 font-medium text-foreground">{item.name}</td>
+                            {insightKind === 'coefficients' && <td className="px-3 py-2 text-muted-foreground">{item.class_name || '-'}</td>}
+                            <td className="px-3 py-2 text-right font-mono text-xs text-foreground">{formatInsightValue(item.value)}</td>
+                            <td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground">{formatInsightValue(item.abs_value ?? Math.abs(item.value))}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1039,11 +1039,11 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
         {activeTab === 'metrics' && (
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
-              <h3 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
+              <h3 className="text-2xl font-extrabold text-foreground flex items-center gap-3">
                 <Gauge className="h-6 w-6 text-emerald-500" />
                 Metrics
               </h3>
-              <p className="text-sm text-gray-600 max-w-3xl">
+              <p className="text-sm text-muted-foreground max-w-3xl">
                 Captured metrics from the training artifact summary. Metric history appears below when structured time-series records are available.
               </p>
             </div>
@@ -1053,12 +1053,12 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 {scalarMetricEntries.length > 0 && (
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     {scalarMetricEntries.slice(0, 8).map(([name, value]) => (
-                      <div key={`summary-${name}`} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                        <p className="truncate text-xs font-bold uppercase tracking-wider text-gray-500" title={name}>
+                      <div key={`summary-${name}`} className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                        <p className="truncate text-xs font-bold uppercase tracking-wider text-muted-foreground" title={name}>
                           {name.replace(/_/g, ' ')}
                         </p>
                         <p
-                          className="mt-2 truncate font-mono text-2xl font-extrabold text-gray-900"
+                          className="mt-2 truncate font-mono text-2xl font-extrabold text-foreground"
                           title={formatValue(value)}
                         >
                           {shortValue(value, 36)}
@@ -1069,8 +1069,8 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 )}
 
                 {numericMetricEntries.length > 0 && (
-                  <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-                    <h4 className="border-b border-gray-100 pb-3 text-sm font-bold uppercase tracking-wider text-gray-900">
+                  <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                    <h4 className="border-b border-border pb-3 text-sm font-bold uppercase tracking-wider text-foreground">
                       Metric Overview
                     </h4>
                     <div className="mt-5 flex flex-col gap-3">
@@ -1080,10 +1080,10 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                         const negative = entry.numericValue < 0;
                         return (
                           <div key={`metric-bar-${entry.name}`} className="grid items-center gap-3 md:grid-cols-[minmax(160px,260px)_1fr_96px]">
-                            <p className="truncate text-sm font-semibold text-gray-700" title={entry.name}>
+                            <p className="truncate text-sm font-semibold text-foreground" title={entry.name}>
                               {entry.name.replace(/_/g, ' ')}
                             </p>
-                            <div className="h-5 overflow-hidden rounded-md bg-gray-100 ring-1 ring-gray-100">
+                            <div className="h-5 overflow-hidden rounded-md bg-muted ring-1 ring-border">
                               <div
                                 className={classNames(
                                   "h-5 rounded-md shadow-sm",
@@ -1092,7 +1092,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                                 style={{ width: `${width}%` }}
                               />
                             </div>
-                            <p className="text-right font-mono text-sm font-semibold text-gray-800">
+                            <p className="text-right font-mono text-sm font-semibold text-foreground">
                               {formatValue(entry.value)}
                             </p>
                           </div>
@@ -1102,23 +1102,23 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   </div>
                 )}
 
-                <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-                  <h4 className="border-b border-gray-100 pb-3 text-sm font-bold uppercase tracking-wider text-gray-900">
+                <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                  <h4 className="border-b border-border pb-3 text-sm font-bold uppercase tracking-wider text-foreground">
                     Metric Table
                   </h4>
                   <div className="mt-4 overflow-auto">
-                    <table className="min-w-full divide-y divide-gray-100 text-sm">
-                      <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                    <table className="min-w-full divide-y divide-border text-sm">
+                      <thead className="bg-muted text-xs uppercase text-muted-foreground">
                         <tr>
                           <th className="px-3 py-2 text-left font-semibold">Metric</th>
                           <th className="px-3 py-2 text-right font-semibold">Value</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-border">
                         {scalarMetricEntries.map(([name, value]) => (
-                          <tr key={`metric-row-${name}`} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 font-medium text-gray-800">{name}</td>
-                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-800" title={formatValue(value)}>
+                          <tr key={`metric-row-${name}`} className="hover:bg-muted">
+                            <td className="px-3 py-2 font-medium text-foreground">{name}</td>
+                            <td className="px-3 py-2 text-right font-mono text-xs text-foreground" title={formatValue(value)}>
                               {shortValue(value, 120)}
                             </td>
                           </tr>
@@ -1129,25 +1129,25 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 </div>
 
                 {objectMetricEntries.length > 0 && (
-                  <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-                    <h4 className="border-b border-gray-100 pb-3 text-sm font-bold uppercase tracking-wider text-gray-900">
+                  <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                    <h4 className="border-b border-border pb-3 text-sm font-bold uppercase tracking-wider text-foreground">
                       Metric Metadata
                     </h4>
                     <div className="mt-4 grid gap-4 lg:grid-cols-2">
                       {objectMetricEntries.map(([name, value]) => (
-                        <div key={`metric-object-${name}`} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">{name.replace(/_/g, ' ')}</p>
+                        <div key={`metric-object-${name}`} className="rounded-lg border border-border bg-muted p-4">
+                          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{name.replace(/_/g, ' ')}</p>
                           {isPlainRecord(value) ? (
                             <dl className="grid gap-2">
                               {Object.entries(value).slice(0, 20).map(([key, item]) => (
                                 <div key={key} className="grid grid-cols-[minmax(120px,220px)_1fr] gap-3 text-sm">
-                                  <dt className="truncate font-medium text-gray-500" title={key}>{key}</dt>
-                                  <dd className="truncate font-mono text-gray-800" title={formatValue(item)}>{shortValue(item, 90)}</dd>
+                                  <dt className="truncate font-medium text-muted-foreground" title={key}>{key}</dt>
+                                  <dd className="truncate font-mono text-foreground" title={formatValue(item)}>{shortValue(item, 90)}</dd>
                                 </div>
                               ))}
                             </dl>
                           ) : (
-                            <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-white p-3 text-xs text-gray-700">
+                            <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface p-3 text-xs text-foreground">
                               {formatValue(value)}
                             </pre>
                           )}
@@ -1158,19 +1158,19 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 )}
               </>
             ) : (
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-                <Gauge className="mx-auto h-10 w-10 text-gray-300" />
-                <h4 className="mt-3 text-base font-bold text-gray-800">No metrics captured for this version.</h4>
-                <p className="mt-2 text-sm text-gray-500">
+              <div className="rounded-xl border border-dashed border-border bg-muted p-8 text-center">
+                <Gauge className="mx-auto h-10 w-10 text-muted-foreground" />
+                <h4 className="mt-3 text-base font-bold text-foreground">No metrics captured for this version.</h4>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Training scripts can write SM_OUTPUT_DIR/metrics.json or print METRIC_JSON lines.
                 </p>
               </div>
             )}
 
-            <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
               <div className="mb-4">
-                <h4 className="text-sm font-bold uppercase tracking-wider text-gray-900">Metric History</h4>
-                <p className="mt-1 text-xs text-gray-500">Optional structured metric records across training steps.</p>
+                <h4 className="text-sm font-bold uppercase tracking-wider text-foreground">Metric History</h4>
+                <p className="mt-1 text-xs text-muted-foreground">Optional structured metric records across training steps.</p>
               </div>
               <ModelMetricsPanel familyId={family.id} versionId={version.id} />
             </div>

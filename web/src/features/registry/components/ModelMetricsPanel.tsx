@@ -63,19 +63,19 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
   if (metricEntries.length === 0) {
     return (
-      <div className="text-center py-12 flex flex-col items-center border border-dashed border-gray-200 rounded-2xl bg-gray-50/50 px-6 max-w-3xl mx-auto">
-        <div className="rounded-full bg-white border border-gray-200 p-4 mb-4 shadow-sm">
-          <BarChart2 className="h-8 w-8 text-gray-400" />
+      <div className="text-center py-12 flex flex-col items-center border border-dashed border-border rounded-2xl bg-muted/50 px-6 max-w-3xl mx-auto">
+        <div className="rounded-full bg-surface border border-border p-4 mb-4 shadow-sm">
+          <BarChart2 className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-bold text-gray-900 mb-2">No Metric History Found</h3>
-        <p className="text-sm text-gray-600 max-w-lg mb-6">
+        <h3 className="text-lg font-bold text-foreground mb-2">No Metric History Found</h3>
+        <p className="text-sm text-muted-foreground max-w-lg mb-6">
           Summary metrics are shown above when training artifacts include metrics.json. This panel is reserved for structured metric records across training steps.
         </p>
         
@@ -87,10 +87,10 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
                 <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
                 <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
               </div>
-              <span className="text-xs font-mono text-gray-400">train.py - metric output contract</span>
+              <span className="text-xs font-mono text-muted-foreground">train.py - metric output contract</span>
             </div>
             <button 
-              className="text-xs text-gray-400 hover:text-white transition-colors"
+              className="text-xs text-muted-foreground hover:text-white transition-colors"
               onClick={() => {
                 navigator.clipboard.writeText('import json\n\n# METRIC_JSON stdout works without extra dependencies.\nprint("METRIC_JSON:", json.dumps({\n    "step": 1,\n    "accuracy": 0.95,\n    "loss": 0.12,\n    "f1": 0.93\n}))');
                 toast.success('Snippet copied to clipboard');
@@ -114,7 +114,7 @@ print("METRIC_JSON:", json.dumps({
           </div>
         </div>
 
-        <p className="text-xs font-medium text-gray-500">
+        <p className="text-xs font-medium text-muted-foreground">
           Metrics appear here after the training job completes and registry data is synced.
         </p>
       </div>
@@ -130,17 +130,17 @@ print("METRIC_JSON:", json.dumps({
         {metricEntries.map((m) => {
           if (!m) return null;
           return (
-            <div key={`card-${m.name}`} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 truncate" title={m.name}>
+            <div key={`card-${m.name}`} className="bg-muted border border-border rounded-xl p-4">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 truncate" title={m.name}>
                 {m.name.replace(/_/g, ' ')}
               </p>
               <div className="flex items-end gap-2">
-                <span className="text-2xl font-bold text-gray-900">
+                <span className="text-2xl font-bold text-foreground">
                   {Number.isInteger(m.latest.value) ? m.latest.value : m.latest.value.toFixed(4)}
                 </span>
-                <span className="text-xs text-gray-500 mb-1">Step {m.latest.step}</span>
+                <span className="text-xs text-muted-foreground mb-1">Step {m.latest.step}</span>
               </div>
-              <p className="text-[10px] text-gray-400 uppercase mt-2">Source: {m.latest.source}</p>
+              <p className="text-[10px] text-muted-foreground uppercase mt-2">Source: {m.latest.source}</p>
             </div>
           );
         })}
@@ -163,13 +163,13 @@ print("METRIC_JSON:", json.dumps({
           const last5 = [...m.chartPoints].reverse().slice(0, 5);
 
           return (
-            <div key={`chart-${m.name}`} className="border border-gray-200 bg-white shadow-sm rounded-2xl p-5">
+            <div key={`chart-${m.name}`} className="border border-border bg-surface shadow-sm rounded-2xl p-5">
               <div className="flex justify-between items-center mb-4">
-                <h4 className="text-sm font-bold text-gray-900 capitalize">{m.name.replace(/_/g, ' ')} Progression</h4>
-                <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">Min: {m.min.toFixed(2)} | Max: {m.max.toFixed(2)}</span>
+                <h4 className="text-sm font-bold text-foreground capitalize">{m.name.replace(/_/g, ' ')} Progression</h4>
+                <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">Min: {m.min.toFixed(2)} | Max: {m.max.toFixed(2)}</span>
               </div>
               
-              <div className="w-full bg-gray-50 rounded-xl p-4 border border-gray-100 flex flex-col gap-2">
+              <div className="w-full bg-muted rounded-xl p-4 border border-border flex flex-col gap-2">
                 <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-32 overflow-visible stroke-blue-500 fill-none" preserveAspectRatio="none">
                   <defs>
                     <linearGradient id={`grad-${m.name}`} x1="0" y1="0" x2="0" y2="1">
@@ -190,7 +190,7 @@ print("METRIC_JSON:", json.dumps({
                     );
                   })}
                 </svg>
-                <div className="flex justify-between text-xs text-gray-400 font-mono px-1">
+                <div className="flex justify-between text-xs text-muted-foreground font-mono px-1">
                   <span>Step {m.chartPoints[0].step}</span>
                   <span>Step {m.latest.step}</span>
                 </div>
@@ -198,20 +198,20 @@ print("METRIC_JSON:", json.dumps({
 
               {/* Trend Table */}
               <div className="mt-6">
-                <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Recent Trend (Last 5)</h5>
-                <div className="border border-gray-100 rounded-lg overflow-hidden">
+                <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Recent Trend (Last 5)</h5>
+                <div className="border border-border rounded-lg overflow-hidden">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
+                    <thead className="bg-muted text-muted-foreground text-xs uppercase font-semibold">
                       <tr>
                         <th className="px-3 py-2">Step</th>
                         <th className="px-3 py-2 text-right">Value</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-border">
                       {last5.map((point) => (
-                        <tr key={point.step} className="bg-white">
-                          <td className="px-3 py-2 font-mono text-gray-500">{point.step}</td>
-                          <td className="px-3 py-2 text-right font-mono text-gray-900">
+                        <tr key={point.step} className="bg-surface">
+                          <td className="px-3 py-2 font-mono text-muted-foreground">{point.step}</td>
+                          <td className="px-3 py-2 text-right font-mono text-foreground">
                             {Number.isInteger(point.value) ? point.value : point.value.toFixed(4)}
                           </td>
                         </tr>

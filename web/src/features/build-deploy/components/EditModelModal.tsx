@@ -68,15 +68,15 @@ export default function EditModelModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div 
-        className="w-full max-w-xl bg-white rounded-2xl shadow-xl flex flex-col max-h-[85vh] overflow-hidden"
+        className="w-full max-w-xl bg-surface rounded-2xl shadow-xl flex flex-col max-h-[85vh] overflow-hidden"
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 shrink-0">
-          <h2 className="text-xl font-bold text-gray-900">Edit Model API</h2>
+        <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
+          <h2 className="text-xl font-bold text-foreground">Edit Model API</h2>
           <button 
             onClick={handleCancel}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+            className="text-muted-foreground hover:text-muted-foreground transition-colors p-1"
           >
             <X className="h-6 w-6" />
           </button>
@@ -105,7 +105,7 @@ export default function EditModelModal({
                 placeholder=""
               />
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Access Mode</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">Access Mode</label>
                 <AccessModePicker
                   value={form.access_mode}
                   onChange={(v) => setField('access_mode', v)}
@@ -113,7 +113,7 @@ export default function EditModelModal({
               </div>
             </div>
             
-            <div className="mt-8 flex items-center justify-end gap-3 border-t border-gray-200 pt-6">
+            <div className="mt-8 flex items-center justify-end gap-3 border-t border-border pt-6">
               <Button
                 variant="secondary"
                 size="md"

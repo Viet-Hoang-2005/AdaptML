@@ -14,8 +14,10 @@ import type { ModelProject } from '@/features/catalog/types';
 import EditModelModal from '@/features/build-deploy/components/EditModelModal';
 import { PageHeader } from '@/shared/ui/PageHeader';
 import { PageContent } from '@/shared/ui/PageContent';
+import { useTranslation } from 'react-i18next';
 
 export default function APIManagementPage() {
+  const { t, i18n } = useTranslation('buildDeploy');
   const navigate = useNavigate();
   const { data, isLoading } = useModelProjects();
   const { deleteModelProject } = useModelProjectMutations();
@@ -32,13 +34,13 @@ export default function APIManagementPage() {
   const columns: ColumnDef<ModelProject>[] = [
     {
       id: 'index',
-      header: '#',
+      header: t('columns.index'),
       enableSorting: false,
       cell: ({ row }) => <span className="text-muted-foreground">{row.index + 1}</span>,
     },
     {
       accessorKey: 'name',
-      header: 'Name',
+      header: t('columns.name'),
       cell: ({ row }) => (
         <button
           type="button"
@@ -51,31 +53,31 @@ export default function APIManagementPage() {
     },
     {
       accessorKey: 'description',
-      header: 'Description',
+      header: t('columns.description'),
       cell: ({ row }) => (
         <span className="line-clamp-2 max-w-sm text-sm text-muted-foreground">
-          {row.original.description || 'No description provided.'}
+          {row.original.description || t('noDescription')}
         </span>
       ),
     },
     {
       accessorKey: 'flavor',
-      header: 'Flavor',
+      header: t('columns.flavor'),
       cell: ({ row }) => <Badge>{row.original.flavor || 'Not set'}</Badge>,
     },
     {
       accessorKey: 'access_mode',
-      header: 'Access',
+      header: t('columns.access'),
       cell: ({ row }) => <Badge variant={row.original.access_mode === 'public' ? 'success' : 'neutral'}>{row.original.access_mode}</Badge>,
     },
     {
       accessorKey: 'updated_at',
-      header: 'Updated',
-      cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{new Date(row.original.updated_at).toLocaleString()}</span>,
+      header: t('columns.updated'),
+      cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{new Date(row.original.updated_at).toLocaleString(i18n.language)}</span>,
     },
     {
       id: 'actions',
-      header: 'Actions',
+      header: t('columns.actions'),
       enableSorting: false,
       cell: ({ row }) => {
         const record = row.original;
@@ -106,14 +108,14 @@ export default function APIManagementPage() {
 
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
-      <PageHeader title="Management" />
+      <PageHeader title={t('title')} />
 
       <PageContent>
         <div className="px-6 py-6 space-y-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="w-full md:w-96">
               <Input
-                placeholder="Search model by name..."
+                placeholder={t('search')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 icon={<Search className="h-4 w-4" />}
@@ -125,22 +127,22 @@ export default function APIManagementPage() {
               onClick={() => navigate('/dashboard/api-management/upload')}
             >
               <Plus className="h-4 w-4"/>
-              Upload model
+              {t('upload')}
             </Button>
           </div>
 
           <div>
             {isLoading ? (
-              <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center text-sm text-gray-500">
-                Loading models...
+              <div className="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+                {t('loading')}
               </div>
             ) : filteredModels.length === 0 ? (
               <Placeholder
-                title="No models found"
-                description={searchQuery ? `No models matching "${searchQuery}"` : "Upload your first MLflow model package to create a prediction endpoint."}
+                title={t('noModels')}
+                description={searchQuery ? t('noMatch', { query: searchQuery }) : t('noModelsDescription')}
                 icon={<Bot className="h-6 w-6" />}
                 showModelName={false}
-                action={!searchQuery && <Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>Upload model</Button>}
+                action={!searchQuery && <Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>{t('upload')}</Button>}
               />
             ) : (
               <DataTable columns={columns} data={filteredModels} getRowId={(model) => model.id} pageSize={10} />
@@ -160,9 +162,9 @@ export default function APIManagementPage() {
       />
       <ConfirmModal
         open={Boolean(modelToDelete)}
-        title="Delete model API"
-        description={<>Delete <strong>{modelToDelete?.name}</strong>? This action cannot be undone.</>}
-        confirmText="Delete model"
+        title={t('deleteTitle')}
+        description={t('deleteDescription', { name: modelToDelete?.name })}
+        confirmText={t('deleteConfirm')}
         tone="danger"
         onConfirm={() => {
           if (modelToDelete) void deleteModelProject(modelToDelete.id);

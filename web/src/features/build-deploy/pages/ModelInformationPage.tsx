@@ -78,12 +78,12 @@ export function ModelInformationPage({
           className={!editing ? readOnlyFieldClass : ''}
         />
         
-        <label htmlFor="model-desc" className="flex flex-col gap-2 text-sm font-medium text-gray-700 shrink-0">
+        <label htmlFor="model-desc" className="flex flex-col gap-2 text-sm font-medium text-foreground shrink-0">
           Description
           <textarea
             id="model-desc"
-            className={`text-sm text-gray-800 placeholder-gray-400 font-normal placeholder:font-normal h-25 w-full resize-y rounded-2xl border border-gray-300 bg-white py-3 px-4 outline-none transition-colors duration-200 disabled:bg-gray-50 disabled:text-gray-400 ${
-              editing ? 'hover:border-black focus:border-black' : 'cursor-default hover:border-gray-300 focus:border-gray-300'
+            className={`text-sm text-foreground placeholder:text-muted-foreground font-normal placeholder:font-normal h-25 w-full resize-y rounded-2xl border border-border bg-surface py-3 px-4 outline-none transition-colors duration-200 disabled:bg-muted disabled:text-muted-foreground ${
+              editing ? 'hover:border-primary focus:border-primary' : 'cursor-default hover:border-border focus:border-border'
             }`}
             value={editing ? form.description : (model.description || '')}
             onChange={(e) => setField('description', e.target.value)}
@@ -92,12 +92,12 @@ export function ModelInformationPage({
           />
         </label>
 
-        <label htmlFor="model-info" className="flex flex-col flex-1 gap-2 text-sm font-medium text-gray-700">
+        <label htmlFor="model-info" className="flex flex-col flex-1 gap-2 text-sm font-medium text-foreground">
           Model Information
           <textarea
             id="model-info"
-            className={`text-sm text-gray-800 placeholder-gray-400 font-normal placeholder:font-normal flex-1 w-full resize-y rounded-2xl border border-gray-300 bg-white py-3 px-4 outline-none transition-colors duration-200 disabled:bg-gray-50 disabled:text-gray-400 ${
-              editing ? 'hover:border-black focus:border-black' : 'cursor-default hover:border-gray-300 focus:border-gray-300'
+            className={`text-sm text-foreground placeholder:text-muted-foreground font-normal placeholder:font-normal flex-1 w-full resize-y rounded-2xl border border-border bg-surface py-3 px-4 outline-none transition-colors duration-200 disabled:bg-muted disabled:text-muted-foreground ${
+              editing ? 'hover:border-primary focus:border-primary' : 'cursor-default hover:border-border focus:border-border'
             }`}
             value={editing ? form.model_info : (model.model_info || '')}
             onChange={(e) => setField('model_info', e.target.value)}
@@ -107,7 +107,7 @@ export function ModelInformationPage({
         </label>
 
         <div className="shrink-0">
-          <label className="text-sm font-medium text-gray-700 mb-2 block">Access Mode</label>
+          <label className="text-sm font-medium text-foreground mb-2 block">Access Mode</label>
           <AccessModePicker
             value={editing ? form.access_mode : (model.access_mode || 'public')}
             onChange={(v) => editing && setField('access_mode', v)}

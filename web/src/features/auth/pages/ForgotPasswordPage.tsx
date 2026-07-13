@@ -7,26 +7,28 @@ import { Button } from '@/shared/ui/Button';
 import { toast } from '@/shared/ui/toastStore';
 import { forgotPasswordOTP } from '@/features/auth/api/authApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
+import { useTranslation } from 'react-i18next';
 
 export default function ForgotPasswordPage() {
+  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSendOTP = async () => {
     if (!email) {
-      toast.warning('Please enter your email address.');
+      toast.warning(t('signup.emailRequired'));
       return;
     }
     setLoading(true);
     try {
       const response = await forgotPasswordOTP(email);
-      toast.success('OTP has been sent to your email!');
+      toast.success(t('signup.otpSent'));
       navigate('/forgot-password/verify-otp', {
         state: { email: response.email || email.trim().toLowerCase() },
       });
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to send OTP. Please check your email and try again.'));
+      toast.error(getApiErrorMessage(error, t('recovery.sendFailed')));
     } finally {
       setLoading(false);
     }
@@ -42,7 +44,7 @@ export default function ForgotPasswordPage() {
                     font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="leading-none">Back to sign in</span>
+          <span className="leading-none">{t('recovery.backToSignIn')}</span>
         </Link>
 
         {/* Icon */}
@@ -50,9 +52,9 @@ export default function ForgotPasswordPage() {
           <Mail className="h-8 w-8 text-foreground" />
         </div>
 
-        <h2 className="mb-2 text-center text-2xl font-bold text-foreground">Reset your password</h2>
+        <h2 className="mb-2 text-center text-2xl font-bold text-foreground">{t('recovery.title')}</h2>
         <p className="mb-6 text-center text-sm text-muted-foreground">
-          Enter your email and we'll send you a verification code to reset your password.
+          {t('recovery.description')}
         </p>
 
         <div className="flex flex-col gap-4">
@@ -60,9 +62,9 @@ export default function ForgotPasswordPage() {
             id="input-forgot-email"
             name="email"
             autoComplete="email"
-            label="Email"
+            label={t('login.email')}
             type="email"
-            placeholder="example@gmail.com"
+            placeholder={t('login.emailPlaceholder')}
             icon={<Mail className="h-4 w-4" />}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -76,7 +78,7 @@ export default function ForgotPasswordPage() {
             onClick={handleSendOTP}
             className="mt-4"
           >
-            Send OTP
+            {t('recovery.send')}
           </Button>
         </div>
       </div>

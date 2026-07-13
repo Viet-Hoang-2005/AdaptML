@@ -88,7 +88,7 @@ export function PackagePreview({ preview, compact = false }: { preview: string[]
   }, [preview]);
 
   return (
-    <div className={`rounded-lg border border-gray-200 bg-gray-950 p-4 font-mono text-xs text-gray-100 ${compact ? 'max-h-60 overflow-auto custom-scrollbar' : ''}`}>
+    <div className={`rounded-lg border border-border bg-gray-950 p-4 font-mono text-xs text-gray-100 ${compact ? 'max-h-60 overflow-auto custom-scrollbar' : ''}`}>
       {lines.map((line, idx) => {
         // Extract the connector/prefix part vs the actual file name
         const nameIndex = line.text.lastIndexOf(line.name);
@@ -97,8 +97,8 @@ export function PackagePreview({ preview, compact = false }: { preview: string[]
         
         return (
           <div key={idx} className="flex items-center whitespace-pre py-1">
-            <span className="text-gray-500">{prefix}</span>
-            <span className={`flex items-center gap-1.5 ${line.isDirectory ? 'text-blue-300 font-semibold' : 'text-gray-300'}`}>
+            <span className="text-muted-foreground">{prefix}</span>
+            <span className={`flex items-center gap-1.5 ${line.isDirectory ? 'text-blue-300 font-semibold' : 'text-muted-foreground'}`}>
               {line.isDirectory ? <Boxes className="h-3 w-3" /> : <FileCode2 className="h-3 w-3 opacity-60" />}
               {line.name}{suffix}
             </span>

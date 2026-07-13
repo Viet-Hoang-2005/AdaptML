@@ -30,13 +30,13 @@ export function RollbackVersionModal({ family, version, onClose, onSuccess }: Pr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-amber-100 text-amber-600 p-2.5 rounded-full">
               <RotateCcw className="h-6 w-6" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900">Rollback to Version</h3>
+            <h3 className="text-xl font-bold text-foreground">Rollback to Version</h3>
           </div>
           
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-amber-800 shadow-sm">
@@ -46,25 +46,25 @@ export function RollbackVersionModal({ family, version, onClose, onSuccess }: Pr
             </p>
           </div>
 
-          <div className="mt-6 flex flex-col gap-3 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
-            <div className="flex justify-between py-1 border-b border-gray-200">
-              <span className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Rollback Target</span>
+          <div className="mt-6 flex flex-col gap-3 text-sm bg-muted p-4 rounded-xl border border-border">
+            <div className="flex justify-between py-1 border-b border-border">
+              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">Rollback Target</span>
               <span className="font-bold font-mono text-amber-700 bg-amber-100 px-2 rounded">{formatVersion(version.version)}</span>
             </div>
-            <div className="flex justify-between py-1 border-b border-gray-200">
-              <span className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Current Prod</span>
-              <span className="font-mono text-gray-600">
+            <div className="flex justify-between py-1 border-b border-border">
+              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">Current Prod</span>
+              <span className="font-mono text-muted-foreground">
                 {family.current_production_version ? formatVersion(family.current_production_version.version) : 'None'}
               </span>
             </div>
             <div className="flex justify-between py-1">
-              <span className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Family</span>
-              <span className="font-bold text-gray-900">{family.display_name || family.name}</span>
+              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">Family</span>
+              <span className="font-bold text-foreground">{family.display_name || family.name}</span>
             </div>
           </div>
         </div>
         
-        <div className="p-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+        <div className="p-4 bg-muted border-t border-border flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             Cancel
           </Button>

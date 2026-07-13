@@ -12,8 +12,10 @@ import { PageContent } from '@/shared/ui/PageContent';
 import { DataTable } from '@/shared/ui/DataTable';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Badge } from '@/shared/ui/Badge';
+import { useTranslation } from 'react-i18next';
 
 export default function DeveloperSettingPage() {
+  const { t } = useTranslation('settings');
   const navigate = useNavigate();
   const { data: modelsData } = useModelProjects();
   const models = modelsData?.models ?? [];
@@ -41,35 +43,35 @@ export default function DeveloperSettingPage() {
     },
     {
       accessorKey: 'name',
-      header: 'Name',
+      header: t('apiKey.name'),
       cell: ({ row }) => <span className="font-semibold text-foreground">{row.original.name}</span>,
     },
     {
       accessorKey: 'description',
-      header: 'Description',
+      header: t('apiKey.description'),
       cell: ({ row }) => (
         <span className="line-clamp-2 max-w-sm text-sm text-muted-foreground">
-          {row.original.description || 'No description provided.'}
+          {row.original.description || t('apiKey.noDescription')}
         </span>
       ),
     },
     {
       id: 'models',
-      header: 'Model scope',
+      header: t('apiKey.modelScope'),
       enableSorting: false,
       cell: ({ row }) => {
         const record = row.original;
         const scope = record.scope;
         if (scope === 'all') {
-          return <Badge variant="primary">All models</Badge>;
+          return <Badge variant="primary">{t('apiKey.allModels')}</Badge>;
         }
         if (!record.allowed_models || record.allowed_models.length === 0) {
-          return <Badge variant="danger">No models</Badge>;
+          return <Badge variant="danger">{t('apiKey.noModels')}</Badge>;
         }
         return (
           <div className="flex max-w-xs flex-wrap gap-1">
             {record.allowed_models.map(id => (
-              <Badge key={id}>{modelIdToName[id] || `Unknown (${id})`}</Badge>
+              <Badge key={id}>{modelIdToName[id] || t('apiKey.unknownModel', { id })}</Badge>
             ))}
           </div>
         );
@@ -77,24 +79,24 @@ export default function DeveloperSettingPage() {
     },
     {
       accessorKey: 'created_at',
-      header: 'Created',
+      header: t('apiKey.created'),
       cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{new Date(row.original.created_at).toLocaleString()}</span>,
     },
     {
       id: 'actions',
-      header: 'Actions',
+      header: t('apiKey.actions'),
       enableSorting: false,
       cell: ({ row }) => {
         const record = row.original;
         return (
         <div className="flex items-center gap-1">
           <IconButton
-            label="Edit API key"
+            label={t('apiKey.edit')}
             icon={<Edit3 className="h-4 w-4" />}
             onClick={() => navigate(`/dashboard/settings/developer/api-keys/${record.id}`)}
           />
-          <IconButton label="Regenerate API key" icon={<RefreshCw className="h-4 w-4" />} onClick={() => setPendingAction({ kind: 'regenerate', key: record })} />
-          <IconButton label="Delete API key" variant="danger-outline" icon={<Trash2 className="h-4 w-4" />} onClick={() => setPendingAction({ kind: 'delete', key: record })} />
+          <IconButton label={t('apiKey.regenerate')} icon={<RefreshCw className="h-4 w-4" />} onClick={() => setPendingAction({ kind: 'regenerate', key: record })} />
+          <IconButton label={t('apiKey.delete')} variant="danger-outline" icon={<Trash2 className="h-4 w-4" />} onClick={() => setPendingAction({ kind: 'delete', key: record })} />
         </div>
       );
       },
@@ -104,11 +106,11 @@ export default function DeveloperSettingPage() {
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
       <PageContent>
-        <div className="flex flex-col gap-4 border-b border-gray-100 px-6 py-6 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-border px-6 py-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Developer Access</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Create and manage API keys for private model endpoint authentication.
+            <h2 className="text-xl font-bold text-foreground">{t('apiKey.developerTitle')}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t('apiKey.developerDescription')}
             </p>
           </div>
           <Button
@@ -117,19 +119,19 @@ export default function DeveloperSettingPage() {
             icon={<KeyRound className="h-4 w-4" />}
             onClick={() => navigate('/dashboard/settings/developer/api-keys/create')}
           >
-            Create API Key
+            {t('apiKey.createTitle')}
           </Button>
         </div>
 
         <div className="px-6 py-6">
-          <DataTable columns={columns} data={apiKeys} getRowId={(key) => key.id} loading={loading} pageSize={10} emptyMessage="No API keys yet." />
+          <DataTable columns={columns} data={apiKeys} getRowId={(key) => key.id} loading={loading} pageSize={10} emptyMessage={t('apiKey.empty')} />
         </div>
       </PageContent>
 
       {createdApiKey && (
         <ApiModal
-          title="API Key Regenerated"
-          description="This new key is shown once. Store it now before closing this modal. The old key will no longer work."
+          title={t('apiKey.regeneratedTitle')}
+          description={t('apiKey.regeneratedDescription')}
           apiKey={createdApiKey.api_key}
           onClose={handleDone}
           onCopy={handleCopyCreatedKey}
@@ -137,11 +139,11 @@ export default function DeveloperSettingPage() {
       )}
       <ConfirmModal
         open={Boolean(pendingAction)}
-        title={pendingAction?.kind === 'delete' ? 'Delete API key' : 'Regenerate API key'}
+        title={pendingAction?.kind === 'delete' ? t('apiKey.delete') : t('apiKey.regenerate')}
         description={pendingAction?.kind === 'delete'
-          ? `Delete “${pendingAction.key.name}”? Applications using this key will immediately lose access.`
-          : `Regenerate “${pendingAction?.key.name}”? The existing key will stop working immediately.`}
-        confirmText={pendingAction?.kind === 'delete' ? 'Delete key' : 'Regenerate key'}
+          ? t('apiKey.deleteDescription', { name: pendingAction.key.name })
+          : t('apiKey.regenerateDescription', { name: pendingAction?.key.name })}
+        confirmText={pendingAction?.kind === 'delete' ? t('apiKey.deleteKey') : t('apiKey.regenerateKey')}
         tone={pendingAction?.kind === 'delete' ? 'danger' : 'default'}
         onConfirm={() => {
           if (pendingAction?.kind === 'delete') void handleDeleteAPIKey(pendingAction.key);

@@ -1,6 +1,7 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import { AlertTriangle, Info } from 'lucide-react';
 import { useRef, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from './Button';
 
 type ConfirmTone = 'default' | 'danger';
@@ -21,13 +22,16 @@ export function ConfirmModal({
   open,
   title,
   description,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   tone = 'default',
   loading = false,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
+  const { t } = useTranslation('common');
+  const resolvedConfirmText = confirmText || t('actions.confirm');
+  const resolvedCancelText = cancelText || t('actions.cancel');
   const danger = tone === 'danger';
   const confirmedRef = useRef(false);
   return (
@@ -40,22 +44,22 @@ export function ConfirmModal({
       onCancel();
     }}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-sm animate-fade-in" />
-        <AlertDialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-6 text-foreground shadow-[var(--shadow-overlay)] animate-fade-in">
-          <div className="flex items-start gap-4">
-            <span className={danger ? 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-danger-subtle text-danger' : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary'}>
+        <AlertDialog.Overlay className="fixed inset-0 z-50 bg-slate-950/40 animate-fade-in" />
+        <AlertDialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[8px] border border-border bg-surface text-foreground shadow-[var(--shadow-overlay)] animate-fade-in">
+          <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+            <span className={danger ? 'flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] bg-danger-subtle text-danger' : 'flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] bg-muted text-foreground'}>
               {danger ? <AlertTriangle className="h-5 w-5" /> : <Info className="h-5 w-5" />}
             </span>
-            <div className="min-w-0 flex-1">
-              <AlertDialog.Title className="text-lg font-semibold text-foreground">{title}</AlertDialog.Title>
-              <AlertDialog.Description asChild>
-                <div className="mt-2 text-sm leading-6 text-muted-foreground">{description}</div>
-              </AlertDialog.Description>
-            </div>
+            <AlertDialog.Title className="text-lg font-bold text-foreground">{title}</AlertDialog.Title>
           </div>
-          <div className="mt-7 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <AlertDialog.Cancel asChild><Button variant="secondary">{cancelText}</Button></AlertDialog.Cancel>
-            <AlertDialog.Action asChild><Button variant={danger ? 'danger' : 'primary'} loading={loading} onClick={() => { confirmedRef.current = true; onConfirm(); }}>{confirmText}</Button></AlertDialog.Action>
+          <div className="space-y-8 px-6 py-6">
+            <AlertDialog.Description asChild>
+              <div className="text-base leading-6 text-muted-foreground">{description}</div>
+            </AlertDialog.Description>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <AlertDialog.Cancel asChild><Button variant="secondary">{resolvedCancelText}</Button></AlertDialog.Cancel>
+              <AlertDialog.Action asChild><Button variant={danger ? 'danger' : 'primary'} loading={loading} onClick={() => { confirmedRef.current = true; onConfirm(); }}>{resolvedConfirmText}</Button></AlertDialog.Action>
+            </div>
           </div>
         </AlertDialog.Content>
       </AlertDialog.Portal>

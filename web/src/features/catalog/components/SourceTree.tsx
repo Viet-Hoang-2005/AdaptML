@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ChevronDown,
   ChevronRight,
@@ -11,6 +12,7 @@ import {
 import type { CreatingFileState, SourceTreeNode } from './sourceTreeModel';
 
 function InlineTreeInput({ onCommit }: { onCommit: (value: string) => void }) {
+  const { t } = useTranslation('catalog');
   const [value, setValue] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
@@ -23,7 +25,7 @@ function InlineTreeInput({ onCommit }: { onCommit: (value: string) => void }) {
   return (
     <input
       autoFocus
-      aria-label="File or folder name"
+      aria-label={t('sourceEditor.fileFolderName')}
       className="min-w-0 flex-1 rounded border border-[var(--color-primary)] bg-[var(--color-surface)] px-1 py-0.5 text-sm text-[var(--color-foreground)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
       value={value}
       onChange={(event) => setValue(event.target.value)}

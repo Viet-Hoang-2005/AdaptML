@@ -1,4 +1,4 @@
-import { Bell, BrainCircuit, Boxes, ChartNoAxesCombined, ChevronsLeft, ChevronsRight, Home, LogOut, Rocket, Settings, X } from 'lucide-react';
+import { Bell, Bot, BrainCircuit, GitBranch, Home, LineChart, LogOut, Menu, Settings, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, useLocation } from 'react-router-dom';
 import { routes } from '@/app/router/paths';
@@ -12,69 +12,75 @@ interface DashboardSidebarProps {
   onCloseMobile: () => void;
 }
 
-const lifecycleItems = [
-  { key: 'overview', label: 'Overview', to: routes.overview, icon: Home, match: '/dashboard/home' },
-  { key: 'buildDeploy', label: 'Build & Deploy', to: routes.buildDeploy, icon: Rocket, match: routes.buildDeploy },
-  { key: 'training', label: 'Training', to: routes.training, icon: BrainCircuit, match: routes.training },
-  { key: 'registry', label: 'Registry', to: routes.registry, icon: Boxes, match: routes.registry },
-  { key: 'monitoring', label: 'Monitoring', to: routes.monitoring, icon: ChartNoAxesCombined, match: routes.monitoring },
+const workspaceItems = [
+  { key: 'home', label: 'Home', to: routes.overview, icon: Home, match: '/dashboard/home' },
+  { key: 'driftMonitoring', label: 'Drift Monitoring', to: routes.monitoring, icon: LineChart, match: routes.monitoring },
+  { key: 'modelTraining', label: 'Model Training', to: routes.training, icon: BrainCircuit, match: routes.training },
+  { key: 'modelEvolution', label: 'Model Evolution', to: routes.registry, icon: GitBranch, match: routes.registry },
 ] as const;
 
 const utilityItems = [
-  { key: 'notifications', label: 'Notifications', to: routes.notifications, icon: Bell, match: routes.notifications },
-  { key: 'settings', label: 'Settings', to: routes.profile, icon: Settings, match: '/dashboard/settings' },
+  { key: 'management', label: 'Management', to: routes.buildDeploy, icon: Bot, match: routes.buildDeploy },
+  { key: 'notification', label: 'Notification', to: routes.notifications, icon: Bell, match: routes.notifications },
+  { key: 'setting', label: 'Setting', to: routes.profile, icon: Settings, match: '/dashboard/settings' },
 ] as const;
 
 export default function Sidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: DashboardSidebarProps) {
   const location = useLocation();
   const { logout } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation('common');
 
   const itemClass = (match: string) => cn(
-    'group flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
+    'group flex h-10 items-center gap-3 rounded-[8px] px-3 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring',
     location.pathname.startsWith(match)
-      ? 'bg-primary text-primary-foreground shadow-sm'
+      ? 'bg-primary text-primary-foreground'
       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+    'md:justify-center md:px-0 xl:justify-start xl:px-3',
     collapsed && 'xl:justify-center xl:px-0',
   );
 
-  const renderItem = (item: (typeof lifecycleItems)[number] | (typeof utilityItems)[number]) => {
+  const labelClass = cn('truncate md:hidden xl:block', collapsed && 'xl:hidden');
+
+  const renderItem = (item: (typeof workspaceItems)[number] | (typeof utilityItems)[number]) => {
     const Icon = item.icon;
     return (
       <NavLink key={item.key} to={item.to} onClick={onCloseMobile} className={itemClass(item.match)} title={collapsed ? item.label : undefined}>
         <Icon className="h-5 w-5 shrink-0" />
-        <span className={cn('truncate', collapsed && 'xl:hidden')}>{t(`navigation.${item.key}`, item.label)}</span>
+        <span className={labelClass}>{t(`navigation.${item.key}`, item.label)}</span>
       </NavLink>
     );
   };
 
   return (
     <>
-      {mobileOpen && <button type="button" className="fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-sm md:hidden" onClick={onCloseMobile} aria-label="Close navigation overlay" />}
+      {mobileOpen && <button type="button" className="fixed inset-0 z-30 bg-slate-950/40 md:hidden" onClick={onCloseMobile} aria-label={t('actions.closeNavigation')} />}
       <aside className={cn(
-        'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-border bg-surface transition-transform duration-200 md:static md:z-20 md:w-18 md:translate-x-0 xl:w-64',
+        'fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-border bg-surface transition-[transform,width] duration-200 md:static md:z-20 md:w-[68px] md:translate-x-0 xl:w-56',
         mobileOpen ? 'translate-x-0' : '-translate-x-full',
-        collapsed && 'xl:w-18',
+        collapsed && 'xl:w-[68px]',
       )}>
         <div className="flex h-16 items-center justify-between border-b border-border px-3 md:hidden">
-          <span className="text-sm font-semibold text-foreground">Lifecycle navigation</span>
-          <button type="button" onClick={onCloseMobile} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close navigation"><X className="h-5 w-5" /></button>
+          <span className="text-sm text-muted-foreground">{t('navigation.workspace')}</span>
+          <button type="button" onClick={onCloseMobile} className="flex h-10 w-10 items-center justify-center rounded-[8px] text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t('actions.closeNavigation')}><X className="h-5 w-5" /></button>
         </div>
 
-        <div className="hidden h-12 items-center border-b border-border px-3 md:flex md:justify-center xl:justify-between">
-          <span className={cn('text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground md:hidden xl:block', collapsed && 'xl:hidden')}>Model lifecycle</span>
-          <button type="button" onClick={onToggle} className="hidden h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground xl:flex" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-            {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+        <div className="hidden h-12 items-center gap-1 border-b border-border p-3 md:flex md:justify-center xl:justify-start">
+          <button type="button" onClick={onToggle} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] text-muted-foreground hover:text-foreground" aria-label={collapsed ? t('actions.expandSidebar') : t('actions.collapseSidebar')}>
+            <Menu className="h-5 w-5" />
           </button>
+          <span className={cn('text-sm tracking-wide text-muted-foreground md:hidden xl:block', collapsed && 'xl:hidden')}>{t('navigation.workspace')}</span>
         </div>
 
-        <nav className="flex min-h-0 flex-1 flex-col justify-between gap-6 overflow-y-auto p-3" aria-label="Primary navigation">
-          <div className="space-y-1.5">{lifecycleItems.map(renderItem)}</div>
-          <div className="space-y-1.5 border-t border-border pt-3">
+        <nav className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto p-3" aria-label={t('navigation.primary')}>
+          <div className="space-y-1">{workspaceItems.map(renderItem)}</div>
+          <div className="mb-2 space-y-1">
             {utilityItems.map(renderItem)}
-            <button type="button" onClick={logout} className={cn('flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold text-muted-foreground hover:bg-danger-subtle hover:text-danger', collapsed && 'xl:justify-center xl:px-0')} title={collapsed ? 'Sign out' : undefined}>
+            <button type="button" onClick={logout} className={cn(
+              'flex h-10 w-full items-center gap-3 rounded-[8px] px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger md:justify-center md:px-0 xl:justify-start xl:px-3',
+              collapsed && 'xl:justify-center xl:px-0',
+            )} title={collapsed ? t('actions.logout') : undefined}>
               <LogOut className="h-5 w-5 shrink-0" />
-              <span className={cn(collapsed && 'xl:hidden')}>Sign out</span>
+              <span className={labelClass}>{t('actions.logout')}</span>
             </button>
           </div>
         </nav>

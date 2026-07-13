@@ -1,5 +1,6 @@
 import { BriefcaseBusiness, Building2, CalendarDays, Camera, ChevronDown, FileText, Fingerprint, Globe2, LockKeyhole, Mail, ShieldCheck, Tags, Trash2, UserRound, Edit3 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 import { AvatarCropModal } from '@/features/settings/components/AvatarCropModal';
 import { AvatarModal } from '@/features/settings/components/AvatarModal';
@@ -34,11 +35,12 @@ const getInitials = (profile: UserProfile | null) => {
 };
 
 const readOnlyFieldClass =
-  'cursor-default hover:border-gray-300 focus:border-gray-300';
+  'cursor-default hover:border-border focus:border-border';
 
 type AvatarModalState = 'closed' | 'options';
 
 export default function ProfileSettingPage() {
+  const { t } = useTranslation('settings');
   const {
     profile,
     avatarHistory,
@@ -105,7 +107,7 @@ export default function ProfileSettingPage() {
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.warning('Avatar image must be 5MB or smaller.');
+      toast.warning(t('imageSize'));
       return;
     }
 
@@ -146,13 +148,13 @@ export default function ProfileSettingPage() {
     <div className="w-full space-y-6">
       <section className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         <aside className="flex flex-col">
-          <div className="flex-1 rounded-lg border border-gray-300 bg-white">
+          <div className="flex-1 rounded-lg border border-border bg-surface">
             <div className="flex flex-col items-center text-center p-6">
               <button
                 type="button"
                 onClick={openAvatarModal}
                 disabled={loading || avatarSaving}
-                className="group relative flex h-36 w-36 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-4xl font-bold text-white outline-none ring-offset-2 transition focus:ring-2 focus:ring-black disabled:cursor-not-allowed disabled:opacity-70"
+                className="group relative flex h-36 w-36 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-4xl font-bold text-primary-foreground outline-none ring-offset-2 transition focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
                 aria-label="Update avatar"
                 title="Update avatar"
               >
@@ -161,10 +163,10 @@ export default function ProfileSettingPage() {
                   <Camera className="h-7 w-7 text-white" />
                 </span>
               </button>
-              <h2 className="mt-5 max-w-full truncate text-xl font-bold text-gray-900">
+              <h2 className="mt-5 max-w-full truncate text-xl font-bold text-foreground">
                 {profile?.full_name || 'AI Engineer'}
               </h2>
-              <p className="mt-1 max-w-full truncate text-sm text-gray-500">{profile?.email || 'Loading profile...'}</p>
+              <p className="mt-1 max-w-full truncate text-sm text-muted-foreground">{profile?.email || 'Loading profile...'}</p>
             </div>
             <input
               ref={fileInputRef}
@@ -174,7 +176,7 @@ export default function ProfileSettingPage() {
               onChange={(event) => handleAvatarSelection(event.target.files?.[0])}
             />
 
-            <div className="mx-auto h-px w-64 rounded-full bg-gray-300" />
+            <div className="mx-auto h-px w-64 rounded-full bg-border" />
 
             <div className="p-6">
               <div className="space-y-3">
@@ -188,10 +190,10 @@ export default function ProfileSettingPage() {
 
         </aside>
 
-        <div className="rounded-lg border border-gray-300 bg-white p-6">
+        <div className="rounded-lg border border-border bg-surface p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-base font-bold text-gray-900">Profile Information</h3>
+              <h3 className="text-base font-bold text-foreground">{t('profileInformation')}</h3>
               {editingProfile ? (
                 <div className="flex gap-2">
                   <Button variant="secondary" size="md" onClick={handleCancelEdit}>
@@ -216,7 +218,7 @@ export default function ProfileSettingPage() {
                   disabled={loading}
                 >
                   <Edit3 className="h-4 w-4" />
-                  Edit Profile
+                  {t('editProfile')}
                 </Button>
               )}
             </div>
@@ -224,8 +226,8 @@ export default function ProfileSettingPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <Input
                 id="profile-full-name"
-                label="Full Name"
-                icon={<UserRound className="h-4 w-4 text-gray-400" />}
+                label={t('fullName')}
+                icon={<UserRound className="h-4 w-4 text-muted-foreground" />}
                 placeholder="Enter your full name"
                 value={formValues.fullName}
                 disabled={loading}
@@ -235,16 +237,16 @@ export default function ProfileSettingPage() {
                 onChange={(event) => updateProfileField('fullName', event.target.value)}
               />
               {editingProfile ? (
-                <label htmlFor="profile-pronouns" className="flex flex-col gap-2 text-sm font-medium text-gray-700">
-                  Pronouns
+                <label htmlFor="profile-pronouns" className="flex flex-col gap-2 text-sm font-medium text-foreground">
+                  {t('pronouns')}
                   <div className="relative">
-                    <Tags className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Tags className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <select
                       id="profile-pronouns"
                       value={formValues.pronouns}
                       disabled={loading}
                       onChange={(event) => updateProfileField('pronouns', event.target.value)}
-                      className="h-14 w-full appearance-none rounded-2xl border border-gray-300 bg-white pl-10 pr-10 text-sm font-normal text-gray-800 outline-none transition-colors duration-200 hover:border-black focus:border-black disabled:bg-gray-50 disabled:text-gray-400"
+                      className="h-14 w-full appearance-none rounded-2xl border border-border bg-surface pl-10 pr-10 text-sm font-normal text-foreground outline-none transition-colors duration-200 hover:border-primary focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                     >
                       <option value="">Don't specify</option>
                       <option value="he/him">he/him</option>
@@ -252,14 +254,14 @@ export default function ProfileSettingPage() {
                       <option value="they/them">they/them</option>
                       <option value="other">other</option>
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   </div>
                 </label>
               ) : (
                 <Input
                   id="profile-pronouns"
-                  label="Pronouns"
-                  icon={<Tags className="h-4 w-4 text-gray-400" />}
+                  label={t('pronouns')}
+                  icon={<Tags className="h-4 w-4 text-muted-foreground" />}
                   value={formValues.pronouns || "Don't specify"}
                   disabled={loading}
                   readOnly
@@ -272,8 +274,8 @@ export default function ProfileSettingPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <Input
                 id="profile-company"
-                label="Company"
-                icon={<Building2 className="h-4 w-4 text-gray-400" />}
+                label={t('company')}
+                icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
                 placeholder="e.g. UIT"
                 value={formValues.company}
                 disabled={loading}
@@ -284,8 +286,8 @@ export default function ProfileSettingPage() {
               />
               <Input
                 id="profile-field-of-work"
-                label="Field of Work"
-                icon={<BriefcaseBusiness className="h-4 w-4 text-gray-400" />}
+                label={t('fieldOfWork')}
+                icon={<BriefcaseBusiness className="h-4 w-4 text-muted-foreground" />}
                 placeholder="e.g. Machine Learning"
                 value={formValues.fieldOfWork}
                 disabled={loading}
@@ -298,8 +300,8 @@ export default function ProfileSettingPage() {
             
             <Input
               id="profile-country"
-              label="Country"
-              icon={<Globe2 className="h-4 w-4 text-gray-400" />}
+              label={t('country')}
+              icon={<Globe2 className="h-4 w-4 text-muted-foreground" />}
               placeholder="e.g. Vietnam"
               value={formValues.country}
               disabled={loading}
@@ -310,14 +312,14 @@ export default function ProfileSettingPage() {
               onKeyDown={(event) => event.key === 'Enter' && handleSave()}
             />
             
-            <label htmlFor="profile-description" className="flex flex-col gap-2 text-sm font-medium text-gray-700">
-              Description
+            <label htmlFor="profile-description" className="flex flex-col gap-2 text-sm font-medium text-foreground">
+              {t('description')}
               <div className="relative">
-                <FileText className="pointer-events-none absolute left-3 top-4 h-4 w-4 text-gray-400" />
+                <FileText className="pointer-events-none absolute left-3 top-4 h-4 w-4 text-muted-foreground" />
                 <textarea
                   id="profile-description"
-                  className={`text-sm text-gray-800 placeholder-gray-400 font-normal placeholder:font-normal min-h-24 w-full resize-y rounded-2xl border border-gray-300 bg-white py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-gray-50 disabled:text-gray-400 ${
-                    editingProfile ? 'hover:border-black focus:border-black' : 'cursor-default hover:border-gray-300 focus:border-gray-300'
+                  className={`text-sm text-foreground placeholder:text-muted-foreground font-normal placeholder:font-normal min-h-24 w-full resize-y rounded-2xl border border-border bg-surface py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-muted disabled:text-muted-foreground ${
+                    editingProfile ? 'hover:border-primary focus:border-primary' : 'cursor-default hover:border-border focus:border-border'
                   }`}
                   placeholder="Tell us more about yourself"
                   value={formValues.description}
@@ -337,7 +339,7 @@ export default function ProfileSettingPage() {
                 onClick={() => setPasswordSendConfirmOpen(true)}
                 disabled={loading}
               >
-                Change Password
+                {t('changePassword')}
               </Button>
               <Button
                 id="btn-delete-account"
@@ -346,7 +348,7 @@ export default function ProfileSettingPage() {
                 onClick={() => setDeleteModalOpen(true)}
                 disabled={loading}
               >
-                Delete Account
+                {t('deleteAccount')}
               </Button>
             </div>
           </div>
@@ -359,7 +361,7 @@ export default function ProfileSettingPage() {
         description={
           <>
             We will send a 6-digit OTP to{' '}
-            <span className="font-semibold text-gray-700">{profile?.email}</span> to verify this password change.
+            <span className="font-semibold text-foreground">{profile?.email}</span> to verify this password change.
           </>
         }
         confirmText="Send OTP"
@@ -370,8 +372,8 @@ export default function ProfileSettingPage() {
 
       {passwordModalStep === 'otp' && (
         <BaseModal title="Verify OTP" onClose={() => setPasswordModalStep('closed')}>
-          <p className="mb-4 text-sm text-gray-500">
-            Enter the 6-digit OTP sent to <span className="font-semibold text-gray-700">{profile?.email}</span>.
+          <p className="mb-4 text-sm text-muted-foreground">
+            Enter the 6-digit OTP sent to <span className="font-semibold text-foreground">{profile?.email}</span>.
           </p>
           <OTPInput
             onComplete={(otp) => {
@@ -407,14 +409,14 @@ export default function ProfileSettingPage() {
           </div>
           <div className="mt-6 flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setPasswordModalStep('closed')}>Cancel</Button>
-            <Button loading={passwordActionLoading} onClick={handleCompletePasswordChange}>Change Password</Button>
+            <Button loading={passwordActionLoading} onClick={handleCompletePasswordChange}>{t('changePassword')}</Button>
           </div>
         </BaseModal>
       )}
 
       <ConfirmModal
         open={deleteModalOpen}
-        title="Delete Account?"
+        title={t('deleteTitle')}
         tone="danger"
         description={
           <>
@@ -422,10 +424,10 @@ export default function ProfileSettingPage() {
             <br />
             <br />
             Are you sure you want to delete the account{' '}
-            <span className="font-semibold text-gray-700">{profile?.email}</span>?
+            <span className="font-semibold text-foreground">{profile?.email}</span>?
           </>
         }
-        confirmText="Delete Account"
+        confirmText={t('deleteAccount')}
         loading={deleteLoading}
         onCancel={() => setDeleteModalOpen(false)}
         onConfirm={handleDeleteAccount}
@@ -456,11 +458,11 @@ export default function ProfileSettingPage() {
 
 function ReadOnlyRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="flex items-start gap-3 rounded-md bg-gray-50 px-3 py-3">
-      <span className="mt-0.5 text-gray-400">{icon}</span>
+    <div className="flex items-start gap-3 rounded-md bg-muted px-3 py-3">
+      <span className="mt-0.5 text-muted-foreground">{icon}</span>
       <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-        <p className="truncate text-sm font-semibold text-gray-800">{value}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="truncate text-sm font-semibold text-foreground">{value}</p>
       </div>
     </div>
   );

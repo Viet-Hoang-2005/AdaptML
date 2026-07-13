@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   Archive,
@@ -74,20 +75,11 @@ const formatMegabytes = (mb: number) => {
   return `${Math.round(mb)} MB`;
 };
 
-const statusLabels: Record<TrainingJobStatus, string> = {
-  pending: 'Pending',
-  queued: 'Queued',
-  uploading: 'Uploading',
-  running: 'Running',
-  completed: 'Completed',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-};
-
 const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
 const AUTO_SYNC_INTERVAL_MS = 3000;
 
 export default function TrainingJobDetailPage() {
+  const { t } = useTranslation('training');
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -107,6 +99,11 @@ export default function TrainingJobDetailPage() {
   const parsedJobId = jobId ?? '';
   const [liveElapsed, setLiveElapsed] = useState<number | null>(null);
   const lastToastedStatus = useRef<string | null>(null);
+  const statusLabels: Record<TrainingJobStatus, string> = {
+    pending: t('detail.statuses.pending'), queued: t('detail.statuses.queued'), uploading: t('detail.statuses.uploading'),
+    running: t('detail.statuses.running'), completed: t('detail.statuses.completed'), failed: t('detail.statuses.failed'),
+    cancelled: t('detail.statuses.cancelled'),
+  };
 
   // -- Queries --
   const {
@@ -130,12 +127,12 @@ export default function TrainingJobDetailPage() {
     const nextStatus = job.status;
     const prevStatus = lastToastedStatus.current;
     if (prevStatus && prevStatus !== nextStatus) {
-      if (nextStatus === 'completed') toast.success('Training job completed!');
-      else if (nextStatus === 'failed') toast.error('Training job failed.');
-      else if (nextStatus === 'cancelled') toast.warning('Training job cancelled.');
+      if (nextStatus === 'completed') toast.success(t('detail.completedToast'));
+      else if (nextStatus === 'failed') toast.error(t('detail.failedToast'));
+      else if (nextStatus === 'cancelled') toast.warning(t('detail.cancelledToast'));
     }
     lastToastedStatus.current = nextStatus;
-  }, [job?.status]);
+  }, [job?.status, t]);
 
   const {
     data: logsResponse,
@@ -232,10 +229,10 @@ export default function TrainingJobDetailPage() {
       refetchLogs();
       refetchMetrics();
       refetchEvents();
-      toast.success('Job status refreshed');
+      toast.success(t('detail.refreshed'));
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Failed to refresh job status'));
+      toast.error(getApiErrorMessage(err, t('detail.refreshFailed')));
     }
   });
 
@@ -249,19 +246,19 @@ export default function TrainingJobDetailPage() {
       document.body.removeChild(link);
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Failed to get download URL'));
+      toast.error(getApiErrorMessage(err, t('detail.downloadFailed')));
     },
   });
 
   const archiveMutation = useMutation({
     mutationFn: () => deleteTrainingJob(parsedJobId),
     onSuccess: () => {
-      toast.success('Job archived');
+      toast.success(t('detail.archived'));
       refetchJob();
       queryClient.invalidateQueries({ queryKey: trainingQueryKeys.jobs() });
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Failed to archive job'));
+      toast.error(getApiErrorMessage(err, t('detail.archiveFailed')));
     }
   });
 
@@ -396,19 +393,19 @@ export default function TrainingJobDetailPage() {
   const restoreMutation = useMutation({
     mutationFn: () => restoreTrainingJob(parsedJobId),
     onSuccess: () => {
-      toast.success('Job restored');
+      toast.success(t('detail.restored'));
       refetchJob();
       queryClient.invalidateQueries({ queryKey: trainingQueryKeys.jobs() });
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Failed to restore job'));
+      toast.error(getApiErrorMessage(err, t('detail.restoreFailed')));
     }
   });
 
   const handleCopyUri = useCallback((value: string) => {
     navigator.clipboard.writeText(value);
-    toast.success('Copied to clipboard');
-  }, []);
+    toast.success(t('detail.copied'));
+  }, [t]);
 
   const openRegisterModal = () => {
     setRegisterForm({
@@ -424,7 +421,7 @@ export default function TrainingJobDetailPage() {
   if (!parsedJobId) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
-        <p className="text-gray-500 text-lg font-medium">Invalid Job ID</p>
+        <p className="text-muted-foreground text-lg font-medium">{t('detail.invalidId')}</p>
       </div>
     );
   }
@@ -432,8 +429,8 @@ export default function TrainingJobDetailPage() {
   if (jobLoading) {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
-        <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
-        <p className="text-gray-500 font-medium">Loading training workspace...</p>
+        <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium">{t('detail.loading')}</p>
       </div>
     );
   }
@@ -441,15 +438,15 @@ export default function TrainingJobDetailPage() {
   if (jobError || !job) {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
-        <div className="rounded-full bg-red-50 p-4">
-          <AlertTriangle className="h-10 w-10 text-red-500" />
+        <div className="rounded-full bg-danger-subtle p-4">
+          <AlertTriangle className="h-10 w-10 text-danger" />
         </div>
-        <p className="text-gray-900 font-bold text-lg">Job not found or error loading job</p>
-        <p className="text-gray-500 max-w-md text-center">
-          The training job you are looking for might have been deleted, or you don't have access to it.
+        <p className="text-foreground font-bold text-lg">{t('detail.notFound')}</p>
+        <p className="text-muted-foreground max-w-md text-center">
+          {t('detail.notFoundDescription')}
         </p>
         <Button onClick={() => navigate('/dashboard/model-training')} variant="secondary" className="mt-2">
-          Back to History
+          {t('detail.backHistory')}
         </Button>
       </div>
     );
@@ -465,12 +462,12 @@ export default function TrainingJobDetailPage() {
   };
 
   const getAccentBorderClass = () => {
-    if (job.is_deleted) return 'border-t-2 border-t-gray-300';
+    if (job.is_deleted) return 'border-t-2 border-t-border';
     if (job.status === 'completed') return 'border-t-2 border-t-emerald-400';
     if (job.status === 'failed') return 'border-t-2 border-t-red-400';
     if (job.status === 'cancelled') return 'border-t-2 border-t-amber-400';
     if (job.status === 'running') return 'border-t-2 border-t-blue-400';
-    return 'border-t-2 border-t-gray-200';
+    return 'border-t-2 border-t-border';
   };
 
   const getMilestones = () => {
@@ -495,19 +492,19 @@ export default function TrainingJobDetailPage() {
       runningState = hasStarted ? 'completed' : 'skipped';
     }
     
-    let finalLabel = 'Completed';
+    let finalLabel = t('detail.milestones.completed');
     let finalState: 'pending' | 'completed' | 'failed' | 'cancelled' = 'pending';
     if (isCompleted) {
       finalState = 'completed';
     } else if (isFailed) {
-      finalLabel = 'Failed';
+      finalLabel = t('detail.milestones.failed');
       finalState = 'failed';
     } else if (isCancelled) {
-      finalLabel = 'Cancelled';
+      finalLabel = t('detail.milestones.cancelled');
       finalState = 'cancelled';
     }
     
-    const formatTime = (iso?: string | null) => iso ? new Date(iso).toLocaleString() : 'Timestamp unavailable';
+    const formatTime = (iso?: string | null) => iso ? new Date(iso).toLocaleString() : t('detail.milestones.unavailable');
     const formatDurationDiff = (start?: string | null, end?: string | null) => {
       const elapsed = computeElapsed(start, end ?? undefined);
       return elapsed != null ? formatDuration(elapsed) : undefined;
@@ -516,7 +513,7 @@ export default function TrainingJobDetailPage() {
     return [
       {
         id: 'created',
-        label: 'Created',
+        label: t('detail.milestones.created'),
         state: createdState as 'completed',
         icon: Clock,
         timestamp: formatTime(job.created_at),
@@ -524,37 +521,37 @@ export default function TrainingJobDetailPage() {
       },
       {
         id: 'submitted',
-        label: 'Submitted',
+        label: t('detail.milestones.submitted'),
         state: submittedState as 'pending' | 'active' | 'completed',
         icon: UploadCloud,
-        timestamp: (submittedState === 'completed' || submittedState === 'active') ? formatTime(job.updated_at) : 'Pending',
+        timestamp: (submittedState === 'completed' || submittedState === 'active') ? formatTime(job.updated_at) : t('detail.milestones.pending'),
         helper: undefined
       },
       {
         id: 'running',
-        label: 'Running',
+        label: t('detail.milestones.running'),
         state: runningState as 'pending' | 'active' | 'completed' | 'skipped',
         icon: Loader2,
-        timestamp: (runningState === 'completed' || runningState === 'active') ? formatTime(job.started_at) : (runningState === 'skipped' ? 'Skipped' : 'Pending'),
-        helper: hasStarted && job.created_at ? `Started after ${formatDurationDiff(job.created_at, job.started_at)}` : undefined
+        timestamp: (runningState === 'completed' || runningState === 'active') ? formatTime(job.started_at) : (runningState === 'skipped' ? t('detail.milestones.skipped') : t('detail.milestones.pending')),
+        helper: hasStarted && job.created_at ? t('detail.milestones.startedAfter', { duration: formatDurationDiff(job.created_at, job.started_at) }) : undefined
       },
       {
         id: 'final',
         label: finalLabel,
         state: finalState as 'pending' | 'completed' | 'failed' | 'cancelled',
         icon: finalState === 'failed' || finalState === 'cancelled' ? XCircle : CheckCircle,
-        timestamp: (finalState === 'completed' || finalState === 'failed' || finalState === 'cancelled') ? formatTime(job.completed_at) : 'Pending',
-        helper: job.completed_at && job.started_at ? `Finished in ${formatDurationDiff(job.started_at, job.completed_at)}` : undefined
+        timestamp: (finalState === 'completed' || finalState === 'failed' || finalState === 'cancelled') ? formatTime(job.completed_at) : t('detail.milestones.pending'),
+        helper: job.completed_at && job.started_at ? t('detail.milestones.finishedIn', { duration: formatDurationDiff(job.started_at, job.completed_at) }) : undefined
       }
     ];
   };
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: Info },
-    { id: 'logs', label: 'Logs', icon: ScrollText },
-    { id: 'metrics', label: 'Metrics', icon: Activity },
-    { id: 'artifacts', label: 'Artifacts', icon: FileArchive },
-    { id: 'config', label: 'Config', icon: Settings },
+    { id: 'overview', label: t('detail.tabs.overview'), icon: Info },
+    { id: 'logs', label: t('detail.tabs.logs'), icon: ScrollText },
+    { id: 'metrics', label: t('detail.tabs.metrics'), icon: Activity },
+    { id: 'artifacts', label: t('detail.tabs.artifacts'), icon: FileArchive },
+    { id: 'config', label: t('detail.tabs.config'), icon: Settings },
   ] as const;
 
   return (
@@ -562,57 +559,57 @@ export default function TrainingJobDetailPage() {
       {/* Back button */}
       <button
         onClick={() => navigate('/dashboard/model-training')}
-        className="mb-6 flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors group"
+        className="mb-6 flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors group"
       >
-        <ArrowLeft className="h-4 w-4 text-gray-400 group-hover:text-gray-600 group-hover:-translate-x-0.5 transition-all" />
-        Back to Model Training
+        <ArrowLeft className="h-4 w-4 text-muted-foreground group-hover:text-muted-foreground group-hover:-translate-x-0.5 transition-all" />
+        {t('detail.backTraining')}
       </button>
 
       {/* Header Card */}
-      <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden border-t-4 ${getAccentBorderClass()} ${job.is_deleted ? 'opacity-80 grayscale-[0.2]' : ''}`}>
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between p-6 lg:p-8 gap-6 border-b border-gray-100">
+      <div className={`rounded-2xl border border-border bg-surface shadow-sm hover:shadow-md transition-shadow overflow-hidden border-t-4 ${getAccentBorderClass()} ${job.is_deleted ? 'opacity-80 grayscale-[0.2]' : ''}`}>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between p-6 lg:p-8 gap-6 border-b border-border">
           <div className="flex items-start gap-4 min-w-0">
             {/* Model/Job Icon */}
-            <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gray-50 border border-gray-100 text-gray-500 shadow-inner">
+            <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted border border-border text-muted-foreground shadow-inner">
               <Activity className="h-6 w-6" />
             </div>
             
             <div className="flex flex-col min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 truncate">{job.name}</h1>
-                <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-bold tracking-wide text-gray-600 border border-gray-200">
+                <h1 className="text-2xl font-extrabold tracking-tight text-foreground truncate">{job.name}</h1>
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-bold tracking-wide text-muted-foreground border border-border">
                   {job.model_version}
                 </span>
                 <span className={`w-fit rounded-full px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider ring-1 ${
-                  job.is_deleted ? 'bg-gray-100 text-gray-600 ring-gray-200' : 
-                  job.status === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' :
-                  job.status === 'failed' ? 'bg-red-50 text-red-700 ring-red-200' :
-                  job.status === 'cancelled' ? 'bg-amber-50 text-amber-700 ring-amber-200' :
-                  job.status === 'running' ? 'bg-blue-50 text-blue-700 ring-blue-300 animate-pulse' :
-                  'bg-blue-50 text-blue-700 ring-blue-200'
+                  job.is_deleted ? 'bg-muted text-muted-foreground ring-border' :
+                  job.status === 'completed' ? 'bg-success-subtle text-success ring-success/20' :
+                  job.status === 'failed' ? 'bg-danger-subtle text-danger ring-danger/20' :
+                  job.status === 'cancelled' ? 'bg-warning-subtle text-warning ring-warning/20' :
+                  job.status === 'running' ? 'bg-primary-subtle text-primary ring-primary/30 animate-pulse' :
+                  'bg-primary-subtle text-primary ring-primary/20'
                 }`}>
-                  {job.is_deleted ? 'Archived' : statusLabels[job.status]}
+                  {job.is_deleted ? t('detail.statuses.archived') : statusLabels[job.status]}
                 </span>
               </div>
-              <p className="mt-1 text-xs text-gray-500 font-medium">
-                Training job #{job.id}
+              <p className="mt-1 text-xs text-muted-foreground font-medium">
+                {t('detail.jobNumber', { id: job.id })}
               </p>
               
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-bold text-gray-600">
-                <span className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 uppercase tracking-wider">
-                  <Cloud className="h-3.5 w-3.5 text-gray-400" />
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-bold text-muted-foreground">
+                <span className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 uppercase tracking-wider">
+                  <Cloud className="h-3.5 w-3.5 text-muted-foreground" />
                   {backendLabel(job.training_backend)}
                 </span>
-                <span className="text-gray-300">•</span>
-                <span className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 uppercase tracking-wider">
-                  <Cpu className="h-3.5 w-3.5 text-gray-400" />
+                <span className="text-muted-foreground">•</span>
+                <span className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 uppercase tracking-wider">
+                  <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
                   {job.vcpu} vCPU / {job.memory / 1024} GB
                 </span>
                 {job.accelerator_type !== 'none' && (
                   <>
-                    <span className="text-gray-300">•</span>
-                    <span className="flex items-center gap-1.5 rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-purple-700 uppercase tracking-wider">
-                      <Rocket className="h-3.5 w-3.5 text-purple-500" />
+                    <span className="text-muted-foreground">•</span>
+                    <span className="flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary-subtle px-2 py-1 text-primary uppercase tracking-wider">
+                      <Rocket className="h-3.5 w-3.5 text-primary" />
                       {job.accelerator_type.toUpperCase()} x{job.accelerator_count}
                     </span>
                   </>
@@ -634,9 +631,9 @@ export default function TrainingJobDetailPage() {
                 icon={<RefreshCw className="h-4 w-4" />}
                 loading={refreshingSection === 'header'}
                 onClick={handleRefreshHeader}
-                title="Refresh Status"
+                title={t('detail.refreshStatus')}
               >
-                Refresh
+                {t('detail.refresh')}
               </Button>
               <Button
                 variant={job.status === 'completed' ? 'primary' : 'secondary'}
@@ -646,56 +643,56 @@ export default function TrainingJobDetailPage() {
                 loading={downloadMutation.isPending}
                 onClick={() => downloadMutation.mutate()}
               >
-                Download
+                {t('detail.download')}
               </Button>
             </div>
             {job.is_deleted ? (
-              <button onClick={() => restoreMutation.mutate()} disabled={restoreMutation.isPending} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900 transition-colors mt-1">
-                <RotateCcw className="h-3.5 w-3.5" /> Restore
+              <button onClick={() => restoreMutation.mutate()} disabled={restoreMutation.isPending} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors mt-1">
+                <RotateCcw className="h-3.5 w-3.5" /> {t('detail.restore')}
               </button>
             ) : (
-              <button onClick={() => archiveMutation.mutate()} disabled={archiveMutation.isPending} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-red-600 transition-colors mt-1">
-                <Archive className="h-3.5 w-3.5" /> Archive
+              <button onClick={() => archiveMutation.mutate()} disabled={archiveMutation.isPending} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-danger transition-colors mt-1">
+                <Archive className="h-3.5 w-3.5" /> {t('detail.archive')}
               </button>
             )}
           </div>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-gray-100 bg-gray-50/50">
+        <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-border bg-muted/50">
           <div className="p-5 flex flex-col justify-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Status</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">{t('detail.status')}</p>
             <div className="flex items-center">
                <span className={`w-fit rounded-md px-2.5 py-0.5 text-sm font-bold border ${
-                  job.is_deleted ? 'bg-gray-50 text-gray-600 border-gray-200' : 
-                  job.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                  job.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
-                  job.status === 'cancelled' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                  job.status === 'running' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                  'bg-white text-gray-700 border-gray-200'
+                  job.is_deleted ? 'bg-muted text-muted-foreground border-border' :
+                  job.status === 'completed' ? 'bg-success-subtle text-success border-success/20' :
+                  job.status === 'failed' ? 'bg-danger-subtle text-danger border-danger/20' :
+                  job.status === 'cancelled' ? 'bg-warning-subtle text-warning border-warning/20' :
+                  job.status === 'running' ? 'bg-primary-subtle text-primary border-primary/20' :
+                  'bg-surface text-foreground border-border'
                 }`}>
-                  {job.is_deleted ? 'Archived' : statusLabels[job.status]}
+                  {job.is_deleted ? t('detail.statuses.archived') : statusLabels[job.status]}
                 </span>
             </div>
           </div>
           <div className="p-5 flex flex-col justify-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Runtime Elapsed</p>
-            <p className="text-xl font-bold text-gray-900">{formatDuration(elapsedForJob(job)) || '-'}{job.status === 'running' && <span className="ml-1 text-xs font-normal text-blue-500 animate-pulse">live</span>}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">{t('detail.runtimeElapsed')}</p>
+            <p className="text-xl font-bold text-foreground">{formatDuration(elapsedForJob(job)) || '-'}{job.status === 'running' && <span className="ml-1 text-xs font-normal text-primary animate-pulse">{t('detail.live')}</span>}</p>
           </div>
           <div className="p-5 flex flex-col justify-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Max Runtime</p>
-            <p className="text-xl font-bold text-gray-900">{formatDuration(job.max_runtime_seconds)}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">{t('detail.maxRuntime')}</p>
+            <p className="text-xl font-bold text-foreground">{formatDuration(job.max_runtime_seconds)}</p>
           </div>
           <div className="p-5 flex flex-col justify-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Created At</p>
-            <p className="text-sm font-bold text-gray-900">{new Date(job.created_at).toLocaleString()}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">{t('detail.createdAt')}</p>
+            <p className="text-sm font-bold text-foreground">{new Date(job.created_at).toLocaleString()}</p>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 mt-2">
-        <nav className="-mb-px flex space-x-8 px-2 overflow-x-auto scrollbar-none" aria-label="Tabs">
+      <div className="border-b border-border mt-2">
+        <nav className="-mb-px flex space-x-8 px-2 overflow-x-auto scrollbar-none" aria-label={t('detail.tabsLabel')}>
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -705,13 +702,13 @@ export default function TrainingJobDetailPage() {
                 onClick={() => setActiveTab(tab.id as 'overview' | 'logs' | 'metrics' | 'artifacts' | 'config')}
                 className={`group inline-flex items-center border-b-2 py-4 px-1 text-sm font-bold transition-colors whitespace-nowrap ${
                   isActive
-                    ? 'border-gray-900 text-gray-900'
-                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
                 }`}
               >
                 <Icon
                   className={`-ml-0.5 mr-2 h-4 w-4 transition-colors ${
-                    isActive ? 'text-gray-900' : 'text-gray-400 group-hover:text-gray-500'
+                    isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-muted-foreground'
                   }`}
                   aria-hidden="true"
                 />
@@ -727,17 +724,17 @@ export default function TrainingJobDetailPage() {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {job.status === 'failed' && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm">
-                <h4 className="flex items-center gap-2 text-base font-bold text-red-800 mb-2">
+              <div className="rounded-xl border border-danger/20 bg-danger-subtle p-5">
+                <h4 className="flex items-center gap-2 text-base font-bold text-danger mb-2">
                   <AlertTriangle className="h-5 w-5" />
                   Training Failed
                 </h4>
-                <p className="text-sm font-medium text-red-700 mb-3">
+                <p className="text-sm font-medium text-danger mb-3">
                   {job.stop_reason || 'The training job exited unexpectedly.'}
                 </p>
                 {job.error_message && (
-                  <div className="rounded-lg border border-red-100 bg-white p-4 shadow-sm overflow-x-auto">
-                    <code className="whitespace-pre-wrap wrap-break-words text-xs text-red-900 font-mono">
+                  <div className="rounded-lg border border-danger/20 bg-surface p-4 overflow-x-auto">
+                    <code className="whitespace-pre-wrap wrap-break-words text-xs text-danger font-mono">
                       {job.error_message}
                     </code>
                   </div>
@@ -746,20 +743,20 @@ export default function TrainingJobDetailPage() {
             )}
 
             {job.status === 'cancelled' && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-                <h4 className="flex items-center gap-2 text-base font-bold text-amber-800 mb-2">
+              <div className="rounded-xl border border-warning/20 bg-warning-subtle p-5">
+                <h4 className="flex items-center gap-2 text-base font-bold text-warning mb-2">
                   <AlertTriangle className="h-5 w-5" />
                   Training Cancelled
                 </h4>
-                <p className="text-sm font-medium text-amber-700">
+                <p className="text-sm font-medium text-warning">
                   {job.stop_reason || 'This training job was cancelled before completion.'}
                 </p>
               </div>
             )}
 
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Job Metadata</h3>
+            <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-border bg-muted/50">
+                <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Job Metadata</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8 p-6">
                 <MetadataRow label="Internal Job ID" value={String(job.id)} />
@@ -776,21 +773,21 @@ export default function TrainingJobDetailPage() {
             </div>
 
             {/* Visual Timeline */}
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden p-6 sm:p-8">
-              <h3 className="text-sm font-bold text-gray-900 mb-6 uppercase tracking-wider">Status Timeline</h3>
+            <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden p-6 sm:p-8">
+              <h3 className="text-sm font-bold text-foreground mb-6 uppercase tracking-wider">Status Timeline</h3>
               <div className="w-full overflow-x-auto pb-4">
                 <MilestoneTracker milestones={getMilestones()} />
               </div>
               {job.status === 'failed' && (job.error_message || job.stop_reason) && (
-                <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-1 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Failure Reason</p>
-                  <p className="text-sm font-medium text-red-800">{job.error_message || job.stop_reason}</p>
+                <div className="mt-6 rounded-lg border border-danger/20 bg-danger-subtle p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-danger mb-1 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Failure Reason</p>
+                  <p className="text-sm font-medium text-danger">{job.error_message || job.stop_reason}</p>
                 </div>
               )}
               {job.status === 'cancelled' && job.stop_reason && (
-                <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-1 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Cancel Reason</p>
-                  <p className="text-sm font-medium text-amber-800">{job.stop_reason}</p>
+                <div className="mt-6 rounded-lg border border-warning/20 bg-warning-subtle p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-warning mb-1 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Cancel Reason</p>
+                  <p className="text-sm font-medium text-warning">{job.stop_reason}</p>
                 </div>
               )}
               <TrainingEventHistory events={eventsResponse?.events || []} />
@@ -801,10 +798,10 @@ export default function TrainingJobDetailPage() {
         {activeTab === 'logs' && (
           <div className="space-y-4 animate-in fade-in duration-300">
              {job.status === 'failed' && job.stop_reason && (
-               <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex gap-3 items-start text-sm text-red-800 font-medium shadow-sm">
-                 <AlertTriangle className="h-5 w-5 shrink-0 text-red-600 mt-0.5" />
+               <div className="rounded-lg border border-danger/20 bg-danger-subtle p-4 flex gap-3 items-start text-sm text-danger font-medium">
+                 <AlertTriangle className="h-5 w-5 shrink-0 text-danger mt-0.5" />
                  <div>
-                   <p className="font-bold mb-1 text-red-900">Stop Reason</p>
+                   <p className="font-bold mb-1 text-danger">Stop Reason</p>
                    <p>{job.stop_reason}</p>
                  </div>
                </div>
@@ -820,16 +817,16 @@ export default function TrainingJobDetailPage() {
         {activeTab === 'metrics' && (
           <div className="space-y-4 animate-in fade-in duration-300">
             {!metrics?.metrics_available && ACTIVE_STATUSES.includes(job.status) ? (
-              <div className="flex flex-col items-center justify-center py-16 px-4 rounded-xl border border-gray-200 border-dashed bg-gray-50 text-center shadow-sm">
-                <Activity className="h-10 w-10 text-gray-300 mb-4" />
-                <p className="text-base font-bold text-gray-900">Metrics are starting up</p>
-                <p className="text-sm text-gray-500 mt-2 max-w-md">Runtime metrics will appear here automatically once the runner emits them.</p>
+              <div className="flex flex-col items-center justify-center py-16 px-4 rounded-xl border border-border border-dashed bg-muted text-center shadow-sm">
+                <Activity className="h-10 w-10 text-muted-foreground mb-4" />
+                <p className="text-base font-bold text-foreground">Metrics are starting up</p>
+                <p className="text-sm text-muted-foreground mt-2 max-w-md">Runtime metrics will appear here automatically once the runner emits them.</p>
               </div>
             ) : !metrics?.metrics_available ? (
-              <div className="flex flex-col items-center justify-center py-16 px-4 rounded-xl border border-gray-200 bg-white text-center shadow-sm">
-                <Activity className="h-10 w-10 text-gray-200 mb-4" />
-                <p className="text-base font-bold text-gray-900">No metrics available</p>
-                <p className="text-sm text-gray-500 mt-2">This job did not emit any runtime metrics.</p>
+              <div className="flex flex-col items-center justify-center py-16 px-4 rounded-xl border border-border bg-surface text-center shadow-sm">
+                <Activity className="mb-4 h-10 w-10 text-muted-foreground" />
+                <p className="text-base font-bold text-foreground">No metrics available</p>
+                <p className="text-sm text-muted-foreground mt-2">This job did not emit any runtime metrics.</p>
               </div>
             ) : (
               <RuntimeMetricsPanel metrics={metrics} loading={loadingMetrics || refreshingSection === 'metrics'} onRefresh={handleRefreshMetrics} />
@@ -840,11 +837,11 @@ export default function TrainingJobDetailPage() {
         {activeTab === 'artifacts' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             {!job.registered_model ? (
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 shadow-sm mb-6">
+              <div className="rounded-xl border border-primary/20 bg-primary-subtle p-5 mb-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm font-bold text-blue-950">Deploy this training artifact</p>
-                    <p className="mt-1 text-sm text-blue-800">
+                    <p className="text-sm font-bold text-primary">Deploy this training artifact</p>
+                    <p className="mt-1 text-sm text-primary">
                       Register the completed model artifact as a Model API before building and deploying an endpoint.
                     </p>
                   </div>
@@ -884,9 +881,9 @@ export default function TrainingJobDetailPage() {
               </div>
             )}
 
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex flex-wrap gap-4 justify-between items-center">
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Output Artifacts</h3>
+            <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-border bg-muted/50 flex flex-wrap gap-4 justify-between items-center">
+                <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Output Artifacts</h3>
                 <Button
                   size="sm"
                   icon={<Download className="h-4 w-4" />}
@@ -901,36 +898,36 @@ export default function TrainingJobDetailPage() {
                 {job.status === 'completed' ? (
                   <>
                     <div className="space-y-2">
-                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Model Artifact URI</p>
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Model Artifact URI</p>
                       <UriLine label="Model URI" value={job.model_artifact_uri} onCopy={handleCopyUri} />
                     </div>
                     <div className="space-y-2">
-                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Output S3 URI</p>
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Output S3 URI</p>
                       <UriLine label="Output URI" value={job.output_s3_uri} onCopy={handleCopyUri} />
                     </div>
                   </>
                 ) : (
                   <div className="py-10 text-center">
-                    <FileArchive className="h-10 w-10 text-gray-200 mx-auto mb-4" />
-                    <p className="text-base font-bold text-gray-600">Model artifact is not ready yet.</p>
-                    <p className="text-sm text-gray-400 mt-1 max-w-sm mx-auto">Artifacts will be available for download and URI inspection once the training completes successfully.</p>
+                    <FileArchive className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
+                    <p className="text-base font-bold text-muted-foreground">Model artifact is not ready yet.</p>
+                    <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">Artifacts will be available for download and URI inspection once the training completes successfully.</p>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Source Files</h3>
+            <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-border bg-muted/50">
+                <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Source Files</h3>
               </div>
               <div className="p-6 space-y-6">
                 <div className="space-y-2">
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Source ZIP URI</p>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Source ZIP URI</p>
                   <UriLine label="Source ZIP" value={job.s3_source_uri} onCopy={handleCopyUri} />
                 </div>
                 {job.s3_training_data_uri && (
                   <div className="space-y-2">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Training Data URI</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Training Data URI</p>
                     <UriLine label="Data URI" value={job.s3_training_data_uri} onCopy={handleCopyUri} />
                   </div>
                 )}
@@ -940,13 +937,13 @@ export default function TrainingJobDetailPage() {
         )}
 
         {activeTab === 'config' && (
-          <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden animate-in fade-in duration-300">
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Submitted Configuration</h3>
+          <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden animate-in fade-in duration-300">
+            <div className="px-6 py-4 border-b border-border bg-muted/50">
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Submitted Configuration</h3>
             </div>
             <div className="p-6 space-y-8">
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-4 border-b border-gray-100 pb-2">Compute & Runtime</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4 border-b border-border pb-2">Compute & Runtime</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-8">
                   <MetadataRow label="Training Backend" value={backendLabel(job.training_backend)} />
                   <MetadataRow label="vCPU" value={String(job.vcpu)} />
@@ -955,14 +952,14 @@ export default function TrainingJobDetailPage() {
                 </div>
               </div>
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-4 border-b border-gray-100 pb-2">Accelerator</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4 border-b border-border pb-2">Accelerator</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-8">
                   <MetadataRow label="Accelerator Type" value={job.accelerator_type === 'none' ? 'None' : job.accelerator_type.toUpperCase()} />
                   {job.accelerator_type !== 'none' && <MetadataRow label="Accelerator Count" value={String(job.accelerator_count)} />}
                 </div>
               </div>
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-4 border-b border-gray-100 pb-2">Source</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4 border-b border-border pb-2">Source</h4>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-8">
                   <MetadataRow label="Entry Point" value={job.entry_point} monospace />
                 </div>
@@ -974,58 +971,58 @@ export default function TrainingJobDetailPage() {
 
       {registerModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-xl bg-surface p-6 shadow-xl">
             <div className="mb-5">
-              <h3 className="text-lg font-bold text-gray-900">Register training artifact as model</h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <h3 className="text-lg font-bold text-foreground">Register training artifact as model</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
                 This creates a Model API record first. You can build and deploy it after registration.
               </p>
             </div>
             <div className="space-y-4">
-              <label className="block text-sm font-semibold text-gray-700">
+              <label className="block text-sm font-semibold text-foreground">
                 Model name
                 <input
                   value={registerForm.model_name}
                   onChange={(event) => setRegisterForm((current) => ({ ...current, model_name: event.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               </label>
-              <label className="block text-sm font-semibold text-gray-700">
+              <label className="block text-sm font-semibold text-foreground">
                 Version
                 <input
                   value={registerForm.model_version}
                   onChange={(event) => setRegisterForm((current) => ({ ...current, model_version: event.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               </label>
-              <label className="block text-sm font-semibold text-gray-700">
+              <label className="block text-sm font-semibold text-foreground">
                 Flavor
                 <select
                   value={registerForm.flavor}
                   onChange={(event) => setRegisterForm((current) => ({ ...current, flavor: event.target.value as ModelFlavor }))}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
                 >
                   <option value="sklearn">Scikit-learn</option>
                   <option value="xgboost">XGBoost</option>
                 </select>
               </label>
-              <label className="block text-sm font-semibold text-gray-700">
+              <label className="block text-sm font-semibold text-foreground">
                 Access mode
                 <select
                   value={registerForm.access_mode}
                   onChange={(event) => setRegisterForm((current) => ({ ...current, access_mode: event.target.value as ModelAccessMode }))}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
                 >
                   <option value="public">Public</option>
                   <option value="private">Private</option>
                 </select>
               </label>
-              <label className="block text-sm font-semibold text-gray-700">
+              <label className="block text-sm font-semibold text-foreground">
                 Description
                 <textarea
                   value={registerForm.description}
                   onChange={(event) => setRegisterForm((current) => ({ ...current, description: event.target.value }))}
-                  className="mt-1 min-h-20 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  className="mt-1 min-h-20 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               </label>
             </div>
@@ -1047,17 +1044,17 @@ export default function TrainingJobDetailPage() {
 
       {endpointLogsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-4xl rounded-xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-4xl rounded-xl bg-surface p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Endpoint logs</h3>
-                <p className="text-sm text-gray-500">Recent Docker logs for the deployed model endpoint.</p>
+                <h3 className="text-lg font-bold text-foreground">Endpoint logs</h3>
+                <p className="text-sm text-muted-foreground">Recent Docker logs for the deployed model endpoint.</p>
               </div>
               <Button variant="secondary" onClick={() => setEndpointLogsOpen(false)}>
                 Close
               </Button>
             </div>
-            <pre className="max-h-120t overflow-auto rounded-lg bg-black p-4 text-xs text-green-100">
+            <pre className="max-h-120t overflow-auto rounded-lg bg-primary p-4 text-xs text-green-100">
               {endpointLogs}
             </pre>
           </div>
@@ -1101,14 +1098,14 @@ function RuntimeMetricsPanel({
       : 'No GPU detected by runner';
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="mb-6 flex items-center justify-between gap-3 border-b border-gray-100 pb-4">
-        <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-900">
+    <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+      <div className="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4">
+        <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground">
           <Activity className="h-4 w-4 text-blue-500" />
           Runtime metrics
         </p>
         <div className="flex items-center gap-3">
-          <span className="text-xs font-bold text-gray-400">
+          <span className="text-xs font-bold text-muted-foreground">
             {latest?.timestamp
               ? `Sampled ${new Date(latest.timestamp).toLocaleTimeString()}`
               : 'Pending metrics...'}
@@ -1116,7 +1113,7 @@ function RuntimeMetricsPanel({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="flex h-7 items-center gap-1.5 rounded bg-gray-50 border border-gray-200 px-2.5 text-[11px] font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+            className="flex h-7 items-center gap-1.5 rounded bg-muted border border-border px-2.5 text-[11px] font-bold text-muted-foreground hover:bg-muted disabled:opacity-50 transition-colors"
           >
             <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -1176,29 +1173,29 @@ function MetricCell({
   progressColor?: string;
 }) {
   return (
-    <div className={`min-w-0 flex flex-col justify-between rounded-xl bg-gray-50 px-5 py-4 border ${warning ? 'border-amber-300 ring-1 ring-amber-100' : 'border-gray-200'} ${muted ? 'opacity-50 grayscale border-dashed' : ''}`}>
+    <div className={`min-w-0 flex flex-col justify-between rounded-xl bg-muted px-5 py-4 border ${warning ? 'border-amber-300 ring-1 ring-amber-100' : 'border-border'} ${muted ? 'opacity-50 grayscale border-dashed' : ''}`}>
       <div>
         <div className="flex items-start justify-between">
-          <p className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${warning ? 'text-amber-600' : 'text-gray-500'}`}>
+          <p className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${warning ? 'text-amber-600' : 'text-muted-foreground'}`}>
             {icon}
             {label}
           </p>
-          <p className={`truncate text-2xl font-black tracking-tight ${warning ? 'text-amber-700' : muted ? 'text-gray-400' : 'text-gray-900'}`} title={value}>
+          <p className={`truncate text-2xl font-black tracking-tight ${warning ? 'text-amber-700' : muted ? 'text-muted-foreground' : 'text-foreground'}`} title={value}>
             {value}
           </p>
         </div>
         
         {progress != null && !muted && (
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className={`h-full transition-all duration-500 ${progressColor || 'bg-gray-400'}`}
+              className={`h-full transition-all duration-500 ${progressColor || 'bg-border'}`}
               style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
             />
           </div>
         )}
       </div>
       
-      <p className={`mt-3 truncate text-[11px] font-bold ${warning ? 'text-amber-600/80' : 'text-gray-400'}`} title={detail}>
+      <p className={`mt-3 truncate text-[11px] font-bold ${warning ? 'text-amber-600/80' : 'text-muted-foreground'}`} title={detail}>
         {detail}
       </p>
     </div>
@@ -1255,15 +1252,15 @@ function LogTerminal({
     <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#0d1117] shadow-md">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-800 bg-[#161b22] px-4 py-2.5">
         <div className="flex items-center gap-2.5">
-          <ScrollText className="h-4 w-4 text-gray-400" />
-          <p className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+          <ScrollText className="h-4 w-4 text-muted-foreground" />
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             Training Output
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopy}
-            className="flex h-7 items-center gap-1.5 rounded bg-gray-800 px-2.5 text-[11px] font-bold text-gray-300 hover:bg-gray-700 transition-colors"
+            className="flex h-7 items-center gap-1.5 rounded bg-gray-800 px-2.5 text-[11px] font-bold text-muted-foreground hover:bg-gray-700 transition-colors"
           >
             <Clipboard className="h-3 w-3" />
             Copy
@@ -1271,7 +1268,7 @@ function LogTerminal({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="flex h-7 items-center gap-1.5 rounded bg-gray-800 px-2.5 text-[11px] font-bold text-gray-300 hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            className="flex h-7 items-center gap-1.5 rounded bg-gray-800 px-2.5 text-[11px] font-bold text-muted-foreground hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
             <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -1282,7 +1279,7 @@ function LogTerminal({
         <pre
           ref={scrollRef}
           onScroll={handleScroll}
-          className="max-h-150 min-h-100 overflow-x-auto overflow-y-auto whitespace-pre p-6 font-mono text-[13px] leading-6 text-gray-300"
+          className="max-h-150 min-h-100 overflow-x-auto overflow-y-auto whitespace-pre p-6 font-mono text-[13px] leading-6 text-muted-foreground"
         >
           {text}
         </pre>
@@ -1312,19 +1309,19 @@ function UriLine({
   onCopy: (value: string) => void;
 }) {
   return (
-    <div className="flex w-full min-w-0 items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 shadow-sm">
+    <div className="flex w-full min-w-0 items-center justify-between gap-3 rounded-lg border border-border bg-muted px-4 py-2 shadow-sm">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
           {icon}
           {label}
         </div>
-        <code className="mt-1 block truncate text-xs sm:text-sm font-semibold text-gray-700 max-w-50 sm:max-w-md lg:max-w-xl" title={value || '-'}>
+        <code className="mt-1 block truncate text-xs sm:text-sm font-semibold text-foreground max-w-50 sm:max-w-md lg:max-w-xl" title={value || '-'}>
           {value || '-'}
         </code>
       </div>
       <button
         type="button"
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 hover:text-gray-900 shadow-sm transition-all disabled:opacity-40"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-surface text-muted-foreground hover:bg-muted hover:text-foreground shadow-sm transition-all disabled:opacity-40"
         disabled={!value}
         onClick={() => onCopy(value)}
         aria-label={`Copy ${label}`}

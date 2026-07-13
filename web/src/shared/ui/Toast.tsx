@@ -1,6 +1,7 @@
 import * as ToastPrimitive from '@radix-ui/react-toast';
 import { AlertCircle, CheckCircle2, X, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { setGlobalToastCallback } from './toastStore';
 
 type ToastType = 'success' | 'error' | 'warning';
@@ -14,6 +15,7 @@ const visuals = {
 } as const;
 
 export function ToastContainer() {
+  const { t } = useTranslation('common');
   const [items, setItems] = useState<ToastItem[]>([]);
   const addToast = useCallback((type: ToastType, message: string) => {
     setItems((current) => [...current, { id: ++nextId, type, message }]);
@@ -38,7 +40,7 @@ export function ToastContainer() {
           >
             <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${visual.className}`}><Icon className="h-4 w-4" /></span>
             <ToastPrimitive.Description className="pt-1 text-sm leading-5 text-foreground">{item.message}</ToastPrimitive.Description>
-            <ToastPrimitive.Close className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Dismiss notification"><X className="h-4 w-4" /></ToastPrimitive.Close>
+            <ToastPrimitive.Close className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t('accessibility.dismissNotification')}><X className="h-4 w-4" /></ToastPrimitive.Close>
           </ToastPrimitive.Root>
         );
       })}

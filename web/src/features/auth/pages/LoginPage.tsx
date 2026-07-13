@@ -1,6 +1,8 @@
 import { useGoogleLogin } from '@react-oauth/google';
 import { Mail, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '@/app/theme/useTheme';
 import { AuthCard } from '@/features/auth/components/AuthCard';
 import { Button } from '@/shared/ui/Button';
 import { Divider } from '@/features/auth/components/Divider';
@@ -10,16 +12,18 @@ import { startGitHubOAuth } from '@/features/auth/lib/oauth';
 import { toast } from '@/shared/ui/toastStore';
 import { useForm } from '@/features/auth/hooks/useForm';
 import GitHubIcon from '@/assets/icons/GitHub.png';
+import GitHubDarkIcon from '@/assets/icons/GitHub-Dark.png';
 import GoogleIcon from '@/assets/icons/Google.png';
 import MLdriftLogo from '@/assets/icons/MLdrift.png';
 
 function GoogleLoginButton({ onSuccess }: { onSuccess: (accessToken: string) => void }) {
+  const { t } = useTranslation('auth');
   const openGoogleLogin = useGoogleLogin({
     scope: 'openid email profile',
     onSuccess: (tokenResponse) => {
       onSuccess(tokenResponse.access_token);
     },
-    onError: () => toast.error('Google login failed. Please try again.'),
+    onError: () => toast.error(t('login.googleFailed')),
   });
 
   return (
@@ -30,12 +34,14 @@ function GoogleLoginButton({ onSuccess }: { onSuccess: (accessToken: string) => 
                   text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary hover:opacity-70"
     >
       <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
-      Google
+      {t('login.google')}
     </button>
   );
 }
 
 export default function LoginPage() {
+  const { t } = useTranslation('auth');
+  const { resolvedTheme } = useTheme();
   const { login, loginWithGoogle, loading } = useAuth();
   const { values, updateField } = useForm({ email: '', password: '' });
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -44,7 +50,7 @@ export default function LoginPage() {
     try {
       startGitHubOAuth();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'GitHub OAuth is not configured.');
+      toast.error(error instanceof Error ? error.message : t('login.githubMissing'));
     }
   };
 
@@ -54,8 +60,8 @@ export default function LoginPage() {
         <img src={MLdriftLogo} alt="MLdrift" className="w-8 h-8" />
       </div>
 
-      <h2 className="mb-1 text-center text-2xl font-bold text-foreground">Welcome back</h2>
-      <p className="mb-8 text-center text-sm text-muted-foreground">Sign in to your account to continue</p>
+      <h2 className="mb-1 text-center text-2xl font-bold text-foreground">{t('login.title')}</h2>
+      <p className="mb-8 text-center text-sm text-muted-foreground">{t('login.description')}</p>
 
       <div className="flex gap-3 mb-6">
         {googleClientId ? (
@@ -63,12 +69,12 @@ export default function LoginPage() {
         ) : (
           <button
             id="btn-google-login"
-            onClick={() => toast.error('VITE_GOOGLE_CLIENT_ID is not configured.')}
+            onClick={() => toast.error(t('login.googleMissing'))}
             className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border px-4 py-3
                         text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary hover:opacity-70"
           >
             <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
-            Google
+            {t('login.google')}
           </button>
         )}
         <button
@@ -77,13 +83,13 @@ export default function LoginPage() {
           className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border px-4 py-3
                       text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary hover:opacity-70"
         >
-          <img src={GitHubIcon} alt="GitHub" className="w-5 h-5" />
-          GitHub
+          <img src={resolvedTheme === 'dark' ? GitHubDarkIcon : GitHubIcon} alt="GitHub" className="w-5 h-5" />
+          {t('login.github')}
         </button>
       </div>
 
       <div className="mb-6">
-        <Divider label="or sign in with email" />
+        <Divider label={t('login.divider')} />
       </div>
 
       <form
@@ -97,9 +103,9 @@ export default function LoginPage() {
           id="input-email"
           name="email"
           autoComplete="email"
-          label="Email"
+          label={t('login.email')}
           type="email"
-          placeholder="example@gmail.com"
+          placeholder={t('login.emailPlaceholder')}
           icon={<Mail className="w-4 h-4" />}
           value={values.email}
           onChange={(e) => updateField('email', e.target.value)}
@@ -109,8 +115,8 @@ export default function LoginPage() {
           id="input-password"
           name="password"
           autoComplete="current-password"
-          label="Password"
-          placeholder="••••••••"
+          label={t('login.password')}
+          placeholder={t('login.passwordPlaceholder')}
           icon={<LockKeyhole className="w-4 h-4" />}
           value={values.password}
           onChange={(e) => updateField('password', e.target.value)}
@@ -121,7 +127,7 @@ export default function LoginPage() {
             to="/forgot-password"
             className="text-xs font-semibold text-foreground underline hover:opacity-60"
           >
-            Forgot password?
+            {t('login.forgotPassword')}
           </Link>
         </div>
 
@@ -133,14 +139,14 @@ export default function LoginPage() {
           loading={loading}
           className="mt-2 "
         >
-          Sign in
+          {t('login.submit')}
         </Button>
       </form>
 
       <p className="mt-8 text-center text-sm text-muted-foreground">
-        Don't have an account?{' '}
+        {t('login.noAccount')}{' '}
         <Link to="/signup" className="font-semibold text-foreground underline hover:opacity-60">
-          Sign up
+          {t('login.signUp')}
         </Link>
       </p>
     </AuthCard>

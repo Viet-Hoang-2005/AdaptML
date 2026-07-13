@@ -7,20 +7,15 @@ import { useForm } from '@/features/auth/hooks/useForm';
 import { resetForgottenPassword } from '@/features/auth/api/authApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
 import { toast } from '@/shared/ui/toastStore';
+import { useTranslation } from 'react-i18next';
 
 interface LocationState {
   email: string;
   resetToken: string;
 }
 
-const validationRules = {
-  password: (value: string) =>
-    !value ? 'Password is required.' : value.length < 8 ? 'Password must be at least 8 characters.' : undefined,
-  confirmPassword: (value: string, all: Record<string, string>) =>
-    value !== all.password ? 'Passwords do not match.' : undefined,
-};
-
 export default function ForgotPasswordResetPage() {
+  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const location = useLocation();
   const { email, resetToken } = (location.state as LocationState) || {
@@ -30,16 +25,19 @@ export default function ForgotPasswordResetPage() {
 
   const { values, errors, loading, updateField, handleSubmit } = useForm(
     { password: '', confirmPassword: '' },
-    validationRules,
+    {
+      password: (value: string) => !value ? t('profile.passwordRequired') : value.length < 8 ? t('profile.passwordLength') : undefined,
+      confirmPassword: (value: string, all: Record<string, string>) => value !== all.password ? t('profile.mismatch') : undefined,
+    },
   );
 
   const onSubmit = handleSubmit(async (formValues) => {
     try {
       await resetForgottenPassword(resetToken, formValues.password);
-      toast.success('Password reset successfully. Please sign in again.');
+      toast.success(t('recovery.resetSuccess'));
       navigate('/login', { replace: true });
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to reset password. Please request a new OTP.'));
+      toast.error(getApiErrorMessage(error, t('recovery.resetFailed')));
     }
   });
 
@@ -56,17 +54,16 @@ export default function ForgotPasswordResetPage() {
                     font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="leading-none">Start over</span>
+          <span className="leading-none">{t('recovery.startOver')}</span>
         </Link>
 
         <div className="mb-4 rounded-2xl flex items-center justify-center mx-auto">
           <LockKeyhole className="h-8 w-8 text-foreground" />
         </div>
 
-        <h2 className="mb-2 text-center text-2xl font-bold text-foreground">Create a new password</h2>
+        <h2 className="mb-2 text-center text-2xl font-bold text-foreground">{t('recovery.newTitle')}</h2>
         <p className="mb-8 text-center text-sm text-muted-foreground">
-          Choose a strong password for{' '}
-          <span className="font-semibold text-foreground">{email}</span>.
+          {t('recovery.newDescription', { email })}
         </p>
 
         <div className="flex flex-col gap-4">
@@ -74,8 +71,8 @@ export default function ForgotPasswordResetPage() {
             id="input-reset-password"
             name="new-password"
             autoComplete="new-password"
-            label="New Password"
-            placeholder="At least 8 characters"
+            label={t('recovery.newPassword')}
+            placeholder={t('recovery.passwordPlaceholder')}
             value={values.password}
             error={errors.password}
             onChange={(event) => updateField('password', event.target.value)}
@@ -84,8 +81,8 @@ export default function ForgotPasswordResetPage() {
             id="input-confirm-reset-password"
             name="confirm-password"
             autoComplete="new-password"
-            label="Confirm Password"
-            placeholder="Re-enter password"
+            label={t('recovery.confirmPassword')}
+            placeholder={t('recovery.confirmPlaceholder')}
             value={values.confirmPassword}
             error={errors.confirmPassword}
             onChange={(event) => updateField('confirmPassword', event.target.value)}
@@ -99,7 +96,7 @@ export default function ForgotPasswordResetPage() {
             onClick={onSubmit}
             className="mt-4"
           >
-            Reset password
+            {t('recovery.reset')}
           </Button>
         </div>
       </div>

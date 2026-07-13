@@ -13,14 +13,14 @@ export interface SliderProps {
 export function Slider({ options, value, onChange, getColor }: SliderProps) {
   const currentIndex = Math.max(0, options.findIndex(opt => opt.value === value));
   
-  let sliderColor = 'bg-blue-500';
+  let sliderColor = 'bg-primary';
   if (getColor) {
     sliderColor = getColor(currentIndex, value);
   }
 
   return (
     <div className="relative pt-2 pb-8 select-none px-4">
-      <div className="relative h-2 bg-gray-200 rounded-full w-full">
+      <div className="relative h-2 bg-muted rounded-full w-full">
         {/* Colored track */}
         <div 
           className={`absolute top-0 left-0 h-full rounded-full transition-all duration-300 ease-in-out ${sliderColor}`}
@@ -29,7 +29,7 @@ export function Slider({ options, value, onChange, getColor }: SliderProps) {
         
         {/* Thumb */}
         <div 
-          className={`absolute top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-4 rounded-full shadow transition-all duration-300 ease-in-out ${sliderColor.replace('bg-', 'border-')}`}
+          className={`absolute top-1/2 -translate-y-1/2 w-5 h-5 bg-surface border-4 rounded-full shadow transition-all duration-300 ease-in-out ${sliderColor.replace('bg-', 'border-')}`}
           style={{ left: `calc(${(currentIndex / (options.length - 1)) * 100}% - 10px)` }}
         />
         
@@ -51,7 +51,7 @@ export function Slider({ options, value, onChange, getColor }: SliderProps) {
           <div 
             key={opt.value}
             className={`absolute top-0 -translate-x-1/2 text-xs font-medium cursor-pointer transition-colors ${
-              i === currentIndex ? 'text-gray-900 font-bold' : 'text-gray-500 hover:text-gray-700'
+              i === currentIndex ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
             style={{ left: `${(i / (options.length - 1)) * 100}%` }}
             onClick={() => onChange(opt.value)}

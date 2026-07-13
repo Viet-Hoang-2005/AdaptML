@@ -35,13 +35,13 @@ export function PromoteVersionModal({ family, version, onClose, onSuccess }: Pro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-emerald-100 text-emerald-600 p-2.5 rounded-full">
               <ArrowUpCircle className="h-6 w-6" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900">Promote to Alias</h3>
+            <h3 className="text-xl font-bold text-foreground">Promote to Alias</h3>
           </div>
           
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 text-blue-800 shadow-sm">
@@ -51,13 +51,13 @@ export function PromoteVersionModal({ family, version, onClose, onSuccess }: Pro
             </p>
           </div>
 
-          <div className="mt-6 flex flex-col gap-3 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
-            <label className="flex flex-col gap-2 pb-2 border-b border-gray-200">
-              <span className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Alias</span>
+          <div className="mt-6 flex flex-col gap-3 text-sm bg-muted p-4 rounded-xl border border-border">
+            <label className="flex flex-col gap-2 pb-2 border-b border-border">
+              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">Alias</span>
               <select
                 value={alias}
                 onChange={(event) => setAlias(event.target.value as RoutingAliasName)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
                 disabled={loading}
               >
                 <option value="production">Production</option>
@@ -65,24 +65,24 @@ export function PromoteVersionModal({ family, version, onClose, onSuccess }: Pro
                 <option value="champion">Champion</option>
               </select>
             </label>
-            <div className="flex justify-between py-1 border-b border-gray-200">
-              <span className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Target Version</span>
+            <div className="flex justify-between py-1 border-b border-border">
+              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">Target Version</span>
               <span className="font-bold font-mono text-emerald-700 bg-emerald-100 px-2 rounded">{formatVersion(version.version)}</span>
             </div>
-            <div className="flex justify-between py-1 border-b border-gray-200">
-              <span className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Current Prod</span>
-              <span className="font-mono text-gray-600">
+            <div className="flex justify-between py-1 border-b border-border">
+              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">Current Prod</span>
+              <span className="font-mono text-muted-foreground">
                 {family.current_production_version ? formatVersion(family.current_production_version.version) : 'None'}
               </span>
             </div>
             <div className="flex justify-between py-1">
-              <span className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Family</span>
-              <span className="font-bold text-gray-900">{family.display_name || family.name}</span>
+              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">Family</span>
+              <span className="font-bold text-foreground">{family.display_name || family.name}</span>
             </div>
           </div>
         </div>
         
-        <div className="p-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+        <div className="p-4 bg-muted border-t border-border flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             Cancel
           </Button>

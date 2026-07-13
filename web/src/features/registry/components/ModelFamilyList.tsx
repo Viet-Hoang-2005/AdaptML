@@ -18,7 +18,7 @@ export function ModelFamilyList({ families, loading, selectedFamilyId, selectedF
     return (
       <div className="flex flex-col gap-2 p-2">
         {[1, 2, 3].map(i => (
-          <div key={i} className="h-16 bg-gray-100 animate-pulse rounded-xl" />
+          <div key={i} className="h-16 bg-muted animate-pulse rounded-xl" />
         ))}
       </div>
     );
@@ -27,11 +27,11 @@ export function ModelFamilyList({ families, loading, selectedFamilyId, selectedF
   if (families.length === 0) {
     return (
       <div className="p-8 text-center flex flex-col items-center">
-        <div className="bg-gray-100 p-3 rounded-full mb-3">
-          <Box className="h-6 w-6 text-gray-400" />
+        <div className="bg-muted p-3 rounded-full mb-3">
+          <Box className="h-6 w-6 text-muted-foreground" />
         </div>
-        <p className="text-sm font-bold text-gray-900">No Model Families</p>
-        <p className="mt-1 text-xs text-gray-500 max-w-[200px]">
+        <p className="text-sm font-bold text-foreground">No Model Families</p>
+        <p className="mt-1 text-xs text-muted-foreground max-w-[200px]">
           Upload a model to create your first registry family.
         </p>
       </div>
@@ -57,14 +57,14 @@ export function ModelFamilyList({ families, loading, selectedFamilyId, selectedF
             className={classNames(
               'w-full text-left p-3.5 rounded-xl border flex items-start gap-3 transition-all duration-200 group',
               isSelected 
-                ? 'bg-blue-50/60 border-blue-200 shadow-sm relative overflow-hidden' 
-                : 'bg-white border-transparent hover:bg-gray-50 hover:border-gray-200'
+                ? 'bg-primary-subtle border-primary/20 relative overflow-hidden'
+                : 'bg-surface border-transparent hover:bg-muted hover:border-border'
             )}
           >
-            {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-xl" />}
+            {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-xl" />}
             <div className={classNames(
               'p-2 rounded-lg mt-0.5 transition-colors',
-              isSelected ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400 group-hover:text-gray-600'
+              isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground group-hover:text-muted-foreground'
             )}>
               <Box className="h-5 w-5" />
             </div>
@@ -73,20 +73,20 @@ export function ModelFamilyList({ families, loading, selectedFamilyId, selectedF
               <div className="flex justify-between items-start gap-2">
                 <p className={classNames(
                   "text-sm font-bold truncate",
-                  isSelected ? "text-blue-900" : "text-gray-900"
+                  isSelected ? "text-primary" : "text-foreground"
                 )}>
                   {family.display_name || family.name}
                 </p>
                 {hasProd && (
-                  <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded shadow-sm">
+                  <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-success bg-success-subtle px-1.5 py-0.5 rounded">
                     <CheckCircle className="h-3 w-3" /> Prod
                   </span>
                 )}
               </div>
               
-              <div className="text-[11px] font-medium flex items-center gap-1.5 text-gray-500">
+              <div className="text-[11px] font-medium flex items-center gap-1.5 text-muted-foreground">
                 {hasProd ? (
-                  <span className="text-gray-700 font-bold">Prod {formatVersion(family.current_production_version?.version)}</span>
+                  <span className="text-foreground font-bold">Prod {formatVersion(family.current_production_version?.version)}</span>
                 ) : (
                   <span>No production version</span>
                 )}
@@ -94,10 +94,10 @@ export function ModelFamilyList({ families, loading, selectedFamilyId, selectedF
                 <span>{finalCount} {finalCount === 1 ? 'version' : 'versions'}</span>
               </div>
               
-              <div className="text-[10px] text-gray-400 flex items-center justify-between mt-0.5">
+              <div className="text-[10px] text-muted-foreground flex items-center justify-between mt-0.5">
                 <span className="truncate">Updated {new Date(family.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 {isEndpointReady && (
-                  <span className="text-emerald-600 font-semibold tracking-wide uppercase">Endpoint Ready</span>
+                  <span className="text-success font-semibold tracking-wide uppercase">Endpoint Ready</span>
                 )}
               </div>
             </div>

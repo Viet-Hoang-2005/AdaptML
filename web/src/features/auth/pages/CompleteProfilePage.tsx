@@ -11,6 +11,7 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useForm } from '@/features/auth/hooks/useForm';
 import { completeRegistration } from '@/features/auth/api/authApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
+import { useTranslation } from 'react-i18next';
 
 interface LocationState {
   registrationToken: string;
@@ -19,15 +20,8 @@ interface LocationState {
 
 type AvatarModalState = 'closed' | 'options';
 
-const validationRules = {
-  full_name: (v: string) => (!v ? 'Full name is required.' : undefined),
-  password: (v: string) =>
-    !v ? 'Password is required.' : v.length < 8 ? 'Password must be at least 8 characters.' : undefined,
-  confirmPassword: (v: string, all: Record<string, string>) =>
-    v !== all.password ? 'Passwords do not match.' : undefined,
-};
-
 export default function CompleteProfilePage() {
+  const { t } = useTranslation('auth');
   const location = useLocation();
   const { registrationToken, email } = (location.state as LocationState) || {
     registrationToken: '',
@@ -43,7 +37,11 @@ export default function CompleteProfilePage() {
 
   const { values, errors, loading, updateField, handleSubmit } = useForm(
     { full_name: '', field_of_work: '', password: '', confirmPassword: '' },
-    validationRules,
+    {
+      full_name: (value: string) => !value ? t('profile.fullNameRequired') : undefined,
+      password: (value: string) => !value ? t('profile.passwordRequired') : value.length < 8 ? t('profile.passwordLength') : undefined,
+      confirmPassword: (value: string, all: Record<string, string>) => value !== all.password ? t('profile.mismatch') : undefined,
+    },
   );
 
   useEffect(() => {
@@ -57,12 +55,12 @@ export default function CompleteProfilePage() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.warning('Please select an image file.');
+      toast.warning(t('profile.imageOnly'));
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.warning('Avatar image must be 5MB or smaller.');
+      toast.warning(t('profile.imageSize'));
       return;
     }
 
@@ -114,10 +112,10 @@ export default function CompleteProfilePage() {
         password: v.password,
         avatar: avatarFile,
       });
-      toast.success('Account created successfully!');
+      toast.success(t('profile.success'));
       saveAuthTokens(response.access, response.refresh, '/dashboard', response.tenant_id);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Registration failed. Please try again.'));
+      toast.error(getApiErrorMessage(error, t('profile.failed')));
     }
   });
 
@@ -134,12 +132,12 @@ export default function CompleteProfilePage() {
                     font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="leading-none">Back to sign up</span>
+          <span className="leading-none">{t('profile.back')}</span>
         </Link>
 
-        <h2 className="mb-1 text-2xl font-bold text-foreground">Complete your profile</h2>
+        <h2 className="mb-1 text-2xl font-bold text-foreground">{t('profile.title')}</h2>
         <p className="mb-6 text-sm text-muted-foreground">
-          Registering as <span className="font-semibold text-foreground">{email}</span>
+          {t('profile.registering', { email })}
         </p>
 
         <form
@@ -165,8 +163,8 @@ export default function CompleteProfilePage() {
                 )}
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">Avatar</p>
-                <p className="text-xs text-muted-foreground">Upload and crop a profile image</p>
+                <p className="text-sm font-semibold text-foreground">{t('profile.avatar')}</p>
+                <p className="text-xs text-muted-foreground">{t('profile.avatarDescription')}</p>
               </div>
             </div>
           </button>
@@ -183,8 +181,8 @@ export default function CompleteProfilePage() {
             id="input-fullname"
             name="full_name"
             autoComplete="name"
-            label="Full Name"
-            placeholder="Nguyen Van A"
+            label={t('profile.fullName')}
+            placeholder={t('profile.fullNamePlaceholder')}
             icon={<User className="h-4 w-4" />}
             value={values.full_name}
             error={errors.full_name}
@@ -194,8 +192,8 @@ export default function CompleteProfilePage() {
             id="input-field"
             name="field_of_work"
             autoComplete="organization-title"
-            label="Field of Work"
-            placeholder="e.g. Machine Learning"
+            label={t('profile.field')}
+            placeholder={t('profile.fieldPlaceholder')}
             icon={<Briefcase className="h-4 w-4" />}
             value={values.field_of_work}
             onChange={(e) => updateField('field_of_work', e.target.value)}
@@ -206,8 +204,8 @@ export default function CompleteProfilePage() {
               id="input-new-password"
               name="new-password"
               autoComplete="new-password"
-              label="Password"
-              placeholder="At least 8 characters"
+              label={t('profile.password')}
+              placeholder={t('profile.passwordPlaceholder')}
               icon={<Lock className="h-4 w-4" />}
               value={values.password}
               error={errors.password}
@@ -217,8 +215,8 @@ export default function CompleteProfilePage() {
               id="input-confirm-password"
               name="confirm-password"
               autoComplete="new-password"
-              label="Confirm"
-              placeholder="Re-enter password"
+              label={t('profile.confirm')}
+              placeholder={t('profile.confirmPlaceholder')}
               icon={<LockKeyhole className="h-4 w-4" />}
               value={values.confirmPassword}
               error={errors.confirmPassword}
@@ -234,7 +232,7 @@ export default function CompleteProfilePage() {
             loading={loading}
             className="mt-6"
           >
-            Create account
+            {t('profile.submit')}
           </Button>
         </form>
       </div>
@@ -251,7 +249,7 @@ export default function CompleteProfilePage() {
         imageSrc={cropImage}
         onClose={closeCropModal}
         onConfirm={confirmAvatarCrop}
-        onError={() => toast.error('Unable to crop avatar. Please try another image.')}
+        onError={() => toast.error(t('profile.cropFailed'))}
       />
     </AuthCard>
   );

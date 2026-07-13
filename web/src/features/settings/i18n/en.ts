@@ -1,0 +1,28 @@
+export const settingsEn = {
+  title: 'Settings', profile: 'Profile', developer: 'Developer', apiKeys: 'API keys', editProfile: 'Edit Profile',
+  changePassword: 'Change Password', deleteAccount: 'Delete Account', avatar: 'Avatar', changeAvatar: 'Change Avatar', removeAvatar: 'Remove Avatar',
+  profileInformation: 'Profile Information', fullName: 'Full Name', pronouns: 'Pronouns', company: 'Company', fieldOfWork: 'Field of Work',
+  country: 'Country', description: 'Description', deleteTitle: 'Delete Account?', imageSize: 'Avatar image must be 5MB or smaller.',
+  avatarDialog: {
+    close: 'Close avatar options modal', current: 'Current avatar', set: 'Set your avatar',
+    setDescription: 'Choose a new image or select a previous avatar below.', upload: 'Upload image', previous: 'Previous avatars',
+    loading: 'Loading...', selectPrevious: 'Select previous avatar', useThis: 'Use this avatar', crop: 'Crop avatar',
+    closeCrop: 'Close crop modal', zoom: 'Zoom', cancel: 'Cancel', use: 'Use avatar',
+  },
+  apiDialog: { label: 'API Key', copy: 'Copy API key', done: 'Done' },
+  apiKey: {
+    copied: 'API key copied to clipboard.', copyFailed: 'Unable to copy API key automatically.', use: 'Use',
+    allowModel: 'Allow access to {{name}}', name: 'Name', description: 'Description', noDescription: 'No description',
+    editTitle: 'Edit API Key', createTitle: 'Create API Key', back: 'Back to Developer Settings', apiName: 'API Name',
+    namePlaceholder: 'e.g. Production Inference Client', descriptionPlaceholder: 'What will this API key be used for?',
+    scope: 'API Key Scope', noPrivateModels: 'No private models are available for scoped access.', python: 'How to use (Python)',
+    codeCopied: 'Code copied to clipboard.', copyCode: 'Copy code', cancel: 'Cancel', save: 'Save changes',
+    createdTitle: 'API Key Created', createdDescription: 'This key is shown once. Store it now before closing this modal.',
+    developerTitle: 'Developer Access', developerDescription: 'Create and manage API keys for private model endpoint authentication.',
+    modelScope: 'Model scope', allModels: 'All models', noModels: 'No models', unknownModel: 'Unknown ({{id}})', created: 'Created',
+    actions: 'Actions', edit: 'Edit API key', regenerate: 'Regenerate API key', delete: 'Delete API key', empty: 'No API keys yet.',
+    regeneratedTitle: 'API Key Regenerated', regeneratedDescription: 'This new key is shown once. Store it now before closing this modal. The old key will no longer work.',
+    deleteDescription: 'Delete “{{name}}”? Applications using this key will immediately lose access.',
+    regenerateDescription: 'Regenerate “{{name}}”? The existing key will stop working immediately.', deleteKey: 'Delete key', regenerateKey: 'Regenerate key',
+  },
+} as const;

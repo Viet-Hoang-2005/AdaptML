@@ -341,8 +341,8 @@ export default function ModelTestingPage() {
       <PageContent className="p-6 h-full">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Data Testing</h2>
-            <p className="mt-1 text-sm text-gray-500">
+            <h2 className="text-xl font-bold text-foreground">Data Testing</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Upload a CSV file to test it with {selectedModel ? selectedModel.name : 'the selected model'}.
             </p>
           </div>
@@ -392,19 +392,19 @@ export default function ModelTestingPage() {
         ) : (
           <div className="flex flex-col space-y-6">
             <div>
-              <p className="mb-4 text-sm font-semibold text-gray-900">
+              <p className="mb-4 text-sm font-semibold text-foreground">
                 {fileName} · {rows.length} rows loaded
               </p>
-              <div className="overflow-hidden rounded-xl border border-gray-200 h-125">
+              <div className="overflow-hidden rounded-xl border border-border h-125">
                 <CSVEditor initialCsvText={csvText} readOnly={true} />
               </div>
             </div>
 
-            <div className='border-t border-gray-200 pt-6 space-y-6'>
+            <div className='border-t border-border pt-6 space-y-6'>
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900">Run Test</h3>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <h3 className="text-xl font-bold text-foreground">Run Test</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Send the CSV file and receive the prediction results from {selectedModel ? selectedModel.name : 'the selected model'}.
                   </p>
                 </div>

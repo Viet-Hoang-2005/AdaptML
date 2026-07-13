@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '@/app/theme/useTheme';
 import { LazyCodeEditor } from '@/shared/ui/LazyCodeEditor';
 import { Save, FolderOpen, Upload, Play, FilePlus, FolderPlus, Trash2 } from 'lucide-react';
 import { CSVEditor } from '@/shared/ui/CSVEditor';
@@ -49,6 +51,8 @@ export function SourceEditor({
   setAsMainLabel,
   entryPointExtension = '.py',
 }: SourceEditorProps) {
+  const { t } = useTranslation('catalog');
+  const { resolvedTheme } = useTheme();
   const [files, setFiles] = useState<S3File[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -111,12 +115,12 @@ export function SourceEditor({
     if (fileMeta) {
       try {
         const res = await fetch(fileMeta.download_url);
-        if (!res.ok) throw new Error('Download failed');
+        if (!res.ok) throw new Error(t('sourceEditor.downloadFailed'));
         const text = await res.text();
         setFileContent(text);
       } catch (err) {
         console.error(err);
-        toast.error(`Failed to load content for ${path}`);
+        toast.error(t('sourceEditor.loadContentFailed', { path }));
         setFileContent('');
       }
     } else {
@@ -145,7 +149,7 @@ export function SourceEditor({
       }
     } catch (err) {
       console.error(err);
-      toast.error(`Failed to load ${title} list.`);
+      toast.error(t('sourceEditor.loadListFailed', { title }));
     }
   };
 
@@ -195,11 +199,11 @@ export function SourceEditor({
       
       await Promise.all(promises);
       setUnsavedContents({});
-      toast.success(`${title} saved successfully!`);
+      toast.success(t('sourceEditor.saved', { title }));
       await fetchFiles();
     } catch (err) {
       console.error(err);
-      toast.error(`Failed to save ${title}.`);
+      toast.error(t('sourceEditor.saveFailed', { title }));
     } finally {
       setSaving(false);
     }
@@ -234,11 +238,11 @@ export function SourceEditor({
       });
       
       await Promise.all(promises);
-      toast.success(`${filesArray.length} file(s) uploaded successfully!`);
+      toast.success(t('sourceEditor.uploaded', { count: filesArray.length }));
       await fetchFiles();
     } catch (err) {
       console.error(err);
-      toast.error('Failed to upload files');
+      toast.error(t('sourceEditor.uploadFailed'));
     } finally {
       setSaving(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -310,12 +314,12 @@ export function SourceEditor({
         } else {
           await uploadReferenceFile(modelId, emptyFile, keepPath);
         }
-        toast.success(`Folder ${name} created!`);
+        toast.success(t('sourceEditor.folderCreated', { name }));
         await fetchFiles();
         setExpandedFolders(prev => new Set(prev).add(path));
       } catch (err) {
         console.error(err);
-        toast.error('Failed to create folder');
+        toast.error(t('sourceEditor.folderCreateFailed'));
       } finally {
         setSaving(false);
       }
@@ -349,7 +353,7 @@ export function SourceEditor({
         });
       }
 
-      toast.success(`${isFolder ? 'Folder' : 'File'} deleted!`);
+      toast.success(isFolder ? t('sourceEditor.folderDeleted') : t('sourceEditor.fileDeleted'));
       if (selectedPath === deleteConfirmPath || selectedPath?.startsWith(deleteConfirmPath + '/')) {
         setSelectedPath(null);
         setFileContent('');
@@ -357,7 +361,7 @@ export function SourceEditor({
       await fetchFiles();
     } catch (err) {
       console.error(err);
-      toast.error('Failed to delete item');
+      toast.error(t('sourceEditor.deleteFailed'));
     } finally {
       setSaving(false);
       setDeleteConfirmPath(null);
@@ -380,21 +384,21 @@ export function SourceEditor({
 
   if (loading) {
     return (
-      <div className="flex h-125 border border-gray-300 rounded-lg bg-white mb-6 items-center justify-center shadow-sm">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-black border-t-transparent"></div>
+      <div className="flex h-125 border border-border rounded-lg bg-surface mb-6 items-center justify-center shadow-sm">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-125 border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm">
-      <div className="flex border-b border-gray-200 bg-gray-50">
+    <div className="flex flex-col h-125 border border-border rounded-lg overflow-hidden bg-surface shadow-sm">
+      <div className="flex border-b border-border bg-muted">
         <div className="flex-1 flex items-center justify-between p-3">
-          <div className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <div className="text-sm font-semibold text-foreground flex items-center gap-2">
             {icon}
             {title}
             {isDirty && (
-              <span className="ml-1 inline-block h-2 w-2 rounded-full bg-yellow-400" title="Unsaved changes" />
+              <span className="ml-1 inline-block h-2 w-2 rounded-full bg-warning" title={t('sourceEditor.unsaved')} />
             )}
           </div>
           <div className="flex items-center gap-1">
@@ -402,14 +406,14 @@ export function SourceEditor({
               <button 
                 className={`px-3 py-2 text-xs rounded-xl font-medium mr-2 flex items-center gap-1 transition-colors ${
                   currentEntryPoint === selectedPath 
-                    ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700' 
-                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                    ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover'
+                    : 'bg-primary-subtle text-primary hover:bg-primary/15 border border-primary/20'
                 }`}
                 onClick={() => onSetEntryPoint(selectedPath)}
-                title={setAsMainLabel ?? "Set this file as the main entry point"}
+                title={setAsMainLabel ?? t('sourceEditor.mainTitle')}
               >
                 <Play className="w-3 h-3" />
-                {currentEntryPoint === selectedPath ? 'Selected' : (setAsMainLabel ?? 'Set as Main')}
+                {currentEntryPoint === selectedPath ? t('sourceEditor.selected') : (setAsMainLabel ?? t('sourceEditor.setMain'))}
               </button>
             )}
             
@@ -419,32 +423,32 @@ export function SourceEditor({
               onClick={handleSave} 
               disabled={saving || !isDirty} 
               loading={saving}
-              title="Save Changes"
+              title={t('sourceEditor.saveChanges')}
             >
               <Save className="w-4 h-4 mr-1.5" />
-              Save
+              {t('sourceEditor.save')}
             </Button>
           </div>
         </div>
       </div>
       
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 bg-white flex flex-col min-w-0">
+        <div className="flex-1 bg-surface flex flex-col min-w-0">
           {!selectedPath || isSelectedFolder ? (
-            <div className="flex-1 flex flex-col p-6 bg-white">
+            <div className="flex-1 flex flex-col p-6 bg-surface">
               {files.length === 0 ? (
                 <button 
                   onClick={() => fileInputRef.current?.click()} 
-                  className="flex-1 w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-colors group cursor-pointer"
+                  className="flex-1 w-full flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg hover:bg-muted hover:border-primary transition-colors group cursor-pointer"
                 >
-                  <Upload className="w-12 h-12 mb-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                  <p className="text-gray-600 font-medium text-lg group-hover:text-blue-600 transition-colors">Click to upload file</p>
-                  <p className="text-sm text-gray-400 mt-2">Support: {accept}</p>
+                  <Upload className="w-12 h-12 mb-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <p className="text-muted-foreground font-medium text-lg group-hover:text-primary transition-colors">{t('sourceEditor.uploadPrompt')}</p>
+                  <p className="text-sm text-muted-foreground mt-2">{t('sourceEditor.support', { types: accept })}</p>
                 </button>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
-                  <FolderOpen className="w-12 h-12 mb-4 text-gray-300" />
-                  <p>Select a file from the tree to view or edit</p>
+                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+                  <FolderOpen className="w-12 h-12 mb-4 text-muted-foreground" />
+                  <p>{t('sourceEditor.selectFile')}</p>
                 </div>
               )}
             </div>
@@ -454,7 +458,7 @@ export function SourceEditor({
               <LazyCodeEditor
               height="100%"
               language={getLanguage(selectedPath)}
-              theme="light"
+              theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
               value={fileContent}
               onChange={handleEditorChange}
               options={{
@@ -467,20 +471,20 @@ export function SourceEditor({
           )}
         </div>
 
-        <div className="w-75 border-l border-gray-200 bg-gray-50 flex flex-col shrink-0">
-          <div className="flex items-center justify-between p-2 border-b border-gray-200 text-gray-500">
-            <span className="text-xs font-semibold uppercase tracking-wider pl-2 text-gray-600">Explorer</span>
+        <div className="w-75 border-l border-border bg-muted flex flex-col shrink-0">
+          <div className="flex items-center justify-between p-2 border-b border-border text-muted-foreground">
+            <span className="text-xs font-semibold uppercase tracking-wider pl-2 text-muted-foreground">{t('sourceEditor.explorer')}</span>
             <div className="flex items-center gap-1">
-              <button onClick={startCreateFile} title="New File" className="p-1 hover:bg-gray-200 rounded text-gray-700">
+              <button onClick={startCreateFile} title={t('sourceEditor.newFile')} className="p-1 hover:bg-muted rounded text-foreground">
                 <FilePlus className="w-4 h-4" />
               </button>
-              <button onClick={startCreateFolder} title="New Folder" className="p-1 hover:bg-gray-200 rounded text-gray-700">
+              <button onClick={startCreateFolder} title={t('sourceEditor.newFolder')} className="p-1 hover:bg-muted rounded text-foreground">
                 <FolderPlus className="w-4 h-4" />
               </button>
-              <button onClick={() => fileInputRef.current?.click()} title="Upload Files" className="p-1 hover:bg-gray-200 rounded text-gray-700">
+              <button onClick={() => fileInputRef.current?.click()} title={t('sourceEditor.uploadFiles')} className="p-1 hover:bg-muted rounded text-foreground">
                 <Upload className="w-4 h-4" />
               </button>
-              <button onClick={handleDelete} title="Delete Selected" disabled={!selectedPath} className="p-1 hover:bg-gray-200 rounded disabled:opacity-30 text-red-500 hover:text-red-700">
+              <button onClick={handleDelete} title={t('sourceEditor.deleteSelected')} disabled={!selectedPath} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-danger hover:text-danger/80">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -490,8 +494,8 @@ export function SourceEditor({
 
           <div className="flex-1 overflow-y-auto py-2 pr-2">
             {files.length === 0 && !creatingFile ? (
-              <div className="text-sm text-gray-500 text-center py-8">
-                No files found.
+              <div className="text-sm text-muted-foreground text-center py-8">
+                {t('sourceEditor.noFiles')}
               </div>
             ) : (
               <SourceTree
@@ -513,18 +517,18 @@ export function SourceEditor({
       
       <ConfirmModal
         open={!!deleteConfirmPath}
-        title="Delete Item"
+        title={t('sourceEditor.deleteTitle')}
         description={
           deleteConfirmPath ? (
             <p>
-              Are you sure you want to delete {files.some(f => f.relative_path.startsWith(deleteConfirmPath + '/')) ? 'folder' : 'file'} <span className="font-semibold text-gray-900">"{deleteConfirmPath}"</span>?
+              {t('sourceEditor.deleteQuestion', { kind: files.some(f => f.relative_path.startsWith(deleteConfirmPath + '/')) ? t('sourceEditor.folder') : t('sourceEditor.file'), path: deleteConfirmPath })}
               <br />
-              This action cannot be undone.
+              {t('sourceEditor.deleteDescription')}
             </p>
           ) : null
         }
         tone="danger"
-        confirmText="Delete"
+        confirmText={t('sourceEditor.delete')}
         loading={saving}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmPath(null)}

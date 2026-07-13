@@ -36,19 +36,19 @@ export function ModelHistoryTimeline({ familyId }: Props) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
   if (history.length === 0) {
     return (
-      <div className="text-center py-16 flex flex-col items-center border border-dashed border-gray-200 rounded-2xl bg-gray-50/50 px-4">
-        <div className="rounded-full bg-white border border-gray-200 p-4 mb-4 shadow-sm">
-          <GitCommit className="h-8 w-8 text-gray-400" />
+      <div className="text-center py-16 flex flex-col items-center border border-dashed border-border rounded-2xl bg-muted/50 px-4">
+        <div className="rounded-full bg-surface border border-border p-4 mb-4 shadow-sm">
+          <GitCommit className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-bold text-gray-900">No registry events yet</h3>
-        <p className="mt-2 text-sm text-gray-500 max-w-md">
+        <h3 className="text-lg font-bold text-foreground">No registry events yet</h3>
+        <p className="mt-2 text-sm text-muted-foreground max-w-md">
           Events will appear here when versions are registered, deployed, promoted, or rolled back.
         </p>
       </div>
@@ -56,39 +56,39 @@ export function ModelHistoryTimeline({ familyId }: Props) {
   }
 
   return (
-    <div className="relative border-l border-gray-200 ml-3 py-4 space-y-8">
+    <div className="relative border-l border-border ml-3 py-4 space-y-8">
       {history.map((event, idx) => {
         const isSuccess = event.status === 'success';
         const isFailed = event.status === 'failed';
         
         let Icon = GitCommit;
-        let iconBg = 'bg-gray-100 text-gray-500 border-gray-200';
+        let iconBg = 'bg-muted text-muted-foreground border-border';
 
         // Action-based styling
         if (event.action === 'promoted') {
           Icon = ArrowUpRight;
-          iconBg = 'bg-emerald-100 text-emerald-600 border-emerald-200';
+          iconBg = 'bg-success-subtle text-success border-success/20';
         } else if (event.action === 'rolled_back') {
           Icon = RotateCcw;
-          iconBg = 'bg-amber-100 text-amber-600 border-amber-200';
+          iconBg = 'bg-warning-subtle text-warning border-warning/20';
         } else if (event.action === 'registered') {
           Icon = Package;
-          iconBg = 'bg-blue-100 text-blue-600 border-blue-200';
+          iconBg = 'bg-primary-subtle text-primary border-primary/20';
         } else if (event.action === 'health_checked') {
           Icon = Activity;
-          iconBg = 'bg-purple-100 text-purple-600 border-purple-200';
+          iconBg = 'bg-primary-subtle text-primary border-primary/20';
         } else if (event.action === 'archived' || event.action === 'stopped') {
           Icon = Trash2;
-          iconBg = 'bg-gray-100 text-gray-500 border-gray-200';
+          iconBg = 'bg-muted text-muted-foreground border-border';
         }
 
         // Status overrides
         if (isFailed) {
           Icon = XCircle;
-          iconBg = 'bg-red-100 text-red-600 border-red-200';
+          iconBg = 'bg-danger-subtle text-danger border-danger/20';
         } else if (event.action === 'deployed' && isSuccess) {
           Icon = CheckCircle;
-          iconBg = 'bg-emerald-100 text-emerald-600 border-emerald-200';
+          iconBg = 'bg-success-subtle text-success border-success/20';
         }
 
         let actionText = event.action.replace('_', ' ');
@@ -110,20 +110,20 @@ export function ModelHistoryTimeline({ familyId }: Props) {
             
             if (from === 'No production') {
               return (
-                <span className="text-xs text-gray-500 font-medium">
-                  Previous: <span className="font-semibold text-gray-600">No production</span> &rarr; Current: <span className="font-mono font-semibold text-gray-800">{to}</span>
+                <span className="text-xs text-muted-foreground font-medium">
+                  Previous: <span className="font-semibold text-muted-foreground">No production</span> &rarr; Current: <span className="font-mono font-semibold text-foreground">{to}</span>
                 </span>
               );
             }
             return (
-              <span className="text-xs text-gray-500 font-medium">
-                <span className="font-mono font-semibold text-gray-600">{from}</span> &rarr; <span className="font-mono font-semibold text-gray-800">{to}</span>
+              <span className="text-xs text-muted-foreground font-medium">
+                <span className="font-mono font-semibold text-muted-foreground">{from}</span> &rarr; <span className="font-mono font-semibold text-foreground">{to}</span>
               </span>
             );
           }
 
           return (
-            <span className="text-xs text-gray-500 font-medium">
+            <span className="text-xs text-muted-foreground font-medium">
               {event.from_stage} &rarr; {event.to_stage}
             </span>
           );
@@ -141,22 +141,22 @@ export function ModelHistoryTimeline({ familyId }: Props) {
             </span>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold text-gray-900">{actionText}</span>
-                <span className="text-xs font-mono font-semibold bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-gray-700">{formatVersion(event.version)}</span>
+                <span className="text-sm font-bold text-foreground">{actionText}</span>
+                <span className="text-xs font-mono font-semibold bg-muted border border-border px-2 py-0.5 rounded text-foreground">{formatVersion(event.version)}</span>
                 {renderTransition()}
-                <span className="text-xs font-medium text-gray-400 ml-auto">
+                <span className="text-xs font-medium text-muted-foreground ml-auto">
                   {new Date(event.created_at).toLocaleString()}
                 </span>
               </div>
               
               {event.action === 'promoted' || event.action === 'rolled_back' ? (
-                <p className="text-sm text-gray-600">Registry production marker updated.</p>
+                <p className="text-sm text-muted-foreground">Registry production marker updated.</p>
               ) : (
-                <p className="text-sm text-gray-600">{event.message}</p>
+                <p className="text-sm text-muted-foreground">{event.message}</p>
               )}
               
               {event.actor && (
-                <p className="text-xs font-medium text-gray-400">
+                <p className="text-xs font-medium text-muted-foreground">
                   By: {event.actor}
                 </p>
               )}

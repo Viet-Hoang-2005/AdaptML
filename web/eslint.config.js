@@ -12,6 +12,10 @@ const architectureImportRestrictions = [
     message: 'Import from app, features, or shared; legacy source roots are not allowed.',
   },
   {
+    group: ['antd', 'antd/**', '@ant-design/**'],
+    message: 'Ant Design is not part of the frontend design system; use shared Tailwind/Radix primitives.',
+  },
+  {
     group: ['../*', '../../*', '../../../*', '../../../../*', '../../../../../*'],
     message: 'Use the @/ alias for imports that cross a directory boundary.',
   },

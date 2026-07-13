@@ -1,45 +1,26 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { authEn } from '@/features/auth/i18n/en';
+import { buildDeployEn } from '@/features/build-deploy/i18n/en';
+import { catalogEn } from '@/features/catalog/i18n/en';
+import { driftEn } from '@/features/drift/i18n/en';
+import { notificationsEn } from '@/features/notifications/i18n/en';
+import { registryEn } from '@/features/registry/i18n/en';
+import { settingsEn } from '@/features/settings/i18n/en';
+import { trainingEn } from '@/features/training/i18n/en';
+import { commonEn } from '@/shared/i18n/en';
 
 const resources = {
   en: {
-    common: {
-      actions: {
-        close: 'Close',
-        cancel: 'Cancel',
-        save: 'Save',
-        retry: 'Retry',
-        createModel: 'Create model',
-      },
-      navigation: {
-        overview: 'Overview',
-        buildDeploy: 'Build & Deploy',
-        training: 'Training',
-        registry: 'Registry',
-        monitoring: 'Monitoring',
-        notifications: 'Notifications',
-        settings: 'Settings',
-      },
-      states: {
-        loading: 'Loading...',
-        empty: 'No data available',
-        error: 'Something went wrong',
-      },
-    },
-    auth: {
-      signIn: { title: 'Welcome back', description: 'Sign in to continue to your workspace.' },
-      recovery: { title: 'Recover access', description: 'Reset your account password securely.' },
-    },
-    catalog: { title: 'Model overview', empty: 'Create or upload a model project to begin.' },
-    buildDeploy: {
-      title: 'Build & Deploy',
-      buildLogs: 'Build console',
-      deploymentLogs: 'Deployment console',
-    },
-    training: { title: 'Training', empty: 'Create a training job to track runtime progress and artifacts.' },
-    registry: { title: 'Registry', empty: 'Registered model versions will appear here.' },
-    drift: { title: 'Monitoring', empty: 'Configure drift monitoring to compare production and reference data.' },
-    settings: { title: 'Settings', apiKeys: 'API keys', profile: 'Profile' },
+    common: commonEn,
+    auth: authEn,
+    catalog: catalogEn,
+    buildDeploy: buildDeployEn,
+    training: trainingEn,
+    registry: registryEn,
+    drift: driftEn,
+    settings: settingsEn,
+    notifications: notificationsEn,
   },
 } as const;
 

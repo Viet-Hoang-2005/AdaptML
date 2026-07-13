@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from './Button';
 import { Skeleton } from './Skeleton';
 
@@ -29,9 +30,11 @@ export function DataTable<T>({
   getRowId,
   loading = false,
   pageSize = 10,
-  emptyMessage = 'No records found.',
+  emptyMessage,
   className = '',
 }: DataTableProps<T>) {
+  const { t } = useTranslation('common');
+  const resolvedEmptyMessage = emptyMessage || t('pagination.empty');
   const [sorting, setSorting] = useState<SortingState>([]);
   const table = useReactTable({
     data,
@@ -46,10 +49,10 @@ export function DataTable<T>({
   });
 
   return (
-    <div className={`overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-card)] ${className}`}>
+    <div className={`overflow-hidden rounded-[8px] border border-border bg-surface ${className}`}>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="border-b border-border bg-muted/70 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <thead className="border-b border-border bg-surface text-xs font-semibold text-foreground">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -86,7 +89,7 @@ export function DataTable<T>({
               ))
             ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="transition-colors hover:bg-muted/45">
+                <tr key={row.id} className="transition-colors hover:bg-muted">
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-4 py-3.5 align-middle text-foreground">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -95,17 +98,17 @@ export function DataTable<T>({
                 </tr>
               ))
             ) : (
-              <tr><td colSpan={columns.length} className="px-4 py-12 text-center text-muted-foreground">{emptyMessage}</td></tr>
+              <tr><td colSpan={columns.length} className="px-4 py-12 text-center text-muted-foreground">{resolvedEmptyMessage}</td></tr>
             )}
           </tbody>
         </table>
       </div>
       {!loading && table.getPageCount() > 1 && (
         <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          <span>Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}</span>
+          <span>{t('pagination.page', { current: table.getState().pagination.pageIndex + 1, total: table.getPageCount() })}</span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()} icon={<ChevronLeft className="h-4 w-4" />}>Previous</Button>
-            <Button variant="outline" size="sm" disabled={!table.getCanNextPage()} onClick={() => table.nextPage()}>Next<ChevronRight className="h-4 w-4" /></Button>
+            <Button variant="outline" size="sm" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()} icon={<ChevronLeft className="h-4 w-4" />}>{t('pagination.previous')}</Button>
+            <Button variant="outline" size="sm" disabled={!table.getCanNextPage()} onClick={() => table.nextPage()}>{t('pagination.next')}<ChevronRight className="h-4 w-4" /></Button>
           </div>
         </div>
       )}

@@ -7,7 +7,7 @@ export interface PageContentProps {
 
 export function PageContent({ children, className = '' }: PageContentProps) {
   return (
-    <section className={`flex flex-1 flex-col rounded-xl border border-border bg-surface text-foreground shadow-[var(--shadow-card)] ${className}`}>
+    <section className={`flex flex-1 flex-col rounded-[8px] border border-border bg-surface text-foreground ${className}`}>
       {children}
     </section>
   );

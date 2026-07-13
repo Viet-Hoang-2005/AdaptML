@@ -77,10 +77,10 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
   const isEmpty = content.trim() === '';
 
   return (
-    <div className="flex flex-col h-96 border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm">
+    <div className="flex flex-col h-96 border border-border rounded-lg overflow-hidden bg-surface shadow-sm">
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-2">
-        <div className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+      <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-2">
+        <div className="text-sm font-semibold text-foreground flex items-center gap-2">
           <FileArchive className="w-4 h-4" />
           requirements.txt
           {isDirty && (
@@ -96,14 +96,14 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
             onChange={handleUpload}
           />
           <button
-            className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+            className="p-2 rounded-full hover:bg-muted transition-colors"
             onClick={handleDelete}
             title="Clear content"
           >
-            <Trash2 className="w-4 h-4 text-red-500" />
+            <Trash2 className="w-4 h-4 text-danger" />
           </button>
           <button
-            className="p-2 rounded-full hover:bg-gray-200 transition-colors disabled:opacity-40"
+            className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-40"
             onClick={handleReset}
             disabled={!isDirty}
             title="Reset to last saved"
@@ -111,20 +111,20 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
             <RotateCcw className="w-4 h-4" />
           </button>
           <button
-            className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+            className="p-2 rounded-full hover:bg-muted transition-colors"
             onClick={() => fileInputRef.current?.click()}
             title="Upload .txt file"
           >
             <Upload className="w-4 h-4" />
           </button>
           <button
-            className="p-2 rounded-full hover:bg-gray-200 transition-colors disabled:opacity-40"
+            className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-40"
             onClick={handleSave}
             disabled={saving || !isDirty}
             title="Save to server"
           >
             {saving ? (
-              <div className="w-4 h-4 rounded-full border-2 border-gray-600 border-t-transparent animate-spin" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
             ) : (
               <Save className="w-4 h-4" />
             )}
@@ -137,16 +137,16 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
         {isEmpty ? (
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="w-full h-full flex flex-col items-center justify-center border-0 bg-white hover:bg-gray-50 transition-colors group cursor-pointer"
+            className="w-full h-full flex flex-col items-center justify-center border-0 bg-surface hover:bg-muted transition-colors group cursor-pointer"
           >
-            <Upload className="w-10 h-10 mb-3 text-gray-300 group-hover:text-blue-400 transition-colors" />
-            <p className="text-gray-500 font-medium group-hover:text-blue-600 transition-colors">
+            <Upload className="w-10 h-10 mb-3 text-muted-foreground group-hover:text-blue-400 transition-colors" />
+            <p className="text-muted-foreground font-medium group-hover:text-primary transition-colors">
               Click to upload requirements.txt
             </p>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Or start typing in the editor after clicking a file
             </p>
-            <p className="text-xs text-gray-300 mt-3">
+            <p className="text-xs text-muted-foreground mt-3">
               Accepted: .txt
             </p>
           </button>

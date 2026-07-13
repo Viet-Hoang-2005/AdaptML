@@ -4,6 +4,7 @@ import { Clock3, Cpu, Download, Eye, HardDrive, RefreshCw, Rocket } from 'lucide
 import { Button } from '@/shared/ui/Button';
 import { useModelSelection } from '@/features/catalog/hooks/useModelSelection';
 import type { TrainingJob, TrainingJobStatus } from '@/features/training/types';
+import { useTranslation } from 'react-i18next';
 
 export type JobVisibilityFilter = 'active' | 'archived' | 'all';
 
@@ -16,15 +17,16 @@ export function SegmentedJobFilter({
   value: JobVisibilityFilter;
   onChange: (value: JobVisibilityFilter) => void;
 }) {
+  const { t } = useTranslation('training');
   const options: Array<{ label: string; value: JobVisibilityFilter }> = [
-    { label: 'Active', value: 'active' },
-    { label: 'Archived', value: 'archived' },
-    { label: 'All', value: 'all' },
+    { label: t('visibility.active'), value: 'active' },
+    { label: t('visibility.archived'), value: 'archived' },
+    { label: t('visibility.all'), value: 'all' },
   ];
 
   return (
     <div
-      aria-label="Training job visibility"
+      aria-label={t('visibility.label')}
       className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-muted)] p-0.5"
       role="group"
     >
@@ -48,8 +50,9 @@ export function SegmentedJobFilter({
 }
 
 export function TrainingJobsSkeleton() {
+  const { t } = useTranslation('training');
   return (
-    <div className="space-y-4" aria-label="Loading training jobs" aria-live="polite">
+    <div className="space-y-4" aria-label={t('list.loading')} aria-live="polite">
       {[0, 1].map((item) => (
         <div
           key={item}
@@ -94,6 +97,7 @@ export function TrainingJobRow({
   onRetry,
   retrying,
 }: TrainingJobRowProps) {
+  const { t } = useTranslation('training');
   const { selectedModel } = useModelSelection();
   const isArchived = job.is_deleted;
   const backendLabel = job.training_backend || 'kubeflow';
@@ -157,7 +161,7 @@ export function TrainingJobRow({
             {job.model_version}
           </span>
           <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusClass}`}>
-            {isArchived ? 'Archived' : job.status}
+            {isArchived ? t('list.archived') : job.status}
           </span>
         </div>
 
@@ -174,22 +178,22 @@ export function TrainingJobRow({
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         {!isArchived ? (
           <Button variant="secondary" size="sm" icon={<RefreshCw className="h-4 w-4" />} loading={refreshing} onClick={onRefresh}>
-            Refresh
+            {t('list.refresh')}
           </Button>
         ) : null}
         {!isArchived && job.status === 'completed' ? (
           <Button variant="secondary" size="sm" icon={<Download className="h-4 w-4" />} loading={downloading} onClick={onDownload}>
-            Download
+            {t('list.download')}
           </Button>
         ) : null}
         {!isArchived && isActive ? (
-          <Button variant="danger" size="sm" loading={cancelling} onClick={onCancel}>Cancel</Button>
+          <Button variant="danger" size="sm" loading={cancelling} onClick={onCancel}>{t('list.cancel')}</Button>
         ) : null}
         {!isArchived && canRetry ? (
-          <Button variant="secondary" size="sm" loading={retrying} onClick={onRetry}>Retry</Button>
+          <Button variant="secondary" size="sm" loading={retrying} onClick={onRetry}>{t('list.retry')}</Button>
         ) : null}
         <Link to={detailsUrl}>
-          <Button variant="primary" size="sm" icon={<Eye className="h-4 w-4" />}>View details</Button>
+          <Button variant="primary" size="sm" icon={<Eye className="h-4 w-4" />}>{t('list.view')}</Button>
         </Link>
       </div>
     </article>

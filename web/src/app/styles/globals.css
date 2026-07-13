@@ -89,28 +89,6 @@
   background: #475569;
 }
 
-/* Temporary compatibility mapping while legacy pages migrate to semantic utilities. */
-.dark .bg-white { background-color: var(--surface); }
-.dark .bg-gray-50,
-.dark .bg-slate-50 { background-color: var(--muted); }
-.dark .bg-gray-100 { background-color: var(--surface-elevated); }
-.dark .text-gray-950,
-.dark .text-gray-900,
-.dark .text-gray-800,
-.dark .text-slate-900 { color: var(--foreground); }
-.dark .text-gray-700,
-.dark .text-gray-600,
-.dark .text-gray-500,
-.dark .text-slate-600 { color: var(--muted-foreground); }
-.dark .border-gray-100,
-.dark .border-gray-200,
-.dark .border-gray-300,
-.dark .border-slate-200 { border-color: var(--border); }
-.dark .hover\:bg-gray-100:hover,
-.dark .hover\:bg-gray-50:hover { background-color: var(--surface-elevated); }
-.dark .hover\:text-black:hover,
-.dark .hover\:text-gray-900:hover { color: var(--foreground); }
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

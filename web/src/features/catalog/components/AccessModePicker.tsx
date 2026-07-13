@@ -16,12 +16,12 @@ export function AccessModePicker({
           onClick={() => onChange(mode)}
           className={`rounded-2xl border px-4 py-4 text-left transition-colors ${
             value === mode
-              ? 'border-black bg-black text-white'
-              : 'border-gray-300 bg-white text-gray-700 hover:border-black'
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-border bg-surface text-foreground hover:border-primary'
           }`}
         >
           <span className="text-sm font-bold capitalize">{mode} API</span>
-          <p className={`mt-1 text-xs ${value === mode ? 'text-gray-300' : 'text-gray-500'}`}>
+          <p className={`mt-1 text-xs ${value === mode ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
             {mode === 'private' ? 'Requires JWT or API key.' : 'Allows public prediction requests.'}
           </p>
         </button>

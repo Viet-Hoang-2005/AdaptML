@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Archive, FileCode2, RefreshCw, Rocket } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/Button';
 import {
   cancelTrainingJob,
@@ -104,6 +105,7 @@ const upsertTrainingJob = (jobs: TrainingJob[], job: TrainingJob) => {
 };
 
 export default function TrainModelPage() {
+  const { t } = useTranslation('training');
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { selectedModel } = useModelSelection();
@@ -274,49 +276,49 @@ export default function TrainModelPage() {
 
   return (
     <section className="flex w-full flex-1 flex-col space-y-6">
-      <div className="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Model Training</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Train new model artifacts or retrain the model selected in the header.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t('description')}
           </p>
         </div>
         <Button
           icon={<Rocket className="h-4 w-4" />}
           onClick={() => navigate(selectedModel ? `/dashboard/model-training/${selectedModel.id}/new` : '/dashboard/model-training')}
         >
-          New Training Job
+          {t('newJob')}
         </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="md:col-span-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="md:col-span-2 rounded-xl border border-border bg-surface p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Monthly Training Quota</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('quota')}</p>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-gray-900">
+                <span className="text-2xl font-bold text-foreground">
                   {isUsageLoading ? '...' : formatDuration(usage?.monthly_runtime_seconds)}
                 </span>
-                <span className="text-sm font-medium text-gray-500">
-                  / {formatDuration(usage?.monthly_quota_seconds || 43200)} used
+                <span className="text-sm font-medium text-muted-foreground">
+                  {t('used', { duration: formatDuration(usage?.monthly_quota_seconds || 43200) })}
                 </span>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Remaining</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('remaining')}</p>
               <p className={`mt-1 text-lg font-bold ${
                 usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.1) 
-                  ? 'text-red-600' 
+                  ? 'text-danger'
                   : usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.3) 
-                    ? 'text-amber-600' 
-                    : 'text-emerald-600'
+                    ? 'text-warning'
+                    : 'text-success'
               }`}>
                 {isUsageLoading ? '...' : formatDuration(usage?.remaining_seconds)}
               </p>
             </div>
           </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
             <div
               className={`h-full transition-all duration-500 ease-out ${
                 usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.1) 
@@ -332,16 +334,16 @@ export default function TrainModelPage() {
 
         <div className={`flex flex-col justify-center rounded-xl border p-5 shadow-sm transition-colors ${
           activeUsageCount > 0
-            ? 'border-blue-200 bg-blue-50/50' 
-            : 'border-gray-200 bg-white'
+            ? 'border-primary/20 bg-primary-subtle'
+            : 'border-border bg-surface'
         }`}>
-          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <Rocket className="h-4 w-4" />
-            Active Jobs
+            {t('activeJobs')}
           </p>
           <div className="mt-3 flex items-baseline gap-2">
             <span className={`text-3xl font-bold ${
-              activeUsageCount > 0 ? 'text-blue-700' : 'text-gray-900'
+              activeUsageCount > 0 ? 'text-primary' : 'text-foreground'
             }`}>
               {activeUsageCount}
             </span>
@@ -360,54 +362,54 @@ export default function TrainModelPage() {
       {isLoading ? (
         <TrainingJobsSkeleton />
       ) : isError ? (
-        <div className="rounded-lg border border-red-100 bg-red-50 p-5">
-          <h2 className="text-base font-bold text-red-800">Unable to load training jobs</h2>
-          <p className="mt-1 text-sm text-red-700">{getApiErrorMessage(jobsError, 'Please check the control plane API.')}</p>
+        <div className="rounded-lg border border-danger/20 bg-danger-subtle p-5">
+          <h2 className="text-base font-bold text-danger">{t('loadFailed')}</h2>
+          <p className="mt-1 text-sm text-danger">{getApiErrorMessage(jobsError, t('checkApi'))}</p>
           <Button className="mt-4" variant="secondary" size="sm" icon={<RefreshCw className="h-4 w-4" />} onClick={() => refetch()}>
-            Retry
+            {t('retry')}
           </Button>
         </div>
       ) : allTrainingJobs.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center">
-          <FileCode2 className="mx-auto h-8 w-8 text-gray-400" />
-          <h2 className="mt-3 text-base font-bold text-gray-900">No training jobs yet</h2>
-          <p className="mt-1 text-sm text-gray-500">Submit a source zip and CSV dataset to start your first training job.</p>
+        <div className="rounded-lg border border-dashed border-border bg-surface p-10 text-center">
+          <FileCode2 className="mx-auto h-8 w-8 text-muted-foreground" />
+          <h2 className="mt-3 text-base font-bold text-foreground">{t('noJobs')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('noJobsDescription')}</p>
           <Button className="mt-4" icon={<Rocket className="h-4 w-4" />} onClick={() => navigate(selectedModel ? `/dashboard/model-training/${selectedModel.id}/new` : '/dashboard/model-training')}>
-            Create your first training job
+            {t('firstJob')}
           </Button>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4 sm:flex-row sm:items-center sm:justify-between shadow-sm">
+          <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/50 p-4 sm:flex-row sm:items-center sm:justify-between shadow-sm">
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Training history</h2>
-              <p className="mt-1 text-xs text-gray-500">
-                {trainingJobs.length} shown / {allTrainingJobs.length} total
+              <h2 className="text-sm font-bold text-foreground">{t('history')}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('historyCount', { shown: trainingJobs.length, total: allTrainingJobs.length })}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <SegmentedJobFilter value={visibilityFilter} onChange={setVisibilityFilter} />
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-500">
-                Sort
+              <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                {t('sort')}
                 <select
-                  className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-xs font-semibold text-gray-700"
+                  className="h-8 rounded-lg border border-border bg-surface px-2 text-xs font-semibold text-foreground"
                   value={sortMode}
                   onChange={(event) => setSortMode(event.target.value as JobSortMode)}
                 >
-                  <option value="newest">Newest</option>
-                  <option value="oldest">Oldest</option>
-                  <option value="status">Status</option>
-                  <option value="name">Name</option>
+                  <option value="newest">{t('newest')}</option>
+                  <option value="oldest">{t('oldest')}</option>
+                  <option value="status">{t('status')}</option>
+                  <option value="name">{t('name')}</option>
                 </select>
               </label>
             </div>
-            {isFetching && <span className="text-xs font-semibold text-gray-400">Refreshing list...</span>}
+            {isFetching && <span className="text-xs font-semibold text-muted-foreground">{t('refreshing')}</span>}
           </div>
           {trainingJobs.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
-              <Archive className="mx-auto h-7 w-7 text-gray-400" />
-              <h2 className="mt-3 text-sm font-bold text-gray-900">No jobs match this view</h2>
-              <p className="mt-1 text-sm text-gray-500">Change the filter to Active, Archived, or All.</p>
+            <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center">
+              <Archive className="mx-auto h-7 w-7 text-muted-foreground" />
+              <h2 className="mt-3 text-sm font-bold text-foreground">{t('noView')}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{t('noViewDescription')}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -431,18 +433,18 @@ export default function TrainModelPage() {
       )}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-bold text-gray-900">
-              {confirmAction.type === 'cancel' ? 'Cancel training job?' : 'Retry training job?'}
+          <div className="w-full max-w-md rounded-xl bg-surface p-5 shadow-xl">
+            <h3 className="text-base font-bold text-foreground">
+              {confirmAction.type === 'cancel' ? t('cancelTitle') : t('retryTitle')}
             </h3>
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-muted-foreground">
               {confirmAction.type === 'cancel'
-                ? `This will stop ${jobLabel(confirmAction.job)} if it is still active.`
-                : `Create a new training job using the same configuration as ${jobLabel(confirmAction.job)}?`}
+                ? t('cancelDescription', { job: jobLabel(confirmAction.job) })
+                : t('retryDescription', { job: jobLabel(confirmAction.job) })}
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="secondary" size="sm" onClick={() => setConfirmAction(null)}>
-                Close
+                {t('close')}
               </Button>
               <Button
                 size="sm"
@@ -456,7 +458,7 @@ export default function TrainModelPage() {
                   }
                 }}
               >
-                {confirmAction.type === 'cancel' ? 'Cancel job' : 'Retry job'}
+                {confirmAction.type === 'cancel' ? t('cancelJob') : t('retryJob')}
               </Button>
             </div>
           </div>

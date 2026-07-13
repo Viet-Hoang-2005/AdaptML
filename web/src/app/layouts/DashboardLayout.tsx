@@ -19,8 +19,8 @@ export default function DashboardLayout() {
             onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
             onCloseMobile={() => setMobileSidebarOpen(false)}
           />
-          <main id="main-content" className="min-w-0 flex-1 overflow-y-auto">
-            <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col p-4 md:p-5 xl:p-6">
+          <main id="main-content" className="min-w-0 flex flex-1 flex-col overflow-y-auto p-4 md:p-6">
+            <div className="flex min-h-full w-full flex-1 flex-col">
               <Outlet />
             </div>
           </main>

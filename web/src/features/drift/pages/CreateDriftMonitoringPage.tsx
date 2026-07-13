@@ -80,7 +80,7 @@ export default function CreateDriftMonitoringPage() {
         title="Create Drift Monitoring"
         backLink={{ label: "Back to Dashboard", to: `/dashboard/drift-monitoring/${modelId}` }}
       />
-      <section className="flex flex-col flex-1 rounded-lg border border-gray-300 bg-white p-6 space-y-6">
+      <section className="flex flex-col flex-1 rounded-lg border border-border bg-surface p-6 space-y-6">
 
       <div className="space-y-4">
         <StepTitle 
@@ -101,7 +101,7 @@ export default function CreateDriftMonitoringPage() {
         />
       </div>
 
-      <div className="space-y-4 border-t border-gray-200 pt-6">
+      <div className="space-y-4 border-t border-border pt-6">
         <StepTitle 
           title="Set Trigger Threshold"
           description="Configure how many new production predictions must be logged before a drift check is triggered."
@@ -120,24 +120,24 @@ export default function CreateDriftMonitoringPage() {
         </div>
       </div>
 
-      <div className="space-y-4 border-t border-gray-200 pt-6">
+      <div className="space-y-4 border-t border-border pt-6">
         <StepTitle 
           title="Production Data Preview"
           description="Preview the latest 50 records from your production database that will be used in future drift reports."
         />
-        <div className="h-100 rounded-xl border border-gray-200 overflow-hidden relative bg-gray-50">
+        <div className="h-100 rounded-xl border border-border overflow-hidden relative bg-muted">
           {productionCsv ? (
             <CSVEditor initialCsvText={productionCsv} readOnly={true} />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
-              <Database className="w-8 h-8 text-gray-400 mb-2" />
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <Database className="w-8 h-8 text-muted-foreground mb-2" />
               <p>No production data available yet.</p>
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex items-center gap-4 border-t border-gray-200 pt-6">
+      <div className="flex items-center gap-4 border-t border-border pt-6">
         <Button 
           variant="secondary" 
           size="md"

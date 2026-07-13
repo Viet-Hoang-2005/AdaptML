@@ -112,7 +112,7 @@ export default function BuildPackagePage({
     <div className="flex flex-col gap-6">
       <LineSteps steps={wizardSteps} currentStep={step} onStepChange={setStep} />
 
-      <div className="rounded-lg border border-gray-300 bg-white p-6">
+      <div className="rounded-lg border border-border bg-surface p-6">
         {step === 1 && (
           <MetadataStep form={form} setField={setField} />
         )}
@@ -139,7 +139,7 @@ export default function BuildPackagePage({
           />
         )}
 
-        <div className="mt-8 grid gap-3 pt-5 border-t border-gray-200 sm:grid-cols-2">
+        <div className="mt-8 grid gap-3 pt-5 border-t border-border sm:grid-cols-2">
           <Button
             variant="secondary"
             size="md"
@@ -241,9 +241,9 @@ function ArtifactStep({
         onChange={(file) => setField('label_mapping_file', file)}
       />
 
-      <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-        <p className="text-sm font-bold text-blue-950">Optional Model Evolution metadata</p>
-        <p className="mt-1 text-sm text-blue-800">
+      <div className="rounded-lg border border-primary/20 bg-primary-subtle p-4">
+        <p className="text-sm font-bold text-primary">Optional Model Evolution metadata</p>
+        <p className="mt-1 text-sm text-primary">
           Optional metadata improves Model Evolution comparison and insights. Missing or invalid files will not block deployment.
         </p>
       </div>
@@ -300,27 +300,26 @@ function FlavorStep({
       <div className="grid gap-4 sm:grid-cols-2">
         {options.map((option) => {
           const isSelected = form.flavor === option.value;
-          const isBento = option.badge.includes('BentoML');
           return (
             <button
               key={option.value}
               type="button"
               onClick={() => setField('flavor', option.value)}
               className={`rounded-2xl border p-5 text-left transition-all ${isSelected
-                  ? 'border-black bg-black text-white shadow-lg'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-black'
+                  ? 'border-primary bg-primary text-primary-foreground shadow-lg'
+                  : 'border-border bg-surface text-foreground hover:border-primary'
                 }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-base font-bold">{option.title}</span>
                 <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${isSelected
-                    ? isBento ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
-                    : isBento ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-primary-subtle text-primary'
                   }`}>
                   {option.badge}
                 </span>
               </div>
-              <p className={`mt-2 text-sm leading-6 ${isSelected ? 'text-gray-300' : 'text-gray-500'}`}>
+              <p className={`mt-2 text-sm leading-6 ${isSelected ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
                 {option.description}
               </p>
             </button>
@@ -329,11 +328,11 @@ function FlavorStep({
       </div>
 
       {isBentoFlavor && (
-        <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-4">
-          <div className="flex items-center gap-2 text-sm font-bold text-purple-950">
+        <div className="mt-4 rounded-lg border border-primary/20 bg-primary-subtle p-4">
+          <div className="flex items-center gap-2 text-sm font-bold text-primary">
             <span>🚀 BentoML Pluggable Packaging Strategy Active</span>
           </div>
-          <p className="mt-1 text-sm text-purple-800 leading-relaxed">
+          <p className="mt-1 text-sm text-primary leading-relaxed">
             This model will be containerized using BentoML instead of the default FastAPI server. High-throughput prediction requests will be dynamically batched for optimal concurrency while ensuring 100% data drift telemetry via Redpanda/Kafka to Evidently AI.
           </p>
         </div>

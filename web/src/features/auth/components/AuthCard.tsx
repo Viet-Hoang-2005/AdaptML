@@ -18,8 +18,8 @@ export function AuthCard({
       <div className={`relative z-10 mx-4 w-full max-w-md sm:mx-0 ${containerClassName}`}>
         <div
           className={`
-            rounded-3xl border border-border bg-surface p-8 shadow-[var(--shadow-overlay)]
-            sm:p-10
+            rounded-3xl border border-[var(--auth-card-border)] bg-[var(--auth-card-background)] p-8
+            shadow-2xl backdrop-blur-xl sm:p-10
             ${cardClassName}
           `}
         >

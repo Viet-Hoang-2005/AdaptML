@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, Settings, Trash2, ExternalLink, LineChart, Loader2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { useTranslation } from 'react-i18next';
 
 import Placeholder from '@/features/catalog/components/ModelPlaceholder';
 import { Button } from '@/shared/ui/Button';
@@ -23,6 +24,7 @@ import {
 } from '@/features/drift/hooks/useDriftMonitoring';
 
 export default function DriftMonitoringPage() {
+  const { t, i18n } = useTranslation('drift');
   const { modelId } = useParams<{ modelId: string }>();
   const navigate = useNavigate();
   
@@ -49,23 +51,23 @@ export default function DriftMonitoringPage() {
   };
 
   if (isLoadingJobs) {
-    return <div className="p-8">Loading...</div>;
+    return <div className="p-8">{t('loading')}</div>;
   }
 
   if (!activeJob) {
     return (
       <div className="flex w-full flex-1 flex-col space-y-6">
-        <PageHeader title="Drift Monitoring" />
+        <PageHeader title={t('title')} />
         <Placeholder
-          title="Drift Monitoring"
-          description="You haven't configured Drift Monitoring for this model yet."
+          title={t('title')}
+          description={t('notConfigured')}
           icon={<LineChart className="h-6 w-6" />}
           action={
             <Button 
               size="md"
               onClick={() => navigate(`/dashboard/drift-monitoring/${modelId}/new`)}
             >
-              Create Drift Monitoring
+              {t('createMonitoring')}
             </Button>
           }
         />
@@ -76,45 +78,45 @@ export default function DriftMonitoringPage() {
   const columns: ColumnDef<DriftMonitoringResult>[] = [
     {
       accessorKey: 'run_at',
-      header: 'Run at',
-      cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{new Date(row.original.run_at).toLocaleString()}</span>,
+      header: t('runAt'),
+      cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{new Date(row.original.run_at).toLocaleString(i18n.language)}</span>,
     },
     {
       accessorKey: 'drift_score',
-      header: 'Drift score',
+      header: t('driftScore'),
       cell: ({ row }) => <span className="font-mono font-semibold">{(row.original.drift_score * 100).toFixed(1)}%</span>,
     },
     {
       id: 'status',
-      header: 'Status',
-      cell: ({ row }) => <Badge variant={row.original.dataset_drift ? 'danger' : 'success'}>{row.original.dataset_drift ? 'Drift detected' : 'Healthy'}</Badge>,
+      header: t('status'),
+      cell: ({ row }) => <Badge variant={row.original.dataset_drift ? 'danger' : 'success'}>{row.original.dataset_drift ? t('driftDetected') : t('healthy')}</Badge>,
     },
     {
       id: 'action',
-      header: 'Report',
+      header: t('report'),
       enableSorting: false,
       cell: ({ row }) => (
-        <Button variant="ghost" size="sm" icon={<ExternalLink className="h-4 w-4" />} onClick={() => handleViewReport(row.original.report_url)}>View report</Button>
+        <Button variant="ghost" size="sm" icon={<ExternalLink className="h-4 w-4" />} onClick={() => handleViewReport(row.original.report_url)}>{t('viewReport')}</Button>
       ),
     },
   ];
 
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
-      <PageHeader title="Drift Monitoring" />
+      <PageHeader title={t('title')} />
       
       <PageContent className="p-6 space-y-6">
         <div className="flex flex-col space-y-4">
           <div className="flex justify-between items-start">
-            <StepTitle title="Configuration Details" />
+            <StepTitle title={t('configuration')} />
             <div className="flex gap-2">
               <IconButton
-                label="Edit drift configuration"
+                label={t('edit')}
                 icon={<Settings className="h-5 w-5" />}
                 onClick={() => navigate(`/dashboard/drift-monitoring/${modelId}/new`)}
               />
               <IconButton
-                label="Delete drift configuration"
+                label={t('delete')}
                 variant="danger-outline"
                 icon={<Trash2 className="h-5 w-5" />}
                 onClick={() => setIsDeleteModalOpen(true)}
@@ -131,41 +133,41 @@ export default function DriftMonitoringPage() {
                 ) : (
                   <Play className="w-4 h-4" />
                 )}
-                {isRunning ? 'Running...' : 'Run Now'}
+                {isRunning ? t('running') : t('run')}
               </Button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <SummaryCard 
-              label="Trigger Threshold (Records)" 
+              label={t('trigger')}
               value={activeJob.trigger_threshold.toString()} 
             />
             <SummaryCard 
-              label="Reference Data Path" 
-              value={activeJob.reference_data_s3_path || 'None'} 
+              label={t('referencePath')}
+              value={activeJob.reference_data_s3_path || t('none')}
             />
           </div>
         </div>
 
-        <div className="border-t border-gray-200 pt-6 space-y-4">
+        <div className="border-t border-border pt-6 space-y-4">
           {activeRunId && (
             <TerminalLogViewer
               key={activeRunId}
               modelId={modelId}
               driftRunId={activeRunId}
-              title="Evidently Drift Run Console"
+              title={t('console')}
               onCompleted={() => { void refetchResults(); }}
             />
           )}
-          <StepTitle title="Monitoring History" />
+          <StepTitle title={t('history')} />
           <DataTable
             data={results ?? []}
             columns={columns}
             getRowId={(result) => result.id}
             loading={isLoadingResults}
             pageSize={5}
-            emptyMessage="No drift runs yet. Run monitoring to generate the first report."
+            emptyMessage={t('noRuns')}
           />
         </div>
 
@@ -174,9 +176,9 @@ export default function DriftMonitoringPage() {
 
       <ConfirmModal
         open={isDeleteModalOpen}
-        title="Delete Drift Monitoring Config"
-        description="Are you sure you want to delete this configuration? This action cannot be undone."
-        confirmText="Delete"
+        title={t('deleteTitle')}
+        description={t('deleteDescription')}
+        confirmText={t('deleteConfirm')}
         tone="danger"
         loading={isDeleting}
         onConfirm={() => {

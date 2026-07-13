@@ -1,9 +1,11 @@
 import { TerminalSquare, ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { buildDeployQueryKeys } from '@/features/build-deploy/queryKeys';
 
 export function BuildLogsPanel({ modelId }: { modelId: string }) {
+  const { t } = useTranslation('buildDeploy');
   const logsRef = useRef<HTMLPreElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [expanded, setExpanded] = useState(true);
@@ -35,11 +37,11 @@ export function BuildLogsPanel({ modelId }: { modelId: string }) {
       <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/50 px-4 py-2.5">
         <span className="flex items-center gap-2 text-xs font-semibold text-green-400">
           <TerminalSquare className="h-4 w-4" />
-          Build Process Logs
+          {t('lifecycle.buildLogs')}
         </span>
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+          className="rounded p-1 text-muted-foreground hover:bg-gray-800 hover:text-muted-foreground transition-colors"
         >
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
@@ -48,9 +50,9 @@ export function BuildLogsPanel({ modelId }: { modelId: string }) {
         <div className="relative">
           <pre
             ref={logsRef}
-            className="max-h-64 overflow-auto p-4 text-[13px] leading-relaxed text-gray-300 font-mono whitespace-pre-wrap scrollbar-thin scrollbar-track-gray-900 scrollbar-thumb-gray-700"
+            className="max-h-64 overflow-auto p-4 text-[13px] leading-relaxed text-muted-foreground font-mono whitespace-pre-wrap scrollbar-thin scrollbar-track-gray-900 scrollbar-thumb-gray-700"
           >
-            {text || 'Waiting for build logs...'}
+            {text || t('lifecycle.waitingLogs')}
           </pre>
           {showScrollBtn && (
             <button
@@ -60,7 +62,7 @@ export function BuildLogsPanel({ modelId }: { modelId: string }) {
               }}
               className="absolute bottom-4 right-4 rounded-full border border-gray-600 bg-gray-800/90 px-3 py-1.5 text-xs font-semibold text-gray-200 shadow-lg hover:bg-gray-700 backdrop-blur"
             >
-              New logs ↓
+              {t('lifecycle.newLogs')} ↓
             </button>
           )}
         </div>

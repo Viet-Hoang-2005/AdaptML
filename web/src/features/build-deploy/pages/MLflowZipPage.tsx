@@ -105,7 +105,7 @@ export default function MLflowZipPage({
   };
 
   return (
-    <div className="space-y-6 rounded-lg border border-gray-300 bg-white p-6 lg:p-8">
+    <div className="space-y-6 rounded-lg border border-border bg-surface p-6 lg:p-8">
       <div>
         <StepTitle title="Advanced MLflow Artifact" description="Upload a .zip package that already contains an MLmodel file." />
         <FileDropzone
@@ -116,7 +116,7 @@ export default function MLflowZipPage({
         />
       </div>
 
-      <div className="space-y-5 border-t border-gray-200 pt-6">
+      <div className="space-y-5 border-t border-border pt-6">
         <Input
           label="Model Name"
           value={form.name}
@@ -146,7 +146,7 @@ export default function MLflowZipPage({
         <AccessModePicker value={form.access_mode} onChange={(value) => setField('access_mode', value)} />
       </div>
 
-      <div className="space-y-4 border-t border-gray-200 pt-6">
+      <div className="space-y-4 border-t border-border pt-6">
         <StepTitle title="Upload Source Code & Data (Optional)" description="Upload the training source code and reference data." />
         <FileDropzone
           accept=".zip,.py"
@@ -163,7 +163,7 @@ export default function MLflowZipPage({
         />
       </div>
 
-      <div className="space-y-4 border-t border-gray-200 pt-6">
+      <div className="space-y-4 border-t border-border pt-6">
         <StepTitle
           title="MLflow Package"
           description="Upload a .zip package that already contains an MLmodel file."
@@ -175,7 +175,7 @@ export default function MLflowZipPage({
           onChange={(file) => setField('artifact', file)}
         />
 
-        <p className="mt-6 text-sm font-semibold text-gray-900">MLflow Package Build</p>
+        <p className="mt-6 text-sm font-semibold text-foreground">MLflow Package Build</p>
         <TerminalLogViewer 
           key={createdBuildId || 'idle'}
           modelId={createdModelId}
@@ -199,7 +199,7 @@ export default function MLflowZipPage({
         )}
       </div>
 
-      <div className="flex items-center gap-4 border-t border-gray-200 pt-6">
+      <div className="flex items-center gap-4 border-t border-border pt-6">
         <Button
           className="flex-1"
           variant="danger"
