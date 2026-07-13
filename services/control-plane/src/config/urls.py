@@ -1,7 +1,7 @@
 from apps.deployment.api.urls import build_patterns, deployment_patterns, endpoint_patterns
 from apps.deployment.api.webhooks import BuildWebhookEndpoint
 from apps.drift.api.webhooks import DriftRunWebhookEndpoint
-from apps.training.api.webhooks import TrainingJobWebhookEndpoint
+from apps.training.api.webhooks import TrainingJobWebhookEndpoint, TrainingOutputUploadURLEndpoint
 from django.contrib import admin
 from django.urls import include, path
 
@@ -20,5 +20,6 @@ urlpatterns = [
     path("health/", include("apps.observability.api.urls")),
     path("internal/webhooks/builds/<uuid:build_id>/", BuildWebhookEndpoint.as_view()),
     path("internal/webhooks/training-jobs/<uuid:job_id>/", TrainingJobWebhookEndpoint.as_view()),
+    path("internal/training-jobs/<uuid:job_id>/output-upload-url/", TrainingOutputUploadURLEndpoint.as_view()),
     path("internal/webhooks/drift-runs/<uuid:run_id>/", DriftRunWebhookEndpoint.as_view()),
 ]

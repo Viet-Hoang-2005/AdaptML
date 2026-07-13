@@ -74,6 +74,7 @@ def test_run_training_streams_output_and_sets_environment(monkeypatch, runner_wo
     (source_dir / "train.py").write_text("pass", encoding="utf-8")
     captured = {}
     monkeypatch.setenv("TENANT_ID", "tenant-1")
+    monkeypatch.setenv("S3_OUTPUT_UPLOAD_CAPABILITY", "must-not-leak")
     monkeypatch.setattr(runner, "start_metric_emitter", lambda event: Mock())
     monkeypatch.setattr(runner, "log_to_redis", Mock())
 
@@ -87,13 +88,16 @@ def test_run_training_streams_output_and_sets_environment(monkeypatch, runner_wo
     assert result.stdout == "out one\nout two\n"
     assert result.stderr == "warning\n"
     assert captured["env"]["MODEL_VERSION"] == "v2"
-    assert captured["env"]["MLFLOW_EXPERIMENT_NAME"] == "tenant-tenant-1"
+    assert "MLFLOW_EXPERIMENT_NAME" not in captured["env"]
+    assert "S3_OUTPUT_UPLOAD_CAPABILITY" not in captured["env"]
+    assert "TENANT_ID" not in captured["env"]
 
 
 def _main_env(monkeypatch):
     monkeypatch.setenv("S3_SOURCE_URI", "https://example.test/source")
     monkeypatch.setenv("S3_TRAINING_DATA_URI", "https://example.test/train")
-    monkeypatch.setenv("S3_OUTPUT_URI", "https://example.test/output")
+    monkeypatch.setenv("S3_OUTPUT_UPLOAD_URL", "https://control-plane.test/output-url")
+    monkeypatch.setenv("S3_OUTPUT_UPLOAD_CAPABILITY", "output-capability")
     monkeypatch.setenv("ENTRY_POINT", "custom.py")
     monkeypatch.setenv("MODEL_VERSION", "v3")
     monkeypatch.setenv("TRAINING_JOB_ID", "job-3")
@@ -114,6 +118,8 @@ def test_main_orchestrates_success(monkeypatch, runner_workspace):
     monkeypatch.setattr(runner, "run_training", Mock(return_value=subprocess.CompletedProcess([], 0, "ok", "")))
     monkeypatch.setattr(runner, "write_mlops_bundle", bundle)
     monkeypatch.setattr(runner, "create_model_archive", archive)
+    request_upload_url = Mock(return_value="https://example.test/output")
+    monkeypatch.setattr(runner, "request_output_upload_url", request_upload_url)
     monkeypatch.setattr(runner, "upload_presigned_url", upload)
     runner.main()
     assert downloads.call_count == 2
@@ -129,6 +135,10 @@ def test_main_orchestrates_success(monkeypatch, runner_workspace):
         stderr_text="",
     )
     archive.assert_called_once()
+    request_upload_url.assert_called_once_with(
+        "https://control-plane.test/output-url",
+        "output-capability",
+    )
     upload.assert_called_once()
 
 

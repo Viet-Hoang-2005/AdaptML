@@ -13,7 +13,16 @@ def test_training_job_paths_are_project_scoped(monkeypatch):
     client = APIClient()
     client.force_authenticate(user)
 
-    response = client.post("/api/training-jobs/", {"project": str(project.public_id), "name": "nightly"}, format="json")
+    response = client.post(
+        "/api/training-jobs/",
+        {
+            "project": str(project.public_id),
+            "name": "nightly",
+            "code_snapshot_uri": "s3://other-tenant/source.zip",
+            "data_snapshot_uri": "s3://other-tenant/train.csv",
+        },
+        format="json",
+    )
 
     assert response.status_code == 201
     job = TrainingJob.objects.get(public_id=response.data["id"])
@@ -22,6 +31,8 @@ def test_training_job_paths_are_project_scoped(monkeypatch):
     assert job.data_snapshot_uri.endswith(f"{prefix}/input/data/train.csv")
     assert job.output_uri.endswith(f"{prefix}/output/model.tar.gz")
     assert job.mlflow_artifact_uri.endswith(f"{prefix}/mlflow/")
+    assert "other-tenant" not in job.code_snapshot_uri
+    assert "other-tenant" not in job.data_snapshot_uri
 
     monkeypatch.setattr(
         "apps.training.api.endpoints.output_download_url",

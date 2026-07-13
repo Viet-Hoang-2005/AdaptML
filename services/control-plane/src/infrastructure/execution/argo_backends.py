@@ -1,4 +1,6 @@
 from apps.deployment.models import Endpoint
+from apps.training.services.capabilities import issue_capability
+from apps.training.services.storage_scope import validate_training_uri
 from django.conf import settings
 
 from infrastructure.argo import ArgoWebhookClient
@@ -60,12 +62,17 @@ class ArgoTrainingBackend(_ArgoBackend):
 
     def run(self, job):
         runtime_name = f"training-{str(job.public_id).lower()}"
+        validate_training_uri(job, self.storage.bucket, "code", job.code_snapshot_uri)
+        validate_training_uri(job, self.storage.bucket, "data", job.data_snapshot_uri)
+        validate_training_uri(job, self.storage.bucket, "output", job.output_uri)
+        output_upload_capability = issue_capability(job, "output_upload")
+        reporter_capability = issue_capability(job, "trusted_reporter")
         job.external_job_id = runtime_name
         job.tracking = {
             **job.tracking,
             "runtime": {
                 "backend": "argo",
-                "namespace": "default",
+                "namespace": "user-jobs",
                 "pytorch_job_name": runtime_name,
                 "workflow_selector": f"mlops.io/training-job-id={job.public_id}",
                 "pod_selector": f"mlops.io/training-job-id={job.public_id}",
@@ -78,23 +85,28 @@ class ArgoTrainingBackend(_ArgoBackend):
                 "project_id": str(job.project.public_id),
                 "tenant_id": job.project.owner.tenant_id,
                 "job_name": runtime_name,
-                "namespace": "default",
+                "namespace": "user-jobs",
                 "vcpu": job.vcpu,
                 "memory": job.memory_mb,
                 "accelerator_type": job.accelerator_type,
                 "accelerator_count": job.accelerator_count,
-                "s3_source_uri": self.storage.presigned_get(job.code_snapshot_uri, 14400),
-                "s3_training_data_uri": self.storage.presigned_get(job.data_snapshot_uri, 14400),
-                "s3_output_uri": self.storage.presigned_put(job.output_uri, 14400),
+                "s3_source_uri": self.storage.presigned_get(
+                    job.code_snapshot_uri, settings.TRAINING_PRESIGNED_URL_TTL_SECONDS
+                ),
+                "s3_training_data_uri": self.storage.presigned_get(
+                    job.data_snapshot_uri, settings.TRAINING_PRESIGNED_URL_TTL_SECONDS
+                ),
+                "output_upload_url": (
+                    f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/training-jobs/{job.public_id}/output-upload-url/"
+                ),
+                "output_upload_capability": output_upload_capability,
                 "entry_point": job.entry_point,
                 "model_version": "",
                 "requirements_text": job.requirements_text,
-                "mlflow_tracking_uri": settings.MLFLOW_TRACKING_URI,
-                "mlflow_experiment_name": f"project-{job.project.public_id}-job-{job.public_id}",
-                "mlflow_artifact_root": job.mlflow_artifact_uri,
                 "control_plane_webhook_url": (
                     f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/webhooks/training-jobs/{job.public_id}/"
                 ),
+                "reporter_capability": reporter_capability,
             }
         )
 
@@ -102,7 +114,10 @@ class ArgoTrainingBackend(_ArgoBackend):
         if settings.ARGO_CANCEL_TRAINING_WEBHOOK_URL:
             return self.client.trigger(
                 settings.ARGO_CANCEL_TRAINING_WEBHOOK_URL,
-                {"job_name": job.external_job_id or f"training-{str(job.public_id).lower()}", "namespace": "default"},
+                {
+                    "job_name": job.external_job_id or f"training-{str(job.public_id).lower()}",
+                    "namespace": "user-jobs",
+                },
             )
         return None
 

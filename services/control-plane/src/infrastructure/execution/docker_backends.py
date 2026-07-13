@@ -89,11 +89,24 @@ class DockerTrainingBackend:
 
     def run(self, job):
         project = job.project
-        webhook = f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/webhooks/training-jobs/{job.public_id}/"
+        from apps.training.services.capabilities import issue_capability
+        from apps.training.services.storage_scope import validate_training_uri
+
+        validate_training_uri(job, self.storage.bucket, "code", job.code_snapshot_uri)
+        validate_training_uri(job, self.storage.bucket, "data", job.data_snapshot_uri)
+        validate_training_uri(job, self.storage.bucket, "output", job.output_uri)
+        output_upload_capability = issue_capability(job, "output_upload")
         environment = {
-            "S3_SOURCE_URI": self.storage.presigned_get(job.code_snapshot_uri, 14400),
-            "S3_TRAINING_DATA_URI": self.storage.presigned_get(job.data_snapshot_uri, 14400),
-            "S3_OUTPUT_URI": self.storage.presigned_put(job.output_uri, 14400),
+            "S3_SOURCE_URI": self.storage.presigned_get(
+                job.code_snapshot_uri, settings.TRAINING_PRESIGNED_URL_TTL_SECONDS
+            ),
+            "S3_TRAINING_DATA_URI": self.storage.presigned_get(
+                job.data_snapshot_uri, settings.TRAINING_PRESIGNED_URL_TTL_SECONDS
+            ),
+            "S3_OUTPUT_UPLOAD_URL": (
+                f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/training-jobs/{job.public_id}/output-upload-url/"
+            ),
+            "S3_OUTPUT_UPLOAD_CAPABILITY": output_upload_capability,
             "ENTRY_POINT": job.entry_point,
             "MODEL_VERSION": "",
             "TRAINING_JOB_ID": str(job.public_id),
@@ -101,12 +114,6 @@ class DockerTrainingBackend:
             "REQUIREMENTS_TEXT": base64.b64encode(job.requirements_text.encode()).decode()
             if job.requirements_text
             else "",
-            "REDIS_URL": settings.REDIS_URL,
-            "MLFLOW_TRACKING_URI": settings.MLFLOW_TRACKING_URI,
-            "MLFLOW_EXPERIMENT_NAME": f"project-{project.public_id}-job-{job.public_id}",
-            "MLFLOW_ARTIFACT_ROOT": job.mlflow_artifact_uri,
-            "CONTROL_PLANE_WEBHOOK_URL": webhook,
-            "CONTROL_PLANE_WEBHOOK_SECRET": settings.CONTROL_PLANE_WEBHOOK_SECRET,
         }
         container = self.docker.run(
             image="mlops-paas-training-runner:latest",

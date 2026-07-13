@@ -76,6 +76,8 @@ class TrainingJobSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "backend",
+            "code_snapshot_uri",
+            "data_snapshot_uri",
             "output_uri",
             "mlflow_artifact_uri",
             "external_job_id",
@@ -89,11 +91,7 @@ class TrainingJobSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        extra_kwargs = {
-            "code_snapshot_uri": {"required": False, "allow_blank": True},
-            "data_snapshot_uri": {"required": False, "allow_blank": True},
-            "requirements_text": {"required": False, "allow_blank": True},
-        }
+        extra_kwargs = {"requirements_text": {"required": False, "allow_blank": True}}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

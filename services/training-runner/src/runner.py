@@ -33,8 +33,8 @@ MAX_MODEL_INSIGHT_ITEMS = 500
 
 def log_to_redis(message: str) -> None:
     job_id = os.environ.get("TRAINING_JOB_ID", "").strip()
-    redis_url = os.environ.get("REDIS_URL", "redis://mlops-paas-redis.default.svc.cluster.local:6379/1")
-    if not job_id:
+    redis_url = os.environ.get("REDIS_URL", "").strip()
+    if not job_id or not redis_url:
         return
     try:
         import redis
@@ -452,6 +452,21 @@ def upload_presigned_url(source: Path, uri: str) -> None:
         )
 
 
+def request_output_upload_url(endpoint: str, capability: str) -> str:
+    validate_presigned_url(endpoint)
+    if not capability:
+        raise RuntimeError("Missing output upload capability.")
+    import requests
+
+    response = requests.post(endpoint, headers={"Authorization": f"Bearer {capability}"}, timeout=30)
+    if response.status_code != 200:
+        raise RuntimeError(f"Output upload URL request failed with HTTP status {response.status_code}.")
+    payload = response.json()
+    upload_url = str(payload.get("upload_url", "")).strip()
+    validate_presigned_url(upload_url)
+    return upload_url
+
+
 def safe_extract_zip(zip_path: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path) as archive:
@@ -658,20 +673,17 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
     if not entry_point_path.exists() or not entry_point_path.is_file():
         raise RuntimeError(f"Source zip must contain entry point: {entry_point}")
 
-    env = os.environ.copy()
-    tenant_id = os.environ.get("TENANT_ID", "").strip()
+    env = {
+        name: os.environ[name]
+        for name in ("HOME", "LANG", "LC_ALL", "PATH", "PYTHONPATH", "TZ")
+        if os.environ.get(name)
+    }
     env.update(
         {
             "SM_CHANNEL_TRAIN": str(INPUT_TRAIN_DIR),
             "SM_MODEL_DIR": str(MODEL_DIR),
             "SM_OUTPUT_DIR": str(OUTPUT_DIR),
             "MODEL_VERSION": model_version,
-            "AWS_BUCKET_NAME": os.environ.get("AWS_BUCKET_NAME", ""),
-            "MLFLOW_EXPERIMENT_NAME": os.environ.get(
-                "MLFLOW_EXPERIMENT_NAME",
-                f"tenant-{tenant_id}" if tenant_id else "default-tenant",
-            ),
-            "MLFLOW_ARTIFACT_ROOT": os.environ.get("MLFLOW_ARTIFACT_ROOT", ""),
         }
     )
 
@@ -743,7 +755,8 @@ def create_model_archive(archive_path: Path) -> None:
 def main() -> None:
     source_uri = require_env("S3_SOURCE_URI")
     training_data_uri = require_env("S3_TRAINING_DATA_URI")
-    output_uri = require_env("S3_OUTPUT_URI")
+    output_upload_endpoint = require_env("S3_OUTPUT_UPLOAD_URL")
+    output_upload_capability = require_env("S3_OUTPUT_UPLOAD_CAPABILITY")
     entry_point = os.environ.get("ENTRY_POINT", "train.py").strip() or "train.py"
     model_version = os.environ.get("MODEL_VERSION", "").strip()
     training_job_id = os.environ.get("TRAINING_JOB_ID", "").strip()
@@ -798,7 +811,10 @@ def main() -> None:
     if result.returncode != 0:
         raise RuntimeError(f"Training entry point failed with exit code {result.returncode}")
     create_model_archive(model_archive_path)
-    upload_presigned_url(model_archive_path, output_uri)
+    upload_presigned_url(
+        model_archive_path,
+        request_output_upload_url(output_upload_endpoint, output_upload_capability),
+    )
     log("Training job completed successfully")
 
 

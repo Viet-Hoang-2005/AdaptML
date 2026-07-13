@@ -33,6 +33,8 @@ def clean_runtime_env(monkeypatch):
         "S3_SOURCE_URI",
         "S3_TRAINING_DATA_URI",
         "S3_OUTPUT_URI",
+        "S3_OUTPUT_UPLOAD_URL",
+        "S3_OUTPUT_UPLOAD_CAPABILITY",
         "S3_REQUIREMENTS_URI",
         "ENTRY_POINT",
         "MODEL_VERSION",

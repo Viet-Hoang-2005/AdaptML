@@ -4,6 +4,7 @@ from infrastructure.execution.argo_backends import ArgoTrainingBackend
 
 from apps.catalog.models import ModelProject
 from apps.training.models import TrainingJob
+from apps.training.services.storage_scope import expected_training_uris
 
 
 class FakeArgoClient:
@@ -16,6 +17,8 @@ class FakeArgoClient:
 
 
 class FakeStorage:
+    bucket = "bucket"
+
     def presigned_get(self, uri, expires_in):
         return f"https://storage.example/download?uri={uri}&expires={expires_in}"
 
@@ -35,6 +38,12 @@ def test_argo_training_backend_records_runtime_selectors():
         output_uri="s3://bucket/model.tar.gz",
         mlflow_artifact_uri="s3://bucket/mlflow/",
     )
+    scoped_uris = expected_training_uris(job, "bucket")
+    job.code_snapshot_uri = scoped_uris["code"]
+    job.data_snapshot_uri = scoped_uris["data"]
+    job.output_uri = scoped_uris["output"]
+    job.mlflow_artifact_uri = scoped_uris["mlflow"]
+    job.save(update_fields=["code_snapshot_uri", "data_snapshot_uri", "output_uri", "mlflow_artifact_uri"])
     client = FakeArgoClient()
 
     ArgoTrainingBackend(client=client, storage=FakeStorage()).run(job)
@@ -45,9 +54,14 @@ def test_argo_training_backend_records_runtime_selectors():
     assert job.external_job_id == runtime_name
     assert job.tracking["runtime"] == {
         "backend": "argo",
-        "namespace": "default",
+        "namespace": "user-jobs",
         "pytorch_job_name": runtime_name,
         "workflow_selector": expected_selector,
         "pod_selector": expected_selector,
     }
     assert client.calls[0][1]["project_id"] == str(project.public_id)
+    assert client.calls[0][1]["namespace"] == "user-jobs"
+    assert "expires=900" in client.calls[0][1]["s3_source_uri"]
+    assert "expires=900" in client.calls[0][1]["s3_training_data_uri"]
+    assert "mlflow_tracking_uri" not in client.calls[0][1]
+    assert "redis_url" not in client.calls[0][1]

@@ -4,9 +4,9 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from django.conf import settings
 from django.db import transaction
 from infrastructure.storage import S3Storage
-from infrastructure.storage.paths import training_job_prefix
 
 from apps.training.models import TrainingJob, TrainingJobEvent
+from apps.training.services.storage_scope import expected_training_uris, validate_training_uri
 from apps.training.tasks import cancel_training_job, execute_training_job
 
 
@@ -22,12 +22,12 @@ def create_job(*, project, validated_data):
         if public_id
         else TrainingJob(project=project, **validated_data)
     )
-    prefix = training_job_prefix(project.owner.tenant_id, project.public_id, draft.public_id)
     bucket = settings.AWS_STORAGE_BUCKET_NAME
-    draft.code_snapshot_uri = draft.code_snapshot_uri or f"s3://{bucket}/{prefix}/input/code/source.zip"
-    draft.data_snapshot_uri = draft.data_snapshot_uri or f"s3://{bucket}/{prefix}/input/data/train.csv"
-    draft.output_uri = draft.output_uri or f"s3://{bucket}/{prefix}/output/model.tar.gz"
-    draft.mlflow_artifact_uri = f"s3://{bucket}/{prefix}/mlflow/"
+    scoped_uris = expected_training_uris(draft, bucket)
+    draft.code_snapshot_uri = scoped_uris["code"]
+    draft.data_snapshot_uri = scoped_uris["data"]
+    draft.output_uri = scoped_uris["output"]
+    draft.mlflow_artifact_uri = scoped_uris["mlflow"]
     draft.save()
     storage = S3Storage()
     if source_zip:
@@ -88,4 +88,6 @@ def cancel_job(job):
 
 
 def output_download_url(job):
-    return S3Storage().presigned_get(job.output_uri, 900)
+    storage = S3Storage()
+    validate_training_uri(job, storage.bucket, "output", job.output_uri)
+    return storage.presigned_get(job.output_uri, settings.TRAINING_PRESIGNED_URL_TTL_SECONDS)

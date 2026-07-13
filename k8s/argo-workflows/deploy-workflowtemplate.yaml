@@ -73,6 +73,7 @@ spec:
                 labels:
                   app: {{inputs.parameters.container_name}}
               spec:
+                automountServiceAccountToken: false
                 nodeSelector:
                   workload-type: worker
                 containers:
@@ -81,11 +82,6 @@ spec:
                     imagePullPolicy: Always
                     ports:
                       - containerPort: {{inputs.parameters.target_port}}
-                    envFrom:
-                      - secretRef:
-                          name: mlops-paas-secret
-                      - configMapRef:
-                          name: mlops-paas-control-plane-config
                     env:
                       - {name: MODEL_ID, value: "{{inputs.parameters.model_id}}"}
                       - {name: MODEL_VERSION, value: "{{inputs.parameters.version}}"}

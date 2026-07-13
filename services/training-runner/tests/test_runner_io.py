@@ -24,6 +24,7 @@ def test_redis_logging_is_optional_and_failure_safe(monkeypatch):
     module = types.SimpleNamespace(from_url=Mock(return_value=client))
     monkeypatch.setitem(sys.modules, "redis", module)
     monkeypatch.setenv("TRAINING_JOB_ID", "job-1")
+    monkeypatch.setenv("REDIS_URL", "redis://redis.test:6379/1")
     runner.log_to_redis("hello")
     client.rpush.assert_called_once_with("training_logs:job-1", "hello")
     client.expire.assert_called_once()

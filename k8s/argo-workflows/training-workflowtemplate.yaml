@@ -11,125 +11,82 @@ spec:
     - name: training-pipeline
       inputs:
         parameters:
-          - name: job_id
-          - name: project_id
-          - name: tenant_id
-          - name: job_name
-          - name: namespace
-          - name: vcpu
-          - name: memory
-          - name: accelerator_type
-          - name: accelerator_count
-          - name: s3_source_uri
-          - name: s3_training_data_uri
-          - name: s3_output_uri
-          - name: entry_point
-          - name: model_version
-          - name: control_plane_webhook_url
-          - name: requirements_text
-            value: ""
-          - name: mlflow_tracking_uri
-            value: "http://mlflow-server.mlflow-server.svc.cluster.local:5000"
-          - name: mlflow_experiment_name
-            value: ""
-          - name: mlflow_artifact_root
-            value: ""
+          - {name: job_id}
+          - {name: project_id}
+          - {name: tenant_id}
+          - {name: job_name}
+          - {name: namespace}
+          - {name: vcpu}
+          - {name: memory}
+          - {name: accelerator_type}
+          - {name: accelerator_count}
+          - {name: s3_source_uri}
+          - {name: s3_training_data_uri}
+          - {name: output_upload_url}
+          - {name: output_upload_capability}
+          - {name: entry_point}
+          - {name: model_version}
+          - {name: control_plane_webhook_url}
+          - {name: reporter_capability}
+          - {name: requirements_text, value: ""}
       steps:
         - - name: run-cpu-pytorch-job
             template: cpu-pytorch-job
             when: "'{{inputs.parameters.accelerator_type}}' != 'gpu' || {{inputs.parameters.accelerator_count}} == 0"
             arguments:
               parameters:
-                - name: job_id
-                  value: "{{inputs.parameters.job_id}}"
-                - name: project_id
-                  value: "{{inputs.parameters.project_id}}"
-                - name: tenant_id
-                  value: "{{inputs.parameters.tenant_id}}"
-                - name: job_name
-                  value: "{{inputs.parameters.job_name}}"
-                - name: namespace
-                  value: "{{inputs.parameters.namespace}}"
-                - name: vcpu
-                  value: "{{inputs.parameters.vcpu}}"
-                - name: memory
-                  value: "{{inputs.parameters.memory}}"
-                - name: s3_source_uri
-                  value: "{{inputs.parameters.s3_source_uri}}"
-                - name: s3_training_data_uri
-                  value: "{{inputs.parameters.s3_training_data_uri}}"
-                - name: s3_output_uri
-                  value: "{{inputs.parameters.s3_output_uri}}"
-                - name: entry_point
-                  value: "{{inputs.parameters.entry_point}}"
-                - name: model_version
-                  value: "{{inputs.parameters.model_version}}"
-                - name: requirements_text
-                  value: "{{inputs.parameters.requirements_text}}"
-                - name: mlflow_tracking_uri
-                  value: "{{inputs.parameters.mlflow_tracking_uri}}"
-                - name: mlflow_experiment_name
-                  value: "{{inputs.parameters.mlflow_experiment_name}}"
-                - name: mlflow_artifact_root
-                  value: "{{inputs.parameters.mlflow_artifact_root}}"
+                - {name: job_id, value: "{{inputs.parameters.job_id}}"}
+                - {name: project_id, value: "{{inputs.parameters.project_id}}"}
+                - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
+                - {name: job_name, value: "{{inputs.parameters.job_name}}"}
+                - {name: namespace, value: "{{inputs.parameters.namespace}}"}
+                - {name: vcpu, value: "{{inputs.parameters.vcpu}}"}
+                - {name: memory, value: "{{inputs.parameters.memory}}"}
+                - {name: s3_source_uri, value: "{{inputs.parameters.s3_source_uri}}"}
+                - {name: s3_training_data_uri, value: "{{inputs.parameters.s3_training_data_uri}}"}
+                - {name: output_upload_url, value: "{{inputs.parameters.output_upload_url}}"}
+                - {name: output_upload_capability, value: "{{inputs.parameters.output_upload_capability}}"}
+                - {name: entry_point, value: "{{inputs.parameters.entry_point}}"}
+                - {name: model_version, value: "{{inputs.parameters.model_version}}"}
+                - {name: requirements_text, value: "{{inputs.parameters.requirements_text}}"}
           - name: run-gpu-pytorch-job
             template: gpu-pytorch-job
             when: "'{{inputs.parameters.accelerator_type}}' == 'gpu' && {{inputs.parameters.accelerator_count}} > 0"
             arguments:
               parameters:
-                - name: job_id
-                  value: "{{inputs.parameters.job_id}}"
-                - name: project_id
-                  value: "{{inputs.parameters.project_id}}"
-                - name: tenant_id
-                  value: "{{inputs.parameters.tenant_id}}"
-                - name: job_name
-                  value: "{{inputs.parameters.job_name}}"
-                - name: namespace
-                  value: "{{inputs.parameters.namespace}}"
-                - name: vcpu
-                  value: "{{inputs.parameters.vcpu}}"
-                - name: memory
-                  value: "{{inputs.parameters.memory}}"
-                - name: accelerator_count
-                  value: "{{inputs.parameters.accelerator_count}}"
-                - name: s3_source_uri
-                  value: "{{inputs.parameters.s3_source_uri}}"
-                - name: s3_training_data_uri
-                  value: "{{inputs.parameters.s3_training_data_uri}}"
-                - name: s3_output_uri
-                  value: "{{inputs.parameters.s3_output_uri}}"
-                - name: entry_point
-                  value: "{{inputs.parameters.entry_point}}"
-                - name: model_version
-                  value: "{{inputs.parameters.model_version}}"
-                - name: requirements_text
-                  value: "{{inputs.parameters.requirements_text}}"
-                - name: mlflow_tracking_uri
-                  value: "{{inputs.parameters.mlflow_tracking_uri}}"
-                - name: mlflow_experiment_name
-                  value: "{{inputs.parameters.mlflow_experiment_name}}"
-                - name: mlflow_artifact_root
-                  value: "{{inputs.parameters.mlflow_artifact_root}}"
+                - {name: job_id, value: "{{inputs.parameters.job_id}}"}
+                - {name: project_id, value: "{{inputs.parameters.project_id}}"}
+                - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
+                - {name: job_name, value: "{{inputs.parameters.job_name}}"}
+                - {name: namespace, value: "{{inputs.parameters.namespace}}"}
+                - {name: vcpu, value: "{{inputs.parameters.vcpu}}"}
+                - {name: memory, value: "{{inputs.parameters.memory}}"}
+                - {name: accelerator_count, value: "{{inputs.parameters.accelerator_count}}"}
+                - {name: s3_source_uri, value: "{{inputs.parameters.s3_source_uri}}"}
+                - {name: s3_training_data_uri, value: "{{inputs.parameters.s3_training_data_uri}}"}
+                - {name: output_upload_url, value: "{{inputs.parameters.output_upload_url}}"}
+                - {name: output_upload_capability, value: "{{inputs.parameters.output_upload_capability}}"}
+                - {name: entry_point, value: "{{inputs.parameters.entry_point}}"}
+                - {name: model_version, value: "{{inputs.parameters.model_version}}"}
+                - {name: requirements_text, value: "{{inputs.parameters.requirements_text}}"}
+
     - name: cpu-pytorch-job
       inputs:
         parameters:
-          - name: job_id
-          - name: project_id
-          - name: tenant_id
-          - name: job_name
-          - name: namespace
-          - name: vcpu
-          - name: memory
-          - name: s3_source_uri
-          - name: s3_training_data_uri
-          - name: s3_output_uri
-          - name: entry_point
-          - name: model_version
-          - name: requirements_text
-          - name: mlflow_tracking_uri
-          - name: mlflow_experiment_name
-          - name: mlflow_artifact_root
+          - {name: job_id}
+          - {name: project_id}
+          - {name: tenant_id}
+          - {name: job_name}
+          - {name: namespace}
+          - {name: vcpu}
+          - {name: memory}
+          - {name: s3_source_uri}
+          - {name: s3_training_data_uri}
+          - {name: output_upload_url}
+          - {name: output_upload_capability}
+          - {name: entry_point}
+          - {name: model_version}
+          - {name: requirements_text}
       resource:
         action: create
         successCondition: status.replicaStatuses.Master.succeeded == 1
@@ -162,6 +119,7 @@ spec:
                       mlops.io/project-id: "{{inputs.parameters.project_id}}"
                       mlops.io/tenant-id: "{{inputs.parameters.tenant_id}}"
                   spec:
+                    automountServiceAccountToken: false
                     nodeSelector:
                       mlops-paas/nodepool: training-cpu
                     imagePullSecrets:
@@ -176,56 +134,35 @@ spec:
                           limits:
                             cpu: "{{inputs.parameters.vcpu}}"
                             memory: "{{inputs.parameters.memory}}Mi"
-                        envFrom:
-                          - secretRef:
-                              name: mlops-paas-secret
-                          - configMapRef:
-                              name: mlops-paas-control-plane-config
                         env:
-                          - name: S3_SOURCE_URI
-                            value: "{{inputs.parameters.s3_source_uri}}"
-                          - name: S3_TRAINING_DATA_URI
-                            value: "{{inputs.parameters.s3_training_data_uri}}"
-                          - name: S3_OUTPUT_URI
-                            value: "{{inputs.parameters.s3_output_uri}}"
-                          - name: REQUIREMENTS_TEXT
-                            value: "{{inputs.parameters.requirements_text}}"
-                          - name: TRAINING_JOB_ID
-                            value: "{{inputs.parameters.job_id}}"
-                          - name: TENANT_ID
-                            value: "{{inputs.parameters.tenant_id}}"
-                          - name: ENTRY_POINT
-                            value: "{{inputs.parameters.entry_point}}"
-                          - name: MODEL_VERSION
-                            value: "{{inputs.parameters.model_version}}"
-                          - name: REDIS_URL
-                            value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
-                          - name: MLFLOW_TRACKING_URI
-                            value: "{{inputs.parameters.mlflow_tracking_uri}}"
-                          - name: MLFLOW_EXPERIMENT_NAME
-                            value: "{{inputs.parameters.mlflow_experiment_name}}"
-                          - name: MLFLOW_ARTIFACT_ROOT
-                            value: "{{inputs.parameters.mlflow_artifact_root}}"
+                          - {name: S3_SOURCE_URI, value: "{{inputs.parameters.s3_source_uri}}"}
+                          - {name: S3_TRAINING_DATA_URI, value: "{{inputs.parameters.s3_training_data_uri}}"}
+                          - {name: S3_OUTPUT_UPLOAD_URL, value: "{{inputs.parameters.output_upload_url}}"}
+                          - {name: S3_OUTPUT_UPLOAD_CAPABILITY, value: "{{inputs.parameters.output_upload_capability}}"}
+                          - {name: REQUIREMENTS_TEXT, value: "{{inputs.parameters.requirements_text}}"}
+                          - {name: TRAINING_JOB_ID, value: "{{inputs.parameters.job_id}}"}
+                          - {name: TENANT_ID, value: "{{inputs.parameters.tenant_id}}"}
+                          - {name: ENTRY_POINT, value: "{{inputs.parameters.entry_point}}"}
+                          - {name: MODEL_VERSION, value: "{{inputs.parameters.model_version}}"}
+
     - name: gpu-pytorch-job
       inputs:
         parameters:
-          - name: job_id
-          - name: project_id
-          - name: tenant_id
-          - name: job_name
-          - name: namespace
-          - name: vcpu
-          - name: memory
-          - name: accelerator_count
-          - name: s3_source_uri
-          - name: s3_training_data_uri
-          - name: s3_output_uri
-          - name: entry_point
-          - name: model_version
-          - name: requirements_text
-          - name: mlflow_tracking_uri
-          - name: mlflow_experiment_name
-          - name: mlflow_artifact_root
+          - {name: job_id}
+          - {name: project_id}
+          - {name: tenant_id}
+          - {name: job_name}
+          - {name: namespace}
+          - {name: vcpu}
+          - {name: memory}
+          - {name: accelerator_count}
+          - {name: s3_source_uri}
+          - {name: s3_training_data_uri}
+          - {name: output_upload_url}
+          - {name: output_upload_capability}
+          - {name: entry_point}
+          - {name: model_version}
+          - {name: requirements_text}
       resource:
         action: create
         successCondition: status.replicaStatuses.Master.succeeded == 1
@@ -258,6 +195,7 @@ spec:
                       mlops.io/project-id: "{{inputs.parameters.project_id}}"
                       mlops.io/tenant-id: "{{inputs.parameters.tenant_id}}"
                   spec:
+                    automountServiceAccountToken: false
                     nodeSelector:
                       mlops-paas/nodepool: training-gpu
                     tolerations:
@@ -280,36 +218,17 @@ spec:
                             cpu: "{{inputs.parameters.vcpu}}"
                             memory: "{{inputs.parameters.memory}}Mi"
                             nvidia.com/gpu: "{{inputs.parameters.accelerator_count}}"
-                        envFrom:
-                          - secretRef:
-                              name: mlops-paas-secret
-                          - configMapRef:
-                              name: mlops-paas-control-plane-config
                         env:
-                          - name: S3_SOURCE_URI
-                            value: "{{inputs.parameters.s3_source_uri}}"
-                          - name: S3_TRAINING_DATA_URI
-                            value: "{{inputs.parameters.s3_training_data_uri}}"
-                          - name: S3_OUTPUT_URI
-                            value: "{{inputs.parameters.s3_output_uri}}"
-                          - name: REQUIREMENTS_TEXT
-                            value: "{{inputs.parameters.requirements_text}}"
-                          - name: TRAINING_JOB_ID
-                            value: "{{inputs.parameters.job_id}}"
-                          - name: TENANT_ID
-                            value: "{{inputs.parameters.tenant_id}}"
-                          - name: ENTRY_POINT
-                            value: "{{inputs.parameters.entry_point}}"
-                          - name: MODEL_VERSION
-                            value: "{{inputs.parameters.model_version}}"
-                          - name: REDIS_URL
-                            value: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
-                          - name: MLFLOW_TRACKING_URI
-                            value: "{{inputs.parameters.mlflow_tracking_uri}}"
-                          - name: MLFLOW_EXPERIMENT_NAME
-                            value: "{{inputs.parameters.mlflow_experiment_name}}"
-                          - name: MLFLOW_ARTIFACT_ROOT
-                            value: "{{inputs.parameters.mlflow_artifact_root}}"
+                          - {name: S3_SOURCE_URI, value: "{{inputs.parameters.s3_source_uri}}"}
+                          - {name: S3_TRAINING_DATA_URI, value: "{{inputs.parameters.s3_training_data_uri}}"}
+                          - {name: S3_OUTPUT_UPLOAD_URL, value: "{{inputs.parameters.output_upload_url}}"}
+                          - {name: S3_OUTPUT_UPLOAD_CAPABILITY, value: "{{inputs.parameters.output_upload_capability}}"}
+                          - {name: REQUIREMENTS_TEXT, value: "{{inputs.parameters.requirements_text}}"}
+                          - {name: TRAINING_JOB_ID, value: "{{inputs.parameters.job_id}}"}
+                          - {name: TENANT_ID, value: "{{inputs.parameters.tenant_id}}"}
+                          - {name: ENTRY_POINT, value: "{{inputs.parameters.entry_point}}"}
+                          - {name: MODEL_VERSION, value: "{{inputs.parameters.model_version}}"}
+
     - name: report-status
       container:
         image: curlimages/curl:latest
@@ -321,13 +240,8 @@ spec:
           - -H
           - "Content-Type: application/json"
           - -H
-          - "X-Control-Plane-Secret: $(CONTROL_PLANE_WEBHOOK_SECRET)"
+          - "Authorization: Bearer {{workflow.parameters.reporter_capability}}"
+          - -H
+          - "Idempotency-Key: {{workflow.uid}}"
           - --data
-          - '{"status":"{{workflow.status}}","workflow_status":"{{workflow.status}}","output_uri":"{{workflow.parameters.s3_output_uri}}"}'
-        env:
-          - name: CONTROL_PLANE_WEBHOOK_SECRET
-            valueFrom:
-              secretKeyRef:
-                name: mlops-paas-secret
-                key: CONTROL_PLANE_WEBHOOK_SECRET
-                optional: true
+          - '{"workflow_status":"{{workflow.status}}"}'

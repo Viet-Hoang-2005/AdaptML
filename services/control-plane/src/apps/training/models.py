@@ -89,6 +89,23 @@ class TrainingJobEvent(models.Model):
         return f"{self.job.public_id}: {self.event_type}"
 
 
+class TrainingJobCapability(models.Model):
+    PURPOSES = (("output_upload", "Output upload"), ("trusted_reporter", "Trusted reporter"))
+
+    job = models.ForeignKey(TrainingJob, on_delete=models.CASCADE, related_name="capabilities")
+    purpose = models.CharField(max_length=40, choices=PURPOSES)
+    token_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["job", "purpose", "expires_at"], name="training_capability_idx")]
+
+    def __str__(self):
+        return f"{self.job.public_id}/{self.purpose}"
+
+
 class TrainingOutput(models.Model):
     KINDS = (("model", "Model"), ("metric", "Metric"), ("insight", "Insight"), ("file", "File"))
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
