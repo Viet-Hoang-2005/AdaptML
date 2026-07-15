@@ -1,4 +1,5 @@
 from common.api.exceptions import Conflict
+from infrastructure.storage import S3Storage
 from rest_framework import serializers
 
 from apps.catalog.artifact_types import ARTIFACT_FORMATS, validate_source_artifact
@@ -24,10 +25,22 @@ class ModelProjectSerializer(serializers.ModelSerializer):
             "build_metadata_revision",
             "lifecycle_status",
             "is_active",
+            "deletion_state",
+            "deletion_error",
+            "deletion_task_id",
+            "deleted_at",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("is_active", "created_at", "updated_at")
+        read_only_fields = (
+            "is_active",
+            "deletion_state",
+            "deletion_error",
+            "deletion_task_id",
+            "deleted_at",
+            "created_at",
+            "updated_at",
+        )
 
     def validate_name(self, value):
         request = self.context.get("request")
@@ -80,8 +93,6 @@ class WorkspaceAssetSerializer(serializers.ModelSerializer):
         read_only_fields = ("kind", "s3_uri", "checksum", "size_bytes", "content_type", "created_at", "updated_at")
 
     def get_download_url(self, instance):
-        from infrastructure.storage import S3Storage
-
         return S3Storage().presigned_get(instance.s3_uri, 900)
 
 

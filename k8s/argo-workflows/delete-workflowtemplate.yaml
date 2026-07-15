@@ -5,9 +5,28 @@ metadata:
   namespace: default
 spec:
   serviceAccountName: argo-workflow-sa
-  entrypoint: delete-model
+  entrypoint: delete-model-project
+  onExit: notify-delete-exit
+  arguments:
+    parameters:
+      - name: project_id
+      - name: container_names
+      - name: control_plane_webhook_url
   templates:
-    - name: delete-model
+    - name: delete-model-project
+      inputs:
+        parameters:
+          - name: project_id
+          - name: container_names
+      steps:
+        - - name: delete-runtime
+            template: delete-runtime
+            arguments:
+              parameters:
+                - {name: container_name, value: "{{item}}"}
+            withParam: "{{inputs.parameters.container_names}}"
+
+    - name: delete-runtime
       inputs:
         parameters:
           - name: container_name
@@ -50,3 +69,23 @@ spec:
           metadata:
             name: {{inputs.parameters.container_name}}-svc
             namespace: default
+
+    - name: notify-delete-exit
+      nodeSelector: {workload-type: worker}
+      container:
+        image: curlimages/curl:8.8.0
+        args:
+          - -sS
+          - -X
+          - POST
+          - "{{workflow.parameters.control_plane_webhook_url}}"
+          - -H
+          - "Content-Type: application/json"
+          - -H
+          - "X-Control-Plane-Secret: $(CONTROL_PLANE_WEBHOOK_SECRET)"
+          - --data
+          - '{"status":"{{workflow.status}}","error_message":"Model cleanup workflow {{workflow.name}} finished with {{workflow.status}}"}'
+        env:
+          - name: CONTROL_PLANE_WEBHOOK_SECRET
+            valueFrom:
+              secretKeyRef: {name: mlops-paas-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}

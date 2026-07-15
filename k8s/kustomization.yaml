@@ -17,8 +17,9 @@ resources:
   - argo-workflows
   - mlflow-server
 
-  # 2. Applications (Dùng overlay production)
-  - apps/production
+  # 2. Applications
+  - apps/production (Dùng overlay production)
+  - cronjobs
 
   # 3. MLOps Training Platform
   # Kubeflow Training Operator CRDs/controller are installed by

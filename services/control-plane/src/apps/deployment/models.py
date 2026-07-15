@@ -6,7 +6,7 @@ from django.db import models
 class Build(models.Model):
     STATUSES = tuple(
         (value, value.replace("_", " ").title())
-        for value in ("pending", "queued", "building", "ready", "failed", "cancelled")
+        for value in ("pending", "queued", "building", "ready", "failed", "cancelled", "discarded")
     )
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     version = models.ForeignKey("registry.ModelVersion", on_delete=models.CASCADE, related_name="builds")
@@ -17,6 +17,7 @@ class Build(models.Model):
     image_uri = models.CharField(max_length=1024, blank=True)
     is_saved = models.BooleanField(default=False)
     saved_at = models.DateTimeField(null=True, blank=True)
+    discarded_at = models.DateTimeField(null=True, blank=True)
     package_uri = models.CharField(max_length=1024, blank=True)
     logs = models.TextField(blank=True)
     error_message = models.TextField(blank=True)

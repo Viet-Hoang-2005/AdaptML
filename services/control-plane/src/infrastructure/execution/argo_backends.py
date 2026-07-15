@@ -138,7 +138,7 @@ class ArgoDeploymentBackend(_ArgoBackend):
     def deploy(self, deployment):
         version = deployment.version
         project = version.project
-        container_name = f"endpoint-{str(deployment.public_id).lower()}"
+        container_name = f"deploy-{str(deployment.build.public_id).lower()}"
         target_port = 3000 if project.model_type == "dl" else 5001
         self._log(f"Submitting Argo deployment workflow for runtime {container_name}.")
         self.trigger(

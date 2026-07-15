@@ -23,8 +23,8 @@ class FakeStorage:
 def test_manual_draft_persists_metadata_assets_and_is_tenant_scoped(monkeypatch):
     storage = FakeStorage()
     monkeypatch.setattr("apps.catalog.services.build_metadata.S3Storage", lambda: storage)
-    owner = get_user_model().objects.create_user("draft-owner@example.com", "password123")
-    other = get_user_model().objects.create_user("draft-other@example.com", "password123")
+    owner = get_user_model().objects.create_user("draft-owner@example.com", "password123") # type: ignore[attr-defined]
+    other = get_user_model().objects.create_user("draft-other@example.com", "password123") # type: ignore[attr-defined]
     client = APIClient()
     client.force_authenticate(owner)
 
@@ -44,9 +44,9 @@ def test_manual_draft_persists_metadata_assets_and_is_tenant_scoped(monkeypatch)
     assert response.status_code == 201
     project = ModelProject.objects.get(name="NIDS")
     assert response.data["revision"] == 1
-    assert project.build_metadata.flavor == "sklearn"
+    assert project.build_metadata.flavor == "sklearn" # type: ignore[attr-defined]
     assert project.model_type == "ml"
-    assert project.build_input_assets.get(kind="source_artifact").name == "model.pkl"
+    assert project.build_input_assets.get(kind="source_artifact").name == "model.pkl" # type: ignore[attr-defined]
 
     client.force_authenticate(other)
     assert client.get(f"/api/models/{project.public_id}/build-metadata/").status_code == 404
@@ -56,7 +56,7 @@ def test_manual_draft_persists_metadata_assets_and_is_tenant_scoped(monkeypatch)
 def test_updating_manual_draft_increments_revision_only_for_changes(monkeypatch):
     storage = FakeStorage()
     monkeypatch.setattr("apps.catalog.services.build_metadata.S3Storage", lambda: storage)
-    owner = get_user_model().objects.create_user("draft-update@example.com", "password123")
+    owner = get_user_model().objects.create_user("draft-update@example.com", "password123") # type: ignore[attr-defined]
     project = ModelProject.objects.create(owner=owner, name="NIDS")
     ModelBuildMetadata.objects.create(project=project, flavor="sklearn")
     ModelBuildInputAsset.objects.create(
@@ -92,7 +92,7 @@ def test_updating_manual_draft_increments_revision_only_for_changes(monkeypatch)
 def test_manual_draft_rejects_raw_artifact_with_an_incompatible_flavor(monkeypatch):
     storage = FakeStorage()
     monkeypatch.setattr("apps.catalog.services.build_metadata.S3Storage", lambda: storage)
-    owner = get_user_model().objects.create_user("draft-format@example.com", "password123")
+    owner = get_user_model().objects.create_user("draft-format@example.com", "password123") # type: ignore[attr-defined]
     client = APIClient()
     client.force_authenticate(owner)
 
@@ -115,7 +115,7 @@ def test_manual_draft_rejects_raw_artifact_with_an_incompatible_flavor(monkeypat
 def test_manual_draft_accepts_an_mlflow_package_zip(monkeypatch):
     storage = FakeStorage()
     monkeypatch.setattr("apps.catalog.services.build_metadata.S3Storage", lambda: storage)
-    owner = get_user_model().objects.create_user("draft-package@example.com", "password123")
+    owner = get_user_model().objects.create_user("draft-package@example.com", "password123") # type: ignore[attr-defined]
     client = APIClient()
     client.force_authenticate(owner)
 
@@ -139,7 +139,7 @@ def test_manual_draft_accepts_an_mlflow_package_zip(monkeypatch):
 def test_switching_to_package_zip_removes_separate_metadata_assets(monkeypatch):
     storage = FakeStorage()
     monkeypatch.setattr("apps.catalog.services.build_metadata.S3Storage", lambda: storage)
-    owner = get_user_model().objects.create_user("draft-switch@example.com", "password123")
+    owner = get_user_model().objects.create_user("draft-switch@example.com", "password123") # type: ignore[attr-defined]
     project = ModelProject.objects.create(owner=owner, name="Switch artifact")
     ModelBuildMetadata.objects.create(project=project, flavor="sklearn")
     ModelBuildInputAsset.objects.create(

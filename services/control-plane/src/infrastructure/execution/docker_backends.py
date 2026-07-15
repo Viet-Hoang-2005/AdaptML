@@ -3,6 +3,9 @@ import os
 import time
 
 import docker
+from apps.deployment.models import Endpoint
+from apps.training.services.capabilities import issue_capability
+from apps.training.services.storage_scope import validate_training_uri
 from django.conf import settings
 from django.utils import timezone
 
@@ -46,6 +49,7 @@ class DockerBuildBackend:
         task_type = "TEST_ZIP" if source.metadata.get("artifact_format") == "mlflow_zip" else "BUILD"
         environment = {
             "TASK_TYPE": task_type,
+            "BUILD_ID": str(build.public_id),
             "TENANT_ID": project.owner.tenant_id,
             "MODEL_ID": str(version.public_id),
             "FLAVOR": version.flavor,
@@ -90,9 +94,6 @@ class DockerTrainingBackend:
 
     def run(self, job):
         project = job.project
-        from apps.training.services.capabilities import issue_capability
-        from apps.training.services.storage_scope import validate_training_uri
-
         validate_training_uri(job, self.storage.bucket, "code", job.code_snapshot_uri)
         validate_training_uri(job, self.storage.bucket, "data", job.data_snapshot_uri)
         validate_training_uri(job, self.storage.bucket, "output", job.output_uri)
@@ -148,15 +149,14 @@ class DockerDeploymentBackend:
             self.log_sink(message)
 
     def deploy(self, deployment):
-        from apps.deployment.models import Endpoint
-
         project = deployment.version.project
         image = (
             deployment.build.image_uri
-            or f"{project.owner.tenant_id.lower()}-model-{deployment.version.public_id}:latest"
+            or f"build-{deployment.build.public_id}:latest"
         )
-        container_name = f"endpoint-{deployment.public_id}"
-        internal_url = f"http://{container_name}:5001"
+        container_name = f"deploy-{deployment.build.public_id}"
+        target_port = 5002 if project.model_type == "dl" else 5001
+        internal_url = f"http://{container_name}:{target_port}"
         public_path = f"/{project.owner.tenant_id}/models/{project.public_id}/{deployment.version.public_id}"
         public_url = f"{settings.MODEL_SERVER_PUBLIC_URL}{public_path}"
         labels = {"traefik.enable": "false"}
@@ -164,7 +164,12 @@ class DockerDeploymentBackend:
         container = self.docker.run(
             image=image,
             name=container_name,
-            environment={"MODEL_ID": str(deployment.version.public_id), "MODEL_VERSION": deployment.version.version},
+            environment={
+                "MODEL_ID": str(deployment.version.public_id),
+                "MODEL_VERSION": deployment.version.version,
+                "MODEL_URI": "/app/model_artifact",
+                "TENANT_ID": project.owner.tenant_id,
+            },
             labels=labels,
             network=settings.DOCKER_NETWORK_NAME,
             restart_policy={"Name": "always"},
@@ -183,15 +188,21 @@ class DockerDeploymentBackend:
         self._log("Runtime container created; waiting for model worker health endpoint.")
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
-            healthy, _ = self.health(deployment)
+            healthy, metadata = self.health(deployment)
             if healthy:
                 self._log("Model worker health endpoint responded successfully.")
                 endpoint.health_status = "healthy"
                 endpoint.last_checked_at = timezone.now()
                 endpoint.save(update_fields=["health_status", "last_checked_at", "updated_at"])
                 return endpoint
-            self._log("Model worker is not healthy yet; checking again in 5 seconds.")
+            detail = metadata.get("message") or metadata.get("error") or metadata.get("detail")
+            suffix = f" Reason: {detail}" if detail else ""
+            self._log(f"Model worker is not healthy yet.{suffix} Checking again in 5 seconds.")
             time.sleep(5)
+        try:
+            container.remove(force=True)
+        except docker.errors.DockerException as exc:
+            self._log(f"Unable to remove the unhealthy runtime container: {exc}")
         raise RuntimeError("Endpoint did not become healthy before timeout.")
 
     def stop(self, deployment):
@@ -208,7 +219,8 @@ class DockerDeploymentBackend:
         try:
             response = self.http.request("GET", f"{endpoint.internal_url}/health")
             payload = response.json()
-            return bool(payload.get("model_loaded", True)), payload
+            healthy = payload.get("model_loaded", payload.get("status") == "healthy")
+            return bool(healthy and payload.get("status") != "unhealthy"), payload
         except Exception as exc:
             return False, {"status": "unhealthy", "detail": str(exc)}
 

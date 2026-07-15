@@ -1,4 +1,3 @@
-# database.py: Quản lý kết nối đến PostgreSQL cho Consumer
 import os
 import json
 from urllib.parse import quote_plus

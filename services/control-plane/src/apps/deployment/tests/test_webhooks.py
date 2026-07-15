@@ -31,6 +31,7 @@ def test_build_webhook_is_idempotent():
     assert first.status_code == 200
     assert second.data["duplicate"] is True
     assert build.status == "ready"
+    assert build.image_uri.endswith(f"build-{build.public_id}:latest")
 
 
 @pytest.mark.django_db

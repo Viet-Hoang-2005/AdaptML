@@ -12,7 +12,7 @@ from apps.deployment.selectors import (
     endpoint_for_user,
     endpoints_for_user,
 )
-from apps.deployment.services.builds import request_build, request_cancel, save_build
+from apps.deployment.services.builds import request_build, request_cancel, request_discard, save_build
 from apps.deployment.services.deployments import endpoint_logs, request_deployment, request_stop
 from apps.deployment.services.logs import build_logs, deployment_logs
 
@@ -49,6 +49,14 @@ class BuildSaveEndpoint(APIView):
     def post(self, request, build_id):
         build = save_build(build_for_user(request.user, build_id))
         return Response(BuildSerializer(build).data)
+
+
+class BuildDiscardEndpoint(APIView):
+    """Queue deletion of a ready image that the tenant did not retain or deploy."""
+
+    def post(self, request, build_id):
+        build = request_discard(build_for_user(request.user, build_id))
+        return Response(BuildSerializer(build).data, status=status.HTTP_202_ACCEPTED)
 
 
 class BuildLogsEndpoint(APIView):

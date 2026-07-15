@@ -1,10 +1,14 @@
 import logging
+from datetime import timedelta
 
 from celery import shared_task
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from infrastructure.execution import build_backend, deployment_backend
+from infrastructure.execution.image_cleanup import BuildImageCleaner
 
+from apps.deployment.models import Build, Deployment, Endpoint
 from apps.deployment.services.logs import append_deployment_log, reset_deployment_logs
 from apps.observability.services.outbox import enqueue_event
 
@@ -12,8 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 def _mark_deployment_healthy(deployment):
-    from .models import Endpoint
-
     Deployment = type(deployment)
     Deployment.objects.filter(pk=deployment.pk).update(
         status="healthy", deployed_at=timezone.now(), error_message=""
@@ -35,16 +37,20 @@ def _mark_deployment_healthy(deployment):
     bind=True, autoretry_for=(ConnectionError, TimeoutError), retry_backoff=True, retry_jitter=True, max_retries=5
 )
 def execute_build(self, build_id):
-    from .models import Build
-
     with transaction.atomic():
         build = (
             Build.objects.select_for_update()
             .select_related("version", "version__project", "version__project__owner")
             .get(public_id=build_id)
         )
-        if build.status in {"ready", "cancelled"}:
+        if build.status in {"ready", "cancelled", "discarded"}:
             return build.status
+        if build.version.project.deletion_state != "active":
+            build.status = "cancelled"
+            build.completed_at = timezone.now()
+            build.error_message = "Project deletion is in progress."
+            build.save(update_fields=["status", "completed_at", "error_message", "updated_at"])
+            return "cancelled"
         build.status = "building"
         build.started_at = build.started_at or timezone.now()
         build.celery_task_id = self.request.id or build.celery_task_id
@@ -70,20 +76,49 @@ def execute_build(self, build_id):
 
 @shared_task(bind=True)
 def cancel_build(self, build_id):
-    from .models import Build
-
     build = Build.objects.select_related("version").get(public_id=build_id)
     build_backend(build.backend).cancel(build)
     Build.objects.filter(pk=build.pk).update(status="cancelled", completed_at=timezone.now())
     return "cancelled"
 
 
+@shared_task(bind=True)
+def discard_build_image(self, build_id):
+    from apps.deployment.services.builds import discard_ready_unsaved_build
+
+    return discard_ready_unsaved_build(build_id)
+
+
+@shared_task(bind=True)
+def cleanup_deleted_project_build_image(self, build_id):
+    """Remove an image that finished after its project deletion was requested."""
+    build = Build.objects.select_related("version__project").get(public_id=build_id)
+    if build.version.project.deletion_state == "active":
+        return "retained"
+    result = BuildImageCleaner().delete(build)
+    Build.objects.filter(pk=build.pk).update(
+        status="discarded",
+        discarded_at=timezone.now(),
+        error_message="Project deletion is in progress; build image discarded.",
+    )
+    return result
+
+
+@shared_task(bind=True)
+def cleanup_unsaved_build_images(self):
+    from apps.deployment.services.builds import discard_ready_unsaved_build, expired_unsaved_build_ids
+
+    cutoff = timezone.now() - timedelta(seconds=settings.UNSAVED_BUILD_IMAGE_TTL_SECONDS)
+    build_ids = expired_unsaved_build_ids(cutoff)
+    for build_id in build_ids:
+        discard_ready_unsaved_build(build_id)
+    return len(build_ids)
+
+
 @shared_task(
     bind=True, autoretry_for=(ConnectionError, TimeoutError), retry_backoff=True, retry_jitter=True, max_retries=5
 )
 def execute_deployment(self, deployment_id):
-    from .models import Deployment
-
     with transaction.atomic():
         deployment = (
             Deployment.objects.select_for_update()
@@ -92,6 +127,12 @@ def execute_deployment(self, deployment_id):
         )
         if deployment.status in {"healthy", "stopped"}:
             return deployment.status
+        if deployment.version.project.deletion_state != "active":
+            deployment.status = "stopped"
+            deployment.stopped_at = timezone.now()
+            deployment.error_message = "Project deletion is in progress."
+            deployment.save(update_fields=["status", "stopped_at", "error_message", "updated_at"])
+            return "stopped"
         starting = deployment.status == "pending"
         deployment.status = "deploying"
         deployment.celery_task_id = self.request.id or deployment.celery_task_id
@@ -108,6 +149,13 @@ def execute_deployment(self, deployment_id):
         Deployment.objects.filter(pk=deployment.pk).update(status="failed", error_message=str(exc)[:12000])
         append_deployment_log(deployment, f"Deployment failed: {exc}")
         raise
+    deployment.version.project.refresh_from_db(fields=["deletion_state"])
+    if deployment.version.project.deletion_state != "active":
+        backend.stop(deployment)
+        Deployment.objects.filter(pk=deployment.pk).update(status="stopped", stopped_at=timezone.now())
+        Endpoint = type(endpoint)
+        Endpoint.objects.filter(pk=endpoint.pk).update(health_status="stopped")
+        return "stopped"
     append_deployment_log(deployment, "Runtime resource created; waiting for endpoint health check.")
     if endpoint.health_status == "healthy":
         _mark_deployment_healthy(deployment)
@@ -118,8 +166,6 @@ def execute_deployment(self, deployment_id):
 
 @shared_task(bind=True, max_retries=30)
 def check_deployment_health(self, deployment_id):
-    from .models import Deployment, Endpoint
-
     deployment = Deployment.objects.select_related("version", "build").get(public_id=deployment_id)
     if deployment.status in {"healthy", "failed", "stopped"}:
         return deployment.status
@@ -144,8 +190,6 @@ def check_deployment_health(self, deployment_id):
 
 @shared_task(bind=True)
 def stop_deployment(self, deployment_id):
-    from .models import Deployment
-
     deployment = Deployment.objects.select_related("version", "build").get(public_id=deployment_id)
     deployment_backend(deployment.backend).stop(deployment)
     Deployment.objects.filter(pk=deployment.pk).update(status="stopped", stopped_at=timezone.now())

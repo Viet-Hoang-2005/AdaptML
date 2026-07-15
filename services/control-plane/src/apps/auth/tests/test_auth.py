@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -127,7 +129,7 @@ def test_google_oauth_saves_provider_avatar_and_profile_exposes_provider():
 
     assert response.status_code == 200
     assert response.data["auth_provider"] == "google"
-    assert response.data["avatar"].endswith("oauth-google.png")
+    assert urlparse(response.data["avatar"]).path.endswith("oauth-google.png")
 
 
 @pytest.mark.django_db

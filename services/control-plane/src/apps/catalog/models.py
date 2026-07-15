@@ -7,6 +7,12 @@ from django.db import models
 class ModelProject(models.Model):
     ACCESS_MODES = (("private", "Private"), ("public", "Public"))
     MODEL_TYPES = (("ml", "Machine Learning"), ("dl", "Deep Learning"))
+    DELETION_STATES = (
+        ("active", "Active"),
+        ("deleting", "Deleting"),
+        ("deleted", "Deleted"),
+        ("delete_failed", "Delete Failed"),
+    )
 
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="model_projects")
@@ -17,6 +23,10 @@ class ModelProject(models.Model):
     requirements_text = models.TextField(blank=True)
     next_version_number = models.PositiveIntegerField(default=1)
     is_active = models.BooleanField(default=True)
+    deletion_state = models.CharField(max_length=20, choices=DELETION_STATES, default="active")
+    deletion_error = models.TextField(blank=True)
+    deletion_task_id = models.CharField(max_length=255, blank=True, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

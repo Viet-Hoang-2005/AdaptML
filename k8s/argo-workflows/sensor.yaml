@@ -279,13 +279,25 @@ spec:
                   name: mlops-paas-model-server-delete-template
                 arguments:
                   parameters:
-                    - name: container_name
+                    - name: project_id
+                      value: ""
+                    - name: container_names
+                      value: "[]"
+                    - name: control_plane_webhook_url
                       value: ""
           parameters:
             - src:
                 dependencyName: delete-dep
-                dataKey: body.container_name
+                dataKey: body.project_id
               dest: spec.arguments.parameters.0.value
+            - src:
+                dependencyName: delete-dep
+                dataKey: body.container_names
+              dest: spec.arguments.parameters.1.value
+            - src:
+                dependencyName: delete-dep
+                dataKey: body.control_plane_webhook_url
+              dest: spec.arguments.parameters.2.value
 
     - template:
         name: train-workflow-trigger

@@ -4,7 +4,6 @@ import os
 import re
 from typing import Any, Dict
 from urllib.parse import quote_plus
-
 from sqlalchemy import create_engine, text
 
 MODEL_RECORD_CACHE_TTL = int(os.environ.get("MODEL_RECORD_CACHE_TTL_SECONDS", "30"))

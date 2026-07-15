@@ -116,7 +116,6 @@ def webhook_headers() -> dict[str, str]:
 def post_webhook(webhook_url: str, payload: dict) -> None:
     if not webhook_url:
         return
-    print(f"Calling build webhook: {webhook_url}")
     response = requests.post(webhook_url, json=payload, headers=webhook_headers(), timeout=10)
     if response.status_code >= 400:
         raise RuntimeError(f"Build webhook failed with HTTP {response.status_code}: {response.text[:500]}")
@@ -144,7 +143,8 @@ COPY model /app/model_artifact
     (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
 
-    base_name = f"{tenant_id.lower()}-model-{model_id.lower()}:latest"
+    build_id = os.environ.get("BUILD_ID", "").strip().lower()
+    base_name = f"build-{build_id or model_id.lower()}:latest"
     harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
     image_tag = f"{harbor_url}/{harbor_project}/{base_name}" if harbor_url else base_name
 
@@ -186,7 +186,8 @@ COPY model /app/model_artifact
     (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
 
-    base_name = f"{tenant_id.lower()}-model-{model_id.lower()}:latest"
+    build_id = os.environ.get("BUILD_ID", "").strip().lower()
+    base_name = f"build-{build_id or model_id.lower()}:latest"
     harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
     image_tag = f"{harbor_url}/{harbor_project}/{base_name}" if harbor_url else base_name
 

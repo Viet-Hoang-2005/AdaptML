@@ -7,6 +7,10 @@ import sys
 import tarfile
 import threading
 import time
+import redis
+import base64
+import mlflow
+import requests
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,7 +41,6 @@ def log_to_redis(message: str) -> None:
     if not job_id or not redis_url:
         return
     try:
-        import redis
         r = redis.from_url(redis_url)
         r.rpush(f"training_logs:{job_id}", message)
         r.expire(f"training_logs:{job_id}", 86400 * 7)
@@ -293,7 +296,6 @@ def log_to_mlflow(
     if not tracking_uri:
         return
     try:
-        import mlflow
         log(f"Connecting to MLflow Tracking Server at {tracking_uri}")
         mlflow.set_tracking_uri(tracking_uri)
         exp_name = os.environ.get("MLFLOW_EXPERIMENT_NAME", "").strip()
@@ -430,8 +432,6 @@ def download_presigned_url(uri: str, destination: Path) -> None:
     validate_presigned_url(uri)
     destination.parent.mkdir(parents=True, exist_ok=True)
     log(f"Downloading presigned URL to {destination}")
-    import requests
-
     with requests.get(uri, stream=True, timeout=300) as response:
         response.raise_for_status()
         with open(destination, "wb") as out_file:
@@ -442,7 +442,6 @@ def download_presigned_url(uri: str, destination: Path) -> None:
 def upload_presigned_url(source: Path, uri: str) -> None:
     validate_presigned_url(uri)
     log(f"Uploading {source} via presigned PUT URL")
-    import requests
 
     with open(source, "rb") as handle:
         response = requests.put(uri, data=handle, timeout=300)
@@ -456,7 +455,6 @@ def request_output_upload_url(endpoint: str, capability: str) -> str:
     validate_presigned_url(endpoint)
     if not capability:
         raise RuntimeError("Missing output upload capability.")
-    import requests
 
     response = requests.post(endpoint, headers={"Authorization": f"Bearer {capability}"}, timeout=30)
     if response.status_code != 200:
@@ -785,7 +783,6 @@ def main() -> None:
 
     requirements_text = os.environ.get("REQUIREMENTS_TEXT", "").strip()
     if requirements_text:
-        import base64
         try:
             decoded = base64.b64decode(requirements_text.encode("utf-8")).decode("utf-8")
             if any(c.isalpha() for c in decoded):

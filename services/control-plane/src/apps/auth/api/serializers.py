@@ -80,7 +80,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         fields = ("email", "password", "full_name")
 
     def create(self, validated_data):
-        return get_user_model().objects.create_user(**validated_data)
+        return get_user_model().objects.create_user(**validated_data) # type: ignore[attr-defined]
 
 
 class AvatarSerializer(serializers.ModelSerializer):

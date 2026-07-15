@@ -1,4 +1,3 @@
-# consumer.py: Consumer liên tục lắng nghe Redpanda, gom nhóm dữ liệu, và lưu vào PostgreSQL
 import os
 import json
 import time

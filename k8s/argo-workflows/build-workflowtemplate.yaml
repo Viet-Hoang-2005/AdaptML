@@ -38,6 +38,7 @@ spec:
             template: prepare-package
             arguments:
               parameters:
+                - {name: build_id, value: "{{inputs.parameters.build_id}}"}
                 - {name: version_id, value: "{{inputs.parameters.version_id}}"}
                 - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
                 - {name: flavor, value: "{{inputs.parameters.flavor}}"}
@@ -51,6 +52,7 @@ spec:
             template: build-image
             arguments:
               parameters:
+                - {name: build_id, value: "{{inputs.parameters.build_id}}"}
                 - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
                 - {name: version_id, value: "{{inputs.parameters.version_id}}"}
         - - name: notify-success
@@ -64,6 +66,7 @@ spec:
       nodeSelector: {workload-type: worker}
       inputs:
         parameters:
+          - {name: build_id}
           - {name: version_id}
           - {name: tenant_id}
           - {name: flavor}
@@ -82,6 +85,7 @@ spec:
           - {name: BUILD_ENGINE, value: kaniko}
           - {name: BUILD_WORKSPACE_DIR, value: /workspace}
           - {name: TASK_TYPE, value: "{{inputs.parameters.task_type}}"}
+          - {name: BUILD_ID, value: "{{inputs.parameters.build_id}}"}
           - {name: MODEL_ID, value: "{{inputs.parameters.version_id}}"}
           - {name: TENANT_ID, value: "{{inputs.parameters.tenant_id}}"}
           - {name: FLAVOR, value: "{{inputs.parameters.flavor}}"}
@@ -98,6 +102,7 @@ spec:
       nodeSelector: {workload-type: worker}
       inputs:
         parameters:
+          - {name: build_id}
           - {name: tenant_id}
           - {name: version_id}
       container:
@@ -105,7 +110,7 @@ spec:
         args:
           - --context=dir:///workspace
           - --dockerfile=/workspace/Dockerfile
-          - --destination=registry.mlops-nids-nt114.id.vn/user-images/{{inputs.parameters.tenant_id}}-model-{{inputs.parameters.version_id}}:latest
+          - --destination=registry.mlops-nids-nt114.id.vn/user-images/build-{{inputs.parameters.build_id}}:latest
         volumeMounts:
           - {name: workspace, mountPath: /workspace}
           - {name: harbor-config, mountPath: /kaniko/.docker/}
