@@ -75,6 +75,19 @@ export const getLatestProjectBuild = async (modelId: string): Promise<Build | nu
 export const saveBuildImage = async (buildId: string): Promise<Build> =>
   (await apiClient.post<Build>(controlPlaneURL(`/builds/${buildId}/save/`))).data;
 
+export const discardBuildImage = async (buildId: string): Promise<Build> =>
+  (await apiClient.post<Build>(controlPlaneURL(`/builds/${buildId}/discard/`))).data;
+
+/** Browser-unload requests cannot rely on Axios completing; keep this tiny request alive instead. */
+export const discardBuildImageOnPageExit = (buildId: string) => {
+  const token = localStorage.getItem('access_token');
+  return fetch(controlPlaneURL(`/builds/${buildId}/discard/`), {
+    method: 'POST',
+    keepalive: true,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  }).catch(() => undefined);
+};
+
 export const deployBuild = async (buildId: string): Promise<Deployment> =>
   (await apiClient.post<Deployment>(controlPlaneURL('/deployments/'), { build: buildId })).data;
 

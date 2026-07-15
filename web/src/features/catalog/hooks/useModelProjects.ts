@@ -64,11 +64,11 @@ export function useModelProjectMutations() {
     mutationFn: (modelId: string) => deleteModelProject(modelId, true),
     onSuccess: async () => {
       await invalidateModels();
-      toast.success('Model API disabled successfully.');
+      toast.success('Model project deletion started.');
       navigate('/dashboard/management');
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to disable model API.'));
+      toast.error(getApiErrorMessage(error, 'Unable to delete model project.'));
     },
   });
 

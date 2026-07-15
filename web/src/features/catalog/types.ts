@@ -18,12 +18,13 @@ export type ModelProjectStatus =
   | 'archived'
   | 'error'
   | 'disabled';
-export type ModelBuildStatus = 'not_started' | 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled' | 'error';
+export type ModelBuildStatus = 'not_started' | 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled' | 'discarded' | 'error';
 export type ModelEndpointStatus = 'not_deployed' | 'deploying' | 'healthy' | 'unhealthy' | 'deploy_failed' | 'stopped';
 export type ModelFlavor = 'sklearn' | 'xgboost' | 'pytorch' | 'tensorflow';
 export type ModelArtifactFormat = 'raw' | 'mlflow_zip';
 export type ModelSourceType = 'manual_upload' | 'training_job';
 export type ModelLifecycleStatus = 'metadata' | 'image_ready' | 'deployed';
+export type ModelDeletionState = 'active' | 'deleting' | 'deleted' | 'delete_failed';
 
 export interface ModelProject {
   id: ResourceId;
@@ -33,6 +34,9 @@ export interface ModelProject {
   model_type: 'ml' | 'dl';
   requirements_text: string;
   is_active: boolean;
+  deletion_state?: ModelDeletionState;
+  deletion_error?: string;
+  deleted_at?: string | null;
   version?: string;
   source_type?: ModelSourceType;
   source_training_job?: ResourceId | null;
@@ -94,10 +98,11 @@ export interface Build {
   id: ResourceId;
   version_id: ResourceId;
   backend: 'docker' | 'argo';
-  status: 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled';
+  status: 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled' | 'discarded';
   image_uri: string;
   is_saved: boolean;
   saved_at: string | null;
+  discarded_at: string | null;
   package_uri: string;
   logs: string;
   error_message: string;

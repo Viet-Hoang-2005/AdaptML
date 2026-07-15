@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight} from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -35,6 +35,30 @@ const formFromMetadata = (metadata: ModelBuildMetadata): ModelBuildFormValues =>
   requirements_text: metadata.requirements_text,
 });
 
+const fileFields: Array<keyof ModelBuildFormValues> = [
+  'source_artifact',
+  'label_mapping_file',
+  'metrics_file',
+  'params_file',
+  'model_insights_file',
+  'feature_importance_file',
+  'input_schema_file',
+  'source_code_file',
+  'reference_data_file',
+];
+
+const isFormDirty = (form: ModelBuildFormValues, metadata: ModelBuildMetadata | null) => {
+  const saved = metadata ? formFromMetadata(metadata) : emptyForm;
+  const scalarChanged = form.name !== saved.name
+    || form.description !== saved.description
+    || form.access_mode !== saved.access_mode
+    || form.flavor !== saved.flavor
+    || form.artifact_format !== saved.artifact_format
+    || form.requirements_text !== saved.requirements_text;
+  const hasSelectedFile = fileFields.some((field) => form[field] instanceof File);
+  return scalarChanged || hasSelectedFile;
+};
+
 export default function MetadataPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,9 +67,9 @@ export default function MetadataPage() {
   const [metadata, setMetadata] = useState<ModelBuildMetadata | null>(null);
   const [form, setForm] = useState<ModelBuildFormValues>(emptyForm);
   const [loading, setLoading] = useState(Boolean(requestedModelId));
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState<'save' | 'continue' | null>(null);
   const [showDiscard, setShowDiscard] = useState(false);
+  const dirty = useMemo(() => isFormDirty(form, metadata), [form, metadata]);
 
   useEffect(() => {
     if (!requestedModelId) return;
@@ -54,7 +78,6 @@ export default function MetadataPage() {
         setModelId(result.id);
         setMetadata(result);
         setForm(formFromMetadata(result));
-        setDirty(false);
       })
       .catch((error) => {
         toast.error(getApiErrorMessage(error, 'Unable to load model metadata.'));
@@ -70,7 +93,6 @@ export default function MetadataPage() {
 
   const setField = (field: keyof ModelBuildFormValues, value: string | File | null) => {
     setForm((current) => ({ ...current, [field]: value }));
-    setDirty(true);
   };
 
   const readRequirementsFile = async (file: File | null) => {
@@ -90,9 +112,10 @@ export default function MetadataPage() {
     return false;
   };
 
-  const persist = async () => {
+  const persist = async (action: 'save' | 'continue') => {
     if (!validate()) return null;
-    setSaving(true);
+    if (modelId && metadata && !dirty) return metadata;
+    setSubmittingAction(action);
     try {
       const saved = modelId
         ? await updateModelBuildMetadata(modelId, form)
@@ -100,7 +123,6 @@ export default function MetadataPage() {
       setModelId(saved.id);
       setMetadata(saved);
       setForm(formFromMetadata(saved));
-      setDirty(false);
       setSearchParams({ modelId: saved.id }, { replace: true });
       toast.success('Model metadata saved.');
       return saved;
@@ -108,7 +130,7 @@ export default function MetadataPage() {
       toast.error(getApiErrorMessage(error, 'Unable to save model metadata.'));
       return null;
     } finally {
-      setSaving(false);
+      setSubmittingAction(null);
     }
   };
 
@@ -134,22 +156,36 @@ export default function MetadataPage() {
       <div className="rounded-lg border border-border bg-surface p-6 lg:p-8">
         <ModelMetadataFields form={form} assets={metadata?.assets} setField={setField} onRequirementsFile={readRequirementsFile} />
         <footer className="mt-8 grid gap-3 border-t border-border pt-5 sm:grid-cols-3">
-          <Button variant="secondary" size="md" icon={<ArrowLeft className="h-4 w-4" />} disabled={saving} onClick={cancel}>Cancel</Button>
           <Button
             variant="secondary"
             size="md"
-            loading={saving}
+            icon={<ArrowLeft className="h-4 w-4" />}
+            disabled={submittingAction !== null}
+            onClick={cancel}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="secondary"
+            size="md"
+            loading={submittingAction === 'save'}
+            disabled={submittingAction !== null || !dirty}
             onClick={async () => {
-              const saved = await persist();
+              const saved = await persist('save');
               if (saved) navigate('/dashboard/management');
             }}
           >
-            - Save -
+            {metadata && !dirty ? 'Metadata saved' : 'Save Metadata'}
           </Button>
-          <Button size="md" loading={saving} onClick={async () => {
-            const saved = await persist();
-            if (saved) navigate(`/dashboard/management/model/upload/build-deploy?modelId=${saved.id}`);
-          }}>
+          <Button
+            size="md"
+            loading={submittingAction === 'continue'}
+            disabled={submittingAction !== null}
+            onClick={async () => {
+              const saved = await persist('continue');
+              if (saved) navigate(`/dashboard/management/model/upload/build-deploy?modelId=${saved.id}`);
+            }}
+          >
             Continue <ArrowRight className="h-4 w-4" />
           </Button>
         </footer>

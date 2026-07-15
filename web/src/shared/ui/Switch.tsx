@@ -23,7 +23,7 @@ export function Switch<T extends string | number>({
   return (
     <div className="flex justify-center">
       <div 
-        className={cn('inline-flex rounded-sm shadow-sm w-100', className)} 
+        className={cn('inline-flex rounded-lg shadow-sm w-100', className)} 
         role="tablist" 
         aria-label={ariaLabel}
       >
@@ -38,7 +38,7 @@ export function Switch<T extends string | number>({
               onClick={() => onChange(option.value)}
               className={cn(
                 'flex-1 px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:z-10 border',
-                index === 0 ? 'rounded-l-sm' : index === options.length - 1 ? 'rounded-r-sm -ml-px' : '-ml-px',
+                index === 0 ? 'rounded-l-lg' : index === options.length - 1 ? 'rounded-r-lg -ml-px' : '-ml-px',
                 isSelected
                   ? 'bg-primary border-primary text-primary-foreground z-10'
                   : 'bg-surface border-border text-muted-foreground hover:bg-muted hover:text-foreground'

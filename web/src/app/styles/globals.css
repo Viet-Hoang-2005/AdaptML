@@ -72,7 +72,6 @@
 
 .custom-scrollbar {
   scrollbar-color: #475569 transparent;
-  scrollbar-width: thin;
 }
 
 .custom-scrollbar::-webkit-scrollbar {

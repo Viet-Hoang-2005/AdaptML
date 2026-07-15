@@ -18,7 +18,7 @@ export default function ModelProjectPage() {
     toast.success(t('endpointCopied'));
   };
 
-  if (loading) return <section className="flex-1 rounded-sm border border-border bg-surface p-8" />;
+  if (loading) return <section className="flex-1 rounded-lg border border-border bg-surface p-8" />;
 
   if (!selectedModel) {
     return (
@@ -42,15 +42,15 @@ export default function ModelProjectPage() {
       </div>
 
       <div className="grid gap-4 p-6 lg:grid-cols-3">
-        <div className="rounded-sm border border-border bg-muted p-4">
+        <div className="rounded-lg border border-border bg-muted p-4">
           <p className="text-xs font-semibold uppercase text-muted-foreground">{t('access')}</p>
           <p className="mt-2 text-sm font-bold capitalize text-foreground">{selectedModel.access_mode}</p>
         </div>
-        <div className="rounded-sm border border-border bg-muted p-4">
+        <div className="rounded-lg border border-border bg-muted p-4">
           <p className="text-xs font-semibold uppercase text-muted-foreground">{t('flavor')}</p>
           <p className="mt-2 text-sm font-bold text-foreground capitalize">{selectedModel.flavor || '-'}</p>
         </div>
-        <div className="rounded-sm border border-border bg-muted p-4">
+        <div className="rounded-lg border border-border bg-muted p-4">
           <p className="text-xs font-semibold uppercase text-muted-foreground">{t('updated')}</p>
           <p className="mt-2 text-sm font-bold text-foreground">
             {new Date(selectedModel.updated_at).toLocaleString(i18n.language)}
@@ -60,7 +60,7 @@ export default function ModelProjectPage() {
 
       <div className="border-t border-border p-6">
         <p className="mb-2 text-sm font-semibold text-foreground">{t('endpoint')}</p>
-        <div className="flex flex-col gap-3 rounded-sm border border-border bg-muted p-3 md:flex-row md:items-center">
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted p-3 md:flex-row md:items-center">
           <code className="min-w-0 flex-1 overflow-x-auto text-sm text-foreground">{selectedModel.endpoint_url}</code>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" icon={<Copy className="h-4 w-4" />} onClick={copyEndpoint}>

@@ -1,4 +1,6 @@
+import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import Anser from 'anser';
 import { Clipboard, Loader2, Play, Square, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -6,6 +8,34 @@ import { getRuntimeLogs } from '@/shared/api/runtimeLogs';
 import { toast } from './toastStore';
 
 type LogKind = 'build' | 'deployment' | 'training' | 'drift';
+
+function getAnsiStyle(segment: Anser.AnserJsonEntry): CSSProperties {
+  const decorations = new Set(segment.decorations);
+  const textDecorations = [
+    decorations.has('underline') ? 'underline' : '',
+    decorations.has('strikethrough') ? 'line-through' : '',
+  ].filter(Boolean);
+
+  return {
+    color: segment.fg_truecolor || segment.fg || undefined,
+    backgroundColor: segment.bg_truecolor || segment.bg || undefined,
+    fontWeight: decorations.has('bold') ? 700 : undefined,
+    fontStyle: decorations.has('italic') ? 'italic' : undefined,
+    opacity: decorations.has('dim') ? 0.7 : undefined,
+    visibility: decorations.has('hidden') ? 'hidden' : undefined,
+    textDecoration: textDecorations.length ? textDecorations.join(' ') : undefined,
+  };
+}
+
+function AnsiLogLine({ log }: { log: string }) {
+  const segments = Anser.ansiToJson(log, { remove_empty: true });
+
+  return segments.map((segment, index) => (
+    <span key={`${index}-${segment.content}`} style={getAnsiStyle(segment)}>
+      {segment.content}
+    </span>
+  ));
+}
 
 export function TerminalViewer({
   modelId,
@@ -69,10 +99,12 @@ export function TerminalViewer({
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
+    let cancelled = false;
     const fetchLogs = async () => {
       if (!resourceId || !logKind || buildStatus !== 'building') return;
       try {
         const data = await getRuntimeLogs({ kind: logKind, id: resourceId }, offsetRef.current);
+        if (cancelled) return;
         if (data.logs.length) {
           setLogs((previous) => [...previous, ...data.logs.filter((log) => !log.startsWith('BUILD_EOF_'))]);
           offsetRef.current = data.nextOffset;
@@ -111,7 +143,10 @@ export function TerminalViewer({
       interval = setInterval(fetchLogs, 1500);
       fetchLogs();
     }
-    return () => interval && clearInterval(interval);
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
   }, [building, buildStatus, getBuildPreview, logKind, modelId, onBuildSuccess, onCompleted, resourceId, t, title]);
 
   const isGeneric = logsOverride !== undefined;
@@ -130,8 +165,8 @@ export function TerminalViewer({
   return (
     <div className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900 shadow-lg">
       <div className="relative flex items-center border-b border-gray-700 bg-gray-800/80 px-4 py-3">
-        <Terminal className="mr-2 h-4 w-4 text-muted-foreground" />
-        <span className="text-xs font-mono text-muted-foreground">{activeTitle}</span>
+        <Terminal className="mr-2 h-4 w-4 text-slate-400" />
+        <span className="font-mono text-xs text-slate-300">{activeTitle}</span>
         {activeRunning && <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full bg-green-500" />}
         <div className="ml-auto flex items-center">
           {customButtons !== undefined ? customButtons : <>
@@ -142,9 +177,9 @@ export function TerminalViewer({
           <button type="button" onClick={() => { navigator.clipboard.writeText(activeLogs.join('\n')); toast.success(t('terminal.copied')); }} className="ml-3 flex items-center gap-1.5 rounded-md bg-gray-700 px-3 py-1 text-xs font-medium text-white hover:bg-gray-600" title={t('terminal.copyTitle')}><Clipboard className="h-3 w-3" />{t('terminal.copy')}</button>
         </div>
       </div>
-      <div ref={terminalRef} className="h-72 w-full custom-scrollbar overflow-y-auto bg-gray-900 p-4 font-mono text-sm text-muted-foreground antialiased" style={{ scrollBehavior: 'smooth' }}>
-        {activeLogs.length === 0 ? <span className="text-muted-foreground">{activePlaceholder}</span> : !resourceId && !isGeneric ? <div className="mb-1 break-all text-muted-foreground italic">{activePlaceholder}</div> : activeLogs.map((log, index) => <div key={index} className="mb-1 break-all whitespace-pre-wrap leading-tight"><span className={/error|exception|failed/i.test(log) ? 'text-red-400' : 'text-muted-foreground'}>{log}</span></div>)}
-        {errorMsg && <div className="mt-4 border-t border-red-500/30 pt-4 text-red-400"><span className="font-bold">{t('terminal.error')}</span> {errorMsg}</div>}
+      <div ref={terminalRef} className="h-72 w-full custom-scrollbar overflow-y-auto bg-gray-900 p-4 font-mono text-sm text-slate-300 antialiased" style={{ scrollBehavior: 'smooth' }}>
+        {activeLogs.length === 0 ? <span className="text-slate-400">{activePlaceholder}</span> : !resourceId && !isGeneric ? <div className="mb-1 break-all text-slate-400 italic">{activePlaceholder}</div> : activeLogs.map((log, index) => <div key={index} className="mb-1 break-all whitespace-pre-wrap leading-tight"><AnsiLogLine log={log} /></div>)}
+        {errorMsg && <div className="mt-4 border-t border-red-400/40 pt-4 text-red-400"><span className="font-bold">{t('terminal.error')}</span> {errorMsg}</div>}
       </div>
     </div>
   );
