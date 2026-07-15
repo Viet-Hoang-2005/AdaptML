@@ -10,9 +10,73 @@ import type {
   Build,
   Deployment,
   ModelBuildFormValues,
+  ModelBuildMetadata,
   ModelProject,
   ModelVersion,
 } from '@/features/catalog/types';
+
+const metadataFormData = (payload: ModelBuildFormValues): FormData => {
+  const data = new FormData();
+  data.append('name', payload.name);
+  data.append('description', payload.description);
+  data.append('access_mode', payload.access_mode);
+  data.append('flavor', payload.flavor);
+  data.append('artifact_format', payload.artifact_format);
+  data.append('requirements_text', payload.requirements_text);
+  const files: Array<[string, File | null | undefined]> = [
+    ['source_artifact', payload.source_artifact],
+    ['label_mapping_file', payload.label_mapping_file],
+    ['metrics_file', payload.metrics_file],
+    ['params_file', payload.params_file],
+    ['model_insights_file', payload.model_insights_file],
+    ['feature_importance_file', payload.feature_importance_file],
+    ['input_schema_file', payload.input_schema_file],
+    ['source_code_file', payload.source_code_file],
+    ['reference_data_file', payload.reference_data_file],
+  ];
+  files.forEach(([name, file]) => {
+    if (file) data.append(name, file);
+  });
+  return data;
+};
+
+export const createModelDraft = async (payload: ModelBuildFormValues): Promise<ModelBuildMetadata> =>
+  (await apiClient.post<ModelBuildMetadata>(
+    controlPlaneURL('/models/drafts/'),
+    metadataFormData(payload),
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )).data;
+
+export const getModelBuildMetadata = async (modelId: string): Promise<ModelBuildMetadata> =>
+  (await apiClient.get<ModelBuildMetadata>(controlPlaneURL(`/models/${modelId}/build-metadata/`))).data;
+
+export const updateModelBuildMetadata = async (
+  modelId: string,
+  payload: ModelBuildFormValues,
+): Promise<ModelBuildMetadata> =>
+  (await apiClient.put<ModelBuildMetadata>(
+    controlPlaneURL(`/models/${modelId}/build-metadata/`),
+    metadataFormData(payload),
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )).data;
+
+export const startProjectBuild = async (modelId: string): Promise<Build> =>
+  (await apiClient.post<Build>(controlPlaneURL(`/models/${modelId}/builds/`))).data;
+
+export const getBuild = async (buildId: string): Promise<Build> =>
+  (await apiClient.get<Build>(controlPlaneURL(`/builds/${buildId}/`))).data;
+
+export const getLatestProjectBuild = async (modelId: string): Promise<Build | null> => {
+  const [versions, builds] = await Promise.all([getProjectVersions(modelId), listBuilds()]);
+  const versionIds = new Set(versions.map((version) => version.id));
+  return builds.find((build) => versionIds.has(build.version_id)) ?? null;
+};
+
+export const saveBuildImage = async (buildId: string): Promise<Build> =>
+  (await apiClient.post<Build>(controlPlaneURL(`/builds/${buildId}/save/`))).data;
+
+export const deployBuild = async (buildId: string): Promise<Deployment> =>
+  (await apiClient.post<Deployment>(controlPlaneURL('/deployments/'), { build: buildId })).data;
 
 export const getProjectVersions = async (projectId: string): Promise<ModelVersion[]> => {
   const { data } = await apiClient.get<{ results: ModelVersion[] } | ModelVersion[]>(

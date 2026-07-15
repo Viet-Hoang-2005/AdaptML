@@ -15,6 +15,20 @@ def workspace_prefix(tenant_id, project_id, kind):
     return f"{project_prefix(tenant_id, project_id)}/{kind}/"
 
 
+def build_input_prefix(tenant_id, project_id, kind):
+    if kind not in {
+        "source_artifact",
+        "label_mapping",
+        "metrics",
+        "params",
+        "model_insights",
+        "feature_importance",
+        "input_schema",
+    }:
+        raise ValueError("Unsupported build input kind")
+    return f"{project_prefix(tenant_id, project_id)}/build-inputs/{kind}/"
+
+
 def training_job_prefix(tenant_id, project_id, job_id):
     return f"{project_prefix(tenant_id, project_id)}/training/jobs/{_clean(job_id)}"
 

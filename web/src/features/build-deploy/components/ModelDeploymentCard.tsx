@@ -176,7 +176,7 @@ export function ModelDeploymentCard({
                 className="text-lg font-extrabold tracking-tight text-foreground hover:text-primary transition-colors focus:outline-none"
                 onClick={() => {
                   if (onOpenApiManagement) onOpenApiManagement(model);
-                  else navigate(`/dashboard/api-management/${model.id}`);
+                  else navigate(`/dashboard/management/model/${model.id}`);
                 }}
               >
                 {model.name}

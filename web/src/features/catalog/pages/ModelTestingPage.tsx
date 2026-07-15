@@ -2,7 +2,7 @@ import { FileSpreadsheet, Play, Pause, Download, Trash2, SendHorizontal, X, Chec
 import { useRef, useState, useMemo, useEffect } from 'react';
 import { useBlocker } from 'react-router-dom';
 import { ConfirmModal } from '@/shared/ui/ConfirmModal';
-import { TerminalLogViewer } from '@/shared/ui/TerminalLogViewer';
+import { TerminalViewer } from '@/shared/ui/TerminalViewer';
 import { Button } from '@/shared/ui/Button';
 import { useModelSelection } from '@/features/catalog/hooks/useModelSelection';
 import { predictWithModelProject } from '@/features/catalog/api/catalogApi';
@@ -461,7 +461,7 @@ export default function ModelTestingPage() {
               </div>
 
               <div className="mt-6">
-                <TerminalLogViewer 
+                <TerminalViewer 
                   title="Testing Console" 
                   placeholder='Click "Run" to start processing the CSV file...' 
                   logsOverride={stringLogs} 

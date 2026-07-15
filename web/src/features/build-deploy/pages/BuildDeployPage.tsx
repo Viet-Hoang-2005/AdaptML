@@ -1,177 +1,148 @@
-import { useState } from 'react';
-import { Bot, Edit3, Trash2, Search, Plus, Download } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import type { ColumnDef } from '@tanstack/react-table';
+import { ArrowLeft, Rocket, Save } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+
+import {
+  cancelBuild,
+  deployBuild,
+  getBuild,
+  getLatestProjectBuild,
+  getModelBuildMetadata,
+  saveBuildImage,
+  startProjectBuild,
+} from '@/features/build-deploy/api/buildDeployApi';
+import { BuildSummaryItem } from '@/features/build-deploy/components/BuildSummaryItem';
+import type { Build, Deployment, ModelBuildMetadata } from '@/features/catalog/types';
+import { getApiErrorMessage } from '@/shared/api/errors';
 import { Button } from '@/shared/ui/Button';
-import { Input } from '@/shared/ui/Input';
-import { ConfirmModal } from '@/shared/ui/ConfirmModal';
-import { DataTable } from '@/shared/ui/DataTable';
-import { IconButton } from '@/shared/ui/IconButton';
-import { Badge } from '@/shared/ui/Badge';
-import Placeholder from '@/features/catalog/components/ModelPlaceholder';
-import { useModelProjects, useModelProjectMutations } from '@/features/catalog/hooks/useModelProjects';
-import type { ModelProject } from '@/features/catalog/types';
-import EditModelModal from '@/features/build-deploy/components/EditModelModal';
 import { PageHeader } from '@/shared/ui/PageHeader';
-import { PageContent } from '@/shared/ui/PageContent';
-import { useTranslation } from 'react-i18next';
+import { StepTitle } from '@/shared/ui/StepTitle';
+import { TerminalViewer } from '@/shared/ui/TerminalViewer';
+import { toast } from '@/shared/ui/toastStore';
 
-export default function APIManagementPage() {
-  const { t, i18n } = useTranslation('buildDeploy');
+export default function ModelUploadPage() {
   const navigate = useNavigate();
-  const { data, isLoading } = useModelProjects();
-  const { deleteModelProject } = useModelProjectMutations();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedModel, setSelectedModel] = useState<ModelProject | null>(null);
-  const [modelToDelete, setModelToDelete] = useState<ModelProject | null>(null);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  
-  const models = data?.models ?? [];
-  const filteredModels = models.filter((model) =>
-    model.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [searchParams] = useSearchParams();
+  const modelId = searchParams.get('modelId');
+  const [metadata, setMetadata] = useState<ModelBuildMetadata | null>(null);
+  const [build, setBuild] = useState<Build | null>(null);
+  const [deployment, setDeployment] = useState<Deployment | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const columns: ColumnDef<ModelProject>[] = [
-    {
-      id: 'index',
-      header: t('columns.index'),
-      enableSorting: false,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.index + 1}</span>,
-    },
-    {
-      accessorKey: 'name',
-      header: t('columns.name'),
-      cell: ({ row }) => (
-        <button
-          type="button"
-          className="font-semibold text-foreground hover:text-primary"
-          onClick={() => navigate(`/dashboard/api-management/${row.original.id}`)}
-        >
-          {row.original.name}
-        </button>
-      ),
-    },
-    {
-      accessorKey: 'description',
-      header: t('columns.description'),
-      cell: ({ row }) => (
-        <span className="line-clamp-2 max-w-sm text-sm text-muted-foreground">
-          {row.original.description || t('noDescription')}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'flavor',
-      header: t('columns.flavor'),
-      cell: ({ row }) => <Badge>{row.original.flavor || 'Not set'}</Badge>,
-    },
-    {
-      accessorKey: 'access_mode',
-      header: t('columns.access'),
-      cell: ({ row }) => <Badge variant={row.original.access_mode === 'public' ? 'success' : 'neutral'}>{row.original.access_mode}</Badge>,
-    },
-    {
-      accessorKey: 'updated_at',
-      header: t('columns.updated'),
-      cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{new Date(row.original.updated_at).toLocaleString(i18n.language)}</span>,
-    },
-    {
-      id: 'actions',
-      header: t('columns.actions'),
-      enableSorting: false,
-      cell: ({ row }) => {
-        const record = row.original;
-        return (
-        <div className="flex items-center gap-1">
-          <IconButton
-            label="Download model"
-            icon={<Download className="h-4 w-4" />}
-            onClick={() => {
-              if (record.model_uri) window.open(record.model_uri, '_blank', 'noopener,noreferrer');
-            }}
-            disabled={!record.model_uri}
-          />
-          <IconButton
-            label="Edit model"
-            icon={<Edit3 className="h-4 w-4" />}
-            onClick={() => {
-              setSelectedModel(record);
-              setIsModalVisible(true);
-            }}
-          />
-          <IconButton label="Delete model" variant="danger-outline" icon={<Trash2 className="h-4 w-4" />} onClick={() => setModelToDelete(record)} />
-        </div>
-      );
-      },
-    },
-  ];
+  useEffect(() => {
+    if (!modelId) {
+      navigate('/dashboard/management/model/upload/metadata', { replace: true });
+      return;
+    }
+    Promise.all([getModelBuildMetadata(modelId), getLatestProjectBuild(modelId)])
+      .then(([result, latestBuild]) => {
+        setMetadata(result);
+        setBuild(latestBuild);
+      })
+      .catch((error) => {
+        toast.error(getApiErrorMessage(error, 'Unable to load build details.'));
+        navigate(`/dashboard/management/model/upload/metadata?modelId=${modelId}`, { replace: true });
+      })
+      .finally(() => setLoading(false));
+  }, [modelId, navigate]);
+
+  const buildImage = async () => {
+    if (!modelId) return;
+    setActionLoading(true);
+    try {
+      const nextBuild = await startProjectBuild(modelId);
+      setBuild(nextBuild);
+      setDeployment(null);
+      toast.success('Image build started.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to start the image build.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const saveImage = async () => {
+    if (!build) return;
+    setActionLoading(true);
+    try {
+      setBuild(await saveBuildImage(build.id));
+      toast.success('Image saved for later deployment.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to save the image.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const deployImage = async () => {
+    if (!build) return;
+    setActionLoading(true);
+    try {
+      const nextDeployment = await deployBuild(build.id);
+      setDeployment(nextDeployment);
+      setBuild((current) => current ? { ...current, is_saved: true, saved_at: current.saved_at ?? new Date().toISOString() } : current);
+      toast.success('Deployment started.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to deploy the image.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const refreshBuild = async () => {
+    if (!build) return;
+    setBuild(await getBuild(build.id));
+  };
+
+  if (loading) return <div className="rounded-lg border border-border bg-surface p-8 text-sm text-muted-foreground">Loading build and deployment…</div>;
+  if (!modelId || !metadata) return null;
+
+  const isReady = build?.status === 'ready';
+  const isSaveable = Boolean(isReady && !build?.is_saved);
 
   return (
-    <div className="flex w-full flex-1 flex-col space-y-6">
-      <PageHeader title={t('title')} />
-
-      <PageContent>
-        <div className="px-6 py-6 space-y-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="w-full md:w-96">
-              <Input
-                placeholder={t('search')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                icon={<Search className="h-4 w-4" />}
-                className="h-10! rounded-lg!"
-              />
-            </div>
-            <Button
-              size="md"
-              onClick={() => navigate('/dashboard/api-management/upload')}
-            >
-              <Plus className="h-4 w-4"/>
-              {t('upload')}
-            </Button>
+    <section className="space-y-6">
+      <PageHeader title="Build & Deploy" backLink={{ to: `/dashboard/management/model/upload/metadata?modelId=${modelId}`, label: 'Back to metadata' }} />
+      <div className="rounded-lg border border-border bg-surface p-6 lg:p-8">
+        <div className="space-y-6">
+          <StepTitle title="Build image" description="Build an image from the last saved metadata revision, then save it for later or deploy it immediately." />
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <BuildSummaryItem label="Model" value={metadata.name} />
+            <BuildSummaryItem label="Metadata revision" value={`r${metadata.revision}`} />
+            <BuildSummaryItem label="Flavor" value={metadata.flavor} />
+            <BuildSummaryItem label="Image status" value={build?.status ?? 'Not built'} />
           </div>
 
-          <div>
-            {isLoading ? (
-              <div className="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-                {t('loading')}
-              </div>
-            ) : filteredModels.length === 0 ? (
-              <Placeholder
-                title={t('noModels')}
-                description={searchQuery ? t('noMatch', { query: searchQuery }) : t('noModelsDescription')}
-                icon={<Bot className="h-6 w-6" />}
-                showModelName={false}
-                action={!searchQuery && <Button size="md" onClick={() => navigate('/dashboard/api-management/upload')}>{t('upload')}</Button>}
-              />
-            ) : (
-              <DataTable columns={columns} data={filteredModels} getRowId={(model) => model.id} pageSize={10} />
-            )}
-          </div>
+          <TerminalViewer
+            key={build?.id ?? 'idle'}
+            modelId={modelId}
+            buildId={build?.id}
+            title="Build Console"
+            placeholder="Build an image to stream package logs here."
+            onRebuild={buildImage}
+            onCancel={async () => {
+              await cancelBuild(modelId);
+              await refreshBuild();
+            }}
+            onBuildSuccess={() => void refreshBuild()}
+          />
+
+          {deployment ? (
+            <TerminalViewer key={deployment.id} modelId={modelId} deploymentId={deployment.id} title="Deployment Console" />
+          ) : null}
         </div>
-      </PageContent>
-      
-      <EditModelModal
-        key={`edit-modal-${selectedModel?.id || 'none'}-${isModalVisible}`}
-        model={selectedModel}
-        visible={isModalVisible}
-        onClose={() => {
-          setIsModalVisible(false);
-          setSelectedModel(null);
-        }}
-      />
-      <ConfirmModal
-        open={Boolean(modelToDelete)}
-        title={t('deleteTitle')}
-        description={t('deleteDescription', { name: modelToDelete?.name })}
-        confirmText={t('deleteConfirm')}
-        tone="danger"
-        onConfirm={() => {
-          if (modelToDelete) void deleteModelProject(modelToDelete.id);
-          setModelToDelete(null);
-        }}
-        onCancel={() => setModelToDelete(null)}
-      />
-    </div>
+
+        <footer className="mt-8 grid gap-3 border-t border-border pt-5 sm:grid-cols-3">
+          <Button variant="secondary" size="md" icon={<ArrowLeft className="h-4 w-4" />} disabled={actionLoading} onClick={() => navigate(`/dashboard/management/model/upload/metadata?modelId=${modelId}`)}>Back</Button>
+          <Button variant="secondary" size="md" icon={<Save className="h-4 w-4" />} disabled={!isSaveable || actionLoading} loading={actionLoading && isSaveable} onClick={() => void saveImage()}>
+            {build?.is_saved ? 'Image saved' : 'Save image'}
+          </Button>
+          <Button size="md" icon={<Rocket className="h-4 w-4" />} disabled={!isReady || actionLoading || Boolean(deployment)} loading={actionLoading && isReady} onClick={() => void deployImage()}>
+            {deployment ? 'Deployment running' : 'Deploy'}
+          </Button>
+        </footer>
+      </div>
+    </section>
   );
 }

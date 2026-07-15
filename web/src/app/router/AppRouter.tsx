@@ -17,8 +17,9 @@ const NotificationsPage = lazy(() => import('@/features/notifications/pages/Noti
 const CatalogLayout = lazy(() => import('@/features/catalog/pages/CatalogLayout'));
 const ModelProjectPage = lazy(() => import('@/features/catalog/pages/ModelProjectPage'));
 const ModelTestingPage = lazy(() => import('@/features/catalog/pages/ModelTestingPage'));
+const ModelManagementPage = lazy(() => import('@/features/build-deploy/pages/ModelManagementPage'));
+const MetadataPage = lazy(() => import('@/features/build-deploy/pages/MetadataPage'));
 const BuildDeployPage = lazy(() => import('@/features/build-deploy/pages/BuildDeployPage'));
-const UploadModelPage = lazy(() => import('@/features/build-deploy/pages/UploadModelPage'));
 const ModelDetailPage = lazy(() => import('@/features/build-deploy/pages/ModelDetailPage'));
 const TrainModelPage = lazy(() => import('@/features/training/pages/TrainModelPage'));
 const TrainingJobDetailPage = lazy(() => import('@/features/training/pages/TrainingJobDetailPage'));
@@ -81,12 +82,12 @@ const router = createBrowserRouter(
           <Route index element={<RegistryPage />} />
           <Route path=":familyId" element={<RegistryPage />} />
         </Route>
-        <Route path="api-management" element={<BuildDeployPage />} />
-        <Route path="api-management/upload" element={<Navigate to="build-package" replace />} />
-        <Route path="api-management/upload/build-package" element={<UploadModelPage />} />
-        <Route path="api-management/upload/mlflow-zip" element={<UploadModelPage />} />
-        <Route path="api-management/:modelId" element={<Navigate to="information" replace />} />
-        <Route path="api-management/:modelId/:tab" element={<ModelDetailPage />} />
+        <Route path="management" element={<ModelManagementPage />} />
+        <Route path="management/model/upload" element={<Navigate to="metadata" replace />} />
+        <Route path="management/model/upload/metadata" element={<MetadataPage />} />
+        <Route path="management/model/upload/build-deploy" element={<BuildDeployPage />} />
+        <Route path="management/model/:modelId" element={<Navigate to="information" replace />} />
+        <Route path="management/model/:modelId/:tab" element={<ModelDetailPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="profile" replace />} />

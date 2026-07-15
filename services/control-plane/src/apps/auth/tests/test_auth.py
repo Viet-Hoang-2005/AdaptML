@@ -73,6 +73,30 @@ def test_legacy_profile_me_route_is_not_available():
 
 
 @pytest.mark.django_db
+def test_complete_registration_ignores_field_of_work(monkeypatch):
+    monkeypatch.setattr(
+        "apps.auth.api.registration_endpoints.read_token",
+        lambda token, purpose: {"email": "new-owner@example.com"},
+    )
+
+    response = APIClient().post(
+        "/api/auth/register/complete/",
+        {
+            "registration_token": "registration-token",
+            "full_name": "New Owner",
+            "password": "password123",
+            "field_of_work": "Must be ignored during registration",
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201
+    user = get_user_model().objects.get(email="new-owner@example.com")
+    assert user.full_name == "New Owner"
+    assert user.field_of_work == ""
+
+
+@pytest.mark.django_db
 @override_settings(GOOGLE_OAUTH2_CLIENT_ID="test-google-client")
 def test_google_oauth_saves_provider_avatar_and_profile_exposes_provider():
     client = GoogleOAuthClient(

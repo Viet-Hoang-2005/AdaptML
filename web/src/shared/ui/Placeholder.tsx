@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useModelSelection } from '@/features/catalog/hooks/useModelSelection';
 
-interface PlaceholderProps {
+export interface PlaceholderProps {
   title: string;
   description: string;
   icon: ReactNode;
@@ -9,11 +9,11 @@ interface PlaceholderProps {
   showModelName?: boolean;
 }
 
-export default function Placeholder({ title, description, icon, action, showModelName = true }: PlaceholderProps) {
+export function Placeholder({ title, description, icon, action, showModelName = true }: PlaceholderProps) {
   const { selectedModel } = useModelSelection();
 
   return (
-    <section className="flex-1 rounded-lg border border-dashed border-border bg-surface px-8 py-10">
+    <section className="flex-1 rounded-sm border border-dashed border-border bg-surface px-8 py-10">
       <div className="flex h-full flex-col items-center justify-center text-center">
         <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-foreground">
           {icon}

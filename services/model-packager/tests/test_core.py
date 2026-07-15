@@ -23,7 +23,13 @@ def test_load_pickle_model_falls_back(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize(
     "flavor,suffix,loader_name",
-    [("sklearn", ".pkl", "pickle"), ("xgboost", ".xgb", "xgb"), ("pytorch", ".pt", "torch"), ("keras", ".keras", "keras")],
+    [
+        ("sklearn", ".pkl", "pickle"),
+        ("xgboost", ".xgb", "xgb"),
+        ("pytorch", ".pt", "torch"),
+        ("keras", ".keras", "keras"),
+        ("tensorflow", ".h5", "keras"),
+    ],
 )
 def test_load_model_dispatch(monkeypatch, tmp_path, flavor, suffix, loader_name):
     path = tmp_path / f"model{suffix}"

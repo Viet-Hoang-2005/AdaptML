@@ -4,7 +4,6 @@ import { useState, useMemo } from 'react';
 import type { ModelProject } from '@/features/catalog/types';
 import { Button } from '@/shared/ui/Button';
 import { useModelProjectMutations } from '@/features/catalog/hooks/useModelProjects';
-import type { ModelProjectFormValues } from '@/features/catalog/types';
 import { PageTabs } from '@/shared/ui/PageTabs';
 import { ConfirmModal } from '@/shared/ui/ConfirmModal';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
@@ -35,13 +34,11 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
   const activeTab = tab === 'source' ? '3' : tab === 'deployment' ? '2' : tab === 'status' ? '4' : '1';
   
   const handleTabChange = (newTab: 'information' | 'deployment' | 'source' | 'status') => {
-    navigate(`/dashboard/api-management/${model.id}/${newTab}`);
+    navigate(`/dashboard/management/model/${model.id}/${newTab}`);
   };
 
-  const [editing, setEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { deleteModelProject, deleting } = useModelProjectMutations();
-  const { updateModelProject, updating } = useModelProjectMutations();
 
   const [sourceCodeDirty, setSourceCodeDirty] = useState(false);
   const [referenceDataDirty, setReferenceDataDirty] = useState(false);
@@ -50,13 +47,6 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) => isAnyDirty && currentLocation.pathname !== nextLocation.pathname
   );
-
-  const [form, setForm] = useState<ModelProjectFormValues>({
-    name: model.name || '',
-    description: model.description || '',
-    model_info: model.model_info || '',
-    access_mode: model.access_mode || 'public',
-  });
 
   const zipFile = useMemo(() => {
     if (!model.model_uri) return '-';
@@ -67,34 +57,6 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
       return model.model_uri.split('/').pop() || '-';
     }
   }, [model.model_uri]);
-
-  const isFormDirty = 
-    form.name !== (model.name || '') ||
-    form.description !== (model.description || '') ||
-    form.model_info !== (model.model_info || '') ||
-    form.access_mode !== (model.access_mode || 'public');
-
-  const handleSave = async () => {
-    if (!isFormDirty) return;
-    await updateModelProject({ modelId: model.id, payload: form });
-    setEditing(false);
-  };
-
-  const handleCancelEdit = () => {
-    setForm({
-      name: model.name || '',
-      description: model.description || '',
-      model_info: model.model_info || '',
-      access_mode: model.access_mode || 'public',
-    });
-    setEditing(false);
-  };
-
-  const setField = (field: keyof ModelProjectFormValues, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const readOnlyFieldClass = 'cursor-default hover:border-border focus:border-border';
 
   return (
     <>
@@ -110,7 +72,7 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
       <section className="flex flex-col h-full gap-6">
         <div className="flex flex-col gap-4 border-b border-border md:flex-row md:items-end md:justify-between">
           <div className="mb-2">
-            <Link to="/dashboard/api-management" className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
+            <Link to="/dashboard/management" className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-4 w-4" />
               Back to API Management
             </Link>
@@ -150,19 +112,7 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
         <div className="rounded-lg border border-border bg-surface p-6 lg:p-8 flex flex-col flex-1">
           <div className="flex flex-col flex-1">
             {activeTab === '1' && (
-              <ModelInformationPage 
-                model={model}
-                editing={editing}
-                form={form}
-                isFormDirty={isFormDirty}
-                updating={updating}
-                readOnlyFieldClass={readOnlyFieldClass}
-                handleCancelEdit={handleCancelEdit}
-                handleSave={handleSave}
-                setEditing={setEditing}
-                setField={setField}
-                setForm={setForm}
-              />
+              <ModelInformationPage modelId={model.id} />
             )}
 
             {activeTab === '2' && (

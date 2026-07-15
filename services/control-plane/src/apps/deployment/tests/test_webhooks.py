@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import override_settings
@@ -7,6 +9,7 @@ from rest_framework.test import APIClient
 from apps.catalog.models import ModelProject
 from apps.deployment.models import Build
 from apps.deployment.services import builds as build_service
+from apps.deployment.services import deployments as deployment_service
 from apps.registry.models import ModelVersion
 
 
@@ -60,6 +63,40 @@ def test_build_cancel_is_tenant_scoped(django_capture_on_commit_callbacks, monke
 
     assert accepted.status_code == 202
     assert build.status == "cancelled"
+
+
+@pytest.mark.django_db
+def test_saved_build_is_idempotent_and_deploy_saves_ready_image(django_capture_on_commit_callbacks, monkeypatch):
+    owner = get_user_model().objects.create_user("saved-build-owner@example.com", "password123")
+    project = ModelProject.objects.create(owner=owner, name="saved build")
+    version = ModelVersion.objects.create(project=project, version="1")
+    build = Build.objects.create(version=version, status="ready")
+    enqueued = []
+    def enqueue(deployment_id):
+        enqueued.append(deployment_id)
+        return SimpleNamespace(id="test-task")
+
+    monkeypatch.setattr(deployment_service.execute_deployment, "delay", enqueue)
+    client = APIClient()
+    client.force_authenticate(owner)
+
+    first_save = client.post(f"/api/builds/{build.public_id}/save/")
+    second_save = client.post(f"/api/builds/{build.public_id}/save/")
+    build.refresh_from_db()
+    assert first_save.status_code == 200
+    assert second_save.status_code == 200
+    assert build.is_saved is True
+    assert build.saved_at is not None
+
+    unsaved_build = Build.objects.create(version=version, status="ready")
+    with django_capture_on_commit_callbacks(execute=True):
+        deployed = client.post("/api/deployments/", {"build": str(unsaved_build.public_id)}, format="json")
+    unsaved_build.refresh_from_db()
+
+    assert deployed.status_code == 201
+    assert unsaved_build.is_saved is True
+    assert unsaved_build.saved_at is not None
+    assert enqueued == [str(deployed.data["id"])]
 
 
 @override_settings(BUILD_BACKEND="docker", DEPLOYMENT_BACKEND="argo")

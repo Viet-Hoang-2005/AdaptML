@@ -875,7 +875,7 @@ export default function TrainingJobDetailPage() {
                     setEndpointLogsOpen(true);
                     endpointLogsMutation.mutate(model.id);
                   }}
-                  onOpenApiManagement={(model) => navigate(`/dashboard/api-management/${model.id}`)}
+                  onOpenApiManagement={(model) => navigate(`/dashboard/management/model/${model.id}`)}
                   onTestPrediction={() => navigate('/dashboard/home/model-testing')}
                 />
               </div>

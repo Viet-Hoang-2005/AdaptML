@@ -20,7 +20,6 @@ export default function EditModelModal({
   const [form, setForm] = useState<ModelProjectFormValues>({
     name: model?.name || '',
     description: model?.description || '',
-    model_info: model?.model_info || '',
     access_mode: model?.access_mode || 'public',
   });
 
@@ -46,7 +45,6 @@ export default function EditModelModal({
   const isDirty = 
     form.name !== model.name ||
     form.description !== model.description ||
-    form.model_info !== (model.model_info ?? '') ||
     form.access_mode !== model.access_mode;
 
   const handleSave = () => {
@@ -59,7 +57,6 @@ export default function EditModelModal({
     setForm({
       name: model.name,
       description: model.description,
-      model_info: model.model_info ?? '',
       access_mode: model.access_mode,
     });
     onClose();
@@ -95,13 +92,6 @@ export default function EditModelModal({
                 label="Description"
                 value={form.description}
                 onChange={(v) => setField('description', v)}
-                placeholder=""
-              />
-              <TextArea
-                id="edit-info"
-                label="Model Information"
-                value={form.model_info}
-                onChange={(v) => setField('model_info', v)}
                 placeholder=""
               />
               <div>

@@ -1,5 +1,5 @@
 import { Link, Navigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Briefcase, Camera, User, Lock, LockKeyhole } from 'lucide-react';
+import { ArrowLeft, Camera, User, Lock, LockKeyhole } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AuthCard } from '@/features/auth/components/AuthCard';
 import { Input, InputPassword } from '@/shared/ui/Input';
@@ -36,7 +36,7 @@ export default function CompleteProfilePage() {
   const [avatarModal, setAvatarModal] = useState<AvatarModalState>('closed');
 
   const { values, errors, loading, updateField, handleSubmit } = useForm(
-    { full_name: '', field_of_work: '', password: '', confirmPassword: '' },
+    { full_name: '', password: '', confirmPassword: '' },
     {
       full_name: (value: string) => !value ? t('profile.fullNameRequired') : undefined,
       password: (value: string) => !value ? t('profile.passwordRequired') : value.length < 8 ? t('profile.passwordLength') : undefined,
@@ -108,7 +108,6 @@ export default function CompleteProfilePage() {
       const response = await completeRegistration({
         registration_token: registrationToken,
         full_name: v.full_name,
-        field_of_work: v.field_of_work,
         password: v.password,
         avatar: avatarFile,
       });
@@ -188,41 +187,28 @@ export default function CompleteProfilePage() {
             error={errors.full_name}
             onChange={(e) => updateField('full_name', e.target.value)}
           />
-          <Input
-            id="input-field"
-            name="field_of_work"
-            autoComplete="organization-title"
-            label={t('profile.field')}
-            placeholder={t('profile.fieldPlaceholder')}
-            icon={<Briefcase className="h-4 w-4" />}
-            value={values.field_of_work}
-            onChange={(e) => updateField('field_of_work', e.target.value)}
+          <InputPassword
+            id="input-new-password"
+            name="new-password"
+            autoComplete="new-password"
+            label={t('profile.password')}
+            placeholder={t('profile.passwordPlaceholder')}
+            icon={<Lock className="h-4 w-4" />}
+            value={values.password}
+            error={errors.password}
+            onChange={(e) => updateField('password', e.target.value)}
           />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <InputPassword
-              id="input-new-password"
-              name="new-password"
-              autoComplete="new-password"
-              label={t('profile.password')}
-              placeholder={t('profile.passwordPlaceholder')}
-              icon={<Lock className="h-4 w-4" />}
-              value={values.password}
-              error={errors.password}
-              onChange={(e) => updateField('password', e.target.value)}
-            />
-            <InputPassword
-              id="input-confirm-password"
-              name="confirm-password"
-              autoComplete="new-password"
-              label={t('profile.confirm')}
-              placeholder={t('profile.confirmPlaceholder')}
-              icon={<LockKeyhole className="h-4 w-4" />}
-              value={values.confirmPassword}
-              error={errors.confirmPassword}
-              onChange={(e) => updateField('confirmPassword', e.target.value)}
-            />
-          </div>
+          <InputPassword
+            id="input-confirm-password"
+            name="confirm-password"
+            autoComplete="new-password"
+            label={t('profile.confirm')}
+            placeholder={t('profile.confirmPlaceholder')}
+            icon={<LockKeyhole className="h-4 w-4" />}
+            value={values.confirmPassword}
+            error={errors.confirmPassword}
+            onChange={(e) => updateField('confirmPassword', e.target.value)}
+          />
 
           <Button
             id="btn-create-account"

@@ -43,6 +43,7 @@ class ArgoBuildBackend(_ArgoBackend):
                 "version_id": str(version.public_id),
                 "tenant_id": project.owner.tenant_id,
                 "flavor": version.flavor,
+                "task_type": "TEST_ZIP" if source.metadata.get("artifact_format") == "mlflow_zip" else "BUILD",
                 "requirements_text": version.requirements_snapshot,
                 "source_artifact_name": source.name,
                 "source_download_url": self.storage.presigned_get(source.uri, 14400),

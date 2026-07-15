@@ -5,6 +5,7 @@ from .endpoints import (
     BuildDetailEndpoint,
     BuildListCreateEndpoint,
     BuildLogsEndpoint,
+    BuildSaveEndpoint,
     DeploymentDetailEndpoint,
     DeploymentListCreateEndpoint,
     DeploymentLogsEndpoint,
@@ -17,6 +18,7 @@ build_patterns = [
     path("", BuildListCreateEndpoint.as_view(), name="build-list"),
     path("<uuid:build_id>/", BuildDetailEndpoint.as_view(), name="build-detail"),
     path("<uuid:build_id>/cancel/", BuildCancelEndpoint.as_view(), name="build-cancel"),
+    path("<uuid:build_id>/save/", BuildSaveEndpoint.as_view(), name="build-save"),
     path("<uuid:build_id>/logs/", BuildLogsEndpoint.as_view(), name="build-logs"),
 ]
 deployment_patterns = [

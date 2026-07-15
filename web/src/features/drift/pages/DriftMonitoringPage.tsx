@@ -4,14 +4,14 @@ import { Play, Settings, Trash2, ExternalLink, LineChart, Loader2 } from 'lucide
 import type { ColumnDef } from '@tanstack/react-table';
 import { useTranslation } from 'react-i18next';
 
-import Placeholder from '@/features/catalog/components/ModelPlaceholder';
+import { Placeholder } from '@/shared/ui/Placeholder';
 import { Button } from '@/shared/ui/Button';
 import { PageHeader } from '@/shared/ui/PageHeader';
 import { PageContent } from '@/shared/ui/PageContent';
 import { StepTitle } from '@/shared/ui/StepTitle';
 import { SummaryCard } from '@/shared/ui/SummaryCard';
 import { ConfirmModal } from '@/shared/ui/ConfirmModal';
-import { TerminalLogViewer } from '@/shared/ui/TerminalLogViewer';
+import { TerminalViewer } from '@/shared/ui/TerminalViewer';
 import { DataTable } from '@/shared/ui/DataTable';
 import { Badge } from '@/shared/ui/Badge';
 import { IconButton } from '@/shared/ui/IconButton';
@@ -152,7 +152,7 @@ export default function DriftMonitoringPage() {
 
         <div className="border-t border-border pt-6 space-y-4">
           {activeRunId && (
-            <TerminalLogViewer
+            <TerminalViewer
               key={activeRunId}
               modelId={modelId}
               driftRunId={activeRunId}

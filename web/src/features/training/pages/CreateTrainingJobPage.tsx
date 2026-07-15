@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { trainingQueryKeys } from '@/features/training/queryKeys';
 import { Button } from '@/shared/ui/Button';
-import { TerminalLogViewer } from '@/shared/ui/TerminalLogViewer';
+import { TerminalViewer } from '@/shared/ui/TerminalViewer';
 import { TextEditor } from '@/features/catalog/components/TextEditor';
 import { SummaryCard } from '@/shared/ui/SummaryCard';
 import { ConfirmModal } from '@/shared/ui/ConfirmModal';
@@ -401,7 +401,7 @@ export default function CreateTrainingJobPage() {
               />
             </div>
             <div className="mt-4 flex-1">
-              <TerminalLogViewer 
+              <TerminalViewer 
                 title={t('createJob.logTitle')}
                 placeholder={t('createJob.logPlaceholder')}
                 logsOverride={trainingLogs}

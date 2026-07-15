@@ -2,7 +2,8 @@ export const buildDeployEn = {
   title: 'Management', search: 'Search model by name...', upload: 'Upload model', noModels: 'No models found',
   loading: 'Loading models...', noDescription: 'No description provided.',
   noModelsDescription: 'Upload your first MLflow model package to create a prediction endpoint.', noMatch: 'No models matching "{{query}}"',
-  columns: { index: '#', name: 'Name', description: 'Description', flavor: 'Flavor', access: 'Access', updated: 'Updated', actions: 'Action' },
+  columns: { index: '#', name: 'Name', description: 'Description', flavor: 'Flavor', access: 'Access', status: 'Status', updated: 'Updated', actions: 'Action' },
+  status: { metadata: 'metadata only', imageReady: 'image ready', deployed: 'deployed' },
   buildLogs: 'Build Console', deploymentLogs: 'Deployment Console', deleteTitle: 'Delete model API',
   deleteDescription: 'Delete {{name}}? This action cannot be undone.', deleteConfirm: 'Delete model',
   lifecycle: {

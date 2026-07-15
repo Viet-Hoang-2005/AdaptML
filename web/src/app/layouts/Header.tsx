@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import MLdriftLogo from '@/assets/icons/MLdrift.png';
 import type { ThemeMode } from '@/app/theme/theme';
+import { routes } from '@/app/router/paths';
 import { useTheme } from '@/app/theme/useTheme';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useModelSelection } from '@/features/catalog/hooks/useModelSelection';
@@ -77,7 +78,7 @@ export default function Header({ onOpenNavigation }: { onOpenNavigation: () => v
                 )) : <p className="px-3 py-8 text-center text-sm text-muted-foreground">{t('modelSelector.noMatches')}</p>}
               </div>
               <div className="mt-2 border-t border-border pt-2">
-                <button type="button" onClick={() => { setModelMenuOpen(false); navigate('/dashboard/api-management/upload'); }} className="flex h-10 w-full items-center gap-2 rounded-[6px] px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
+                <button type="button" onClick={() => { setModelMenuOpen(false); navigate(routes.uploadModel); }} className="flex h-10 w-full items-center gap-2 rounded-[6px] px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
                   <Plus className="h-4 w-4" /> {t('actions.uploadModel')}
                 </button>
               </div>
@@ -87,7 +88,7 @@ export default function Header({ onOpenNavigation }: { onOpenNavigation: () => v
       </div>
 
       <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 sm:min-w-40 xl:min-w-48">
-        <IconButton label={t('actions.createModel')} icon={<Plus className="h-5 w-5" />} variant="secondary" onClick={() => navigate('/dashboard/api-management/upload')} className="hidden sm:inline-flex" />
+        <IconButton label={t('actions.createModel')} icon={<Plus className="h-5 w-5" />} variant="secondary" onClick={() => navigate(routes.uploadModel)} className="hidden sm:inline-flex" />
 
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>

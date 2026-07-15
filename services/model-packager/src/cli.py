@@ -364,6 +364,7 @@ COPY model /app/model_artifact
 def run_test_zip_task(model_id: str, webhook_url: str) -> None:
     source_download_url = os.environ.get("SOURCE_DOWNLOAD_URL", "")
     source_artifact_name = os.environ.get("SOURCE_ARTIFACT_NAME", "")
+    flavor = os.environ.get("FLAVOR", "").lower()
     tenant_id = os.environ.get("TENANT_ID", "unknown")
     if not all([source_download_url, source_artifact_name]):
         raise ValueError("Missing presigned download URL for test.")
@@ -391,6 +392,7 @@ def run_test_zip_task(model_id: str, webhook_url: str) -> None:
 
         package_dir = mlmodel_paths[0].parent
         print(f"Found MLmodel at {package_dir.relative_to(extract_dir)}")
+        shutil.copytree(package_dir, workspace / "model", dirs_exist_ok=True)
 
         requirements_text = ""
         req_file = package_dir / "requirements.txt"
@@ -419,7 +421,7 @@ def run_test_zip_task(model_id: str, webhook_url: str) -> None:
 
         preview_tree = build_preview_tree(extract_dir)
         manifest = {
-            "flavor": "advanced_zip",
+            "flavor": flavor,
             "source_type": "manual_upload",
             "source_artifact": artifact_name,
             "package_root": package_dir.name,
@@ -429,7 +431,16 @@ def run_test_zip_task(model_id: str, webhook_url: str) -> None:
         if os.environ.get("BUILD_ENGINE", "").lower() == "kaniko":
             print("Kaniko build engine detected. Preparing build context for TEST_ZIP...")
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
-            base_image = f"{harbor_url}/mlops-paas/machine-learning-serving:latest" if harbor_url else "mlops-paas-machine-learning-serving:latest"
+            is_deep_learning = flavor in ["pytorch", "tensorflow", "keras"]
+            base_image = (
+                f"{harbor_url}/mlops-paas/deep-learning-serving:latest"
+                if harbor_url and is_deep_learning
+                else "mlops-paas-deep-learning-serving:latest"
+                if is_deep_learning
+                else f"{harbor_url}/mlops-paas/machine-learning-serving:latest"
+                if harbor_url
+                else "mlops-paas-machine-learning-serving:latest"
+            )
             dockerfile_content = f"""FROM {base_image}
 USER root
 COPY requirements.txt /tmp/custom_requirements.txt
@@ -450,7 +461,10 @@ COPY model /app/model_artifact
             print("TEST_ZIP context prepared successfully for Kaniko! BUILD_PREPARE_SUCCESS")
             return
         else:
-            build_custom_image(workspace, model_id, tenant_id, requirements_text)
+            if flavor in ["pytorch", "tensorflow", "keras"]:
+                build_bento_image(workspace, model_id, tenant_id, requirements_text)
+            else:
+                build_custom_image(workspace, model_id, tenant_id, requirements_text)
         print("Test and build completed successfully!")
 
         post_webhook(

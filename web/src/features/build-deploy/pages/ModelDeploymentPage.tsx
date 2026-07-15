@@ -1,5 +1,8 @@
 import type { ModelProject } from '@/features/catalog/types';
 import { PackagePreview } from '@/features/build-deploy/components/PackagePreview';
+import { Link } from 'react-router-dom';
+import { Rocket } from 'lucide-react';
+import { Button } from '@/shared/ui/Button';
 
 interface ModelDeploymentPageProps {
   model: ModelProject;
@@ -9,6 +12,15 @@ interface ModelDeploymentPageProps {
 export function ModelDeploymentPage({ model, zipFile }: ModelDeploymentPageProps) {
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-semibold text-foreground">Build from current metadata</p>
+          <p className="mt-1 text-sm text-muted-foreground">Edit metadata without changing the current image, then build a new version when ready.</p>
+        </div>
+        <Link to={`/dashboard/management/model/upload/build-deploy?modelId=${model.id}`}>
+          <Button size="md" icon={<Rocket className="h-4 w-4" />}>Build & Deploy</Button>
+        </Link>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <p className="text-sm font-semibold text-muted-foreground">Flavor</p>
@@ -25,7 +37,6 @@ export function ModelDeploymentPage({ model, zipFile }: ModelDeploymentPageProps
           </div>
         ) : null}
         <div className="md:col-span-2">
-          <p className="text-sm font-semibold text-muted-foreground">Requirements.txt</p>
           <pre className="mt-2 bg-muted p-4 rounded-lg text-sm text-foreground whitespace-pre-wrap font-mono border border-border overflow-x-auto max-h-60">
             {model.requirements_text || '-'}
           </pre>

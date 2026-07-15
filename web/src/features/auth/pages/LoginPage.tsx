@@ -145,7 +145,7 @@ export default function LoginPage() {
 
       <p className="mt-8 text-center text-sm text-muted-foreground">
         {t('login.noAccount')}{' '}
-        <Link to="/signup" className="font-semibold text-foreground underline hover:opacity-60">
+        <Link to="/signup" className="font-semibold text-white underline hover:opacity-60">
           {t('login.signUp')}
         </Link>
       </p>

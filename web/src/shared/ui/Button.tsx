@@ -3,7 +3,6 @@ import type { VariantProps } from 'class-variance-authority';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/shared/lib/cn';
 import { buttonVariants } from './buttonVariants';
-
 export interface ButtonProps
   extends ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {

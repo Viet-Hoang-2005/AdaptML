@@ -15,6 +15,8 @@ class Build(models.Model):
     celery_task_id = models.CharField(max_length=255, blank=True, db_index=True)
     external_build_id = models.CharField(max_length=255, blank=True)
     image_uri = models.CharField(max_length=1024, blank=True)
+    is_saved = models.BooleanField(default=False)
+    saved_at = models.DateTimeField(null=True, blank=True)
     package_uri = models.CharField(max_length=1024, blank=True)
     logs = models.TextField(blank=True)
     error_message = models.TextField(blank=True)

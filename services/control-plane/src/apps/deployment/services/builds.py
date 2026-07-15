@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.deployment.models import Build
@@ -24,4 +25,16 @@ def request_cancel(build):
     build.status = "cancelled"
     build.save(update_fields=["status", "updated_at"])
     transaction.on_commit(lambda: cancel_build.delay(str(build.public_id)))
+    return build
+
+
+def save_build(build):
+    with transaction.atomic():
+        build = Build.objects.select_for_update().get(pk=build.pk)
+        if build.status != "ready":
+            raise ValidationError({"build": "Only a ready build can be saved."})
+        if not build.is_saved:
+            build.is_saved = True
+            build.saved_at = timezone.now()
+            build.save(update_fields=["is_saved", "saved_at", "updated_at"])
     return build

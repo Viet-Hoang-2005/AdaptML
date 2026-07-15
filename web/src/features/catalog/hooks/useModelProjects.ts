@@ -41,7 +41,7 @@ export function useModelProjectMutations() {
     onSuccess: async (model) => {
       await invalidateModels();
       toast.success('MLflow package built and deployed successfully.');
-      navigate(`/dashboard/api-management/${model.id}`);
+      navigate(`/dashboard/management/model/${model.id}`);
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Unable to build MLflow package.'));
@@ -65,7 +65,7 @@ export function useModelProjectMutations() {
     onSuccess: async () => {
       await invalidateModels();
       toast.success('Model API disabled successfully.');
-      navigate('/dashboard/api-management');
+      navigate('/dashboard/management');
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Unable to disable model API.'));

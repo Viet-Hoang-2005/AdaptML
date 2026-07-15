@@ -5,6 +5,8 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ModelProject
+from apps.deployment.models import Build, Deployment
+from apps.registry.models import ModelVersion
 
 
 @pytest.mark.django_db
@@ -38,4 +40,31 @@ def test_duplicate_project_name_returns_conflict_with_clear_message():
             "code": "conflict",
             "detail": "A model project named NIDS already exists.",
         }
+    }
+
+
+@pytest.mark.django_db
+def test_project_list_returns_metadata_image_ready_and_deployed_lifecycle_statuses():
+    owner = get_user_model().objects.create_user("lifecycle-owner@example.com", "password123")
+    metadata_project = ModelProject.objects.create(owner=owner, name="Metadata only")
+    image_project = ModelProject.objects.create(owner=owner, name="Image ready")
+    deployed_project = ModelProject.objects.create(owner=owner, name="Deployed")
+
+    image_version = ModelVersion.objects.create(project=image_project, version="1")
+    Build.objects.create(version=image_version, status="ready")
+
+    deployed_version = ModelVersion.objects.create(project=deployed_project, version="1")
+    deployed_build = Build.objects.create(version=deployed_version, status="ready")
+    Deployment.objects.create(version=deployed_version, build=deployed_build, status="healthy")
+
+    client = APIClient()
+    client.force_authenticate(owner)
+    response = client.get("/api/models/")
+
+    assert response.status_code == 200
+    statuses = {project["name"]: project["lifecycle_status"] for project in response.data["results"]}
+    assert statuses == {
+        metadata_project.name: "metadata",
+        image_project.name: "image_ready",
+        deployed_project.name: "deployed",
     }

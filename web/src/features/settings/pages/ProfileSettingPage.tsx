@@ -334,7 +334,7 @@ export default function ProfileSettingPage() {
             <div className="flex justify-end space-x-3 pt-1">
               <Button
                 id="btn-change-password"
-                variant="primary"
+                variant="secondary"
                 icon={<LockKeyhole className="h-4 w-4" />}
                 onClick={() => setPasswordSendConfirmOpen(true)}
                 disabled={loading}

@@ -60,6 +60,23 @@ class S3Storage:
         bucket, key = self.parse_uri(uri)
         self.client.delete_object(Bucket=bucket, Key=key)
 
+    def copy(self, source_uri, destination_key):
+        source_bucket, source_key = self.parse_uri(source_uri)
+        self.client.copy_object(
+            Bucket=self.bucket,
+            Key=destination_key,
+            CopySource={"Bucket": source_bucket, "Key": source_key},
+        )
+        response = self.client.head_object(Bucket=self.bucket, Key=destination_key)
+        metadata = response.get("Metadata", {})
+        return StoredObject(
+            destination_key,
+            f"s3://{self.bucket}/{destination_key}",
+            metadata.get("sha256", ""),
+            response.get("ContentLength", 0),
+            response.get("ContentType", "application/octet-stream"),
+        )
+
     @staticmethod
     def parse_uri(uri):
         if not uri.startswith("s3://"):

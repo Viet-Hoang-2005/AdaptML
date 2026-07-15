@@ -13,7 +13,7 @@ export const authEn = {
     googleFailed: 'Google sign up failed. Please try again.',
   },
   otp: {
-    title: 'Verify your email', description: "We've sent a 6-digit code to {{email}}", back: 'Back', verify: 'Verify',
+    title: 'Verify your email', description: "We've sent a 6-digit code to {{email}}", back: 'Back to sign up', verify: 'Verify',
     invalid: 'Please enter a valid 6-digit code.', verified: 'Email verified successfully!', expired: 'Invalid or expired OTP. Please try again.',
     missing: "Didn't receive the code?", resendIn: 'Resend in {{seconds}}s', resend: 'Resend code',
     resent: 'A new OTP has been sent to your email.', resendFailed: 'Failed to resend OTP.',
@@ -30,8 +30,7 @@ export const authEn = {
   profile: {
     back: 'Back to sign up', title: 'Complete your profile', registering: 'Registering as {{email}}', avatar: 'Avatar',
     avatarDescription: 'Upload and crop a profile image', fullName: 'Full Name', fullNamePlaceholder: 'Nguyen Van A',
-    field: 'Field of Work', fieldPlaceholder: 'e.g. Machine Learning', password: 'Password', confirm: 'Confirm',
-    passwordPlaceholder: 'At least 8 characters', confirmPlaceholder: 'Re-enter password', submit: 'Create account',
+    password: 'Password', passwordPlaceholder: 'At least 8 characters', confirm: 'Confirm Password', confirmPlaceholder: 'Re-enter your password', submit: 'Create account',
     imageOnly: 'Please select an image file.', imageSize: 'Avatar image must be 5MB or smaller.',
     success: 'Account created successfully!', failed: 'Registration failed. Please try again.', cropFailed: 'Unable to crop avatar. Please try another image.',
     fullNameRequired: 'Full name is required.', passwordRequired: 'Password is required.', passwordLength: 'Password must be at least 8 characters.', mismatch: 'Passwords do not match.',

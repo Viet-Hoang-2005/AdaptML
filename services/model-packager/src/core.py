@@ -56,7 +56,7 @@ def load_model(path: Path, flavor: str) -> Any:
 
         return torch.load(path, map_location="cpu")
 
-    if flavor == "keras":
+    if flavor in {"tensorflow", "keras"}:
         if extension not in {".h5", ".keras"}:
             raise ValueError("Keras flavor requires a .h5 or .keras artifact.")
         try:
@@ -101,7 +101,7 @@ def save_mlflow_model(model: Any, flavor: str, output_dir: Path, requirements: l
         )
         return
 
-    if flavor == "keras":
+    if flavor in {"tensorflow", "keras"}:
         import mlflow.keras
 
         try:

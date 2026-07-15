@@ -16,7 +16,6 @@ export interface CompleteRegistrationRequest {
   registration_token: string;
   full_name: string;
   avatar?: File | null;
-  field_of_work: string;
   password: string;
 }
 

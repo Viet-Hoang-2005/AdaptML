@@ -55,12 +55,23 @@ All UI error messages pass through `getApiErrorMessage`. The normalizer handles 
 
 ## Runtime logs
 
-`src/shared/api/runtimeLogs.ts` normalizes log batches from build, deployment, training, and drift endpoints into `RuntimeLogBatch`. `TerminalLogViewer` consumes this adapter and accepts callbacks for feature-specific result lookup, keeping shared UI independent from domain APIs.
+`src/shared/api/runtimeLogs.ts` normalizes log batches from build, deployment, training, and drift endpoints into `RuntimeLogBatch`. `TerminalViewer` consumes this adapter and accepts callbacks for feature-specific result lookup, keeping shared UI independent from domain APIs.
 
 Runtime output and lifecycle state have different authority:
 
 - Redis-backed logs provide incremental console output.
 - The Control Plane database is authoritative for pending/running/completed/failed state.
+
+## Manual upload lifecycle
+
+Manual model upload uses two route coordinators rather than a multi-page wizard:
+
+- `/dashboard/management/model/upload/metadata` saves mutable project metadata, the primary artifact, optional registry attachments, workspace source/data, and requirements.
+- `/dashboard/management/model/upload/build-deploy?modelId=<uuid>` snapshots the saved metadata revision into an immutable registry version, builds its image, and streams build/deployment logs through `TerminalViewer`.
+
+The Metadata page validates model name, flavor, and primary artifact before Save or Continue. The artifact format is explicit: raw uploads are limited to the extensions supported by the selected flavor and may use separate label/metrics attachments. A model package upload accepts one `.zip` containing an `MLmodel` file and all package metadata; it does not accept separate artifact attachments. MLflow ZIP is not a separate route.
+
+The Control Plane owns the state transitions. Metadata edits increment a draft revision but do not replace a previous image. The first build of a revision creates registry version `1`; a rebuild of the same revision reuses that version, while a changed revision creates the next version. A ready image may be explicitly saved for later, or deployed immediately. Immediate deployment atomically marks the ready build as saved before creating the deployment.
 
 ## Routing and bundles
 

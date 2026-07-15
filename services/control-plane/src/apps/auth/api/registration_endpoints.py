@@ -59,7 +59,6 @@ class CompleteRegistrationEndpoint(APIView):
             email=payload["email"],
             password=password,
             full_name=str(request.data.get("full_name", "")),
-            field_of_work=str(request.data.get("field_of_work", "")),
         )
         avatar = request.FILES.get("avatar")
         if avatar:

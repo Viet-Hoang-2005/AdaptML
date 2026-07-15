@@ -43,8 +43,9 @@ class DockerBuildBackend:
         build.package_uri = package_uri
         build.save(update_fields=["package_uri", "updated_at"])
         webhook = f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/webhooks/builds/{build.public_id}/"
+        task_type = "TEST_ZIP" if source.metadata.get("artifact_format") == "mlflow_zip" else "BUILD"
         environment = {
-            "TASK_TYPE": "BUILD",
+            "TASK_TYPE": task_type,
             "TENANT_ID": project.owner.tenant_id,
             "MODEL_ID": str(version.public_id),
             "FLAVOR": version.flavor,

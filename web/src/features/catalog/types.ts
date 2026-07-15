@@ -21,7 +21,9 @@ export type ModelProjectStatus =
 export type ModelBuildStatus = 'not_started' | 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled' | 'error';
 export type ModelEndpointStatus = 'not_deployed' | 'deploying' | 'healthy' | 'unhealthy' | 'deploy_failed' | 'stopped';
 export type ModelFlavor = 'sklearn' | 'xgboost' | 'pytorch' | 'tensorflow';
+export type ModelArtifactFormat = 'raw' | 'mlflow_zip';
 export type ModelSourceType = 'manual_upload' | 'training_job';
+export type ModelLifecycleStatus = 'metadata' | 'image_ready' | 'deployed';
 
 export interface ModelProject {
   id: ResourceId;
@@ -32,7 +34,6 @@ export interface ModelProject {
   requirements_text: string;
   is_active: boolean;
   version?: string;
-  model_info?: string;
   source_type?: ModelSourceType;
   source_training_job?: ResourceId | null;
   source_artifact_uri?: string;
@@ -53,6 +54,7 @@ export interface ModelProject {
   package_manifest?: Record<string, unknown>;
   package_preview_tree?: string[];
   build_status?: ModelBuildStatus;
+  lifecycle_status?: ModelLifecycleStatus;
   build_id?: ResourceId;
   build_error?: string;
   deployment_id?: ResourceId;
@@ -77,6 +79,7 @@ export interface ModelVersion {
   source_job_id: ResourceId | null;
   requirements_snapshot: string;
   flavor: ModelFlavor | '';
+  source_config_revision?: number | null;
   stage: RegistryStage;
   deployability: RegistryDeployabilityStatus;
   deployability_reason: string;
@@ -93,6 +96,8 @@ export interface Build {
   backend: 'docker' | 'argo';
   status: 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled';
   image_uri: string;
+  is_saved: boolean;
+  saved_at: string | null;
   package_uri: string;
   logs: string;
   error_message: string;
@@ -119,7 +124,6 @@ export interface Endpoint {
 export interface ModelProjectFormValues {
   name: string;
   description: string;
-  model_info: string;
   access_mode: ModelAccessMode;
   version?: string;
   artifact?: File | null;
@@ -129,6 +133,7 @@ export interface ModelProjectFormValues {
 
 export interface ModelBuildFormValues extends ModelProjectFormValues {
   source_artifact: File | null;
+  artifact_format: ModelArtifactFormat;
   label_mapping_file?: File | null;
   metrics_file?: File | null;
   params_file?: File | null;
@@ -138,6 +143,36 @@ export interface ModelBuildFormValues extends ModelProjectFormValues {
   flavor: ModelFlavor;
   requirements_text: string;
   requirements_file?: File | null;
+}
+
+export type ModelBuildInputAssetKind =
+  | 'source_artifact'
+  | 'label_mapping'
+  | 'metrics'
+  | 'params'
+  | 'model_insights'
+  | 'feature_importance'
+  | 'input_schema';
+
+export interface ModelBuildInputAsset {
+  kind: ModelBuildInputAssetKind;
+  name: string;
+  checksum: string;
+  size_bytes: number;
+  content_type: string;
+  updated_at: string;
+}
+
+export interface ModelBuildMetadata {
+  id: ResourceId;
+  name: string;
+  description: string;
+  access_mode: ModelAccessMode;
+  requirements_text: string;
+  flavor: ModelFlavor;
+  artifact_format: ModelArtifactFormat;
+  revision: number;
+  assets: ModelBuildInputAsset[];
 }
 
 export interface ModelEndpointLogsResponse {

@@ -25,7 +25,6 @@ export const completeRegistration = async (payload: CompleteRegistrationRequest)
   const formData = new FormData();
   formData.append('registration_token', payload.registration_token);
   formData.append('full_name', payload.full_name);
-  formData.append('field_of_work', payload.field_of_work);
   formData.append('password', payload.password);
   if (payload.avatar) formData.append('avatar', payload.avatar);
   return (await apiClient.post<AuthResponse>('/auth/register/complete/', formData, {

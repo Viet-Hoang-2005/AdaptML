@@ -18,7 +18,7 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
       matchPath("/dashboard/model-training/:modelId/job/:jobId", location.pathname) ||
       matchPath("/dashboard/model-training/:modelId/new", location.pathname) ||
       matchPath("/dashboard/model-training/:modelId", location.pathname) ||
-      matchPath("/dashboard/api-management/:modelId/:tab", location.pathname) ||
+      matchPath("/dashboard/management/model/:modelId/:tab", location.pathname) ||
       matchPath("/dashboard/model-evolution/:modelId", location.pathname);
     return routeMatch?.params.modelId === 'upload' ? null : routeMatch;
   }, [location.pathname]);

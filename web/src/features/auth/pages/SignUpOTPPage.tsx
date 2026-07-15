@@ -49,7 +49,7 @@ export default function SignUpOTPPage() {
     try {
       await requestOTP({ email });
       toast.success(t('otp.resent'));
-      resetCountdown(); // Bắt đầu lại bộ đếm 60s
+      resetCountdown();
     } catch (error) {
       toast.error(getApiErrorMessage(error, t('otp.resendFailed')));
     }
@@ -67,28 +67,25 @@ export default function SignUpOTPPage() {
 
   return (
     <AuthCard>
-      <div className="max-w-sm w-full mx-auto text-center">
+      <div className="flex flex-col max-w-sm w-full mx-auto text-center gap-8">
         <Link
           to="/signup"
-          className="mb-8 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground
                     font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span className="leading-none">{t('otp.back')}</span>
         </Link>
 
-        <div className="mx-auto mb-2 rounded-2xl flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center gap-3">
           <Mail className="h-8 w-8 text-foreground" />
+          <h2 className="text-2xl font-bold text-foreground">{t('otp.title')}</h2>
+          <p className="text-sm text-muted-foreground">
+            {t('otp.description', { email })}
+          </p>
         </div>
 
-        <h2 className="mb-2 text-2xl font-bold text-foreground">{t('otp.title')}</h2>
-        <p className="mb-8 text-sm text-muted-foreground">
-          {t('otp.description', { email })}
-        </p>
-
-        <div className="mb-6">
-          <OTPInput onComplete={handleOTPComplete} disabled={loading} />
-        </div>
+        <OTPInput onComplete={handleOTPComplete} disabled={loading} />
 
         <Button
           id="btn-verify-otp"
@@ -100,7 +97,7 @@ export default function SignUpOTPPage() {
           {t('otp.verify')}
         </Button>
 
-        <p className="mt-6 text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t('otp.missing')}{' '}
           {isRunning ? (
             <span className="font-semibold text-muted-foreground">
@@ -109,7 +106,7 @@ export default function SignUpOTPPage() {
           ) : (
             <button
               onClick={handleResend}
-              className="cursor-pointer font-semibold text-foreground hover:opacity-60"
+              className="cursor-pointer font-semibold text-white hover:opacity-60"
             >
               {t('otp.resend')}
             </button>

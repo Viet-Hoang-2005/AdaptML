@@ -21,6 +21,7 @@ class ModelVersion(models.Model):
     description = models.TextField(blank=True)
     requirements_snapshot = models.TextField(blank=True)
     flavor = models.CharField(max_length=80, blank=True)
+    source_config_revision = models.PositiveIntegerField(null=True, blank=True)
     stage = models.CharField(max_length=20, choices=STAGES, default="none")
     deployability = models.CharField(max_length=30, choices=DEPLOYABILITY, default="unknown")
     deployability_reason = models.TextField(blank=True)
@@ -45,6 +46,11 @@ class ModelArtifact(models.Model):
         ("label_mapping", "Label Mapping"),
         ("mlflow", "MLflow"),
         ("image", "Image"),
+        ("metrics", "Metrics"),
+        ("params", "Parameters"),
+        ("model_insights", "Model Insights"),
+        ("feature_importance", "Feature Importance"),
+        ("input_schema", "Input Schema"),
     )
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     version = models.ForeignKey(ModelVersion, on_delete=models.CASCADE, related_name="artifacts")

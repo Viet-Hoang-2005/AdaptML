@@ -27,6 +27,7 @@ spec:
           - name: version_id
           - name: tenant_id
           - name: flavor
+          - name: task_type
           - name: requirements_text
           - name: source_artifact_name
           - name: source_download_url
@@ -40,6 +41,7 @@ spec:
                 - {name: version_id, value: "{{inputs.parameters.version_id}}"}
                 - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
                 - {name: flavor, value: "{{inputs.parameters.flavor}}"}
+                - {name: task_type, value: "{{inputs.parameters.task_type}}"}
                 - {name: requirements_text, value: "{{inputs.parameters.requirements_text}}"}
                 - {name: source_artifact_name, value: "{{inputs.parameters.source_artifact_name}}"}
                 - {name: source_download_url, value: "{{inputs.parameters.source_download_url}}"}
@@ -65,6 +67,7 @@ spec:
           - {name: version_id}
           - {name: tenant_id}
           - {name: flavor}
+          - {name: task_type}
           - {name: requirements_text}
           - {name: source_artifact_name}
           - {name: source_download_url}
@@ -78,7 +81,7 @@ spec:
         env:
           - {name: BUILD_ENGINE, value: kaniko}
           - {name: BUILD_WORKSPACE_DIR, value: /workspace}
-          - {name: TASK_TYPE, value: BUILD}
+          - {name: TASK_TYPE, value: "{{inputs.parameters.task_type}}"}
           - {name: MODEL_ID, value: "{{inputs.parameters.version_id}}"}
           - {name: TENANT_ID, value: "{{inputs.parameters.tenant_id}}"}
           - {name: FLAVOR, value: "{{inputs.parameters.flavor}}"}

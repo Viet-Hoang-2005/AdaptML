@@ -52,6 +52,8 @@ spec:
                       value: ""
                     - name: flavor
                       value: ""
+                    - name: task_type
+                      value: ""
                     - name: requirements_text
                       value: ""
                     - name: source_artifact_name
@@ -81,24 +83,28 @@ spec:
               dest: spec.arguments.parameters.3.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.requirements_text
+                dataKey: body.task_type
               dest: spec.arguments.parameters.4.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_artifact_name
+                dataKey: body.requirements_text
               dest: spec.arguments.parameters.5.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_download_url
+                dataKey: body.source_artifact_name
               dest: spec.arguments.parameters.6.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.output_upload_url
+                dataKey: body.source_download_url
               dest: spec.arguments.parameters.7.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.control_plane_webhook_url
+                dataKey: body.output_upload_url
               dest: spec.arguments.parameters.8.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.control_plane_webhook_url
+              dest: spec.arguments.parameters.9.value
     - template:
         name: deploy-workflow-trigger
         conditions: "deploy-dep"

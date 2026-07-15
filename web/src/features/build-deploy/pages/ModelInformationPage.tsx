@@ -1,119 +1,97 @@
-import { Edit3 } from 'lucide-react';
-import type { ModelProject, ModelProjectFormValues } from '@/features/catalog/types';
+import { Edit3, Save } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+import {
+  getModelBuildMetadata,
+  updateModelBuildMetadata,
+} from '@/features/build-deploy/api/buildDeployApi';
+import { ModelMetadataFields } from '@/features/build-deploy/components/ModelMetadataFields';
+import type { ModelBuildFormValues, ModelBuildMetadata } from '@/features/catalog/types';
+import { getApiErrorMessage } from '@/shared/api/errors';
 import { Button } from '@/shared/ui/Button';
-import { Input } from '@/shared/ui/Input';
-import { AccessModePicker } from '@/features/catalog/components/AccessModePicker';
+import { toast } from '@/shared/ui/toastStore';
 
-interface ModelInformationPageProps {
-  model: ModelProject;
-  editing: boolean;
-  form: ModelProjectFormValues;
-  isFormDirty: boolean;
-  updating: boolean;
-  readOnlyFieldClass: string;
-  handleCancelEdit: () => void;
-  handleSave: () => void;
-  setEditing: (editing: boolean) => void;
-  setField: (field: keyof ModelProjectFormValues, value: string) => void;
-  setForm: (form: ModelProjectFormValues) => void;
-}
+const toForm = (metadata: ModelBuildMetadata): ModelBuildFormValues => ({
+  name: metadata.name,
+  description: metadata.description,
+  access_mode: metadata.access_mode,
+  source_artifact: null,
+  artifact_format: metadata.artifact_format,
+  flavor: metadata.flavor,
+  requirements_text: metadata.requirements_text,
+});
 
-export function ModelInformationPage({
-  model,
-  editing,
-  form,
-  isFormDirty,
-  updating,
-  readOnlyFieldClass,
-  handleCancelEdit,
-  handleSave,
-  setEditing,
-  setField,
-  setForm,
-}: ModelInformationPageProps) {
+export function ModelInformationPage({ modelId }: { modelId: string }) {
+  const [metadata, setMetadata] = useState<ModelBuildMetadata | null>(null);
+  const [form, setForm] = useState<ModelBuildFormValues | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getModelBuildMetadata(modelId)
+      .then((result) => {
+        setMetadata(result);
+        setForm(toForm(result));
+      })
+      .catch(() => {
+        setMetadata(null);
+        setForm(null);
+      });
+  }, [modelId]);
+
+  if (!metadata || !form) {
+    return <p className="text-sm text-muted-foreground">Build metadata is available after saving a manual model upload.</p>;
+  }
+
+  const setField = (field: keyof ModelBuildFormValues, value: string | File | null) =>
+    setForm((current) => current ? { ...current, [field]: value } : current);
+
+  const readRequirementsFile = async (file: File | null) => {
+    setField('requirements_file', file);
+    if (file) setField('requirements_text', await file.text());
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const result = await updateModelBuildMetadata(modelId, form);
+      setMetadata(result);
+      setForm(toForm(result));
+      setEditing(false);
+      toast.success('Model metadata saved. Build a new image when you are ready to apply it.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to save model metadata.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full space-y-6">
-      <div className="flex justify-end mb-2">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Metadata revision r{metadata.revision}. Saving changes does not rebuild the current image.</p>
         {editing ? (
           <div className="flex gap-2">
-            <Button variant="secondary" size="md" onClick={handleCancelEdit}>
-              Cancel
-            </Button>
-            <Button
-              size="md"
-              loading={updating}
-              disabled={!isFormDirty}
-              onClick={handleSave}
-            >
-              Save
-            </Button>
+            <Button variant="secondary" size="md" onClick={() => { setForm(toForm(metadata)); setEditing(false); }}>Cancel</Button>
+            <Button size="md" icon={<Save className="h-4 w-4" />} loading={saving} onClick={() => void save()}>Save</Button>
           </div>
-        ) : (
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => {
-              setForm({
-                name: model.name || '',
-                description: model.description || '',
-                model_info: model.model_info || '',
-                access_mode: model.access_mode || 'public',
-              });
-              setEditing(true);
-            }}
-          >
-            <Edit3 className="h-4 w-4" /> Edit
-          </Button>
-        )}
+        ) : <Button variant="secondary" size="md" icon={<Edit3 className="h-4 w-4" />} onClick={() => setEditing(true)}>Edit</Button>}
       </div>
-      
-      <div className="flex flex-col flex-1 gap-5">
-        <Input
-          id="model-name"
-          label="Model Name"
-          value={editing ? form.name : (model.name || '')}
-          onChange={(e) => setField('name', e.target.value)}
-          readOnly={!editing}
-          tabIndex={!editing ? -1 : undefined}
-          className={!editing ? readOnlyFieldClass : ''}
-        />
-        
-        <label htmlFor="model-desc" className="flex flex-col gap-2 text-sm font-medium text-foreground shrink-0">
-          Description
-          <textarea
-            id="model-desc"
-            className={`text-sm text-foreground placeholder:text-muted-foreground font-normal placeholder:font-normal h-25 w-full resize-y rounded-2xl border border-border bg-surface py-3 px-4 outline-none transition-colors duration-200 disabled:bg-muted disabled:text-muted-foreground ${
-              editing ? 'hover:border-primary focus:border-primary' : 'cursor-default hover:border-border focus:border-border'
-            }`}
-            value={editing ? form.description : (model.description || '')}
-            onChange={(e) => setField('description', e.target.value)}
-            readOnly={!editing}
-            tabIndex={!editing ? -1 : undefined}
-          />
-        </label>
-
-        <label htmlFor="model-info" className="flex flex-col flex-1 gap-2 text-sm font-medium text-foreground">
-          Model Information
-          <textarea
-            id="model-info"
-            className={`text-sm text-foreground placeholder:text-muted-foreground font-normal placeholder:font-normal flex-1 w-full resize-y rounded-2xl border border-border bg-surface py-3 px-4 outline-none transition-colors duration-200 disabled:bg-muted disabled:text-muted-foreground ${
-              editing ? 'hover:border-primary focus:border-primary' : 'cursor-default hover:border-border focus:border-border'
-            }`}
-            value={editing ? form.model_info : (model.model_info || '')}
-            onChange={(e) => setField('model_info', e.target.value)}
-            readOnly={!editing}
-            tabIndex={!editing ? -1 : undefined}
-          />
-        </label>
-
-        <div className="shrink-0">
-          <label className="text-sm font-medium text-foreground mb-2 block">Access Mode</label>
-          <AccessModePicker
-            value={editing ? form.access_mode : (model.access_mode || 'public')}
-            onChange={(v) => editing && setField('access_mode', v)}
-          />
+      {editing ? (
+        <ModelMetadataFields form={form} assets={metadata.assets} setField={setField} onRequirementsFile={readRequirementsFile} />
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2">
+          <Info label="Model Name" value={metadata.name} />
+          <Info label="Flavor" value={metadata.flavor} />
+          <Info label="Access mode" value={metadata.access_mode} />
+          <Info label="Artifact" value={metadata.assets.find((asset) => asset.kind === 'source_artifact')?.name ?? '-'} />
+          <Info label="Description" value={metadata.description || '-'} />
         </div>
-      </div>
+      )}
     </div>
   );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return <div><p className="text-sm font-semibold text-muted-foreground">{label}</p><p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{value}</p></div>;
 }

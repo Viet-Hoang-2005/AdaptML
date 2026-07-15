@@ -26,7 +26,7 @@ function InlineTreeInput({ onCommit }: { onCommit: (value: string) => void }) {
     <input
       autoFocus
       aria-label={t('sourceEditor.fileFolderName')}
-      className="min-w-0 flex-1 rounded border border-[var(--color-primary)] bg-[var(--color-surface)] px-1 py-0.5 text-sm text-[var(--color-foreground)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+      className="min-w-0 flex-1 rounded border border-(--color-primary) bg-(--color-surface) px-1 py-0.5 text-sm text-(--color-foreground) outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring)"
       value={value}
       onChange={(event) => setValue(event.target.value)}
       onKeyDown={(event) => {
@@ -82,10 +82,10 @@ export function SourceTree({
                   onSelect(node.path);
                   toggleFolder(node.path);
                 }}
-                className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] ${
+                className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-(--color-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring) ${
                   isSelected
-                    ? 'bg-[var(--color-primary-subtle)] font-medium text-[var(--color-primary)]'
-                    : 'text-[var(--color-muted-foreground)]'
+                    ? 'bg-(--color-primary-subtle) font-medium text-(--color-primary)'
+                    : 'text-(--color-muted-foreground)'
                 }`}
                 style={{ paddingLeft: `${level * 12 + 8}px` }}
                 title={node.path}
@@ -95,7 +95,7 @@ export function SourceTree({
                 ) : (
                   <ChevronRight className="h-4 w-4 shrink-0" />
                 )}
-                <FolderIcon className="h-4 w-4 shrink-0 text-[var(--color-primary)]" fill="currentColor" />
+                <FolderIcon className="h-4 w-4 shrink-0 text-(--color-primary)" fill="currentColor" />
                 <span className="min-w-0 flex-1 truncate">{node.name}</span>
               </button>
               {isExpanded ? (
@@ -122,25 +122,25 @@ export function SourceTree({
             <button
               type="button"
               onClick={() => onSelect(node.path)}
-              className={`flex w-full items-center gap-1.5 truncate rounded px-2 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] ${
+              className={`flex w-full items-center gap-1.5 truncate rounded px-2 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring) ${
                 isSelected
-                  ? 'bg-[var(--color-primary-subtle)] font-medium text-[var(--color-primary)]'
-                  : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
+                  ? 'bg-(--color-primary-subtle) font-medium text-(--color-primary)'
+                  : 'text-(--color-muted-foreground) hover:bg-(--color-muted)'
               }`}
               style={{ paddingLeft: `${level * 12 + 30}px` }}
               title={node.path}
             >
               {node.name.endsWith('.csv') ? (
-                <Database className="h-4 w-4 shrink-0 text-[var(--color-success)]" />
+                <Database className="h-4 w-4 shrink-0 text-(--color-success)" />
               ) : (
-                <FileCode2 className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+                <FileCode2 className="h-4 w-4 shrink-0 text-(--color-primary)" />
               )}
               <span className="min-w-0 flex-1 truncate">
                 {node.name}
                 {isModified ? ' *' : ''}
               </span>
               {currentEntryPoint === node.path ? (
-                <Play className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
+                <Play className="h-3 w-3 shrink-0 text-(--color-primary)" />
               ) : null}
             </button>
           </li>
@@ -158,10 +158,10 @@ export function SourceTree({
             {creatingFile.type === 'folder' ? (
               <>
                 <ChevronRight className="h-4 w-4 shrink-0 text-transparent" />
-                <FolderIcon className="h-4 w-4 shrink-0 text-[var(--color-primary)]" fill="currentColor" />
+                <FolderIcon className="h-4 w-4 shrink-0 text-(--color-primary)" fill="currentColor" />
               </>
             ) : (
-              <FileCode2 className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+              <FileCode2 className="h-4 w-4 shrink-0 text-(--color-primary)" />
             )}
             <InlineTreeInput onCommit={onFinishCreating} />
           </div>

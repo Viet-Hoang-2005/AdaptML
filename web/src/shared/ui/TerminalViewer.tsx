@@ -7,7 +7,7 @@ import { toast } from './toastStore';
 
 type LogKind = 'build' | 'deployment' | 'training' | 'drift';
 
-export function TerminalLogViewer({
+export function TerminalViewer({
   modelId,
   buildId,
   deploymentId,
