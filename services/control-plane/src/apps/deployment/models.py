@@ -6,18 +6,22 @@ from django.db import models
 class Build(models.Model):
     STATUSES = tuple(
         (value, value.replace("_", " ").title())
-        for value in ("pending", "queued", "building", "ready", "failed", "cancelled", "discarded")
+        for value in ("pending", "queued", "building", "ready", "failed", "cancelled")
     )
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    version = models.ForeignKey("registry.ModelVersion", on_delete=models.CASCADE, related_name="builds")
+    project = models.ForeignKey("catalog.ModelProject", on_delete=models.CASCADE, related_name="builds")
+    version = models.ForeignKey(
+        "registry.ModelVersion", on_delete=models.CASCADE, related_name="builds", null=True, blank=True
+    )
+    flavor = models.CharField(max_length=80)
+    artifact_format = models.CharField(max_length=20, default="raw")
+    requirements_snapshot = models.TextField(blank=True)
     backend = models.CharField(max_length=30, default="docker")
     status = models.CharField(max_length=30, choices=STATUSES, default="pending")
     celery_task_id = models.CharField(max_length=255, blank=True, db_index=True)
     external_build_id = models.CharField(max_length=255, blank=True)
     image_uri = models.CharField(max_length=1024, blank=True)
-    is_saved = models.BooleanField(default=False)
-    saved_at = models.DateTimeField(null=True, blank=True)
-    discarded_at = models.DateTimeField(null=True, blank=True)
+    image_digest = models.CharField(max_length=255, blank=True)
     package_uri = models.CharField(max_length=1024, blank=True)
     logs = models.TextField(blank=True)
     error_message = models.TextField(blank=True)
@@ -28,10 +32,39 @@ class Build(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["version", "status"], name="build_version_status_idx")]
+        indexes = [models.Index(fields=["project", "status"], name="build_project_status_idx")]
 
     def __str__(self):
         return f"Build {self.public_id} ({self.status})"
+
+
+class BuildInputAsset(models.Model):
+    KINDS = (
+        ("source_artifact", "Source Artifact"),
+        ("label_mapping", "Label Mapping"),
+        ("metrics", "Metrics"),
+        ("params", "Parameters"),
+        ("model_insights", "Model Insights"),
+        ("feature_importance", "Feature Importance"),
+        ("input_schema", "Input Schema"),
+    )
+
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    build = models.ForeignKey(Build, on_delete=models.CASCADE, related_name="input_assets")
+    kind = models.CharField(max_length=40, choices=KINDS)
+    name = models.CharField(max_length=255)
+    s3_uri = models.CharField(max_length=1024, blank=True)
+    checksum = models.CharField(max_length=128, blank=True)
+    size_bytes = models.PositiveBigIntegerField(default=0)
+    content_type = models.CharField(max_length=160, blank=True)
+    purged_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["build", "kind"], name="build_input_kind_unique")]
+
+    def __str__(self):
+        return f"{self.build.public_id}/{self.kind}/{self.name}"
 
 
 class Deployment(models.Model):

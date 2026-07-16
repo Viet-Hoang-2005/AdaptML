@@ -6,7 +6,7 @@ from apps.training.models import TrainingJob
 
 
 def model_observability(project, prometheus=None):
-    latest_build = Build.objects.filter(version__project=project).order_by("-created_at").first()
+    latest_build = Build.objects.filter(project=project).order_by("-created_at").first()
     latest_deployment = Deployment.objects.filter(version__project=project).order_by("-created_at").first()
     endpoint = Endpoint.objects.filter(deployment__version__project=project).order_by("-created_at").first()
     latest_training = TrainingJob.objects.filter(project=project).order_by("-created_at").first()

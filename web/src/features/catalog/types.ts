@@ -18,7 +18,7 @@ export type ModelProjectStatus =
   | 'archived'
   | 'error'
   | 'disabled';
-export type ModelBuildStatus = 'not_started' | 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled' | 'discarded' | 'error';
+export type ModelBuildStatus = 'not_started' | 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled' | 'error';
 export type ModelEndpointStatus = 'not_deployed' | 'deploying' | 'healthy' | 'unhealthy' | 'deploy_failed' | 'stopped';
 export type ModelFlavor = 'sklearn' | 'xgboost' | 'pytorch' | 'tensorflow';
 export type ModelArtifactFormat = 'raw' | 'mlflow_zip';
@@ -31,8 +31,6 @@ export interface ModelProject {
   name: string;
   description: string;
   access_mode: ModelAccessMode;
-  model_type: 'ml' | 'dl';
-  requirements_text: string;
   is_active: boolean;
   deletion_state?: ModelDeletionState;
   deletion_error?: string;
@@ -69,6 +67,8 @@ export interface ModelProject {
   metadata_warnings?: string[];
   source_code_file?: string | null;
   reference_data_file?: string | null;
+  source_code?: ProjectAssetSummary | null;
+  reference_data?: ProjectAssetSummary | null;
   created_at: string;
   updated_at: string;
 }
@@ -79,11 +79,9 @@ export interface ModelVersion {
   id: ResourceId;
   project_id: ResourceId;
   version: string;
-  description: string;
   source_job_id: ResourceId | null;
   requirements_snapshot: string;
   flavor: ModelFlavor | '';
-  source_config_revision?: number | null;
   stage: RegistryStage;
   deployability: RegistryDeployabilityStatus;
   deployability_reason: string;
@@ -96,14 +94,18 @@ export interface ModelVersion {
 
 export interface Build {
   id: ResourceId;
-  version_id: ResourceId;
+  project_id: ResourceId;
+  version_id: ResourceId | null;
+  version_number: string | null;
+  flavor: ModelFlavor;
+  artifact_format: ModelArtifactFormat;
+  requirements_snapshot: string;
   backend: 'docker' | 'argo';
-  status: 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled' | 'discarded';
+  status: 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled';
   image_uri: string;
-  is_saved: boolean;
-  saved_at: string | null;
-  discarded_at: string | null;
+  image_digest: string;
   package_uri: string;
+  input_assets: BuildInputAssetSummary[];
   logs: string;
   error_message: string;
 }
@@ -136,7 +138,23 @@ export interface ModelProjectFormValues {
   reference_data_file?: File | null;
 }
 
-export interface ModelBuildFormValues extends ModelProjectFormValues {
+export interface ProjectAssetSummary {
+  name: string;
+  download_url: string;
+  checksum: string;
+  size_bytes: number;
+  content_type: string;
+}
+
+export interface ProjectMetadataForm {
+  name: string;
+  description: string;
+  access_mode: ModelAccessMode;
+  source_code_file: File | null;
+  reference_data_file: File | null;
+}
+
+export interface BuildInputForm {
   source_artifact: File | null;
   artifact_format: ModelArtifactFormat;
   label_mapping_file?: File | null;
@@ -150,6 +168,8 @@ export interface ModelBuildFormValues extends ModelProjectFormValues {
   requirements_file?: File | null;
 }
 
+export type ModelBuildFormValues = ProjectMetadataForm & BuildInputForm;
+
 export type ModelBuildInputAssetKind =
   | 'source_artifact'
   | 'label_mapping'
@@ -159,25 +179,14 @@ export type ModelBuildInputAssetKind =
   | 'feature_importance'
   | 'input_schema';
 
-export interface ModelBuildInputAsset {
+export interface BuildInputAssetSummary {
+  id: ResourceId;
   kind: ModelBuildInputAssetKind;
   name: string;
   checksum: string;
   size_bytes: number;
   content_type: string;
-  updated_at: string;
-}
-
-export interface ModelBuildMetadata {
-  id: ResourceId;
-  name: string;
-  description: string;
-  access_mode: ModelAccessMode;
-  requirements_text: string;
-  flavor: ModelFlavor;
-  artifact_format: ModelArtifactFormat;
-  revision: number;
-  assets: ModelBuildInputAsset[];
+  purged_at: string | null;
 }
 
 export interface ModelEndpointLogsResponse {

@@ -17,11 +17,15 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ('flavor', models.CharField(max_length=80)),
+                ('artifact_format', models.CharField(default='raw', max_length=20)),
+                ('requirements_snapshot', models.TextField(blank=True)),
                 ('backend', models.CharField(default='docker', max_length=30)),
                 ('status', models.CharField(choices=[('pending', 'Pending'), ('queued', 'Queued'), ('building', 'Building'), ('ready', 'Ready'), ('failed', 'Failed'), ('cancelled', 'Cancelled')], default='pending', max_length=30)),
                 ('celery_task_id', models.CharField(blank=True, db_index=True, max_length=255)),
                 ('external_build_id', models.CharField(blank=True, max_length=255)),
                 ('image_uri', models.CharField(blank=True, max_length=1024)),
+                ('image_digest', models.CharField(blank=True, max_length=255)),
                 ('package_uri', models.CharField(blank=True, max_length=1024)),
                 ('logs', models.TextField(blank=True)),
                 ('error_message', models.TextField(blank=True)),
@@ -33,6 +37,21 @@ class Migration(migrations.Migration):
             options={
                 'ordering': ['-created_at'],
             },
+        ),
+        migrations.CreateModel(
+            name='BuildInputAsset',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ('kind', models.CharField(choices=[('source_artifact', 'Source Artifact'), ('label_mapping', 'Label Mapping'), ('metrics', 'Metrics'), ('params', 'Parameters'), ('model_insights', 'Model Insights'), ('feature_importance', 'Feature Importance'), ('input_schema', 'Input Schema')], max_length=40)),
+                ('name', models.CharField(max_length=255)),
+                ('s3_uri', models.CharField(blank=True, max_length=1024)),
+                ('checksum', models.CharField(blank=True, max_length=128)),
+                ('size_bytes', models.PositiveBigIntegerField(default=0)),
+                ('content_type', models.CharField(blank=True, max_length=160)),
+                ('purged_at', models.DateTimeField(blank=True, null=True)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+            ],
         ),
         migrations.CreateModel(
             name='Deployment',

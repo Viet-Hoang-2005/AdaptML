@@ -50,8 +50,8 @@ def test_cleanup_manifest_includes_all_project_build_images_and_runtime_names():
     project = ModelProject.objects.create(owner=owner, name="All image history")
     first = ModelVersion.objects.create(project=project, version="1")
     second = ModelVersion.objects.create(project=project, version="2")
-    old_build = Build.objects.create(version=first, status="ready", image_uri="build-old:latest", is_saved=True)
-    new_build = Build.objects.create(version=second, status="ready", image_uri="build-new:latest")
+    old_build = Build.objects.create(project=project, version=first, flavor="sklearn", status="ready", image_uri="build-old:latest")
+    new_build = Build.objects.create(project=project, version=second, flavor="sklearn", status="ready", image_uri="build-new:latest")
     deployment = Deployment.objects.create(version=first, build=old_build, status="stopped")
     Endpoint.objects.create(deployment=deployment, public_url="http://example.test", runtime_name="deploy-old")
 
@@ -68,7 +68,7 @@ def test_finalization_deletes_project_s3_prefix_and_archives_database_rows():
     owner = get_user_model().objects.create_user("finalize-owner@example.com", "password123") # type: ignore[attr-defined]
     project = ModelProject.objects.create(owner=owner, name="Finalize me", deletion_state="deleting", is_active=False)
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(version=version, status="ready", image_uri="build-finalize:latest")
+    build = Build.objects.create(project=project, version=version, flavor="sklearn", status="ready", image_uri="build-finalize:latest")
     deployment = Deployment.objects.create(version=version, build=build, status="healthy")
     endpoint = Endpoint.objects.create(
         deployment=deployment,

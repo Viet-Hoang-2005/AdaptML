@@ -120,6 +120,21 @@ def post_webhook(webhook_url: str, payload: dict) -> None:
     if response.status_code >= 400:
         raise RuntimeError(f"Build webhook failed with HTTP {response.status_code}: {response.text[:500]}")
 
+
+def built_image_metadata() -> dict[str, str]:
+    build_id = os.environ.get("BUILD_ID", "").strip().lower()
+    harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
+    harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
+    base_name = f"build-{build_id}:latest"
+    image_uri = f"{harbor_url}/{harbor_project}/{base_name}" if harbor_url else base_name
+    try:
+        image = docker.from_env().images.get(image_uri)
+        repo_digests = image.attrs.get("RepoDigests") or []
+        digest = repo_digests[0].split("@", 1)[1] if repo_digests else image.attrs.get("Id", "")
+    except Exception:
+        digest = ""
+    return {"image_uri": image_uri, "image_digest": digest}
+
 def build_custom_image(workspace: Path, model_id: str, tenant_id: str, requirements_text: str) -> None:
     docker_client = docker.from_env()
     harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
@@ -355,6 +370,7 @@ COPY model /app/model_artifact
                 "package_manifest": manifest,
                 "package_preview_tree": preview_tree,
                 "task_type": "BUILD",
+                **built_image_metadata(),
             },
         )
         print("BUILD_EOF_SUCCESS")
@@ -476,6 +492,7 @@ COPY model /app/model_artifact
                 "package_manifest": manifest,
                 "package_preview_tree": preview_tree,
                 "task_type": "TEST_ZIP",
+                **built_image_metadata(),
             },
         )
         print("BUILD_EOF_SUCCESS")
@@ -489,6 +506,12 @@ def run_notify_task(workspace_dir: str, webhook_url: str) -> None:
     if not payload_file.exists():
         raise FileNotFoundError(f"Webhook payload not found at {payload_file}")
     payload = json.loads(payload_file.read_text(encoding="utf-8"))
+    image_uri = os.environ.get("IMAGE_URI", "").strip()
+    digest_file = workspace / "image-digest"
+    if image_uri:
+        payload["image_uri"] = image_uri
+    if digest_file.exists():
+        payload["image_digest"] = digest_file.read_text(encoding="utf-8").strip()
     print(f"Sending post-build notification for model {payload.get('model_id')}...")
     post_webhook(webhook_url, payload)
     print("NOTIFY_EOF_SUCCESS")

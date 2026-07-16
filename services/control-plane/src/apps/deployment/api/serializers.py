@@ -1,31 +1,39 @@
 from rest_framework import serializers
 
-from apps.deployment.models import Build, Deployment, Endpoint
+from apps.catalog.artifact_types import ARTIFACT_FORMATS, validate_source_artifact
+from apps.deployment.models import Build, BuildInputAsset, Deployment, Endpoint
 from apps.registry.models import ModelVersion
 
 
 class BuildSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
-    version_id = serializers.UUIDField(source="version.public_id", read_only=True)
+    project_id = serializers.UUIDField(source="project.public_id", read_only=True)
+    version_id = serializers.UUIDField(source="version.public_id", allow_null=True, read_only=True)
+    version_number = serializers.CharField(source="version.version", allow_null=True, read_only=True)
     version = serializers.SlugRelatedField(
-        slug_field="public_id", queryset=ModelVersion.objects.none(), write_only=True
+        slug_field="public_id", queryset=ModelVersion.objects.none(), required=False, write_only=True
     )
+    input_assets = serializers.SerializerMethodField()
 
     class Meta:
         model = Build
         fields = (
             "id",
+            "project_id",
             "version",
             "version_id",
+            "version_number",
+            "flavor",
+            "artifact_format",
+            "requirements_snapshot",
             "backend",
             "status",
             "celery_task_id",
             "external_build_id",
             "image_uri",
-            "is_saved",
-            "saved_at",
-            "discarded_at",
+            "image_digest",
             "package_uri",
+            "input_assets",
             "logs",
             "error_message",
             "started_at",
@@ -39,9 +47,7 @@ class BuildSerializer(serializers.ModelSerializer):
             "celery_task_id",
             "external_build_id",
             "image_uri",
-            "is_saved",
-            "saved_at",
-            "discarded_at",
+            "image_digest",
             "package_uri",
             "logs",
             "error_message",
@@ -56,6 +62,48 @@ class BuildSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             self.fields["version"].queryset = ModelVersion.objects.filter(project__owner=request.user)
+
+    @staticmethod
+    def get_input_assets(instance):
+        return BuildInputAssetSerializer(instance.input_assets.all(), many=True).data
+
+
+class BuildInputAssetSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="public_id", read_only=True)
+
+    class Meta:
+        model = BuildInputAsset
+        fields = ("id", "kind", "name", "checksum", "size_bytes", "content_type", "purged_at")
+
+
+class ManualBuildCreateSerializer(serializers.Serializer):
+    flavor = serializers.ChoiceField(choices=("sklearn", "xgboost", "pytorch", "tensorflow"))
+    artifact_format = serializers.ChoiceField(choices=ARTIFACT_FORMATS, default="raw")
+    requirements_text = serializers.CharField(required=False, allow_blank=True, default="")
+    source_artifact = serializers.FileField()
+    label_mapping_file = serializers.FileField(required=False)
+    metrics_file = serializers.FileField(required=False)
+    params_file = serializers.FileField(required=False)
+    model_insights_file = serializers.FileField(required=False)
+    feature_importance_file = serializers.FileField(required=False)
+    input_schema_file = serializers.FileField(required=False)
+
+    def validate(self, attrs):
+        validate_source_artifact(
+            filename=attrs["source_artifact"].name,
+            flavor=attrs["flavor"],
+            artifact_format=attrs["artifact_format"],
+        )
+        if attrs["artifact_format"] == "mlflow_zip":
+            extras = [field for field in (
+                "label_mapping_file", "metrics_file", "params_file", "model_insights_file",
+                "feature_importance_file", "input_schema_file",
+            ) if attrs.get(field)]
+            if extras:
+                raise serializers.ValidationError(
+                    {field: "Include this file inside the model package ZIP instead." for field in extras}
+                )
+        return attrs
 
 
 class DeploymentSerializer(serializers.ModelSerializer):
@@ -98,7 +146,9 @@ class DeploymentSerializer(serializers.ModelSerializer):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            self.fields["build"].queryset = Build.objects.filter(version__project__owner=request.user, status="ready")
+            self.fields["build"].queryset = Build.objects.filter(
+                project__owner=request.user, status="ready", version__isnull=False
+            )
 
 
 class EndpointSerializer(serializers.ModelSerializer):

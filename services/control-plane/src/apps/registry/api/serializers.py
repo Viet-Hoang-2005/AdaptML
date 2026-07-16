@@ -30,13 +30,11 @@ class ModelVersionSerializer(serializers.ModelSerializer):
             "id",
             "project_id",
             "version",
-            "description",
             "source_job",
             "source_job_id",
             "source_artifact",
             "requirements_snapshot",
             "flavor",
-            "source_config_revision",
             "stage",
             "deployability",
             "deployability_reason",
@@ -55,7 +53,6 @@ class ModelVersionSerializer(serializers.ModelSerializer):
             "metrics_summary",
             "params_summary",
             "insights_summary",
-            "source_config_revision",
             "registered_at",
         )
 

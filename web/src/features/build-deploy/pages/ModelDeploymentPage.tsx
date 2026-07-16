@@ -17,8 +17,8 @@ export function ModelDeploymentPage({ model, zipFile }: ModelDeploymentPageProps
           <p className="font-semibold text-foreground">Build from current metadata</p>
           <p className="mt-1 text-sm text-muted-foreground">Edit metadata without changing the current image, then build a new version when ready.</p>
         </div>
-        <Link to={`/dashboard/management/model/upload/build-deploy?modelId=${model.id}`}>
-          <Button size="md" icon={<Rocket className="h-4 w-4" />}>Build & Deploy</Button>
+        <Link to={`/dashboard/management/model/upload/build?modelId=${model.id}`}>
+          <Button size="md" icon={<Rocket className="h-4 w-4" />}>Build a new version</Button>
         </Link>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -36,11 +36,6 @@ export function ModelDeploymentPage({ model, zipFile }: ModelDeploymentPageProps
             <PackagePreview preview={model.package_preview_tree} compact />
           </div>
         ) : null}
-        <div className="md:col-span-2">
-          <pre className="mt-2 bg-muted p-4 rounded-lg text-sm text-foreground whitespace-pre-wrap font-mono border border-border overflow-x-auto max-h-60">
-            {model.requirements_text || '-'}
-          </pre>
-        </div>
         <div className="md:col-span-2">
           <p className="text-sm font-semibold text-muted-foreground">Model API Endpoint</p>
           <code className="mt-2 block bg-muted p-4 rounded-lg text-sm text-foreground font-mono break-all border border-border">

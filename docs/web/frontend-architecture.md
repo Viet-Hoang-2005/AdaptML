@@ -64,14 +64,15 @@ Runtime output and lifecycle state have different authority:
 
 ## Manual upload lifecycle
 
-Manual model upload uses two route coordinators rather than a multi-page wizard:
+Manual model upload is coordinated by `UploadModelPage`, which owns the in-memory files, navigation guards, validation, and typed Outlet context for three nested routes:
 
-- `/dashboard/management/model/upload/metadata` saves mutable project metadata, the primary artifact, optional registry attachments, workspace source/data, and requirements.
-- `/dashboard/management/model/upload/build-deploy?modelId=<uuid>` snapshots the saved metadata revision into an immutable registry version, builds its image, and streams build/deployment logs through `TerminalViewer`.
+- `/dashboard/management/model/upload/metadata` persists latest-only project metadata and optional source/reference attachments when Continue is selected.
+- `/dashboard/management/model/upload/build?modelId=<uuid>` submits immutable flavor, artifact, attachment, and requirements inputs for one Build UUID.
+- `/dashboard/management/model/upload/deploy?modelId=<uuid>&buildId=<uuid>` deploys exactly the ready Build identified by the URL.
 
-The Metadata page validates model name, flavor, and primary artifact before Save or Continue. The artifact format is explicit: raw uploads are limited to the extensions supported by the selected flavor and may use separate label/metrics attachments. A model package upload accepts one `.zip` containing an `MLmodel` file and all package metadata; it does not accept separate artifact attachments. MLflow ZIP is not a separate route.
+`LineSteps` uses the same transitions as Back/Continue, so a future step cannot bypass validation. Files remain available while navigating inside the upload layout, but refresh or browser close clears files that have not been submitted; `beforeunload`, `useBlocker`, and the shared confirm dialog communicate that boundary.
 
-The Control Plane owns the state transitions. Metadata edits increment a draft revision but do not replace a previous image. The first build of a revision creates registry version `1`; a rebuild of the same revision reuses that version, while a changed revision creates the next version. A ready image may be explicitly saved for later, or deployed immediately. Immediate deployment atomically marks the ready build as saved before creating the deployment.
+Project metadata is latest-only and never creates a registry version. Every successful manual Build creates exactly one immutable registry version and stores its image automatically. Failed or cancelled Builds keep audit metadata while their binary input and partial image are cleaned up. Deployment accepts only a tenant-owned ready Build with a registered version.
 
 ## Routing and bundles
 

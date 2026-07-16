@@ -114,7 +114,7 @@ def routable_version(db):
     user = get_user_model().objects.create_user("route-owner@example.com", "password123")
     project = ModelProject.objects.create(owner=user, name="Routable")
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(version=version, status="ready")
+    build = Build.objects.create(project=project, version=version, flavor="sklearn", status="ready")
     deployment = Deployment.objects.create(version=version, build=build, status="healthy")
     Endpoint.objects.create(
         deployment=deployment,

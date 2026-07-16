@@ -13,8 +13,6 @@ from apps.training.tasks import cancel_training_job, execute_training_job
 def create_job(*, project, validated_data):
     source_zip = validated_data.pop("source_zip", None)
     training_data = validated_data.pop("training_data", None)
-    if not validated_data.get("requirements_text"):
-        validated_data["requirements_text"] = project.requirements_text
     validated_data["backend"] = settings.TRAINING_BACKEND
     public_id = validated_data.pop("public_id", None)
     draft = (

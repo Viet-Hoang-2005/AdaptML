@@ -11,9 +11,10 @@ export interface LineStepsProps {
   steps: StepItem[];
   currentStep: number;
   onStepChange?: (step: number) => void;
+  isTransitioning?: boolean;
 }
 
-export function LineSteps({ steps, currentStep, onStepChange }: LineStepsProps) {
+export function LineSteps({ steps, currentStep, onStepChange, isTransitioning = false }: LineStepsProps) {
   const { t } = useTranslation('common');
   return (
     <>
@@ -31,21 +32,23 @@ export function LineSteps({ steps, currentStep, onStepChange }: LineStepsProps) 
             const Icon = item.icon;
             const active = currentStep === item.id;
             const done = currentStep > item.id;
-            const disabled = item.id > currentStep;
+            const disabled = isTransitioning || !onStepChange;
 
             return (
               <div key={item.id} className="relative z-10 flex flex-col items-center bg-surface px-2">
                 <button
                   type="button"
-                  disabled={disabled || !onStepChange}
+                  disabled={disabled}
                   onClick={() => onStepChange?.(item.id)}
+                  aria-current={active ? 'step' : undefined}
+                  aria-label={item.label}
                   className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
                     active
                       ? 'border-primary bg-primary text-primary-foreground'
                       : done
                         ? 'border-primary bg-surface text-foreground hover:bg-muted'
                         : 'border-border bg-surface text-muted-foreground'
-                  } ${(disabled || !onStepChange) ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'}`}
                 >
                   <Icon className="h-4 w-4" />
                 </button>
@@ -62,10 +65,27 @@ export function LineSteps({ steps, currentStep, onStepChange }: LineStepsProps) 
         </div>
       </div>
 
-      {/* Fallback stepper cho mobile */}
-      <div className="sm:hidden rounded-lg border border-border bg-surface p-4 flex items-center justify-between">
-        <span className="text-sm font-bold text-foreground">{t('steps.progress', { current: currentStep, total: steps.length })}</span>
-        <span className="text-sm font-semibold text-muted-foreground">{steps[currentStep - 1]?.label}</span>
+      <div className="sm:hidden overflow-x-auto rounded-lg border border-border bg-surface p-3">
+        <span className="sr-only">{t('steps.progress', { current: currentStep, total: steps.length })}</span>
+        <div className="flex min-w-max gap-2">
+          {steps.map((item) => {
+            const Icon = item.icon;
+            const active = currentStep === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                disabled={isTransitioning || !onStepChange}
+                aria-current={active ? 'step' : undefined}
+                onClick={() => onStepChange?.(item.id)}
+                className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-surface text-muted-foreground'} disabled:opacity-60`}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </>
   );

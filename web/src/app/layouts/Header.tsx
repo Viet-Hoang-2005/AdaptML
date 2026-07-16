@@ -72,7 +72,7 @@ export default function Header({ onOpenNavigation }: { onOpenNavigation: () => v
               <div className="max-h-72 overflow-y-auto">
                 {visibleModels.length ? visibleModels.map((model) => (
                   <button key={model.id} type="button" onClick={() => { selectModel(model.id); setModelMenuOpen(false); setSearch(''); }} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-[6px] px-3 py-2 text-left hover:bg-muted">
-                    <span className="min-w-0"><span className="block truncate text-sm font-semibold text-foreground">{model.name}</span><span className="block truncate text-xs capitalize text-muted-foreground">{model.status || t('statuses.registered')} · {model.flavor || model.model_type}</span></span>
+                    <span className="min-w-0"><span className="block truncate text-sm font-semibold text-foreground">{model.name}</span><span className="block truncate text-xs capitalize text-muted-foreground">{model.status || t('statuses.registered')} · {model.flavor || t('statuses.registered')}</span></span>
                     {selectedModel?.id === model.id && <Check className="h-4 w-4 shrink-0 text-primary" />}
                   </button>
                 )) : <p className="px-3 py-8 text-center text-sm text-muted-foreground">{t('modelSelector.noMatches')}</p>}

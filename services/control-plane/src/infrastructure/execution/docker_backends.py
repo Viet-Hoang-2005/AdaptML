@@ -12,7 +12,7 @@ from django.utils import timezone
 from infrastructure.docker import DockerClient
 from infrastructure.http import HttpClient
 from infrastructure.storage import S3Storage
-from infrastructure.storage.paths import drift_run_prefix, version_prefix
+from infrastructure.storage.paths import build_prefix, drift_run_prefix, version_prefix
 
 
 def _wait_and_cleanup(container):
@@ -32,28 +32,25 @@ class DockerBuildBackend:
         self.storage = storage or S3Storage()
 
     def run(self, build):
-        version = build.version
-        project = version.project
-        source = version.artifacts.filter(kind__in=("source", "training_output")).order_by("-created_at").first()
+        project = build.project
+        source = build.input_assets.filter(kind="source_artifact").first()
+        if source is None and build.version_id:
+            source = build.version.artifacts.filter(kind__in=("source", "training_output")).order_by("-created_at").first()
         if not source:
-            raise RuntimeError("The model version has no buildable source artifact.")
-        package_root = version_prefix(
-            project.owner.tenant_id,
-            project.public_id,
-            version.public_id,
-        )
+            raise RuntimeError("The build has no source artifact.")
+        package_root = build_prefix(project.owner.tenant_id, project.public_id, build.public_id)
         package_uri = f"s3://{self.storage.bucket}/{package_root}/artifacts/model-package.zip"
         build.package_uri = package_uri
         build.save(update_fields=["package_uri", "updated_at"])
         webhook = f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/webhooks/builds/{build.public_id}/"
-        task_type = "TEST_ZIP" if source.metadata.get("artifact_format") == "mlflow_zip" else "BUILD"
+        task_type = "TEST_ZIP" if build.artifact_format == "mlflow_zip" else "BUILD"
         environment = {
             "TASK_TYPE": task_type,
             "BUILD_ID": str(build.public_id),
             "TENANT_ID": project.owner.tenant_id,
-            "MODEL_ID": str(version.public_id),
-            "FLAVOR": version.flavor,
-            "REQUIREMENTS_TEXT": version.requirements_snapshot,
+            "MODEL_ID": str(build.public_id),
+            "FLAVOR": build.flavor,
+            "REQUIREMENTS_TEXT": build.requirements_snapshot,
             "SOURCE_ARTIFACT_NAME": source.name,
             "SOURCE_DOWNLOAD_URL": self.storage.presigned_get(source.uri, 14400),
             "OUTPUT_UPLOAD_URL": self.storage.presigned_put(package_uri, 14400),
@@ -155,7 +152,7 @@ class DockerDeploymentBackend:
             or f"build-{deployment.build.public_id}:latest"
         )
         container_name = f"deploy-{deployment.build.public_id}"
-        target_port = 5002 if project.model_type == "dl" else 5001
+        target_port = 5002 if deployment.version.flavor in {"pytorch", "tensorflow"} else 5001
         internal_url = f"http://{container_name}:{target_port}"
         public_path = f"/{project.owner.tenant_id}/models/{project.public_id}/{deployment.version.public_id}"
         public_url = f"{settings.MODEL_SERVER_PUBLIC_URL}{public_path}"

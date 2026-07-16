@@ -24,7 +24,7 @@ def test_build_logs_streams_redis_lines_for_build_owner(monkeypatch):
     owner = get_user_model().objects.create_user("build-owner@example.com", "password123")
     project = ModelProject.objects.create(owner=owner, name="build logs")
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(version=version, status="building")
+    build = Build.objects.create(project=project, version=version, flavor="sklearn", status="building")
     monkeypatch.setattr(log_service.Redis, "from_url", lambda _url: FakeRedis([b"first", b"second"]))
     client = APIClient()
     client.force_authenticate(owner)
@@ -46,7 +46,7 @@ def test_build_logs_falls_back_to_persisted_history_when_redis_is_unavailable(mo
     owner = get_user_model().objects.create_user("history-owner@example.com", "password123")
     project = ModelProject.objects.create(owner=owner, name="build history")
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(version=version, status="ready", logs="one\ntwo")
+    build = Build.objects.create(project=project, version=version, flavor="sklearn", status="ready", logs="one\ntwo")
     monkeypatch.setattr(log_service.Redis, "from_url", lambda _url: (_ for _ in ()).throw(log_service.RedisError()))
     client = APIClient()
     client.force_authenticate(owner)
@@ -64,7 +64,7 @@ def test_build_logs_are_tenant_scoped_and_validate_offset():
     other = get_user_model().objects.create_user("logs-other@example.com", "password123")
     project = ModelProject.objects.create(owner=owner, name="private logs")
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(version=version)
+    build = Build.objects.create(project=project, version=version, flavor="sklearn")
     client = APIClient()
     client.force_authenticate(other)
 
@@ -81,7 +81,7 @@ def test_deployment_logs_stream_runtime_progress_for_owner(monkeypatch):
     owner = get_user_model().objects.create_user("deployment-owner@example.com", "password123")
     project = ModelProject.objects.create(owner=owner, name="deployment logs")
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(version=version, status="ready")
+    build = Build.objects.create(project=project, version=version, flavor="sklearn", status="ready")
     from apps.deployment.models import Deployment
 
     deployment = Deployment.objects.create(version=version, build=build, status="deploying")

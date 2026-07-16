@@ -19,7 +19,7 @@ def test_build_webhook_is_idempotent():
     user = get_user_model().objects.create_user("owner@example.com", "password123")
     project = ModelProject.objects.create(owner=user, name="project")
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(version=version, status="building")
+    build = Build.objects.create(project=project, version=version, flavor="sklearn", status="building")
     client = APIClient()
     headers = {"HTTP_X_CONTROL_PLANE_SECRET": "test-webhook-secret"}
     url = f"/internal/webhooks/builds/{build.public_id}/"
@@ -46,7 +46,7 @@ def test_build_cancel_is_tenant_scoped(django_capture_on_commit_callbacks, monke
     other = get_user_model().objects.create_user("other@example.com", "password123")
     project = ModelProject.objects.create(owner=owner, name="cancel project")
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(version=version, status="building")
+    build = Build.objects.create(project=project, version=version, flavor="sklearn", status="building")
     enqueued = []
     monkeypatch.setattr(build_service.cancel_build, "delay", lambda build_id: enqueued.append(build_id))
     client = APIClient()
@@ -67,12 +67,13 @@ def test_build_cancel_is_tenant_scoped(django_capture_on_commit_callbacks, monke
 
 
 @pytest.mark.django_db
-def test_saved_build_is_idempotent_and_deploy_saves_ready_image(django_capture_on_commit_callbacks, monkeypatch):
-    owner = get_user_model().objects.create_user("saved-build-owner@example.com", "password123")
-    project = ModelProject.objects.create(owner=owner, name="saved build")
+def test_deployment_accepts_only_ready_registered_build(django_capture_on_commit_callbacks, monkeypatch):
+    owner = get_user_model().objects.create_user("deploy-build-owner@example.com", "password123")
+    project = ModelProject.objects.create(owner=owner, name="deploy build")
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(version=version, status="ready")
+    build = Build.objects.create(project=project, version=version, flavor="sklearn", status="ready")
     enqueued = []
+
     def enqueue(deployment_id):
         enqueued.append(deployment_id)
         return SimpleNamespace(id="test-task")
@@ -80,24 +81,15 @@ def test_saved_build_is_idempotent_and_deploy_saves_ready_image(django_capture_o
     monkeypatch.setattr(deployment_service.execute_deployment, "delay", enqueue)
     client = APIClient()
     client.force_authenticate(owner)
-
-    first_save = client.post(f"/api/builds/{build.public_id}/save/")
-    second_save = client.post(f"/api/builds/{build.public_id}/save/")
-    build.refresh_from_db()
-    assert first_save.status_code == 200
-    assert second_save.status_code == 200
-    assert build.is_saved is True
-    assert build.saved_at is not None
-
-    unsaved_build = Build.objects.create(version=version, status="ready")
     with django_capture_on_commit_callbacks(execute=True):
-        deployed = client.post("/api/deployments/", {"build": str(unsaved_build.public_id)}, format="json")
-    unsaved_build.refresh_from_db()
+        deployed = client.post("/api/deployments/", {"build": str(build.public_id)}, format="json")
 
     assert deployed.status_code == 201
-    assert unsaved_build.is_saved is True
-    assert unsaved_build.saved_at is not None
     assert enqueued == [str(deployed.data["id"])]
+
+    pending = Build.objects.create(project=project, flavor="sklearn", status="building")
+    rejected = client.post("/api/deployments/", {"build": str(pending.public_id)}, format="json")
+    assert rejected.status_code == 400
 
 
 @override_settings(BUILD_BACKEND="docker", DEPLOYMENT_BACKEND="argo")

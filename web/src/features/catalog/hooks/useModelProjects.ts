@@ -6,7 +6,6 @@ import {
   listModelProjects,
   updateModelProject,
 } from '@/features/catalog/api/catalogApi';
-import { buildModelProject } from '@/features/build-deploy/api/buildDeployApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
 import { catalogQueryKeys } from '@/features/catalog/queryKeys';
 import { toast } from '@/shared/ui/toastStore';
@@ -36,18 +35,6 @@ export function useModelProjectMutations() {
     },
   });
 
-  const buildMutation = useMutation({
-    mutationFn: buildModelProject,
-    onSuccess: async (model) => {
-      await invalidateModels();
-      toast.success('MLflow package built and deployed successfully.');
-      navigate(`/dashboard/management/model/${model.id}`);
-    },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to build MLflow package.'));
-    },
-  });
-
   const updateMutation = useMutation({
     mutationFn: ({ modelId, payload }: { modelId: string; payload: ModelProjectFormValues }) =>
       updateModelProject(modelId, payload),
@@ -74,11 +61,9 @@ export function useModelProjectMutations() {
 
   return {
     createModelProject: createMutation.mutateAsync,
-    buildModelProject: buildMutation.mutateAsync,
     updateModelProject: updateMutation.mutateAsync,
     deleteModelProject: deleteMutation.mutateAsync,
     creating: createMutation.isPending,
-    building: buildMutation.isPending,
     updating: updateMutation.isPending,
     deleting: deleteMutation.isPending,
   };

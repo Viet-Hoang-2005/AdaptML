@@ -1,16 +1,17 @@
 import logging
-from datetime import timedelta
 
 from celery import shared_task
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from infrastructure.execution import build_backend, deployment_backend
 from infrastructure.execution.image_cleanup import BuildImageCleaner
+from infrastructure.storage import S3Storage
+from infrastructure.storage.paths import build_prefix
 
 from apps.deployment.models import Build, Deployment, Endpoint
 from apps.deployment.services.logs import append_deployment_log, reset_deployment_logs
 from apps.observability.services.outbox import enqueue_event
+from apps.registry.services.versions import register_successful_build
 
 logger = logging.getLogger(__name__)
 
@@ -33,19 +34,17 @@ def _mark_deployment_healthy(deployment):
     )
 
 
-@shared_task(
-    bind=True, autoretry_for=(ConnectionError, TimeoutError), retry_backoff=True, retry_jitter=True, max_retries=5
-)
+@shared_task(bind=True)
 def execute_build(self, build_id):
     with transaction.atomic():
         build = (
             Build.objects.select_for_update()
-            .select_related("version", "version__project", "version__project__owner")
+            .select_related("project", "project__owner", "version")
             .get(public_id=build_id)
         )
-        if build.status in {"ready", "cancelled", "discarded"}:
+        if build.status in {"ready", "cancelled"}:
             return build.status
-        if build.version.project.deletion_state != "active":
+        if build.project.deletion_state != "active":
             build.status = "cancelled"
             build.completed_at = timezone.now()
             build.error_message = "Project deletion is in progress."
@@ -62,57 +61,42 @@ def execute_build(self, build_id):
         Build.objects.filter(pk=build.pk).update(
             status="failed", error_message=str(exc)[:12000], completed_at=timezone.now()
         )
+        cleanup_failed_build_artifacts.delay(str(build.public_id), False)
         raise
     if isinstance(result, dict) and result.get("dispatched"):
         return "building"
-    Build.objects.filter(pk=build.pk).update(
-        status="ready",
-        logs=str(result)[-20000:],
-        completed_at=timezone.now(),
-        error_message="",
-    )
+    build.refresh_from_db()
+    if build.status != "ready":
+        image_uri = build.image_uri or f"build-{build.public_id}:latest"
+        build = register_successful_build(build=build, image_uri=image_uri, image_digest=build.image_digest)
+    Build.objects.filter(pk=build.pk).update(logs=str(result)[-20000:], completed_at=timezone.now())
     return "ready"
 
 
 @shared_task(bind=True)
 def cancel_build(self, build_id):
-    build = Build.objects.select_related("version").get(public_id=build_id)
+    build = Build.objects.select_related("project").get(public_id=build_id)
     build_backend(build.backend).cancel(build)
     Build.objects.filter(pk=build.pk).update(status="cancelled", completed_at=timezone.now())
+    cleanup_failed_build_artifacts.delay(str(build.public_id), bool(build.image_uri))
     return "cancelled"
 
 
-@shared_task(bind=True)
-def discard_build_image(self, build_id):
-    from apps.deployment.services.builds import discard_ready_unsaved_build
-
-    return discard_ready_unsaved_build(build_id)
-
-
-@shared_task(bind=True)
-def cleanup_deleted_project_build_image(self, build_id):
-    """Remove an image that finished after its project deletion was requested."""
-    build = Build.objects.select_related("version__project").get(public_id=build_id)
-    if build.version.project.deletion_state == "active":
-        return "retained"
-    result = BuildImageCleaner().delete(build)
-    Build.objects.filter(pk=build.pk).update(
-        status="discarded",
-        discarded_at=timezone.now(),
-        error_message="Project deletion is in progress; build image discarded.",
+@shared_task(
+    bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_jitter=True, max_retries=5
+)
+def cleanup_failed_build_artifacts(self, build_id, delete_image=False):
+    build = Build.objects.select_related("project", "project__owner").prefetch_related("input_assets").get(
+        public_id=build_id
     )
-    return result
-
-
-@shared_task(bind=True)
-def cleanup_unsaved_build_images(self):
-    from apps.deployment.services.builds import discard_ready_unsaved_build, expired_unsaved_build_ids
-
-    cutoff = timezone.now() - timedelta(seconds=settings.UNSAVED_BUILD_IMAGE_TTL_SECONDS)
-    build_ids = expired_unsaved_build_ids(cutoff)
-    for build_id in build_ids:
-        discard_ready_unsaved_build(build_id)
-    return len(build_ids)
+    if build.status == "ready":
+        return "retained"
+    if delete_image and build.image_uri:
+        BuildImageCleaner().delete(build)
+    storage = S3Storage()
+    storage.delete_prefix(build_prefix(build.project.owner.tenant_id, build.project.public_id, build.public_id))
+    build.input_assets.update(s3_uri="", purged_at=timezone.now())
+    return "purged"
 
 
 @shared_task(

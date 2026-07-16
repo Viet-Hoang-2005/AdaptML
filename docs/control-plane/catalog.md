@@ -9,13 +9,12 @@ legacy aliases.
 |---|---|
 | Identity | `/api/auth/token/`, `/api/auth/token/refresh/`, `/api/auth/register/`, `/api/auth/profile/`, OTP, password, OAuth, JWKS routes |
 | API keys | `/api/api-keys/`, `/api/api-keys/{key_uuid}/`, `/api/api-keys/{key_uuid}/regenerate/` |
-| Projects | `/api/models/`, `/api/models/drafts/`, `/api/models/{project_uuid}/`, `/{project_uuid}/build-metadata/`, `/{project_uuid}/builds/` |
+| Projects | `/api/models/`, `/api/models/{project_uuid}/`, `/api/models/{project_uuid}/builds/` |
 | Workspace | `/api/models/{project_uuid}/workspace/{code|data}/files/` |
-| Requirements | `/api/models/{project_uuid}/requirements/` |
 | Versions | `/api/registry/models/{project_uuid}/versions/`, `/api/registry/versions/{version_uuid}/`, `/{version_uuid}/smoke-test/` |
 | Aliases | `/api/registry/models/{project_uuid}/aliases/`, `/api/registry/models/{project_uuid}/aliases/{alias}/predict/` |
 | Training | `/api/training-jobs/`, `/{job_uuid}/`, `/{job_uuid}/submit/`, `/{job_uuid}/cancel/`, `/{job_uuid}/events/`, `/{job_uuid}/download/` |
-| Builds | `/api/builds/`, `/api/builds/{build_uuid}/`, `/api/builds/{build_uuid}/logs/?offset={n}`, `/api/builds/{build_uuid}/cancel/`, `/api/builds/{build_uuid}/save/` |
+| Builds | `/api/models/{project_uuid}/builds/` (manual multipart create/list), `/api/builds/`, `/api/builds/{build_uuid}/`, `/api/builds/{build_uuid}/logs/?offset={n}`, `/api/builds/{build_uuid}/cancel/` |
 | Deployments | `/api/deployments/`, `/{deployment_uuid}/`, `/{deployment_uuid}/logs/?offset={n}`, `/{deployment_uuid}/stop/` |
 | Endpoints | `/api/endpoints/`, `/api/endpoints/{endpoint_uuid}/logs/` |
 | Drift | `/api/drift-monitors/`, `/{monitor_uuid}/`, `/{monitor_uuid}/runs/`, `/api/drift-monitors/runs/{run_uuid}/logs/?offset={n}` |
@@ -25,6 +24,8 @@ legacy aliases.
 Collections use the shared DRF pagination envelope. Input serializers validate
 tenant ownership before services mutate state. API key secrets are returned only
 on creation or regeneration and can be scoped only to projects owned by the user.
+
+Project `name`, `description`, `access_mode`, source code, and reference data are latest-only metadata. Manual Build input belongs to one Build UUID and is snapshotted before execution. A successful callback atomically allocates the next model version, copies the artifact snapshot to the version prefix, records the image URI/digest, and marks the Build ready. Callback replay is idempotent; failed/cancelled Builds do not allocate a version.
 
 ## Inference URL
 

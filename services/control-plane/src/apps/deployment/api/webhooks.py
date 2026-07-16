@@ -6,7 +6,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.deployment.models import Build
-from apps.deployment.tasks import cleanup_deleted_project_build_image
+from apps.deployment.tasks import cleanup_failed_build_artifacts
+from apps.registry.services.versions import register_successful_build
 
 
 class BuildWebhookEndpoint(APIView):
@@ -14,34 +15,56 @@ class BuildWebhookEndpoint(APIView):
     permission_classes = (HasInternalWebhookSecret,)
 
     def post(self, request, build_id):
-        build = Build.objects.select_related("version", "version__project", "version__project__owner").get(
-            public_id=build_id
-        )
+        build = Build.objects.select_related("project", "project__owner", "version").get(public_id=build_id)
         incoming = str(request.data.get("status", "")).lower()
-        if build.status in {"ready", "failed", "cancelled", "discarded"}:
-            return Response({"status": build.status, "duplicate": True})
+        if build.status in {"ready", "failed", "cancelled"}:
+            return Response({
+                "status": build.status,
+                "version_id": str(build.version.public_id) if build.version_id else None,
+                "duplicate": True,
+            })
         if incoming in {"success", "succeeded", "ready", "completed"}:
-            project = build.version.project
+            project = build.project
             base_name = f"build-{build.public_id}:latest"
-            build.image_uri = (
+            image_uri = str(request.data.get("image_uri") or (
                 f"{settings.HARBOR_REGISTRY_URL}/{settings.HARBOR_USER_PROJECT}/{base_name}"
                 if settings.HARBOR_REGISTRY_URL
                 else base_name
-            )
+            ))
+            image_digest = str(request.data.get("image_digest", ""))[:255]
             if project.deletion_state != "active":
-                # A build can finish while its project is being deleted. Persist the
-                # concrete image reference, then ask the credentialed worker to remove it.
-                build.status = "discarded"
-                build.error_message = "Project deletion is in progress; build image discarded."
-                transaction.on_commit(
-                    lambda: cleanup_deleted_project_build_image.delay(str(build.public_id))
-                )
+                build.status = "cancelled"
+                build.image_uri = image_uri
+                build.image_digest = image_digest
+                build.error_message = "Project deletion is in progress; build output removed."
+                build.completed_at = timezone.now()
+                build.save(update_fields=[
+                    "status", "image_uri", "image_digest", "error_message", "completed_at", "updated_at"
+                ])
+                transaction.on_commit(lambda: cleanup_failed_build_artifacts.delay(str(build.public_id), True))
             else:
-                build.status = "ready"
-                build.error_message = ""
+                build.package_uri = str(request.data.get("package_uri") or build.package_uri)
+                build.save(update_fields=["package_uri", "updated_at"])
+                build = register_successful_build(
+                    build=build,
+                    image_uri=image_uri,
+                    image_digest=image_digest,
+                )
+                build.completed_at = timezone.now()
+                build.save(update_fields=["completed_at", "updated_at"])
         else:
             build.status = "failed"
+            build.image_uri = str(request.data.get("image_uri", build.image_uri))
+            build.image_digest = str(request.data.get("image_digest", build.image_digest))[:255]
             build.error_message = str(request.data.get("error_message", "Build failed."))[:12000]
-        build.completed_at = timezone.now()
-        build.save(update_fields=["status", "image_uri", "error_message", "completed_at", "updated_at"])
-        return Response({"status": build.status})
+            build.completed_at = timezone.now()
+            build.save(update_fields=[
+                "status", "image_uri", "image_digest", "error_message", "completed_at", "updated_at"
+            ])
+            transaction.on_commit(
+                lambda: cleanup_failed_build_artifacts.delay(str(build.public_id), bool(build.image_uri))
+            )
+        return Response({
+            "status": build.status,
+            "version_id": str(build.version.public_id) if build.version_id else None,
+        })

@@ -10,14 +10,25 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('deployment', '0001_initial'),
+        ('catalog', '0001_initial'),
         ('registry', '0001_initial'),
     ]
 
     operations = [
         migrations.AddField(
             model_name='build',
+            name='project',
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='builds', to='catalog.modelproject'),
+        ),
+        migrations.AddField(
+            model_name='build',
             name='version',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='builds', to='registry.modelversion'),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='builds', to='registry.modelversion'),
+        ),
+        migrations.AddField(
+            model_name='buildinputasset',
+            name='build',
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='input_assets', to='deployment.build'),
         ),
         migrations.AddField(
             model_name='deployment',
@@ -36,6 +47,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='build',
-            index=models.Index(fields=['version', 'status'], name='build_version_status_idx'),
+            index=models.Index(fields=['project', 'status'], name='build_project_status_idx'),
+        ),
+        migrations.AddConstraint(
+            model_name='buildinputasset',
+            constraint=models.UniqueConstraint(fields=('build', 'kind'), name='build_input_kind_unique'),
         ),
     ]

@@ -9,7 +9,7 @@ from apps.training.models import TrainingJob
 @pytest.mark.django_db
 def test_training_job_paths_are_project_scoped(monkeypatch):
     user = get_user_model().objects.create_user("owner@example.com", "password123")
-    project = ModelProject.objects.create(owner=user, name="NIDS", requirements_text="xgboost==2.0.3")
+    project = ModelProject.objects.create(owner=user, name="NIDS")
     client = APIClient()
     client.force_authenticate(user)
 
@@ -18,6 +18,7 @@ def test_training_job_paths_are_project_scoped(monkeypatch):
         {
             "project": str(project.public_id),
             "name": "nightly",
+            "requirements_text": "xgboost==2.0.3",
             "code_snapshot_uri": "s3://other-tenant/source.zip",
             "data_snapshot_uri": "s3://other-tenant/train.csv",
         },

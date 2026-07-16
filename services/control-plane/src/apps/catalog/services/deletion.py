@@ -34,16 +34,12 @@ def _enqueue(project):
 
 
 def project_cleanup_manifest(project):
-    deployments = list(
-        Deployment.objects.filter(version__project=project)
-        .select_related("build", "endpoint")
-    )
-    builds = list(project.versions.prefetch_related("builds").all())
+    deployments = list(Deployment.objects.filter(version__project=project).select_related("build", "endpoint"))
+    builds = list(project.builds.all())
     image_uris = sorted(
         {
             build.image_uri
-            for version in builds
-            for build in version.builds.all()
+            for build in builds
             if build.image_uri
         }
     )

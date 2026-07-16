@@ -1,14 +1,15 @@
-\documentclass[letterpaper,10pt]{article}
+\documentclass[letterpaper,11pt]{article}
 
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage[english]{babel}
+\usepackage{latexsym}
 \usepackage[empty]{fullpage}
 \usepackage{titlesec}
+\usepackage{marvosym}
 \usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
 \usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
 \usepackage{fancyhdr}
+\usepackage[english]{babel}
 \usepackage{tabularx}
 \input{glyphtounicode}
 
@@ -18,59 +19,62 @@
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
 
-\addtolength{\oddsidemargin}{-0.50in}
-\addtolength{\evensidemargin}{-0.50in}
-\addtolength{\textwidth}{1.00in}
-\addtolength{\topmargin}{-0.58in}
-\addtolength{\textheight}{1.16in}
-\setlength{\footskip}{4pt}
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.55in}
+\addtolength{\textheight}{1.1in}
 
 \urlstyle{same}
 \raggedbottom
 \raggedright
 \setlength{\tabcolsep}{0in}
-\setlist[itemize]{itemsep=1pt, topsep=2pt}
 
-\titleformat{\section}{\vspace{-5pt}\scshape\raggedright\large}{}{0em}{}[\color{black}\titlerule \vspace{-6pt}]
+\titleformat{\section}{
+  \vspace{-5pt}\scshape\raggedright\large
+}{}{0em}{}[\color{black}\titlerule \vspace{-6pt}]
+
 \pdfgentounicode=1
 
-%-------------------------
-% Custom commands
-\newcommand{\resumeItem}[1]{\item\small{#1\vspace{-2pt}}}
+\newcommand{\resumeItem}[1]{
+  \item\small{{#1 \vspace{-2pt}}}
+}
+
 \newcommand{\resumeSubheading}[4]{
   \vspace{-2pt}\item
-  \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
-    \textbf{#1} & #2 \\
-    \textit{\small#3} & \textit{\small #4} \\
-  \end{tabular*}\vspace{-7pt}
+    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & #2 \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-7pt}
 }
+
 \newcommand{\resumeProjectHeading}[2]{
-  \item
-  \begin{tabular*}{0.97\textwidth}{p{0.79\textwidth}@{\extracolsep{\fill}}r}
-    \small#1 & #2 \\
-  \end{tabular*}\vspace{-7pt}
+    \item
+    \begin{tabular*}{0.97\textwidth}{p{0.78\textwidth}@{\extracolsep{\fill}}r}
+      \small#1 & #2 \\
+    \end{tabular*}\vspace{-7pt}
 }
+
 \newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.15in, label={}]}
 \newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
 \newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.18in]}
 \newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
 
-%-------------------------------------------
 \begin{document}
 
 %----------HEADING----------
 \begin{center}
-  \textbf{\Huge \scshape Tr\`{\^a}n Nguy\~{\^e}n Vi\d{\^e}t Ho\`ang} \\ \vspace{2pt}
-  \small
-  0828 552 878 \quad $|$ \quad
-  \href{mailto:tnvhoang2005@gmail.com}{tnvhoang2005@gmail.com} \quad $|$ \quad
-  \href{https://github.com/Viet-Hoang-2005}{github.com/Viet-Hoang-2005}
+    \textbf{\Huge \scshape Tran Nguyen Viet Hoang} \\ \vspace{1pt}
+    \small 0828552878 $|$
+    \href{mailto:tnvhoang2005@gmail.com}{tnvhoang2005@gmail.com} $|$
+    \href{https://github.com/Viet-Hoang-2005}{github.com/Viet-Hoang-2005}
 \end{center}
 
 %-----------SUMMARY-----------
-\section{Profile}
+\section{Summary}
 \begin{itemize}[leftmargin=0.15in, label={}]
-  \small{\item{Third-year Computer Networks and Data Communications student pursuing a \textbf{DevOps Intern} role. Interested in cloud-native platforms, infrastructure automation, CI/CD, and MLOps; built end-to-end projects spanning application delivery, Kubernetes, observability, and security.}}
+  \small{\item{Third-year Computer Networks and Data Communications student pursuing a \textbf{DevOps Intern} role. Interested in containerization, infrastructure, cloud-native platforms, CI/CD pipeline and MLOps. Architected scalable using Docker, Kubernetes, Terraform, and GitHub Actions.
+}}
 \end{itemize}
 
 %-----------EDUCATION-----------
@@ -80,34 +84,40 @@
     {University of Information Technology, VNU-HCM}{Ho Chi Minh City, Vietnam}
     {B.Eng. in Computer Networks and Data Communications}{2023 -- Expected 2027}
   \resumeItemListStart
-    \resumeItem{Cumulative GPA: \textbf{8.71/10.00}}
+    \resumeItem{GPA: 8.71/10.00}
   \resumeItemListEnd
 \resumeSubHeadingListEnd
 
 %-----------PROJECTS-----------
-\section{Selected Projects}
+\section{Projects}
 \resumeSubHeadingListStart
-  \resumeProjectHeading
-    {\textbf{MLOps PaaS System} $|$ \href{https://github.com/Viet-Hoang-2005/MLOps-paas-system}{GitHub} $|$ \emph{Solo Developer}}{2025 -- Present}
-  \resumeItemListStart
-    \resumeItem{Designed and implemented a multi-tenant MLOps platform with a React dashboard, Django REST Control Plane, FastAPI model-serving gateway, PostgreSQL, Redis, Redpanda, MLflow, and S3-backed artifacts.}
-    \resumeItem{Built the model lifecycle from metadata and immutable registry versions through asynchronous image packaging, deployment, endpoint health checks, inference logging, and data-drift reporting.}
-    \resumeItem{Implemented local Docker execution and production-oriented Argo Workflows/Kaniko workflows for model packaging, deployment, Evidently drift runs, and Kubeflow PyTorchJob training.}
-    \resumeItem{Authored AWS Terraform, Ansible, K3s/Kustomize, and Argo CD GitOps configuration; integrated Harbor, External Secrets, CloudNativePG, Prometheus/Grafana, KEDA, and Karpenter CPU/GPU autoscaling.}
-  \resumeItemListEnd
 
-  \resumeProjectHeading
-    {\textbf{SageLMS} $|$ \href{https://github.com/daithang59/sagelms}{GitHub} $|$ \emph{Spring Boot, FastAPI, GKE, Terraform}}{2025}
-  \resumeItemListStart
-    \resumeItem{Built a microservices-based learning platform using Spring Boot and FastAPI with a DevSecOps-oriented delivery architecture.}
-    \resumeItem{Provisioned Google Cloud Platform infrastructure with Terraform and deployed the platform to a two-worker-node Google Kubernetes Engine cluster.}
-    \resumeItem{Implemented CI with syntax checks, unit tests, image builds, Trivy scanning, and SonarCloud analysis; automated image publishing to Harbor and GitOps promotion through pull requests.}
-    \resumeItem{Integrated CloudNativePG high availability, Cloudflare Tunnel exposure, Prometheus/Grafana observability, Kyverno image policies, Kubernetes NetworkPolicies, and Flux CD GitOps delivery.}
-  \resumeItemListEnd
+\resumeProjectHeading
+{\textbf{MLOps PaaS System} $|$ \href{https://github.com/Viet-Hoang-2005/mlops-paas-system}{GitHub} $|$ \emph{Django, FastAPI, Docker, Kubernetes, AWS, GitHub Actions, ArgoCD, Argo Workflows, MLflow, Kubeflow, BentoML}}
+{3/2026 -- Present}
+\resumeItemListStart
+\resumeItem{Architected a multi-tenant MLOps platform with React Dashboard, Django REST Control Plane, FastAPI, PostgreSQL, Redis, Redpanda, MLflow artifacts, and Kubeflow Training Operator}
+\resumeItem{Engineered an end-to-end ML model lifecycle, automating metadata tracking, immutable versioning, asynchronous image building, deployment, endpoint health checks, and data drift monitoring.}
+\resumeItem{Containerized microservices utilizing Docker and orchestrated highly available deployments on Kubernetes.}
+\resumeItem{Provisioned scalable AWS infrastructure (VPC, EC2, ALB, S3, EBS) and configured security policies (IAM, ACM, Secrets Manager) via Terraform (IaC).}
+\resumeItem{Integrated and deployed cloud-native ecosystem components on Kubernetes, including Harbor (image registry), Argo Workflows (orchestrator), Prometheus \& Grafana (observability), and KEDA (event-driven autoscaling).}
+\resumeItem{Implemented a GitOps-driven CI/CD pipeline utilizing GitHub Actions and ArgoCD, automating code quality checks, testing, image security scanning, building, and declarative cluster state synchronization.}
+\resumeItemListEnd
+
+\resumeProjectHeading
+{\textbf{SageLMS} $|$ \href{https://github.com/daithang59/sagelms}{GitHub} $|$ \emph{Spring Boot, FastAPI, LangChain, PostgreSQL, Docker, Kubernetes, GCP, GitHub Actions, FluxCD }}
+{4/2026 -- 6/2026}
+\resumeItemListStart
+\resumeItem{Architected a secure-by-design microservices platform for an AI-integrated Learning Management System, comprising gateway, authentication, lesson, challenge, and AI tutor services.}
+\resumeItem{Provisioned scalable and secure Google Cloud Platform (GCP) infrastructure, configuring VPC, GKE, Cloud Storage, and Google Secret Manager.}
+\resumeItem{Integrated shift-left security practices by establishing comprehensive security and vulnerability testing protocols for both source code and Dockerfiles.}
+\resumeItem{Built a robust DevSecOps CI/CD pipeline via GitHub Actions and FluxCD (GitOps), automating unit tests, secret scanning (Gitleaks), static code analysis (SonarCloud), container vulnerability scanning (Trivy), and image signing (Cosign).}
+\resumeItem{Enforced zero-trust runtime security within the Kubernetes cluster by implementing Kyverno for pod admission policies, Network Policies for strict traffic isolation, and centralized credential injection.}
+\resumeItemListEnd
+
 \resumeSubHeadingListEnd
-
 %-----------RESEARCH-----------
-\section{Research \& Awards}
+\section{Research}
 \resumeSubHeadingListStart
   \resumeProjectHeading
     {\parbox[t]{0.79\textwidth}{\textbf{\href{https://csonet-conf.github.io/csonet26/index.html}{A Drift-Aware MLOps Framework for Multi-Model Serving: A Network Intrusion Detection Case Study}}}}{CSoNet 2026}
@@ -115,6 +125,9 @@
     \resumeItem{First author; paper is currently under review (awaiting decision).}
   \resumeItemListEnd
 \resumeSubHeadingListEnd
+
+%-----------AWARDS-----------
+\section{Awards}
 \begin{itemize}[leftmargin=0.15in]
   \small
   \item Encouragement Scholarship for Academic Excellence: Semester 1, 2023--2024; Semester 1, 2024--2025; Semester 2, 2024--2025.
@@ -124,12 +137,11 @@
 \section{Technical Skills}
 \begin{itemize}[leftmargin=0.15in, label={}]
   \small{\item{
-    \textbf{Frontend:} React, Tailwind CSS \quad | \quad
-    \textbf{Backend:} Django, FastAPI, Spring Boot \quad | \quad
-    \textbf{Data:} PostgreSQL \\
-    \textbf{Containers \& Orchestration:} Docker, Kubernetes, K3s, GKE, Argo Workflows, Harbor \\
-    \textbf{Cloud \& IaC:} AWS (VPC, EC2, S3, EKS, Route 53, SageMaker, IAM, Secrets Manager), Terraform, Ansible \\
+    \textbf{Software:} React, Tailwind CSS, Django, FastAPI, PostgreSQL \\
+    \textbf{Containers \& Orchestration:} Docker, Kubernetes, EKS, GKE, Argo Workflows \\
+    \textbf{Infrastructure:} GCP, AWS, Terraform, Ansible \\
     \textbf{CI/CD \& GitOps:} Git, GitHub, GitHub Actions, Argo CD, Flux CD \\
+    \textbf{MLOps:} MLflow, Kubeflow, BentoML \\
     \textbf{Observability \& Networking:} Prometheus, Grafana, Cloudflare, Cisco Packet Tracer \quad | \quad
     \textbf{Tools:} VS Code
   }}

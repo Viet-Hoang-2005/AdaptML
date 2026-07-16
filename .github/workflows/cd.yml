@@ -228,7 +228,7 @@ jobs:
           if [ "${{ needs.detect-changes.outputs.packager }}" == "true" ]; then
             yq e -i '(.spec.templates[] | select(.name == "prepare-package" or .name == "notify-success") | .container.image) = "'$REG'/mlops-paas-model-packager:'$SHA'"' k8s/argo-workflows/build-workflowtemplate.yaml
           fi
-          
+
           if [ "${{ needs.detect-changes.outputs.evidently }}" == "true" ]; then
             yq e -i '(.spec.templates[] | select(.name == "run-evidently") | .container.image) = "'$REG'/mlops-paas-evidently:'$SHA'"' k8s/argo-workflows/evidently-workflowtemplate.yaml
           fi
@@ -270,7 +270,7 @@ jobs:
           if [ "${{ needs.detect-changes.outputs.packager }}" == "true" ]; then
             PACKAGER_TAG="$REG/mlops-paas-model-packager:$SHA"
           fi
-          
+
           if [ "${{ needs.detect-changes.outputs.evidently }}" == "true" ]; then
             EVIDENTLY_TAG="$REG/mlops-paas-evidently:$SHA"
           fi

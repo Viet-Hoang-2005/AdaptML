@@ -15,7 +15,7 @@ def workspace_prefix(tenant_id, project_id, kind):
     return f"{project_prefix(tenant_id, project_id)}/{kind}/"
 
 
-def build_input_prefix(tenant_id, project_id, kind):
+def build_input_prefix(tenant_id, project_id, build_id, kind):
     if kind not in {
         "source_artifact",
         "label_mapping",
@@ -26,7 +26,11 @@ def build_input_prefix(tenant_id, project_id, kind):
         "input_schema",
     }:
         raise ValueError("Unsupported build input kind")
-    return f"{project_prefix(tenant_id, project_id)}/build-inputs/{kind}/"
+    return f"{project_prefix(tenant_id, project_id)}/builds/{_clean(build_id)}/inputs/{kind}/"
+
+
+def build_prefix(tenant_id, project_id, build_id):
+    return f"{project_prefix(tenant_id, project_id)}/builds/{_clean(build_id)}"
 
 
 def training_job_prefix(tenant_id, project_id, job_id):

@@ -6,7 +6,7 @@ from django.conf import settings
 from infrastructure.argo import ArgoWebhookClient
 from infrastructure.http import HttpClient
 from infrastructure.storage import S3Storage
-from infrastructure.storage.paths import drift_run_prefix, version_prefix
+from infrastructure.storage.paths import build_prefix, drift_run_prefix, version_prefix
 
 
 class _ArgoBackend:
@@ -25,14 +25,15 @@ class ArgoBuildBackend(_ArgoBackend):
     setting_name = "ARGO_BUILD_WEBHOOK_URL"
 
     def run(self, build):
-        version = build.version
-        project = version.project
-        source = version.artifacts.filter(kind__in=("source", "training_output")).first()
+        project = build.project
+        source = build.input_assets.filter(kind="source_artifact").first()
+        if source is None and build.version_id:
+            source = build.version.artifacts.filter(kind__in=("source", "training_output")).first()
         if not source:
-            raise RuntimeError("The model version has no buildable source artifact.")
+            raise RuntimeError("The build has no source artifact.")
         package_uri = (
             f"s3://{self.storage.bucket}/"
-            f"{version_prefix(project.owner.tenant_id, project.public_id, version.public_id)}"
+            f"{build_prefix(project.owner.tenant_id, project.public_id, build.public_id)}"
             "/artifacts/model-package.zip"
         )
         build.package_uri = package_uri
@@ -40,11 +41,10 @@ class ArgoBuildBackend(_ArgoBackend):
         return self.trigger(
             {
                 "build_id": str(build.public_id),
-                "version_id": str(version.public_id),
                 "tenant_id": project.owner.tenant_id,
-                "flavor": version.flavor,
-                "task_type": "TEST_ZIP" if source.metadata.get("artifact_format") == "mlflow_zip" else "BUILD",
-                "requirements_text": version.requirements_snapshot,
+                "flavor": build.flavor,
+                "task_type": "TEST_ZIP" if build.artifact_format == "mlflow_zip" else "BUILD",
+                "requirements_text": build.requirements_snapshot,
                 "source_artifact_name": source.name,
                 "source_download_url": self.storage.presigned_get(source.uri, 14400),
                 "output_upload_url": self.storage.presigned_put(package_uri, 14400),
@@ -139,7 +139,8 @@ class ArgoDeploymentBackend(_ArgoBackend):
         version = deployment.version
         project = version.project
         container_name = f"deploy-{str(deployment.build.public_id).lower()}"
-        target_port = 3000 if project.model_type == "dl" else 5001
+        model_type = "dl" if version.flavor in {"pytorch", "tensorflow"} else "ml"
+        target_port = 3000 if model_type == "dl" else 5001
         self._log(f"Submitting Argo deployment workflow for runtime {container_name}.")
         self.trigger(
             {
@@ -152,7 +153,7 @@ class ArgoDeploymentBackend(_ArgoBackend):
                 "image_uri": deployment.build.image_uri,
                 "image_name": deployment.build.image_uri,
                 "container_name": container_name,
-                "model_type": project.model_type,
+                "model_type": model_type,
                 "target_port": str(target_port),
                 "model_uri": next(
                     (

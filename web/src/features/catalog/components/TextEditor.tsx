@@ -2,20 +2,19 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { LazyCodeEditor } from '@/shared/ui/LazyCodeEditor';
 import { Trash2, RotateCcw, Upload, Save, FileArchive } from 'lucide-react';
 import { toast } from '@/shared/ui/toastStore';
-import { updateModelRequirements } from '@/features/catalog/api/catalogApi';
 import type { ModelProject } from '@/features/catalog/types';
 
 export interface TextEditorProps {
   modelProject: ModelProject;
   onDirtyChange?: (isDirty: boolean) => void;
   onContentChange?: (content: string) => void;
-  /** Called after requirements are successfully persisted to the server (ModelProject.requirements_text updated). */
+  /** Called after the current training-job requirements are accepted locally. */
   onSaveSuccess?: () => void;
 }
 
 export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSaveSuccess }: TextEditorProps) {
-  const [content, setContent] = useState<string>(modelProject.requirements_text ?? '');
-  const [originalContent, setOriginalContent] = useState<string>(modelProject.requirements_text ?? '');
+  const [content, setContent] = useState<string>('');
+  const [originalContent, setOriginalContent] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -35,9 +34,8 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
   const [prevModelId, setPrevModelId] = useState(modelProject.id);
   if (prevModelId !== modelProject.id) {
     setPrevModelId(modelProject.id);
-    const fresh = modelProject.requirements_text ?? '';
-    setContent(fresh);
-    setOriginalContent(fresh);
+    setContent('');
+    setOriginalContent('');
   }
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,16 +61,15 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await updateModelRequirements(modelProject.id, content);
       setOriginalContent(content);
       onSaveSuccess?.();
-      toast.success('requirements.txt saved successfully.');
+      toast.success('requirements.txt attached to this training job.');
     } catch {
-      toast.error('Failed to save requirements.txt');
+      toast.error('Failed to accept requirements.txt');
     } finally {
       setSaving(false);
     }
-  }, [modelProject.id, content, onSaveSuccess]);
+  }, [content, onSaveSuccess]);
 
   const isEmpty = content.trim() === '';
 
@@ -121,7 +118,7 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
             className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-40"
             onClick={handleSave}
             disabled={saving || !isDirty}
-            title="Save to server"
+            title="Use for this training job"
           >
             {saving ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />

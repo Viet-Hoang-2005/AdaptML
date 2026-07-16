@@ -135,7 +135,7 @@ export default function CreateTrainingJobPage() {
     ));
   }, []);
 
-  /** Called by TextEditor after a successful Save (PATCH ModelProject) */
+  /** Called after TextEditor accepts requirements for the current training job. */
   const handleRequirementsSaved = useCallback(() => {
     setRequirementsDirty(false);
   }, []);
@@ -183,9 +183,7 @@ export default function CreateTrainingJobPage() {
         name: selectedModel.name,
         model_version: `v${(parseInt((selectedModel.version ?? '0').replace('v', '')) || 0) + 1}`,
         registered_model_id: selectedModel.id,
-        // Intentionally omit requirements_text here — backend will read from
-        // ModelProject.requirements_text (the last saved value) as source of truth.
-        requirements_text: undefined as unknown as string,
+        requirements_text: form.requirements_text,
       };
 
       const response = await createTrainingJob(payload);

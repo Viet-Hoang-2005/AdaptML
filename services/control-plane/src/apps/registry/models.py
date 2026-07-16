@@ -18,10 +18,8 @@ class ModelVersion(models.Model):
         "training.TrainingJob", on_delete=models.PROTECT, related_name="registered_versions", null=True, blank=True
     )
     version = models.CharField(max_length=80)
-    description = models.TextField(blank=True)
     requirements_snapshot = models.TextField(blank=True)
     flavor = models.CharField(max_length=80, blank=True)
-    source_config_revision = models.PositiveIntegerField(null=True, blank=True)
     stage = models.CharField(max_length=20, choices=STAGES, default="none")
     deployability = models.CharField(max_length=30, choices=DEPLOYABILITY, default="unknown")
     deployability_reason = models.TextField(blank=True)

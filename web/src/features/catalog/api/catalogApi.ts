@@ -70,14 +70,6 @@ export const updateModelProject = async (
     access_mode: payload.access_mode,
   })).data;
 
-export const updateModelRequirements = async (
-  modelId: string,
-  requirementsText: string,
-): Promise<ModelProject> =>
-  (await apiClient.patch<ModelProject>(controlPlaneURL(`/models/${modelId}/requirements/`), {
-    requirements_text: requirementsText,
-  })).data;
-
 export const deleteModelProject = async (modelId: string, force = false): Promise<MessageResponse> =>
   (await apiClient.delete<MessageResponse>(controlPlaneURL(`/models/${modelId}/${force ? '?force=true' : ''}`))).data;
 

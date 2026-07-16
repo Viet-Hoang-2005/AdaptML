@@ -23,7 +23,6 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
                 ('version', models.CharField(max_length=80)),
-                ('description', models.TextField(blank=True)),
                 ('requirements_snapshot', models.TextField(blank=True)),
                 ('flavor', models.CharField(blank=True, max_length=80)),
                 ('stage', models.CharField(choices=[('none', 'None'), ('staging', 'Staging'), ('production', 'Production'), ('archived', 'Archived')], default='none', max_length=20)),
@@ -58,7 +57,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('kind', models.CharField(choices=[('source', 'Source'), ('training_output', 'Training Output'), ('package', 'Package'), ('label_mapping', 'Label Mapping'), ('mlflow', 'MLflow'), ('image', 'Image')], max_length=40)),
+                ('kind', models.CharField(choices=[('source', 'Source'), ('training_output', 'Training Output'), ('package', 'Package'), ('label_mapping', 'Label Mapping'), ('mlflow', 'MLflow'), ('image', 'Image'), ('metrics', 'Metrics'), ('params', 'Parameters'), ('model_insights', 'Model Insights'), ('feature_importance', 'Feature Importance'), ('input_schema', 'Input Schema')], max_length=40)),
                 ('name', models.CharField(max_length=255)),
                 ('uri', models.CharField(max_length=1024)),
                 ('checksum', models.CharField(blank=True, max_length=128)),

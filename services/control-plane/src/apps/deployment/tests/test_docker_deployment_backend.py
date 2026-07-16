@@ -34,13 +34,14 @@ class RecordingDockerClient:
 @pytest.mark.django_db
 def test_local_deployment_uses_embedded_model_artifact_and_becomes_healthy():
     owner = get_user_model().objects.create_user("runtime-owner@example.com", "password123")
-    project = ModelProject.objects.create(owner=owner, name="runtime model", model_type="ml")
+    project = ModelProject.objects.create(owner=owner, name="runtime model")
     version = ModelVersion.objects.create(project=project, version="1", flavor="xgboost")
     build = Build.objects.create(
+        project=project,
         version=version,
+        flavor="xgboost",
         status="ready",
         image_uri="build-runtime:latest",
-        is_saved=True,
     )
     deployment = Deployment.objects.create(version=version, build=build, status="deploying")
     docker = RecordingDockerClient()

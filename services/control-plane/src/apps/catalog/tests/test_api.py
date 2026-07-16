@@ -51,10 +51,10 @@ def test_project_list_returns_metadata_image_ready_and_deployed_lifecycle_status
     deployed_project = ModelProject.objects.create(owner=owner, name="Deployed")
 
     image_version = ModelVersion.objects.create(project=image_project, version="1")
-    Build.objects.create(version=image_version, status="ready")
+    Build.objects.create(project=image_project, version=image_version, flavor="sklearn", status="ready")
 
     deployed_version = ModelVersion.objects.create(project=deployed_project, version="1")
-    deployed_build = Build.objects.create(version=deployed_version, status="ready")
+    deployed_build = Build.objects.create(project=deployed_project, version=deployed_version, flavor="sklearn", status="ready")
     Deployment.objects.create(version=deployed_version, build=deployed_build, status="healthy")
 
     client = APIClient()
