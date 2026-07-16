@@ -24,7 +24,7 @@ app.add_middleware(
 
 class InferenceRequest(BaseModel):
     features: Dict[str, Any]
-    model_id: str | None = None
+    model_version_id: str | None = None
 
 @app.get("/")
 async def health_check():
@@ -36,17 +36,17 @@ async def health_check():
 
 @app.get("/health")
 async def model_health():
-    resolved_id_str = os.environ.get("MODEL_ID")
+    resolved_id_str = os.environ.get("MODEL_VERSION_ID")
     if not resolved_id_str or resolved_id_str == "unknown":
         return {
             "status": "healthy",
             "model_loaded": False,
             "engine": "machine-learning-serving",
-            "message": "Waiting for MODEL_ID specification."
+            "message": "Waiting for MODEL_VERSION_ID specification."
         }
         
     try:
-        model_id = resolved_id_str
+        model_version_id = resolved_id_str
         model_uri = os.environ.get("MODEL_URI", "")
         version_marker = os.environ.get("MODEL_VERSION", "latest")
         if not model_uri:
@@ -56,11 +56,12 @@ async def model_health():
                 "engine": "machine-learning-serving",
                 "message": "MODEL_URI env var is missing."
             }
-        loaded = load_model_from_uri(model_id, model_uri, version_marker)
+        loaded = load_model_from_uri(model_version_id, model_uri, version_marker)
         return {
             "status": "healthy",
             "tenant_id": os.environ.get("TENANT_ID", "unknown"),
-            "model_id": str(model_id),
+            "project_id": os.environ.get("PROJECT_ID", "unknown"),
+            "model_version_id": str(model_version_id),
             "model_loaded": loaded.get("model") is not None,
             "engine": "machine-learning-serving",
         }
@@ -74,20 +75,20 @@ async def model_health():
 
 @app.post("/predict")
 async def predict(payload: InferenceRequest):
-    model_id_env = os.environ.get("MODEL_ID")
-    resolved_id_str = str(payload.model_id) if payload.model_id else model_id_env
+    model_version_id_env = os.environ.get("MODEL_VERSION_ID")
+    resolved_id_str = str(payload.model_version_id) if payload.model_version_id else model_version_id_env
     
     if not resolved_id_str or resolved_id_str == "unknown":
-        raise HTTPException(status_code=400, detail="Missing model_id in request or environment.")
+        raise HTTPException(status_code=400, detail="Missing model_version_id in request or environment.")
         
-    model_id = resolved_id_str
+    model_version_id = resolved_id_str
 
     model_uri = os.environ.get("MODEL_URI", "")
     version_marker = os.environ.get("MODEL_VERSION", "latest")
     if not model_uri:
         raise HTTPException(status_code=503, detail="MODEL_URI environment variable is empty.")
 
-    loaded_model = load_model_from_uri(model_id, model_uri, version_marker)
+    loaded_model = load_model_from_uri(model_version_id, model_uri, version_marker)
     model = loaded_model["model"]
     expected_features = loaded_model.get("expected_features")
 
@@ -148,7 +149,8 @@ async def predict(payload: InferenceRequest):
                 "prediction": single_result,
                 "confidence": confidence,
                 "tenant_id": os.environ.get("TENANT_ID", "unknown"),
-                "model_id": str(model_id),
+                "project_id": os.environ.get("PROJECT_ID", "unknown"),
+                "model_version_id": str(model_version_id),
                 "engine": "machine-learning-serving",
             },
             status_code=200,

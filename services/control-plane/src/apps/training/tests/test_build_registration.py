@@ -29,6 +29,11 @@ class FakeStorage:
         self.deleted.append(prefix)
 
 
+class FakeImageRegistry:
+    def promote(self, *, build, version, image_uri, image_digest=""):
+        return f"image-{build.project.public_id}:v{version.version}", image_digest or "sha256:local"
+
+
 def completed_job(email="training-build@example.com"):
     owner = get_user_model().objects.create_user(email, "password123")
     project = ModelProject.objects.create(owner=owner, name="NIDS")
@@ -111,18 +116,20 @@ def test_successful_training_build_creates_one_version_with_summaries():
 
     first = register_successful_build(
         build=build,
-        image_uri=f"build-{build.public_id}:latest",
+        image_uri=f"image-{job.project.public_id}:build-{build.public_id}",
         image_digest="sha256:training",
         metrics_summary={"accuracy": 0.98},
         params_summary={"max_depth": 8},
         insights_summary={"classes": ["normal", "attack"]},
         storage=storage,
+        image_registry=FakeImageRegistry(),
     )
     replay = register_successful_build(
         build=build,
-        image_uri=f"build-{build.public_id}:latest",
+        image_uri=f"image-{job.project.public_id}:build-{build.public_id}",
         image_digest="sha256:training",
         storage=storage,
+        image_registry=FakeImageRegistry(),
     )
 
     assert first.version_id == replay.version_id

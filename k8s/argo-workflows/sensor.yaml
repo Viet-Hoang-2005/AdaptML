@@ -46,7 +46,13 @@ spec:
                   parameters:
                     - name: build_id
                       value: ""
+                    - name: project_id
+                      value: ""
                     - name: tenant_id
+                      value: ""
+                    - name: image_repository
+                      value: ""
+                    - name: image_tag
                       value: ""
                     - name: flavor
                       value: ""
@@ -71,40 +77,52 @@ spec:
               dest: spec.arguments.parameters.0.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.tenant_id
+                dataKey: body.project_id
               dest: spec.arguments.parameters.1.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.flavor
+                dataKey: body.tenant_id
               dest: spec.arguments.parameters.2.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.task_type
+                dataKey: body.image_repository
               dest: spec.arguments.parameters.3.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.requirements_text
+                dataKey: body.image_tag
               dest: spec.arguments.parameters.4.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_artifact_name
+                dataKey: body.flavor
               dest: spec.arguments.parameters.5.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_type
+                dataKey: body.task_type
               dest: spec.arguments.parameters.6.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_download_url
+                dataKey: body.requirements_text
               dest: spec.arguments.parameters.7.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.output_upload_url
+                dataKey: body.source_artifact_name
               dest: spec.arguments.parameters.8.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.control_plane_webhook_url
+                dataKey: body.source_type
               dest: spec.arguments.parameters.9.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.source_download_url
+              dest: spec.arguments.parameters.10.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.output_upload_url
+              dest: spec.arguments.parameters.11.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.control_plane_webhook_url
+              dest: spec.arguments.parameters.12.value
     - template:
         name: deploy-workflow-trigger
         conditions: "deploy-dep"
@@ -124,7 +142,9 @@ spec:
                   parameters:
                     - name: tenant_id
                       value: ""
-                    - name: model_id
+                    - name: project_id
+                      value: ""
+                    - name: model_version_id
                       value: ""
                     - name: version
                       value: ""
@@ -145,32 +165,36 @@ spec:
               dest: spec.arguments.parameters.0.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.model_id
+                dataKey: body.project_id
               dest: spec.arguments.parameters.1.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.version
+                dataKey: body.model_version_id
               dest: spec.arguments.parameters.2.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.image_name
+                dataKey: body.version
               dest: spec.arguments.parameters.3.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.container_name
+                dataKey: body.image_name
               dest: spec.arguments.parameters.4.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.model_type
+                dataKey: body.container_name
               dest: spec.arguments.parameters.5.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.target_port
+                dataKey: body.model_type
               dest: spec.arguments.parameters.6.value
             - src:
                 dependencyName: deploy-dep
-                dataKey: body.model_uri
+                dataKey: body.target_port
               dest: spec.arguments.parameters.7.value
+            - src:
+                dependencyName: deploy-dep
+                dataKey: body.model_uri
+              dest: spec.arguments.parameters.8.value
 
     - template:
         name: drift-workflow-trigger
@@ -193,7 +217,9 @@ spec:
                       value: ""
                     - name: tenant_id
                       value: ""
-                    - name: model_id
+                    - name: project_id
+                      value: ""
+                    - name: model_version_id
                       value: ""
                     - name: model_name
                       value: ""
@@ -222,17 +248,19 @@ spec:
               dest: spec.arguments.parameters.0.value
             - src: { dependencyName: drift-dep, dataKey: body.tenant_id }
               dest: spec.arguments.parameters.1.value
-            - src: { dependencyName: drift-dep, dataKey: body.model_id }
+            - src: { dependencyName: drift-dep, dataKey: body.project_id }
               dest: spec.arguments.parameters.2.value
-            - src: { dependencyName: drift-dep, dataKey: body.model_name }
+            - src: { dependencyName: drift-dep, dataKey: body.model_version_id }
               dest: spec.arguments.parameters.3.value
-            - src: { dependencyName: drift-dep, dataKey: body.model_uri }
+            - src: { dependencyName: drift-dep, dataKey: body.model_name }
               dest: spec.arguments.parameters.4.value
+            - src: { dependencyName: drift-dep, dataKey: body.model_uri }
+              dest: spec.arguments.parameters.5.value
             - src:
                 { dependencyName: drift-dep, dataKey: body.reference_data_url }
-              dest: spec.arguments.parameters.5.value
-            - src: { dependencyName: drift-dep, dataKey: body.html_s3_uri }
               dest: spec.arguments.parameters.6.value
+            - src: { dependencyName: drift-dep, dataKey: body.html_s3_uri }
+              dest: spec.arguments.parameters.7.value
             - src:
                 { dependencyName: drift-dep, dataKey: body.report_json_s3_uri }
               dest: spec.arguments.parameters.7.value
@@ -382,28 +410,28 @@ spec:
             - src: { dependencyName: train-dep, dataKey: body.memory }
               dest: spec.arguments.parameters.6.value
             - src: { dependencyName: train-dep, dataKey: body.accelerator_type }
-              dest: spec.arguments.parameters.7.value
+              dest: spec.arguments.parameters.8.value
             - src:
                 { dependencyName: train-dep, dataKey: body.accelerator_count }
-              dest: spec.arguments.parameters.8.value
-            - src: { dependencyName: train-dep, dataKey: body.s3_source_uri }
               dest: spec.arguments.parameters.9.value
+            - src: { dependencyName: train-dep, dataKey: body.s3_source_uri }
+              dest: spec.arguments.parameters.10.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.s3_training_data_uri,
                 }
-              dest: spec.arguments.parameters.10.value
-            - src: { dependencyName: train-dep, dataKey: body.output_upload_url }
               dest: spec.arguments.parameters.11.value
+            - src: { dependencyName: train-dep, dataKey: body.output_upload_url }
+              dest: spec.arguments.parameters.12.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.output_upload_capability,
                 }
-              dest: spec.arguments.parameters.12.value
-            - src: { dependencyName: train-dep, dataKey: body.entry_point }
               dest: spec.arguments.parameters.13.value
+            - src: { dependencyName: train-dep, dataKey: body.entry_point }
+              dest: spec.arguments.parameters.14.value
             - src: { dependencyName: train-dep, dataKey: body.model_version }
               dest: spec.arguments.parameters.14.value
             - src:

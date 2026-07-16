@@ -21,10 +21,10 @@ SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
 PREFERRED_MODEL_FILENAMES = ("model.pkl", "model.joblib", "model.xgb")
 
 class RedisLogHandler(logging.Handler):
-    def __init__(self, redis_url: str, model_id: str):
+    def __init__(self, redis_url: str, build_id: str):
         super().__init__()
         self.redis_client = redis.from_url(redis_url)
-        self.log_key = f"build_logs:{model_id}"
+        self.log_key = f"build_logs:{build_id}"
         self.redis_client.delete(self.log_key)
 
     def emit(self, record):
@@ -121,12 +121,22 @@ def post_webhook(webhook_url: str, payload: dict) -> None:
         raise RuntimeError(f"Build webhook failed with HTTP {response.status_code}: {response.text[:500]}")
 
 
+def configured_image_reference(build_id: str = "") -> str:
+    build_id = os.environ.get("BUILD_ID", "").strip().lower() or build_id.lower()
+    project_id = os.environ.get("PROJECT_ID", "").strip().lower() or build_id
+    repository = os.environ.get("IMAGE_REPOSITORY", "").strip().rstrip("/")
+    tag = os.environ.get("IMAGE_TAG", "").strip() or f"build-{build_id}"
+    if not repository:
+        repository = f"image-{project_id}"
+        harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
+        harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip().strip("/")
+        if harbor_url:
+            repository = f"{harbor_url}/{harbor_project}/{repository}"
+    return f"{repository}:{tag}"
+
+
 def built_image_metadata() -> dict[str, str]:
-    build_id = os.environ.get("BUILD_ID", "").strip().lower()
-    harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
-    harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
-    base_name = f"build-{build_id}:latest"
-    image_uri = f"{harbor_url}/{harbor_project}/{base_name}" if harbor_url else base_name
+    image_uri = configured_image_reference()
     try:
         image = docker.from_env().images.get(image_uri)
         repo_digests = image.attrs.get("RepoDigests") or []
@@ -135,7 +145,7 @@ def built_image_metadata() -> dict[str, str]:
         digest = ""
     return {"image_uri": image_uri, "image_digest": digest}
 
-def build_custom_image(workspace: Path, model_id: str, tenant_id: str, requirements_text: str) -> None:
+def build_custom_image(workspace: Path, build_id: str, tenant_id: str, requirements_text: str) -> None:
     docker_client = docker.from_env()
     harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
     harbor_user = os.environ.get("HARBOR_USERNAME", "").strip()
@@ -158,10 +168,7 @@ COPY model /app/model_artifact
     (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
 
-    build_id = os.environ.get("BUILD_ID", "").strip().lower()
-    base_name = f"build-{build_id or model_id.lower()}:latest"
-    harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
-    image_tag = f"{harbor_url}/{harbor_project}/{base_name}" if harbor_url else base_name
+    image_tag = configured_image_reference(build_id)
 
     print(f"Building Docker image {image_tag} from workspace {workspace}...")
     for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
@@ -171,7 +178,7 @@ COPY model /app/model_artifact
             raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
     print(f"Docker image {image_tag} built successfully!")
 
-    if harbor_url and harbor_user and harbor_pass:
+    if harbor_url and harbor_user and harbor_pass and image_tag.startswith(f"{harbor_url}/"):
         print(f"Pushing image {image_tag} to Harbor...")
         for line in docker_client.images.push(image_tag, stream=True, decode=True):
             if "status" in line:
@@ -180,7 +187,7 @@ COPY model /app/model_artifact
                 raise RuntimeError(line["errorDetail"].get("message", "Failed to push image to Harbor"))
         print("Image successfully pushed to Harbor!")
 
-def build_bento_image(workspace: Path, model_id: str, tenant_id: str, requirements_text: str) -> None:
+def build_bento_image(workspace: Path, build_id: str, tenant_id: str, requirements_text: str) -> None:
     docker_client = docker.from_env()
     harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
     harbor_user = os.environ.get("HARBOR_USERNAME", "").strip()
@@ -201,10 +208,7 @@ COPY model /app/model_artifact
     (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
     (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
 
-    build_id = os.environ.get("BUILD_ID", "").strip().lower()
-    base_name = f"build-{build_id or model_id.lower()}:latest"
-    harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip()
-    image_tag = f"{harbor_url}/{harbor_project}/{base_name}" if harbor_url else base_name
+    image_tag = configured_image_reference(build_id)
 
     print(f"Building BentoML Docker image {image_tag} from workspace {workspace}...")
     for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
@@ -214,7 +218,7 @@ COPY model /app/model_artifact
             raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
     print(f"BentoML Docker image {image_tag} built successfully!")
 
-    if harbor_url and harbor_user and harbor_pass:
+    if harbor_url and harbor_user and harbor_pass and image_tag.startswith(f"{harbor_url}/"):
         print(f"Pushing BentoML image {image_tag} to Harbor...")
         for line in docker_client.images.push(image_tag, stream=True, decode=True):
             if "status" in line:
@@ -257,7 +261,7 @@ def read_training_summaries(extracted_dir: Path) -> tuple[dict[str, dict], Path 
             summaries[key] = value
     return summaries, mlops_dir
 
-def run_build_task(model_id: str, webhook_url: str) -> None:
+def run_build_task(build_id: str, webhook_url: str) -> None:
     flavor = os.environ.get("FLAVOR", "").lower()
     requirements_text = os.environ.get("REQUIREMENTS_TEXT", "")
     source_download_url = os.environ.get("SOURCE_DOWNLOAD_URL", "")
@@ -280,7 +284,7 @@ def run_build_task(model_id: str, webhook_url: str) -> None:
         workspace.mkdir(parents=True, exist_ok=True)
         print(f"Using shared workspace directory: {workspace}")
     else:
-        workspace = Path(tempfile.mkdtemp(prefix=f"build-{model_id}-"))
+        workspace = Path(tempfile.mkdtemp(prefix=f"build-{build_id}-"))
     try:
         artifact_name = ""
         extracted_label_mapping_path = None
@@ -373,7 +377,7 @@ COPY model /app/model_artifact
             (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
             
             payload = {
-                "model_id": model_id,
+                "build_id": build_id,
                 "status": "success",
                 "package_manifest": manifest,
                 "package_preview_tree": preview_tree,
@@ -385,16 +389,16 @@ COPY model /app/model_artifact
             return
         elif flavor in ["pytorch", "tensorflow", "keras"]:
             print("Detected Deep Learning flavor. Building BentoML container image...")
-            build_bento_image(workspace, model_id, tenant_id, requirements_text)
+            build_bento_image(workspace, build_id, tenant_id, requirements_text)
         else:
             print("Building custom lightweight Docker image...")
-            build_custom_image(workspace, model_id, tenant_id, requirements_text)
+            build_custom_image(workspace, build_id, tenant_id, requirements_text)
         print("Build completed successfully!")
 
         post_webhook(
             webhook_url,
             {
-                "model_id": model_id,
+                "build_id": build_id,
                 "status": "success",
                 "package_manifest": manifest,
                 "package_preview_tree": preview_tree,
@@ -408,7 +412,7 @@ COPY model /app/model_artifact
         if not os.environ.get("BUILD_WORKSPACE_DIR"):
             shutil.rmtree(workspace, ignore_errors=True)
 
-def run_test_zip_task(model_id: str, webhook_url: str) -> None:
+def run_test_zip_task(build_id: str, webhook_url: str) -> None:
     source_download_url = os.environ.get("SOURCE_DOWNLOAD_URL", "")
     source_artifact_name = os.environ.get("SOURCE_ARTIFACT_NAME", "")
     flavor = os.environ.get("FLAVOR", "").lower()
@@ -422,7 +426,7 @@ def run_test_zip_task(model_id: str, webhook_url: str) -> None:
         workspace.mkdir(parents=True, exist_ok=True)
         print(f"Using shared workspace directory: {workspace}")
     else:
-        workspace = Path(tempfile.mkdtemp(prefix=f"test-{model_id}-"))
+        workspace = Path(tempfile.mkdtemp(prefix=f"test-{build_id}-"))
     try:
         artifact_name = Path(source_artifact_name).name
         zip_path = workspace / artifact_name
@@ -498,7 +502,7 @@ COPY model /app/model_artifact
             (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
             (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
             payload = {
-                "model_id": model_id,
+                "build_id": build_id,
                 "status": "success",
                 "package_manifest": manifest,
                 "package_preview_tree": preview_tree,
@@ -509,15 +513,15 @@ COPY model /app/model_artifact
             return
         else:
             if flavor in ["pytorch", "tensorflow", "keras"]:
-                build_bento_image(workspace, model_id, tenant_id, requirements_text)
+                build_bento_image(workspace, build_id, tenant_id, requirements_text)
             else:
-                build_custom_image(workspace, model_id, tenant_id, requirements_text)
+                build_custom_image(workspace, build_id, tenant_id, requirements_text)
         print("Test and build completed successfully!")
 
         post_webhook(
             webhook_url,
             {
-                "model_id": model_id,
+                "build_id": build_id,
                 "status": "success",
                 "package_manifest": manifest,
                 "package_preview_tree": preview_tree,
@@ -542,13 +546,13 @@ def run_notify_task(workspace_dir: str, webhook_url: str) -> None:
         payload["image_uri"] = image_uri
     if digest_file.exists():
         payload["image_digest"] = digest_file.read_text(encoding="utf-8").strip()
-    print(f"Sending post-build notification for model {payload.get('model_id')}...")
+    print(f"Sending post-build notification for build {payload.get('build_id')}...")
     post_webhook(webhook_url, payload)
     print("NOTIFY_EOF_SUCCESS")
 
-def setup_logger(model_id: str):
+def setup_logger(build_id: str):
     redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/1")
-    logger = logging.getLogger(f"build-{model_id}")
+    logger = logging.getLogger(f"build-{build_id}")
     logger.setLevel(logging.INFO)
 
     stdout_handler = logging.StreamHandler(sys.stdout)
@@ -573,7 +577,7 @@ def setup_logger(model_id: str):
     sys.stderr = StreamToLogger(logger, logging.ERROR)
 
     try:
-        redis_handler = RedisLogHandler(redis_url, model_id)
+        redis_handler = RedisLogHandler(redis_url, build_id)
         redis_handler.setFormatter(logging.Formatter("%(message)s"))
         logger.addHandler(redis_handler)
     except Exception as exc:
@@ -582,25 +586,25 @@ def setup_logger(model_id: str):
     return logger
 
 def main():
-    model_id = os.environ.get("MODEL_ID")
-    if not model_id:
-        print("Missing MODEL_ID")
+    build_id = os.environ.get("BUILD_ID")
+    if not build_id:
+        print("Missing BUILD_ID")
         sys.exit(1)
 
-    logger = setup_logger(model_id)
+    logger = setup_logger(build_id)
     webhook_url = os.environ.get("CONTROL_PLANE_WEBHOOK_URL")
 
     try:
         task_type = os.environ.get("TASK_TYPE", "BUILD")
-        print(f"Starting {task_type} process for model {model_id}...")
+        print(f"Starting {task_type} process for build {build_id}...")
 
         if task_type == "NOTIFY_BUILD":
             workspace_dir = os.environ.get("BUILD_WORKSPACE_DIR", "/workspace")
             run_notify_task(workspace_dir, webhook_url)
         elif task_type == "TEST_ZIP":
-            run_test_zip_task(model_id, webhook_url)
+            run_test_zip_task(build_id, webhook_url)
         else:
-            run_build_task(model_id, webhook_url)
+            run_build_task(build_id, webhook_url)
     except Exception as exc:
         logger.error("Build failed with error: %s", exc)
         logger.error(traceback.format_exc())
@@ -608,7 +612,7 @@ def main():
             post_webhook(
                 webhook_url,
                 {
-                    "model_id": model_id,
+                    "build_id": build_id,
                     "status": "error",
                     "error_message": str(exc),
                 },

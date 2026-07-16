@@ -30,10 +30,12 @@ Một TrainingJob tạo tối đa một version thành công. Build failed/cance
 
 1. Upload Model tạo build multipart từ artifact; Training tạo build qua `/{job_uuid}/build/`.
 2. Celery gọi `DockerBuildBackend` hoặc `ArgoBuildBackend`.
-3. Build callback thành công atomically tạo version nếu Build chưa có version, rồi đặt image URI/digest và trạng thái `ready`.
-4. Tạo deployment tại `/api/deployments/` chỉ với build thành công.
-5. Backend tạo worker runtime; `Endpoint` lưu public URL, internal URL, runtime name và health.
-6. Dừng deployment tại `/api/deployments/{deployment_uuid}/stop/`; đọc endpoint/log tại `/api/endpoints/` và `/{endpoint_uuid}/logs/`.
+3. Build ghi tag tạm `image-{project_uuid}:build-{build_uuid}` (dưới Harbor project `user-images` ở production).
+   Model-packager chỉ dùng `BUILD_ID` làm correlation ID cho Redis log, callback và workspace; `PROJECT_ID` chỉ xác định image repository.
+4. Callback thành công atomically tạo version nếu Build chưa có version, gắn tag `vN` lên cùng manifest, bỏ tag tạm, lưu Docker image ID/OCI manifest digest và đặt trạng thái `ready`.
+5. Tạo deployment tại `/api/deployments/` chỉ với build thành công; Docker pin image ID, Argo pin `repository@digest`.
+6. Backend tạo worker runtime; `Endpoint` lưu public URL, internal URL, runtime name và health.
+7. Dừng deployment tại `/api/deployments/{deployment_uuid}/stop/`; đọc endpoint/log tại `/api/endpoints/` và `/{endpoint_uuid}/logs/`.
 
 Production workflow chỉ tạo `Deployment` và `Service` cho worker. Không thêm Traefik `Middleware` hoặc `IngressRoute` cho model riêng lẻ.
 

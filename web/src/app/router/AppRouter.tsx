@@ -73,7 +73,7 @@ const router = createBrowserRouter(
           <Route index element={<DriftMonitoringPage />} />
           <Route path=":modelId" element={<DriftMonitoringPage />} />
           <Route path=":modelId/new" element={<CreateDriftMonitoringPage />} />
-          <Route path=":modelId/report" element={<DriftReportPage />} />
+          <Route path=":modelId/report/:runId" element={<DriftReportPage />} />
         </Route>
         <Route path="model-training">
           <Route index element={<TrainModelPage />} />

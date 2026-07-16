@@ -149,29 +149,37 @@ async def test_access_jwt_missing_kid_expired_and_invalid(monkeypatch):
 
 def test_resolve_worker_url_local_and_kubernetes(monkeypatch):
     monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
-    assert index.resolve_worker_url({"model_type": "ml"}, "/predict") == "http://machine-learning-serving:5001/predict"
-    assert index.resolve_worker_url({"model_type": "dl"}, "/health") == "http://deep-learning-serving:5002/health"
+    assert index.resolve_worker_url({"flavor": "xgboost"}, "/predict") == "http://machine-learning-serving:5001/predict"
+    assert index.resolve_worker_url({"flavor": "pytorch"}, "/health") == "http://deep-learning-serving:5002/health"
     monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "yes")
-    assert index.resolve_worker_url({"model_type": "ml", "endpoint_container_name": "worker"}, "/predict") == "http://worker-svc:5001/predict"
+    assert index.resolve_worker_url({"flavor": "tensorflow", "endpoint_container_name": "worker"}, "/predict") == "http://worker-svc:5002/predict"
     with pytest.raises(HTTPException) as exc:
-        index.resolve_worker_url({"model_type": "ml"}, "/predict")
+        index.resolve_worker_url({"flavor": "sklearn"}, "/predict")
     assert exc.value.status_code == 503
+
+
+def test_serving_engine_is_derived_from_version_flavor():
+    assert index.serving_engine_for_flavor("pytorch") == "dl"
+    assert index.serving_engine_for_flavor("TensorFlow") == "dl"
+    assert index.serving_engine_for_flavor("xgboost") == "ml"
+    assert index.serving_engine_for_flavor(None) == "ml"
 
 
 def test_send_to_redpanda_payload_and_failure(monkeypatch):
     producer = Mock()
     monkeypatch.setattr(index, "kafka_producer", producer)
-    index.send_to_redpanda("t", "m", {"x": 1}, "safe")
+    index.send_to_redpanda("t", "p", "v", {"x": 1}, "safe")
     value = json.loads(producer.produce.call_args.kwargs["value"])
     assert value["tenant_id"] == "t" and value["prediction"] == "safe"
+    assert value["project_id"] == "p" and value["model_version_id"] == "v"
     uuid.UUID(value["id"])
     producer.produce.side_effect = RuntimeError("down")
-    index.send_to_redpanda("t", "m", {}, None)
+    index.send_to_redpanda("t", "p", "v", {}, None)
 
 
 @pytest.mark.asyncio
 async def test_health_proxy_success_and_failure(monkeypatch):
-    token = {"model_record": {"model_type": "ml", "endpoint_container_name": "worker"}}
+    token = {"model_record": {"flavor": "sklearn", "endpoint_container_name": "worker"}}
     monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
     monkeypatch.setattr(index.httpx, "AsyncClient", lambda **kw: FakeAsyncClient(get=FakeResponse(payload={"status": "healthy"})))
     assert (await index.model_health("v", token))["status"] == "healthy"
@@ -183,7 +191,13 @@ async def test_health_proxy_success_and_failure(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_predict_proxy_success_and_background_event(monkeypatch):
-    record = {"id": "version", "tenant_id": "t", "model_type": "ml", "endpoint_container_name": "worker"}
+    record = {
+        "id": "version",
+        "project_id": "project",
+        "tenant_id": "t",
+        "flavor": "xgboost",
+        "endpoint_container_name": "worker",
+    }
     monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
     monkeypatch.setattr(index.httpx, "AsyncClient", lambda **kw: FakeAsyncClient(post=FakeResponse(payload={
         "prediction": "attack", "confidence": 91.0, "engine": "machine-learning-serving"
@@ -196,7 +210,13 @@ async def test_predict_proxy_success_and_background_event(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_predict_upstream_and_network_errors(monkeypatch):
-    record = {"id": "version", "tenant_id": "t", "model_type": "ml", "endpoint_container_name": "worker"}
+    record = {
+        "id": "version",
+        "project_id": "project",
+        "tenant_id": "t",
+        "flavor": "xgboost",
+        "endpoint_container_name": "worker",
+    }
     monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
     monkeypatch.setattr(index.httpx, "AsyncClient", lambda **kw: FakeAsyncClient(post=FakeResponse(422, {"detail": "bad"})))
     response = await index.predict("v", Mock(), index.InferenceRequest(features={}), BackgroundTasks(), {"model_record": record})

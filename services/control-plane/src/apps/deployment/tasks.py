@@ -1,10 +1,12 @@
 import logging
 
 from celery import shared_task
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from infrastructure.execution import build_backend, deployment_backend
 from infrastructure.execution.image_cleanup import BuildImageCleaner
+from infrastructure.execution.image_references import temporary_image_reference
 from infrastructure.storage import S3Storage
 from infrastructure.storage.paths import build_prefix
 
@@ -67,7 +69,12 @@ def execute_build(self, build_id):
         return "building"
     build.refresh_from_db()
     if build.status != "ready":
-        image_uri = build.image_uri or f"build-{build.public_id}:latest"
+        image_uri = build.image_uri or temporary_image_reference(
+            build.project.public_id,
+            build.public_id,
+            registry=settings.HARBOR_REGISTRY_URL if build.backend == "argo" else "",
+            registry_project=settings.HARBOR_USER_PROJECT,
+        )
         build = register_successful_build(build=build, image_uri=image_uri, image_digest=build.image_digest)
     Build.objects.filter(pk=build.pk).update(logs=str(result)[-20000:], completed_at=timezone.now())
     return "ready"

@@ -16,9 +16,9 @@ async def test_root_health_lists_cache(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_model_health_states(monkeypatch):
-    monkeypatch.delenv("MODEL_ID", raising=False)
+    monkeypatch.delenv("MODEL_VERSION_ID", raising=False)
     assert not (await index.model_health())["model_loaded"]
-    monkeypatch.setenv("MODEL_ID", "m")
+    monkeypatch.setenv("MODEL_VERSION_ID", "m")
     monkeypatch.delenv("MODEL_URI", raising=False)
     assert (await index.model_health())["status"] == "unhealthy"
     monkeypatch.setenv("MODEL_URI", "/model")
@@ -30,11 +30,11 @@ async def test_model_health_states(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_predict_requires_model_and_uri(monkeypatch):
-    monkeypatch.delenv("MODEL_ID", raising=False)
+    monkeypatch.delenv("MODEL_VERSION_ID", raising=False)
     with pytest.raises(HTTPException) as exc:
         await index.predict(index.InferenceRequest(features={}))
     assert exc.value.status_code == 400
-    monkeypatch.setenv("MODEL_ID", "m")
+    monkeypatch.setenv("MODEL_VERSION_ID", "m")
     monkeypatch.delenv("MODEL_URI", raising=False)
     with pytest.raises(HTTPException) as exc:
         await index.predict(index.InferenceRequest(features={}))
@@ -50,7 +50,7 @@ async def test_predict_reorders_features_maps_label_and_confidence(monkeypatch):
     model = Mock()
     model.predict.return_value = np.array([1])
     model._model_impl = Raw()
-    monkeypatch.setenv("MODEL_ID", "m")
+    monkeypatch.setenv("MODEL_VERSION_ID", "m")
     monkeypatch.setenv("MODEL_URI", "/model")
     monkeypatch.setenv("TENANT_ID", "tenant")
     monkeypatch.setattr(index, "load_model_from_uri", lambda *_: {
@@ -67,7 +67,7 @@ async def test_predict_reorders_features_maps_label_and_confidence(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_predict_missing_expected_feature(monkeypatch):
-    monkeypatch.setenv("MODEL_ID", "m")
+    monkeypatch.setenv("MODEL_VERSION_ID", "m")
     monkeypatch.setenv("MODEL_URI", "/model")
     monkeypatch.setattr(index, "load_model_from_uri", lambda *_: {
         "model": Mock(), "expected_features": ["a", "b"]
@@ -81,7 +81,7 @@ async def test_predict_missing_expected_feature(monkeypatch):
 async def test_predict_feature_name_value_error(monkeypatch):
     model = Mock()
     model.predict.side_effect = ValueError("feature_names mismatch")
-    monkeypatch.setenv("MODEL_ID", "m")
+    monkeypatch.setenv("MODEL_VERSION_ID", "m")
     monkeypatch.setenv("MODEL_URI", "/model")
     monkeypatch.setattr(index, "load_model_from_uri", lambda *_: {"model": model})
     with pytest.raises(HTTPException) as exc:
@@ -94,7 +94,7 @@ async def test_predict_feature_name_value_error(monkeypatch):
 async def test_predict_generic_error_is_500(monkeypatch):
     model = Mock()
     model.predict.side_effect = RuntimeError("boom")
-    monkeypatch.setenv("MODEL_ID", "m")
+    monkeypatch.setenv("MODEL_VERSION_ID", "m")
     monkeypatch.setenv("MODEL_URI", "/model")
     monkeypatch.setattr(index, "load_model_from_uri", lambda *_: {"model": model})
     with pytest.raises(HTTPException) as exc:

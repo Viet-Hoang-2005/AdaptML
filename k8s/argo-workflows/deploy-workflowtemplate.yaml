@@ -11,7 +11,8 @@ spec:
       inputs:
         parameters:
           - name: tenant_id
-          - name: model_id
+          - name: project_id
+          - name: model_version_id
           - name: version
           - name: image_name
           - name: container_name
@@ -27,7 +28,8 @@ spec:
             arguments:
               parameters:
                 - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
-                - {name: model_id, value: "{{inputs.parameters.model_id}}"}
+                - {name: project_id, value: "{{inputs.parameters.project_id}}"}
+                - {name: model_version_id, value: "{{inputs.parameters.model_version_id}}"}
                 - {name: version, value: "{{inputs.parameters.version}}"}
                 - {name: image_name, value: "{{inputs.parameters.image_name}}"}
                 - {name: container_name, value: "{{inputs.parameters.container_name}}"}
@@ -45,7 +47,8 @@ spec:
       inputs:
         parameters:
           - name: tenant_id
-          - name: model_id
+          - name: project_id
+          - name: model_version_id
           - name: version
           - name: image_name
           - name: container_name
@@ -62,7 +65,8 @@ spec:
             labels:
               app: model-endpoint
               tenant: {{inputs.parameters.tenant_id}}
-              model: "{{inputs.parameters.model_id}}"
+              project: "{{inputs.parameters.project_id}}"
+              model-version: "{{inputs.parameters.model_version_id}}"
           spec:
             replicas: 1
             selector:
@@ -83,7 +87,8 @@ spec:
                     ports:
                       - containerPort: {{inputs.parameters.target_port}}
                     env:
-                      - {name: MODEL_ID, value: "{{inputs.parameters.model_id}}"}
+                      - {name: PROJECT_ID, value: "{{inputs.parameters.project_id}}"}
+                      - {name: MODEL_VERSION_ID, value: "{{inputs.parameters.model_version_id}}"}
                       - {name: MODEL_VERSION, value: "{{inputs.parameters.version}}"}
                       - {name: MODEL_URI, value: "{{inputs.parameters.model_uri}}"}
                       - {name: PYTHONPATH, value: "/app/libs:/app"}

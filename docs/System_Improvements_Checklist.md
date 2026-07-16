@@ -249,7 +249,7 @@ Nền tảng hiện chủ yếu ổn cho PyTorch-style training. Nếu muốn h�
 - [x] Prometheus/Grafana đã có trong cụm.
 - [x] ServiceMonitor scrape dynamic model worker services.
 - [x] ServiceMonitor scrape thêm model-server gateway.
-- [x] Gateway expose metric request/error/latency theo `tenant_id` và `model_id`.
+- [x] Gateway expose metric request/error/latency theo `tenant_id`, `project_id` và `model_version_id`.
 - [x] Control Plane có API observability cho từng model.
 - [x] API trả 3 nhóm dữ liệu: traffic, resource, health.
 - [x] Alert rule dùng gateway metric `paas_*` cho inference latency/error.
@@ -270,8 +270,8 @@ Backend monitoring hiện được chia rõ nguồn dữ liệu:
 Gateway metric chính:
 
 ```text
-paas_predictions_total{tenant_id, model_id, status}
-paas_prediction_latency_seconds_bucket{tenant_id, model_id}
+paas_predictions_total{tenant_id, project_id, model_version_id, status}
+paas_prediction_latency_seconds_bucket{tenant_id, project_id, model_version_id}
 ```
 
 Control Plane API hiện có thể trả về:

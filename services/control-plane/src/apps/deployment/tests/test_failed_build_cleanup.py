@@ -30,7 +30,7 @@ def test_failed_build_cleanup_removes_binary_and_keeps_audit_metadata(monkeypatc
         project=project,
         flavor="sklearn",
         status="failed",
-        image_uri=f"build-{project.public_id}:latest",
+        image_uri=f"image-{project.public_id}:build-failed",
     )
     asset = BuildInputAsset.objects.create(
         build=build,

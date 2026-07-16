@@ -53,7 +53,6 @@ def _fetch_model_version_from_db(version_id: str) -> Dict[str, Any] | None:
             project.public_id AS project_id,
             project.name,
             project.access_mode,
-            project.model_type,
             users.tenant_id,
             endpoint.runtime_name AS endpoint_container_name,
             endpoint.internal_url,

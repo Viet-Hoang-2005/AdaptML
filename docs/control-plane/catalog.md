@@ -9,7 +9,7 @@ legacy aliases.
 |---|---|
 | Identity | `/api/auth/token/`, `/api/auth/token/refresh/`, `/api/auth/register/`, `/api/auth/profile/`, OTP, password, OAuth, JWKS routes |
 | API keys | `/api/api-keys/`, `/api/api-keys/{key_uuid}/`, `/api/api-keys/{key_uuid}/regenerate/` |
-| Projects | `/api/models/`, `/api/models/{project_uuid}/`, `/api/models/{project_uuid}/builds/` |
+| Projects | `/api/models/`, `/api/models/{project_uuid}/`, `/api/models/{project_uuid}/builds/`, `/api/models/{project_uuid}/production-data/?limit={n}` |
 | Workspace | `/api/models/{project_uuid}/workspace/{code|data}/files/` |
 | Versions | `/api/registry/models/{project_uuid}/versions/`, `/api/registry/versions/{version_uuid}/`, `/{version_uuid}/smoke-test/` |
 | Aliases | `/api/registry/models/{project_uuid}/aliases/`, `/api/registry/models/{project_uuid}/aliases/{alias}/predict/` |
@@ -25,7 +25,12 @@ Collections use the shared DRF pagination envelope. Input serializers validate
 tenant ownership before services mutate state. API key secrets are returned only
 on creation or regeneration and can be scoped only to projects owned by the user.
 
-Project `name`, `description`, `access_mode`, source code, and reference data are latest-only metadata. Manual Build input belongs to one Build UUID and is snapshotted before execution. A successful callback atomically allocates the next model version, copies the artifact snapshot to the version prefix, records the image URI/digest, and marks the Build ready. Callback replay is idempotent; failed/cancelled Builds do not allocate a version.
+Production data is private to the project owner. The production-data route validates
+the authenticated user's ownership before reading `public.paas_production_logs`, filters
+by both tenant and project UUID, returns all matching rows when `limit` is omitted, and
+requires a positive integer when `limit` is provided.
+
+Project `name`, `description`, `access_mode`, source code, and reference data are latest-only metadata. Manual Build input belongs to one Build UUID and is snapshotted before execution. The build image is created as `image-{project_uuid}:build-{build_uuid}` locally or under Harbor project `user-images` in production. A successful callback atomically allocates the next model version, retags the same manifest as `v{version_number}`, records its Docker image ID or OCI manifest digest, copies the artifact snapshot to the version prefix, and marks the Build ready. Deployment pins that immutable identity rather than resolving a mutable tag. Callback replay is idempotent; failed/cancelled Builds do not allocate a version.
 
 ## Inference URL
 

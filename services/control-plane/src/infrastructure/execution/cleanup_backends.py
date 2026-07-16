@@ -5,6 +5,8 @@ from infrastructure.argo import ArgoWebhookClient
 from infrastructure.docker import DockerClient
 from infrastructure.harbor import HarborClient
 
+from .image_references import image_repository, local_image_repository
+
 
 class DockerProjectCleanupBackend:
     def __init__(self, docker_client=None):
@@ -21,7 +23,7 @@ class DockerProjectCleanupBackend:
             except docker.errors.NotFound:
                 pass
         for image_uri in manifest["image_uris"]:
-            _validate_build_image(image_uri)
+            _validate_project_image(project, image_uri)
             try:
                 client.images.remove(image=image_uri, force=True, noprune=False)
                 removed["images"].append(image_uri)
@@ -52,7 +54,8 @@ class ArgoProjectCleanupBackend:
         return {"dispatched": True, "response": response}
 
     def delete_images(self, project, manifest):
-        return [self.harbor.delete_artifact(image_uri) for image_uri in manifest["image_uris"]]
+        repository = local_image_repository(project.public_id)
+        return [self.harbor.delete_repository(settings.HARBOR_USER_PROJECT, repository)]
 
 
 def project_cleanup_backend():
@@ -64,8 +67,9 @@ def _validate_container_name(name):
         raise ValueError("Project cleanup can only remove deployment containers named deploy-<BUILD_ID>.")
 
 
-def _validate_build_image(image_uri):
+def _validate_project_image(project, image_uri):
     image_name = str(image_uri).replace("https://", "").replace("http://", "").strip("/").rsplit("/", 1)[-1]
     repository_name = image_name.split("@", 1)[0].split(":", 1)[0]
-    if not repository_name.startswith("build-"):
-        raise ValueError("Project cleanup can only remove images named build-<BUILD_ID>.")
+    expected = image_repository(project.public_id)
+    if repository_name != expected:
+        raise ValueError("Project cleanup can only remove images from its canonical project repository.")

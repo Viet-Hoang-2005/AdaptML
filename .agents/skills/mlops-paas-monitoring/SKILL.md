@@ -16,9 +16,9 @@ model-server gateway
   -> PostgreSQL production data
 ```
 
-Gateway emit tenant, model/version context, timestamp, input features và prediction sau inference. Consumer chịu trách nhiệm persist/batch processing. Giữ schema event backward-compatible; thay đổi schema cần migration/read compatibility và test consumer.
+Gateway emit `tenant_id`, `project_id`, `model_version_id`, timestamp, input features và prediction sau inference. Consumer chịu trách nhiệm persist/batch processing; runtime contract luôn dùng định danh project và version tách biệt.
 
-Gateway expose Prometheus metric cho prediction count, status và latency theo tenant/model. Control Plane expose:
+Gateway expose Prometheus metric cho prediction count, status và latency theo tenant/project/model version. Control Plane expose:
 
 - `/health/live`, `/health/ready`, `/health/metrics`
 - `/api/observability/models/{project_uuid}/`

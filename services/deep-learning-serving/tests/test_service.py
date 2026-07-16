@@ -28,7 +28,7 @@ def test_constructor_handles_load_failure(monkeypatch):
 @pytest.mark.parametrize(
     "payload,expected_rows",
     [
-        ({"features": {"a": 1, "b": 2}, "model_id": "m"}, 1),
+        ({"features": {"a": 1, "b": 2}, "model_version_id": "m"}, 1),
         ({"features": {"a": [1, 2], "b": [3, 4]}}, 2),
         ({"features": [[1, 2], [3, 4]]}, 2),
     ],
@@ -58,7 +58,7 @@ def test_predict_rejects_unloaded_model(monkeypatch):
 
 
 def test_health_reports_model_state(monkeypatch):
-    monkeypatch.setenv("MODEL_ID", "version")
+    monkeypatch.setenv("MODEL_VERSION_ID", "version")
     service = make_service(monkeypatch, object())
     assert service.health()["model_loaded"] is True
-    assert service.health()["model_id"] == "version"
+    assert service.health()["model_version_id"] == "version"

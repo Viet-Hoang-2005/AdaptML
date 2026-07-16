@@ -2,6 +2,7 @@ from common.api.permissions import HasInternalWebhookSecret
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from infrastructure.execution.image_references import temporary_image_reference
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -29,12 +30,15 @@ class BuildWebhookEndpoint(APIView):
             })
         if incoming in {"success", "succeeded", "ready", "completed"}:
             project = build.project
-            base_name = f"build-{build.public_id}:latest"
-            image_uri = str(request.data.get("image_uri") or (
-                f"{settings.HARBOR_REGISTRY_URL}/{settings.HARBOR_USER_PROJECT}/{base_name}"
-                if settings.HARBOR_REGISTRY_URL
-                else base_name
-            ))
+            image_uri = str(
+                request.data.get("image_uri")
+                or temporary_image_reference(
+                    project.public_id,
+                    build.public_id,
+                    registry=settings.HARBOR_REGISTRY_URL if build.backend == "argo" else "",
+                    registry_project=settings.HARBOR_USER_PROJECT,
+                )
+            )
             image_digest = str(request.data.get("image_digest", ""))[:255]
             if project.deletion_state != "active":
                 build.status = "cancelled"

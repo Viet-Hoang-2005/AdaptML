@@ -50,14 +50,24 @@ def test_cleanup_manifest_includes_all_project_build_images_and_runtime_names():
     project = ModelProject.objects.create(owner=owner, name="All image history")
     first = ModelVersion.objects.create(project=project, version="1")
     second = ModelVersion.objects.create(project=project, version="2")
-    old_build = Build.objects.create(project=project, version=first, flavor="sklearn", status="ready", image_uri="build-old:latest")
-    new_build = Build.objects.create(project=project, version=second, flavor="sklearn", status="ready", image_uri="build-new:latest")
+    repository = f"image-{project.public_id}"
+    old_build = Build.objects.create(
+        project=project, version=first, flavor="sklearn", status="ready", image_uri=f"{repository}:v1"
+    )
+    new_build = Build.objects.create(
+        project=project, version=second, flavor="sklearn", status="ready", image_uri=f"{repository}:v2"
+    )
     deployment = Deployment.objects.create(version=first, build=old_build, status="stopped")
     Endpoint.objects.create(deployment=deployment, public_url="http://example.test", runtime_name="deploy-old")
 
     manifest = project_cleanup_manifest(project)
 
-    assert manifest["image_uris"] == ["build-new:latest", "build-old:latest"]
+    assert manifest["image_uris"] == sorted([
+        f"{repository}:v1",
+        f"{repository}:v2",
+        f"{repository}:build-{old_build.public_id}",
+        f"{repository}:build-{new_build.public_id}",
+    ])
     # A stopped deployment is still included: project deletion must clean stale runtimes too.
     assert manifest["container_names"] == ["deploy-old"]
     assert new_build.public_id
@@ -68,7 +78,13 @@ def test_finalization_deletes_project_s3_prefix_and_archives_database_rows():
     owner = get_user_model().objects.create_user("finalize-owner@example.com", "password123") # type: ignore[attr-defined]
     project = ModelProject.objects.create(owner=owner, name="Finalize me", deletion_state="deleting", is_active=False)
     version = ModelVersion.objects.create(project=project, version="1")
-    build = Build.objects.create(project=project, version=version, flavor="sklearn", status="ready", image_uri="build-finalize:latest")
+    build = Build.objects.create(
+        project=project,
+        version=version,
+        flavor="sklearn",
+        status="ready",
+        image_uri=f"image-{project.public_id}:v1",
+    )
     deployment = Deployment.objects.create(version=version, build=build, status="healthy")
     endpoint = Endpoint.objects.create(
         deployment=deployment,
@@ -103,13 +119,15 @@ def test_local_cleanup_uses_docker_sdk_without_a_model_cleaner_container():
     client = SimpleNamespace(containers=Containers(), images=Images())
     backend = DockerProjectCleanupBackend(docker_client=SimpleNamespace(client=client))
 
+    project = SimpleNamespace(public_id="11111111-1111-1111-1111-111111111111")
+    image_uri = f"image-{project.public_id}:v1"
     result = backend.run(
-        SimpleNamespace(),
-        {"container_names": ["deploy-build-1"], "image_uris": ["build-build-1:latest"]},
+        project,
+        {"container_names": ["deploy-build-1"], "image_uris": [image_uri]},
     )
 
     assert result["dispatched"] is False
     assert removed == [
         ("container", "deploy-build-1", True),
-        ("image", "build-build-1:latest", True, False),
+        ("image", image_uri, True, False),
     ]

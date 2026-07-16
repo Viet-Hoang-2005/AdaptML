@@ -24,6 +24,7 @@ JWKS_URL = os.environ.get("JWKS_URL", "http://control-plane:8000/api/auth/.well-
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "redpanda:9092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/1")
+DEEP_LEARNING_FLAVORS = frozenset({"pytorch", "tensorflow"})
 
 
 def create_redis_client():
@@ -82,13 +83,13 @@ app.add_middleware(
 paas_predictions_counter = Counter(
     "paas_predictions_total",
     "Total predictions processed",
-    ["tenant_id", "model_id", "status"],
+    ["tenant_id", "project_id", "model_version_id", "status"],
 )
 
 paas_latency_histogram = Histogram(
     "paas_prediction_latency_seconds",
     "Latency of prediction requests",
-    ["tenant_id", "model_id"],
+    ["tenant_id", "project_id", "model_version_id"],
 )
 
 Instrumentator().instrument(app).expose(app)
@@ -173,7 +174,13 @@ async def verify_model_access(
     except jwt.InvalidTokenError as exc:
         raise HTTPException(status_code=401, detail=f"Unauthorized: Invalid token ({exc})")
 
-def send_to_redpanda(tenant_id: str, model_id: str, features_dict: dict, prediction_result: Any):
+def send_to_redpanda(
+    tenant_id: str,
+    project_id: str,
+    model_version_id: str,
+    features_dict: dict,
+    prediction_result: Any,
+):
     if kafka_producer is None:
         return
 
@@ -181,7 +188,8 @@ def send_to_redpanda(tenant_id: str, model_id: str, features_dict: dict, predict
         payload = {
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
-            "model_id": model_id,
+            "project_id": project_id,
+            "model_version_id": model_version_id,
             "timestamp": datetime.utcnow().isoformat(),
             "features": features_dict,
             "prediction": prediction_result,
@@ -196,9 +204,14 @@ def send_to_redpanda(tenant_id: str, model_id: str, features_dict: dict, predict
     except Exception as exc:
         print(f"Error sending log to Redpanda: {exc}")
 
+def serving_engine_for_flavor(flavor: Any) -> str:
+    normalized_flavor = str(flavor or "").strip().lower()
+    return "dl" if normalized_flavor in DEEP_LEARNING_FLAVORS else "ml"
+
+
 def resolve_worker_url(model_record: Dict[str, Any], endpoint_path: str) -> str:
-    model_type = model_record.get("model_type", "ml")
-    target_port = 5001 if model_type == "ml" else 5002
+    serving_engine = serving_engine_for_flavor(model_record.get("flavor"))
+    target_port = 5001 if serving_engine == "ml" else 5002
     container_name = model_record.get("endpoint_container_name")
 
     if not container_name:
@@ -212,7 +225,7 @@ def resolve_worker_url(model_record: Dict[str, Any], endpoint_path: str) -> str:
                 ),
             )
         # Docker Compose local-dev: fall back to named service so images can be tested individually without a full deploy cycle.
-        fallback_host = "machine-learning-serving" if model_type == "ml" else "deep-learning-serving"
+        fallback_host = "machine-learning-serving" if serving_engine == "ml" else "deep-learning-serving"
         return f"http://{fallback_host}:{target_port}{endpoint_path}"
 
     if os.environ.get("KUBERNETES_SERVICE_HOST"):
@@ -261,16 +274,25 @@ async def predict(
     worker_url = resolve_worker_url(model_record, "/predict")
     features_dict = payload.features
     tenant_id = model_record["tenant_id"]
-    resolved_model_id = str(model_record["id"])
+    project_id = str(model_record["project_id"])
+    resolved_model_version_id = str(model_record["id"])
     start_time = time.perf_counter()
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            worker_payload = {"features": features_dict, "model_id": resolved_model_id}
+            worker_payload = {
+                "features": features_dict,
+                "model_version_id": resolved_model_version_id,
+            }
             response = await client.post(worker_url, json=worker_payload)
             
             if response.status_code != 200:
-                paas_predictions_counter.labels(tenant_id=tenant_id, model_id=resolved_model_id, status=f"error_{response.status_code}").inc()
+                paas_predictions_counter.labels(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    model_version_id=resolved_model_version_id,
+                    status=f"error_{response.status_code}",
+                ).inc()
                 try:
                     error_detail = response.json()
                 except Exception:
@@ -281,7 +303,7 @@ async def predict(
             if isinstance(data, dict):
                 prediction_result = data.get("prediction")
                 confidence = data.get("confidence")
-                engine = data.get("engine", model_record.get("model_type", "ml"))
+                engine = data.get("engine", serving_engine_for_flavor(model_record.get("flavor")))
             elif isinstance(data, list):
                 prediction_result = data
                 confidence = None
@@ -289,10 +311,22 @@ async def predict(
             else:
                 prediction_result = data
                 confidence = None
-                engine = model_record.get("model_type", "ml")
+                engine = serving_engine_for_flavor(model_record.get("flavor"))
 
-            paas_predictions_counter.labels(tenant_id=tenant_id, model_id=resolved_model_id, status="success").inc()
-            background_tasks.add_task(send_to_redpanda, tenant_id, resolved_model_id, features_dict, prediction_result)
+            paas_predictions_counter.labels(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                model_version_id=resolved_model_version_id,
+                status="success",
+            ).inc()
+            background_tasks.add_task(
+                send_to_redpanda,
+                tenant_id,
+                project_id,
+                resolved_model_version_id,
+                features_dict,
+                prediction_result,
+            )
 
             return JSONResponse(
                 content={
@@ -300,19 +334,31 @@ async def predict(
                     "prediction": prediction_result,
                     "confidence": confidence,
                     "tenant_id": tenant_id,
-                    "model_id": resolved_model_id,
+                    "project_id": project_id,
+                    "model_version_id": resolved_model_version_id,
                     "engine": engine,
                 },
                 status_code=200,
             )
     except httpx.RequestError as exc:
-        paas_predictions_counter.labels(tenant_id=tenant_id, model_id=resolved_model_id, status="error_503").inc()
+        paas_predictions_counter.labels(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_version_id=resolved_model_version_id,
+            status="error_503",
+        ).inc()
         raise HTTPException(status_code=503, detail=f"Service Unavailable: Cannot reach model serving pod ({exc})")
     except Exception as exc:
-        paas_predictions_counter.labels(tenant_id=tenant_id, model_id=resolved_model_id, status="error_500").inc()
+        paas_predictions_counter.labels(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_version_id=resolved_model_version_id,
+            status="error_500",
+        ).inc()
         raise HTTPException(status_code=500, detail=str(exc))
     finally:
         paas_latency_histogram.labels(
             tenant_id=tenant_id,
-            model_id=resolved_model_id,
+            project_id=project_id,
+            model_version_id=resolved_model_version_id,
         ).observe(time.perf_counter() - start_time)

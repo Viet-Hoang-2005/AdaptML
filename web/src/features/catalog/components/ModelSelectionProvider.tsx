@@ -13,7 +13,7 @@ export function ModelSelectionProvider({ children }: { children: ReactNode }) {
     const routeMatch = matchPath("/dashboard/home/models/:modelId", location.pathname) ||
       matchPath("/dashboard/home/model-testing/:modelId", location.pathname) ||
       matchPath("/dashboard/drift-monitoring/:modelId/new", location.pathname) ||
-      matchPath("/dashboard/drift-monitoring/:modelId/report", location.pathname) ||
+      matchPath("/dashboard/drift-monitoring/:modelId/report/:runId", location.pathname) ||
       matchPath("/dashboard/drift-monitoring/:modelId", location.pathname) ||
       matchPath("/dashboard/model-training/:modelId", location.pathname) ||
       matchPath("/dashboard/management/model/:modelId/:tab", location.pathname) ||

@@ -117,6 +117,16 @@ def fake_docker_client():
     return client
 
 
+def test_configured_image_reference_uses_project_repository_and_build_tag(monkeypatch):
+    monkeypatch.setenv("PROJECT_ID", "project-uuid")
+    monkeypatch.setenv("BUILD_ID", "build-uuid")
+    monkeypatch.delenv("IMAGE_REPOSITORY", raising=False)
+    monkeypatch.delenv("IMAGE_TAG", raising=False)
+    monkeypatch.delenv("HARBOR_REGISTRY_URL", raising=False)
+
+    assert cli.configured_image_reference() == "image-project-uuid:build-build-uuid"
+
+
 @pytest.mark.parametrize("builder,base_fragment", [
     (cli.build_custom_image, "machine-learning-serving"),
     (cli.build_bento_image, "deep-learning-serving"),
@@ -128,10 +138,17 @@ def test_docker_builders(monkeypatch, tmp_path, builder, base_fragment):
     monkeypatch.setenv("HARBOR_USERNAME", "user")
     monkeypatch.setenv("HARBOR_PASSWORD", "pass")
     monkeypatch.setenv("HARBOR_USER_PROJECT", "models")
+    monkeypatch.setenv("PROJECT_ID", "project-uuid")
+    monkeypatch.setenv("BUILD_ID", "build-uuid")
+    monkeypatch.setenv("IMAGE_REPOSITORY", "registry.example/models/image-project-uuid")
+    monkeypatch.setenv("IMAGE_TAG", "build-build-uuid")
     builder(tmp_path, "VERSION", "TENANT", "numpy")
     assert base_fragment in (tmp_path / "Dockerfile").read_text()
     client.login.assert_called_once()
     client.images.push.assert_called_once()
+    assert client.api.build.call_args.kwargs["tag"] == (
+        "registry.example/models/image-project-uuid:build-build-uuid"
+    )
 
 
 def test_docker_builder_raises_build_error(monkeypatch, tmp_path):
@@ -202,7 +219,7 @@ def test_run_build_task_prepares_kaniko_context(monkeypatch, tmp_path, flavor, b
     cli.run_build_task("version", "http://callback")
     assert base in (tmp_path / "Dockerfile").read_text()
     payload = json.loads((tmp_path / "webhook_payload.json").read_text())
-    assert payload["status"] == "success" and payload["model_id"] == "version"
+    assert payload["status"] == "success" and payload["build_id"] == "version"
 
 
 def test_run_build_task_docker_posts_callback(monkeypatch, tmp_path):
@@ -227,7 +244,7 @@ def test_run_build_task_validates_environment(monkeypatch):
 
 
 def test_run_notify_task(monkeypatch, tmp_path):
-    payload = {"model_id": "m", "status": "success"}
+    payload = {"build_id": "m", "status": "success"}
     (tmp_path / "webhook_payload.json").write_text(json.dumps(payload))
     post = Mock()
     monkeypatch.setattr(cli, "post_webhook", post)
@@ -289,7 +306,7 @@ def test_redis_log_handler(monkeypatch):
 def test_main_dispatch_and_failure(monkeypatch, tmp_path):
     logger = Mock()
     monkeypatch.setattr(cli, "setup_logger", lambda _: logger)
-    monkeypatch.setenv("MODEL_ID", "m")
+    monkeypatch.setenv("BUILD_ID", "m")
     monkeypatch.setenv("TASK_TYPE", "NOTIFY_BUILD")
     monkeypatch.setenv("BUILD_WORKSPACE_DIR", str(tmp_path))
     run = Mock()
@@ -302,3 +319,4 @@ def test_main_dispatch_and_failure(monkeypatch, tmp_path):
     with pytest.raises(SystemExit):
         cli.main()
     assert webhook.call_args.args[1]["status"] == "error"
+    assert webhook.call_args.args[1]["build_id"] == "m"

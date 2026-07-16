@@ -36,7 +36,7 @@ export function ToastContainer() {
             key={item.id}
             defaultOpen
             onOpenChange={(open) => !open && setItems((current) => current.filter((entry) => entry.id !== item.id))}
-            className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-xl border border-border bg-surface p-4 text-foreground shadow-[var(--shadow-overlay)] data-[state=open]:animate-slide-in"
+            className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-xl border border-border bg-surface p-4 text-foreground shadow-(--shadow-overlay) data-[state=open]:animate-slide-in"
           >
             <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${visual.className}`}><Icon className="h-4 w-4" /></span>
             <ToastPrimitive.Description className="pt-1 text-sm leading-5 text-foreground">{item.message}</ToastPrimitive.Description>
@@ -44,7 +44,7 @@ export function ToastContainer() {
           </ToastPrimitive.Root>
         );
       })}
-      <ToastPrimitive.Viewport className="fixed right-4 top-4 z-[100] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 outline-none" />
+      <ToastPrimitive.Viewport className="fixed right-4 top-4 z-100 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 outline-none" />
     </ToastPrimitive.Provider>
   );
 }

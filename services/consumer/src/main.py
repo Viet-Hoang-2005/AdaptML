@@ -5,7 +5,11 @@ import requests
 import signal
 import pandas as pd
 from confluent_kafka import Consumer, KafkaError
-from src.database import save_dataframe_to_db, get_production_data_count_by_model, get_model_drift_thresholds
+from src.database import (
+    get_model_drift_thresholds,
+    get_production_data_count_by_model_version,
+    save_dataframe_to_db,
+)
 
 # Lấy biến môi trường
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
@@ -25,10 +29,10 @@ def handle_sigterm(*args):
     RUNNING = False
 
 # Hàm gửi Webhook cảnh báo về Django Control Plane để kích hoạt Argo Workflows / Celery
-def trigger_django_webhook(model_name: str, count: int):
+def trigger_django_webhook(model_version_id: str, count: int):
     if not CONTROL_PLANE_WEBHOOK_URL:
         return
-    print(f"[{model_name}] Triggering Django webhook for drift check...")
+    print(f"[{model_version_id}] Triggering Django webhook for drift check...")
 
     headers = {
         "Authorization": f"Bearer {WEBHOOK_SECRET}",
@@ -36,42 +40,45 @@ def trigger_django_webhook(model_name: str, count: int):
     }
     payload = {
         "event_type": "trigger_drift_check",
-        "model_id": model_name,
+        "model_version_id": model_version_id,
         "current_data_count": count
     }
 
     try:
         response = requests.post(CONTROL_PLANE_WEBHOOK_URL, headers=headers, json=payload, timeout=10)
         if response.status_code in [200, 201, 204]:
-            print(f"[{model_name}] Webhook sent Successfully! Django has been notified.")
+            print(f"[{model_version_id}] Webhook sent Successfully! Django has been notified.")
         else:
-            print(f"[{model_name}] Webhook failed! HTTP {response.status_code}: {response.text}")
+            print(f"[{model_version_id}] Webhook failed! HTTP {response.status_code}: {response.text}")
     except Exception as e:
-        print(f"[{model_name}] Error sending webhook: {e}")
+        print(f"[{model_version_id}] Error sending webhook: {e}")
 
 # Hàm kiểm tra và gọi webhook nếu Production Data vượt ngưỡng
 def check_threshold_and_trigger(last_triggered_counts: dict, df_batch: pd.DataFrame) -> dict:
     """Kiểm tra số lượng và gọi webhook nếu vượt ngưỡng. Trả về last_triggered_counts mới."""
-    if df_batch is None or df_batch.empty or 'model_id' not in df_batch.columns:
+    if df_batch is None or df_batch.empty or 'model_version_id' not in df_batch.columns:
         return last_triggered_counts
 
     thresholds = get_model_drift_thresholds()
-    unique_models = df_batch['model_id'].dropna().unique()
+    unique_models = df_batch['model_version_id'].dropna().unique()
     
-    for model_name in unique_models:
-        threshold = thresholds.get(model_name)
+    for model_version_id in unique_models:
+        threshold = thresholds.get(model_version_id)
         if not threshold:
             continue
             
-        count = get_production_data_count_by_model(model_name)
-        last_count = last_triggered_counts.get(model_name, 0)
+        count = get_production_data_count_by_model_version(model_version_id)
+        last_count = last_triggered_counts.get(model_version_id, 0)
         diff = count - last_count
         
-        print(f"Drift monitoring [{model_name}]: {count} total rows. New rows since last trigger: {diff}/{threshold}")
+        print(
+            f"Drift monitoring [{model_version_id}]: {count} total rows. "
+            f"New rows since last trigger: {diff}/{threshold}"
+        )
         
         if diff >= threshold:
-            trigger_django_webhook(model_name, count)
-            last_triggered_counts[model_name] = count
+            trigger_django_webhook(model_version_id, count)
+            last_triggered_counts[model_version_id] = count
             
     return last_triggered_counts
 

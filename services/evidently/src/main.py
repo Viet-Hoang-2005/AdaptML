@@ -32,8 +32,9 @@ DB_NAME = os.getenv("DB_NAME", "mlops_paas_db")
 DB_HOST_RO = os.getenv("DB_HOST_RO", "postgres")
 
 TENANT_ID = os.getenv("TENANT_ID")
-MODEL_ID = os.getenv("MODEL_ID")
-MODEL_NAME = os.getenv("MODEL_NAME", MODEL_ID)
+PROJECT_ID = os.getenv("PROJECT_ID")
+MODEL_VERSION_ID = os.getenv("MODEL_VERSION_ID")
+MODEL_NAME = os.getenv("MODEL_NAME", PROJECT_ID)
 REFERENCE_DATA_URL = os.getenv("REFERENCE_DATA_URL")
 MODEL_URI = os.getenv("MODEL_URI", f"models:/{MODEL_NAME}/Production")
 CONTROL_PLANE_WEBHOOK_URL = os.getenv("CONTROL_PLANE_WEBHOOK_URL", "")
@@ -111,8 +112,8 @@ def setup_logger(run_id: str):
 def validate_runtime_config():
     if not 0 <= DRIFT_THRESHOLD <= 1:
         raise ValueError("DRIFT_THRESHOLD must be between 0 and 1.")
-    if not TENANT_ID or not MODEL_ID:
-        raise ValueError("TENANT_ID and MODEL_ID must be set.")
+    if not TENANT_ID or not PROJECT_ID or not MODEL_VERSION_ID:
+        raise ValueError("TENANT_ID, PROJECT_ID and MODEL_VERSION_ID must be set.")
 
 # 1. Tải Reference Data
 def load_reference_data():
@@ -121,7 +122,14 @@ def load_reference_data():
 
     ref_path = urlparse(REFERENCE_DATA_URL).path.lower()
     is_csv = ref_path.endswith(".csv")
-    local_filename = str(TEMP_ROOT / (f"reference_{MODEL_ID}.csv" if is_csv else f"reference_{MODEL_ID}.parquet"))
+    local_filename = str(
+        TEMP_ROOT
+        / (
+            f"reference_{MODEL_VERSION_ID}.csv"
+            if is_csv
+            else f"reference_{MODEL_VERSION_ID}.parquet"
+        )
+    )
 
     if REFERENCE_DATA_URL.startswith("http"):
         print("[2/4] Downloading reference data from presigned URL...")
@@ -143,20 +151,24 @@ def load_reference_data():
 
 # 2. Truy vấn dữ liệu Production Data
 def load_production_data():
-    print(f"[1/4] Fetching Production Logs from Postgres for Model ID: {MODEL_ID}")
+    print(f"[1/4] Fetching Production Logs for Model Version ID: {MODEL_VERSION_ID}")
     
     # Connect to Read-Only Replica
     engine = create_engine(f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST_RO}:{DB_PORT}/{DB_NAME}")
     query = text("""
         SELECT features, prediction
         FROM paas_production_logs
-        WHERE model_id = :mid
+        WHERE model_version_id = :model_version_id
         ORDER BY timestamp DESC
         LIMIT :lim
     """)
 
     with engine.connect() as conn:
-        raw_df = pd.read_sql(query, conn, params={"mid": str(MODEL_ID), "lim": MAX_SAMPLES})
+        raw_df = pd.read_sql(
+            query,
+            conn,
+            params={"model_version_id": str(MODEL_VERSION_ID), "lim": MAX_SAMPLES},
+        )
 
     if len(raw_df) < MIN_SAMPLES:
         print(f"Skipping Drift Analysis: Not enough production samples ({len(raw_df)} < {MIN_SAMPLES})")
@@ -186,7 +198,7 @@ def resolve_model_dir(model_uri):
                 return root
         return model_uri
 
-    cache_dir = str(TEMP_ROOT / f"model_cache_{MODEL_ID}")
+    cache_dir = str(TEMP_ROOT / f"model_cache_{MODEL_VERSION_ID}")
     os.makedirs(cache_dir, exist_ok=True)
     zip_path = os.path.join(cache_dir, "model.zip")
     extract_dir = os.path.join(cache_dir, "extracted")
@@ -253,7 +265,10 @@ def get_column_mapping(reference_df, production_df):
     # Fallback: Auto-infer feature types from actual DataFrame structure
     if not has_signature:
         print("-> Fallback: Auto-infer feature types from actual DataFrame structure...")
-        ignore_cols = {"prediction", "target", "Target", "label", "Label", "class", "Class", "timestamp", "model_id", "tenant_id"}
+        ignore_cols = {
+            "prediction", "target", "Target", "label", "Label", "class", "Class",
+            "timestamp", "model_version_id", "project_id", "tenant_id",
+        }
         feature_cols = [c for c in production_df.columns if c not in ignore_cols]
         num_cols = production_df[feature_cols].select_dtypes(include=["int64", "float64", "int32", "float32"]).columns.tolist()
         cat_cols = production_df[feature_cols].select_dtypes(include=["object", "category", "bool"]).columns.tolist()
@@ -341,7 +356,8 @@ def run_drift_analysis(reference_df, production_df, column_mapping):
 
     summary = {
         "tenant_id": TENANT_ID,
-        "model_id": MODEL_ID,
+        "project_id": PROJECT_ID,
+        "model_version_id": MODEL_VERSION_ID,
         "share_drifted_features": drift_share,
         "dataset_drift": dataset_drift,
         "drift_threshold": DRIFT_THRESHOLD,
@@ -447,7 +463,8 @@ def trigger_django_webhook(drift_summary):
     
     payload = {
         "tenant_id": TENANT_ID,
-        "model_id": MODEL_ID,
+        "project_id": PROJECT_ID,
+        "model_version_id": MODEL_VERSION_ID,
         "drift_summary": drift_summary,
         "threshold": DRIFT_THRESHOLD
     }

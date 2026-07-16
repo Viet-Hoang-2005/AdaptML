@@ -3,7 +3,7 @@ from pathlib import Path
 
 MODEL_CACHE_DIR = os.environ.get("MODEL_CACHE_DIR", "/tmp/mlops_paas_models")
 
-def download_model_artifact(model_id: str, model_uri: str) -> Path:
+def download_model_artifact(model_version_id: str, model_uri: str) -> Path:
     prebuilt_dir = Path("/app/model_artifact")
     if prebuilt_dir.exists() and any(prebuilt_dir.iterdir()):
         if (prebuilt_dir / "source").exists():
@@ -16,7 +16,8 @@ def download_model_artifact(model_id: str, model_uri: str) -> Path:
             return local_path
 
     raise RuntimeError(
-        f"FATAL: Pre-built DL model artifact not found in /app/model_artifact (Model ID: {model_id}). "
+        f"FATAL: Pre-built DL model artifact not found in /app/model_artifact "
+        f"(Model Version ID: {model_version_id}). "
     )
 
 def resolve_mlflow_model_dir(source_dir: Path) -> Path:

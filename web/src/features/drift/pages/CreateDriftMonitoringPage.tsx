@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Papa from 'papaparse';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Database } from 'lucide-react';
@@ -8,7 +8,12 @@ import { Button } from '@/shared/ui/Button';
 import { CSVEditor } from '@/shared/ui/CSVEditor';
 import { SourceEditor } from '@/features/catalog/components/SourceEditor';
 import { StepTitle } from '@/shared/ui/StepTitle';
-import { useCreateDriftMonitoringJob, useProductionData } from '@/features/drift/hooks/useDriftMonitoring';
+import {
+  useCreateDriftMonitoringJob,
+  useDriftMonitoringJobs,
+  useProductionData,
+  useUpdateDriftMonitoringJob,
+} from '@/features/drift/hooks/useDriftMonitoring';
 import { getApiErrorMessage } from '@/shared/api/errors';
 import { toast } from '@/shared/ui/toastStore';
 
@@ -21,15 +26,36 @@ const THRESHOLD_MARKS = [
   { value: 20000, label: '20K' },
 ];
 
+const DataPlaceholder = ({ title, action }: { title: string; action?: React.ReactNode }) => (
+  <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+    <Database className="w-8 h-8 text-muted-foreground" />
+    <p>{title}</p>
+    {action}
+  </div>
+);
+
 export default function CreateDriftMonitoringPage() {
   const { modelId } = useParams<{ modelId: string }>();
   const navigate = useNavigate();
 
-  const [referencePath, setReferencePath] = useState<string>('');
-  const [triggerThreshold, setTriggerThreshold] = useState<number>(1000);
+  const [selectedReferencePath, setSelectedReferencePath] = useState<string | null>(null);
+  const [selectedTriggerThreshold, setSelectedTriggerThreshold] = useState<number | null>(null);
+  const { data: monitors, isLoading: isLoadingMonitors } = useDriftMonitoringJobs(modelId);
+  const existingMonitor = useMemo(
+    () => monitors?.find((monitor) => monitor.is_active),
+    [monitors],
+  );
   
-  const { data: productionLogs } = useProductionData(modelId);
+  const {
+    data: productionLogs,
+    isLoading: isLoadingProductionData,
+    isError: isProductionDataError,
+    refetch: refetchProductionData,
+  } = useProductionData(modelId);
   const { mutateAsync: createJob, isPending: isSubmitting } = useCreateDriftMonitoringJob();
+  const { mutateAsync: updateJob, isPending: isUpdating } = useUpdateDriftMonitoringJob();
+  const referencePath = selectedReferencePath ?? existingMonitor?.reference_asset_name ?? '';
+  const triggerThreshold = selectedTriggerThreshold ?? existingMonitor?.trigger_threshold ?? 1000;
 
   // Convert production logs (features + prediction) to CSV for preview
   // Each row: spread all feature key-value pairs + prediction column
@@ -61,12 +87,17 @@ export default function CreateDriftMonitoringPage() {
       return;
     }
     try {
-      await createJob({
-        model_id: modelId!,
+      const payload = {
+        project_id: modelId!,
         trigger_threshold: triggerThreshold,
         reference_data_s3_path: referencePath,
-      });
-      toast.success('Drift monitoring config created!');
+      };
+      if (existingMonitor) {
+        await updateJob({ ...payload, id: existingMonitor.id });
+      } else {
+        await createJob(payload);
+      }
+      toast.success(existingMonitor ? 'Drift monitoring configuration updated.' : 'Drift monitoring configuration created.');
       navigate(`/dashboard/drift-monitoring/${modelId}`);
     } catch (err) {
       const msg = getApiErrorMessage(err, 'Failed to create config');
@@ -74,10 +105,12 @@ export default function CreateDriftMonitoringPage() {
     }
   };
 
+  const isSaving = isSubmitting || isUpdating;
+
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
       <PageHeader 
-        title="Create Drift Monitoring"
+        title={existingMonitor ? 'Edit Drift Monitoring' : 'Create Drift Monitoring'}
         backLink={{ label: "Back to Dashboard", to: `/dashboard/drift-monitoring/${modelId}` }}
       />
       <section className="flex flex-col flex-1 rounded-lg border border-border bg-surface p-6 space-y-6">
@@ -95,7 +128,7 @@ export default function CreateDriftMonitoringPage() {
           accept=".csv"
           editorType="csv"
           currentEntryPoint={referencePath}
-          onSetEntryPoint={setReferencePath}
+          onSetEntryPoint={setSelectedReferencePath}
           entryPointExtension=".csv"
           setAsMainLabel="Set as Reference"
         />
@@ -110,7 +143,7 @@ export default function CreateDriftMonitoringPage() {
           <Slider 
             options={THRESHOLD_MARKS}
             value={triggerThreshold}
-            onChange={(val) => setTriggerThreshold(val)}
+            onChange={(val) => setSelectedTriggerThreshold(val)}
             getColor={(index) => {
               if (index >= 5) return 'bg-red-500';
               if (index >= 3) return 'bg-yellow-500';
@@ -123,16 +156,26 @@ export default function CreateDriftMonitoringPage() {
       <div className="space-y-4 border-t border-border pt-6">
         <StepTitle 
           title="Production Data Preview"
-          description="Preview the latest 50 records from your production database that will be used in future drift reports."
+          description="Preview the latest 100 records from your production database that will be used in future drift reports."
         />
         <div className="h-100 rounded-xl border border-border overflow-hidden relative bg-muted">
-          {productionCsv ? (
+          {isLoadingProductionData ? (
+            <div className="flex h-full items-center justify-center text-muted-foreground">
+              Loading production data...
+            </div>
+          ) : isProductionDataError ? (
+            <DataPlaceholder 
+              title="Unable to load production data." 
+              action={
+                <Button variant="secondary" size="md" onClick={() => void refetchProductionData()}>
+                  Retry
+                </Button>
+              }
+            />
+          ) : productionCsv ? (
             <CSVEditor initialCsvText={productionCsv} readOnly={true} />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-              <Database className="w-8 h-8 text-muted-foreground mb-2" />
-              <p>No production data available yet.</p>
-            </div>
+            <DataPlaceholder title="No production data available yet." />
           )}
         </div>
       </div>
@@ -143,7 +186,7 @@ export default function CreateDriftMonitoringPage() {
           size="md"
           className="flex-1"
           onClick={() => navigate(`/dashboard/drift-monitoring/${modelId}`)}
-          disabled={isSubmitting}
+          disabled={isSaving}
         >
           Cancel
         </Button>
@@ -152,9 +195,9 @@ export default function CreateDriftMonitoringPage() {
           size="md"
           className="flex-1"
           onClick={handleSubmit}
-          disabled={isSubmitting || !referencePath}
+          disabled={isSaving || isLoadingMonitors || !referencePath}
         >
-          {isSubmitting ? 'Saving...' : 'Create'}
+          {isSaving ? 'Saving...' : existingMonitor ? 'Update' : 'Create'}
         </Button>
       </div>
     </section>

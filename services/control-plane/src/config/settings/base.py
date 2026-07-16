@@ -2,6 +2,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from common.env import env, env_identifier, env_int, env_list
+from corsheaders.defaults import default_headers
 from django.core.exceptions import ImproperlyConfigured
 
 SERVICE_ROOT = Path(__file__).resolve().parents[3]
@@ -114,6 +115,7 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
 STATIC_URL = "/static/"
 STATIC_ROOT = SERVICE_ROOT / "staticfiles"
 

@@ -1,4 +1,6 @@
 from django.db import transaction
+from infrastructure.execution.image_references import repository_from_reference
+from infrastructure.execution.image_registry import image_registry_for
 from infrastructure.storage import S3Storage
 from infrastructure.storage.paths import build_prefix, version_prefix
 from rest_framework.exceptions import ValidationError
@@ -27,10 +29,12 @@ def register_successful_build(
     params_summary=None,
     insights_summary=None,
     storage=None,
+    image_registry=None,
 ):
     """Idempotently publish a manual build as an immutable registry version."""
 
     storage = storage or S3Storage()
+    image_registry = image_registry or image_registry_for(build)
     with transaction.atomic():
         build = (
             type(build)
@@ -113,14 +117,31 @@ def register_successful_build(
         else:
             version = build.version
 
+        version_image_uri, resolved_image_digest = image_registry.promote(
+            build=build,
+            version=version,
+            image_uri=image_uri,
+            image_digest=image_digest,
+        )
+        identity_kind = "oci_manifest_digest" if build.backend == "argo" else "docker_image_id"
+
         ModelArtifact.objects.update_or_create(
             version=version,
             kind="image",
-            name=f"build-{build.public_id}",
-            defaults={"uri": image_uri, "checksum": image_digest, "metadata": {"build_id": str(build.public_id)}},
+            name=version_image_uri.rsplit("/", 1)[-1],
+            defaults={
+                "uri": version_image_uri,
+                "checksum": resolved_image_digest,
+                "metadata": {
+                    "build_id": str(build.public_id),
+                    "temporary_image_uri": image_uri,
+                    "repository": repository_from_reference(version_image_uri),
+                    "identity_kind": identity_kind,
+                },
+            },
         )
-        build.image_uri = image_uri
-        build.image_digest = image_digest
+        build.image_uri = version_image_uri
+        build.image_digest = resolved_image_digest
         build.status = "ready"
         build.error_message = ""
         build.save(update_fields=["version", "image_uri", "image_digest", "status", "error_message", "updated_at"])

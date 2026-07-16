@@ -1,4 +1,6 @@
+from common.api.exceptions import Conflict
 from django.conf import settings
+from infrastructure.storage import S3Storage
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -57,3 +59,13 @@ class DriftRunLogsEndpoint(APIView):
                 "error_message": run.error_message,
             }
         )
+
+
+class DriftRunReportURLEndpoint(APIView):
+    def get(self, request, run_id):
+        run = run_for_user(request.user, run_id)
+        if run.status != "completed":
+            raise Conflict("The drift report is not available until the run has completed.")
+        if not run.report_html_uri:
+            raise Conflict("The completed drift run does not have an HTML report.")
+        return Response({"url": S3Storage().presigned_get(run.report_html_uri, 900)})

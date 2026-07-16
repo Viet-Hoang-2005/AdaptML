@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader } from '@/shared/ui/PageHeader';
 import { PageContent } from '@/shared/ui/PageContent';
@@ -10,22 +10,20 @@ import { getApiErrorMessage } from '@/shared/api/errors';
 import { toast } from '@/shared/ui/toastStore';
 
 export default function DriftReportPage() {
-  const { modelId } = useParams<{ modelId: string }>();
-  const location = useLocation();
+  const { modelId, runId } = useParams<{ modelId: string; runId: string }>();
   const navigate = useNavigate();
-  const reportS3Uri = location.state?.reportS3Uri;
 
   const [reportUrl, setReportUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!reportS3Uri) {
-      toast.error("No report URI provided");
+    if (!runId) {
+      toast.error("No drift run provided");
       navigate(`/dashboard/drift-monitoring/${modelId}`);
       return;
     }
 
-    getDriftReportDownloadUrl(reportS3Uri)
+    getDriftReportDownloadUrl(runId)
       .then(url => {
         setReportUrl(url);
         setLoading(false);
@@ -34,7 +32,7 @@ export default function DriftReportPage() {
         toast.error(getApiErrorMessage(err, "Failed to generate report URL"));
         setLoading(false);
       });
-  }, [reportS3Uri, modelId, navigate]);
+  }, [runId, modelId, navigate]);
 
   const handleDownload = async () => {
     if (!reportUrl) return;

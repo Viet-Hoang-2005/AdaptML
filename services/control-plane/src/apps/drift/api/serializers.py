@@ -1,3 +1,4 @@
+from common.api.exceptions import Conflict
 from rest_framework import serializers
 
 from apps.catalog.models import WorkspaceAsset
@@ -37,6 +38,7 @@ class DriftMonitorSerializer(serializers.ModelSerializer):
         slug_field="public_id", queryset=ModelVersion.objects.none(), write_only=True
     )
     reference_asset_id = serializers.UUIDField(source="reference_asset.public_id", read_only=True)
+    reference_asset_name = serializers.CharField(source="reference_asset.relative_path", read_only=True)
     reference_asset = serializers.SlugRelatedField(
         slug_field="public_id", queryset=WorkspaceAsset.objects.none(), write_only=True
     )
@@ -51,6 +53,7 @@ class DriftMonitorSerializer(serializers.ModelSerializer):
             "project_id",
             "reference_asset",
             "reference_asset_id",
+            "reference_asset_name",
             "name",
             "trigger_threshold",
             "backend",
@@ -60,6 +63,7 @@ class DriftMonitorSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("backend",)
+        validators = ()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -71,6 +75,14 @@ class DriftMonitorSerializer(serializers.ModelSerializer):
             )
 
     def validate(self, attrs):
-        if attrs["version"].project_id != attrs["reference_asset"].project_id:
+        version = attrs.get("version", getattr(self.instance, "version", None))
+        reference_asset = attrs.get("reference_asset", getattr(self.instance, "reference_asset", None))
+        name = attrs.get("name", getattr(self.instance, "name", ""))
+        if version.project_id != reference_asset.project_id:
             raise serializers.ValidationError("Version and reference data must belong to the same project.")
+        duplicate = DriftMonitor.objects.filter(version=version, name=name)
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if duplicate.exists():
+            raise Conflict(f'A drift monitor named {name} already exists for model version {version.version}.')
         return attrs

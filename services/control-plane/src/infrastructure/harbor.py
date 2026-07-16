@@ -23,13 +23,55 @@ class HarborClient:
             return
         encoded = quote(repository, safe="")
         url = f"{self.base_url}/api/v2.0/projects/{project}/repositories/{encoded}"
-        self.http.request("DELETE", url, auth=(settings.HARBOR_USERNAME, settings.HARBOR_PASSWORD))
+        try:
+            self.http.request("DELETE", url, auth=(settings.HARBOR_USERNAME, settings.HARBOR_PASSWORD))
+        except HTTPError as exc:
+            if getattr(exc.response, "status_code", None) == 404:
+                return "already-absent"
+            raise
+        return "deleted"
 
-    def delete_artifact(self, image_uri):
-        """Delete one tagged Harbor artifact, never an entire tenant repository."""
+    def create_tag(self, image_uri, tag, *, reference=""):
+        """Create an idempotent human tag for an existing Harbor artifact."""
         if not self.enabled:
-            raise RuntimeError("Harbor image cleanup requires HARBOR_REGISTRY_URL.")
+            raise RuntimeError("Harbor image registration requires HARBOR_REGISTRY_URL.")
+        project, repository, current_reference = self._parse_image_uri(image_uri)
+        reference = reference or current_reference
+        url = (
+            f"{self.base_url}/api/v2.0/projects/{quote(project, safe='')}/repositories/"
+            f"{quote(repository, safe='')}/artifacts/{quote(reference, safe='')}/tags"
+        )
+        try:
+            self.http.request(
+                "POST",
+                url,
+                json={"name": tag},
+                auth=(settings.HARBOR_USERNAME, settings.HARBOR_PASSWORD),
+            )
+        except HTTPError as exc:
+            if getattr(exc.response, "status_code", None) == 409:
+                return "already-exists"
+            raise
+        return "created"
 
+    def delete_tag(self, image_uri, tag):
+        """Remove one tag while preserving the manifest and its version tag."""
+        if not self.enabled:
+            raise RuntimeError("Harbor tag cleanup requires HARBOR_REGISTRY_URL.")
+        project, repository, reference = self._parse_image_uri(image_uri)
+        url = (
+            f"{self.base_url}/api/v2.0/projects/{quote(project, safe='')}/repositories/"
+            f"{quote(repository, safe='')}/artifacts/{quote(reference, safe='')}/tags/{quote(tag, safe='')}"
+        )
+        try:
+            self.http.request("DELETE", url, auth=(settings.HARBOR_USERNAME, settings.HARBOR_PASSWORD))
+        except HTTPError as exc:
+            if getattr(exc.response, "status_code", None) == 404:
+                return "already-absent"
+            raise
+        return "deleted"
+
+    def _parse_image_uri(self, image_uri):
         image = str(image_uri).replace("https://", "").replace("http://", "").strip("/")
         parts = image.split("/")
         if len(parts) < 3:
@@ -44,8 +86,16 @@ class HarborClient:
         elif ":" in image_name:
             repository_name, reference = image_name.rsplit(":", 1)
         else:
-            raise ValueError("A Harbor image URI must include an immutable build tag or digest.")
+            raise ValueError("A Harbor image URI must include a tag or digest.")
         repository = "/".join([*repository_parts[:-1], repository_name])
+        return project, repository, reference
+
+    def delete_artifact(self, image_uri):
+        """Delete one tagged Harbor artifact, never an entire tenant repository."""
+        if not self.enabled:
+            raise RuntimeError("Harbor image cleanup requires HARBOR_REGISTRY_URL.")
+
+        project, repository, reference = self._parse_image_uri(image_uri)
         url = (
             f"{self.base_url}/api/v2.0/projects/{quote(project, safe='')}/repositories/"
             f"{quote(repository, safe='')}/artifacts/{quote(reference, safe='')}"

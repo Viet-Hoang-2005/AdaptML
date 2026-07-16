@@ -9,10 +9,10 @@ from src.loading import download_model_artifact, resolve_mlflow_model_dir
 logger = logging.getLogger("bentoml.paas_service")
 
 
-def load_runtime_model(model_id: str, model_uri: str | None):
+def load_runtime_model(model_version_id: str, model_uri: str | None):
     model_dir = "/app/model_artifact"
     if model_uri:
-        source_dir = download_model_artifact(model_id, model_uri)
+        source_dir = download_model_artifact(model_version_id, model_uri)
         model_dir = str(resolve_mlflow_model_dir(source_dir))
     elif not os.path.exists(model_dir):
         model_dir = "."
@@ -25,14 +25,16 @@ def load_runtime_model(model_id: str, model_uri: str | None):
 )
 class DeepLearningModelService:
     def __init__(self):
-        model_id_str = os.environ.get("MODEL_ID")
+        model_version_id_str = os.environ.get("MODEL_VERSION_ID")
         model_uri = os.environ.get("MODEL_URI")
-        model_id = model_id_str if model_id_str and model_id_str != "unknown" else "unknown"
+        model_version_id = (
+            model_version_id_str if model_version_id_str and model_version_id_str != "unknown" else "unknown"
+        )
         try:
-            self.model = load_runtime_model(model_id, model_uri)
+            self.model = load_runtime_model(model_version_id, model_uri)
             logger.info("Model loaded successfully via mlflow.pyfunc!")
         except Exception as exc:
-            logger.error("Error loading DL model for %s: %s", model_id, exc)
+            logger.error("Error loading DL model version %s: %s", model_version_id, exc)
             self.model = None
 
     @bentoml.api(route="/predict", batchable=False)
@@ -41,7 +43,11 @@ class DeepLearningModelService:
             raise RuntimeError("Model failed to load at startup")
 
         features = payload.get("features", payload) if isinstance(payload, dict) else payload
-        model_id = payload.get("model_id") if isinstance(payload, dict) else os.environ.get("MODEL_ID", "unknown")
+        model_version_id = (
+            payload.get("model_version_id")
+            if isinstance(payload, dict)
+            else os.environ.get("MODEL_VERSION_ID", "unknown")
+        )
 
         if isinstance(features, dict):
             if all(isinstance(v, (list, tuple, pd.Series)) for v in features.values()):
@@ -65,7 +71,8 @@ class DeepLearningModelService:
             "success": True,
             "prediction": prediction,
             "confidence": None,
-            "model_id": str(model_id),
+            "project_id": os.environ.get("PROJECT_ID", "unknown"),
+            "model_version_id": str(model_version_id),
             "engine": "deep-learning-serving",
         }
 
@@ -75,6 +82,7 @@ class DeepLearningModelService:
             "status": "healthy",
             "model_loaded": self.model is not None,
             "runtime": "deep-learning-serving-bentoml",
-            "model_id": os.environ.get("MODEL_ID", "unknown"),
+            "project_id": os.environ.get("PROJECT_ID", "unknown"),
+            "model_version_id": os.environ.get("MODEL_VERSION_ID", "unknown"),
             "engine": "deep-learning-serving",
         }

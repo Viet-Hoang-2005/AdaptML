@@ -6,6 +6,7 @@ import {
   deleteDriftMonitoringJob,
   listDriftMonitoringJobs,
   listDriftMonitoringResults,
+  listProductionData,
   listReferenceFiles,
   runDriftMonitoringJob,
   updateDriftMonitoringJob,
@@ -36,7 +37,7 @@ export function useCreateDriftMonitoringJob() {
   return useMutation({
     mutationFn: createDriftMonitoringJob,
     onSuccess: (_, variables) => queryClient.invalidateQueries({
-      queryKey: driftQueryKeys.monitors(variables.model_id),
+      queryKey: driftQueryKeys.monitors(variables.project_id),
     }),
   });
 }
@@ -44,9 +45,9 @@ export function useCreateDriftMonitoringJob() {
 export function useDeleteDriftMonitoringJob() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { id: string; model_id: string }) => deleteDriftMonitoringJob(payload.id),
+    mutationFn: async (payload: { id: string; project_id: string }) => deleteDriftMonitoringJob(payload.id),
     onSuccess: (_, variables) => queryClient.invalidateQueries({
-      queryKey: driftQueryKeys.monitors(variables.model_id),
+      queryKey: driftQueryKeys.monitors(variables.project_id),
     }),
   });
 }
@@ -56,7 +57,7 @@ export function useUpdateDriftMonitoringJob() {
   return useMutation({
     mutationFn: updateDriftMonitoringJob,
     onSuccess: (_, variables) => queryClient.invalidateQueries({
-      queryKey: driftQueryKeys.monitors(variables.model_id),
+      queryKey: driftQueryKeys.monitors(variables.project_id),
     }),
   });
 }
@@ -64,7 +65,7 @@ export function useUpdateDriftMonitoringJob() {
 export function useRunDriftMonitoringJob() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { id: string; model_id: string }) => runDriftMonitoringJob(payload.id),
+    mutationFn: async (payload: { id: string; project_id: string }) => runDriftMonitoringJob(payload.id),
     onSuccess: (_, variables) => {
       toast.success('Drift monitoring run queued');
       void queryClient.invalidateQueries({ queryKey: driftQueryKeys.results(variables.id) });
@@ -76,7 +77,7 @@ export function useRunDriftMonitoringJob() {
 export function useProductionData(modelId?: string) {
   return useQuery({
     queryKey: driftQueryKeys.productionData(modelId ?? ''),
-    queryFn: async () => [] as { features: Record<string, unknown>; prediction: string }[],
+    queryFn: () => listProductionData(modelId!, 100),
     enabled: Boolean(modelId),
   });
 }

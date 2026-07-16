@@ -14,7 +14,8 @@ spec:
         parameters:
           - name: job_id
           - name: tenant_id
-          - name: model_id
+          - name: project_id
+          - name: model_version_id
           - name: model_name
           - name: model_uri
           - name: reference_data_url
@@ -41,8 +42,10 @@ spec:
             value: "{{inputs.parameters.job_id}}"
           - name: TENANT_ID
             value: "{{inputs.parameters.tenant_id}}"
-          - name: MODEL_ID
-            value: "{{inputs.parameters.model_id}}"
+          - name: PROJECT_ID
+            value: "{{inputs.parameters.project_id}}"
+          - name: MODEL_VERSION_ID
+            value: "{{inputs.parameters.model_version_id}}"
           - name: MODEL_NAME
             value: "{{inputs.parameters.model_name}}"
           - name: MODEL_URI

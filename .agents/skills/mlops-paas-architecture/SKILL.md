@@ -80,7 +80,7 @@ users/{tenant}/models/{project_uuid}/
 - `TrainingJob` snapshot code/data/requirements trước khi chạy.
 - `ModelVersion` là record registry immutable tạo từ upload hoặc training output.
 - Alias trỏ tới version để promote/rollback.
-- Build tạo image từ version; deployment tạo worker riêng cho version đó.
+- Build đóng gói immutable input trước, callback thành công mới cấp version và gắn tag `vN`; deployment tạo worker riêng và pin image ID/digest của version đó.
 
 Public inference URL luôn là:
 

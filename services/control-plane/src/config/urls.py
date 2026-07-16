@@ -2,6 +2,7 @@ from apps.catalog.api.webhooks import ProjectDeletionWebhookEndpoint
 from apps.deployment.api.urls import build_patterns, deployment_patterns, endpoint_patterns
 from apps.deployment.api.webhooks import BuildWebhookEndpoint
 from apps.drift.api.webhooks import DriftRunWebhookEndpoint
+from apps.observability.api.endpoints import ProductionDataEndpoint
 from apps.training.api.webhooks import TrainingJobWebhookEndpoint, TrainingOutputUploadURLEndpoint
 from django.contrib import admin
 from django.urls import include, path
@@ -10,6 +11,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("apps.auth.api.urls")),
     path("api/api-keys/", include("apps.access.api.urls")),
+    path(
+        "api/models/<uuid:project_id>/production-data/",
+        ProductionDataEndpoint.as_view(),
+        name="model-production-data",
+    ),
     path("api/models/", include("apps.catalog.api.urls")),
     path("api/registry/", include("apps.registry.api.urls")),
     path("api/training-jobs/", include("apps.training.api.urls")),

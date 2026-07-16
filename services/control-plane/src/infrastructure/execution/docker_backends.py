@@ -14,6 +14,8 @@ from infrastructure.http import HttpClient
 from infrastructure.storage import S3Storage
 from infrastructure.storage.paths import build_prefix, drift_run_prefix
 
+from .image_references import build_image_tag, image_repository, immutable_image_reference
+
 
 def _wait_and_cleanup(container):
     result = container.wait()
@@ -52,8 +54,10 @@ class DockerBuildBackend:
         environment = {
             "TASK_TYPE": task_type,
             "BUILD_ID": str(build.public_id),
+            "PROJECT_ID": str(project.public_id),
             "TENANT_ID": project.owner.tenant_id,
-            "MODEL_ID": str(build.public_id),
+            "IMAGE_REPOSITORY": image_repository(project.public_id),
+            "IMAGE_TAG": build_image_tag(build.public_id),
             "FLAVOR": build.flavor,
             "REQUIREMENTS_TEXT": build.requirements_snapshot,
             "SOURCE_ARTIFACT_NAME": source.name,
@@ -153,10 +157,7 @@ class DockerDeploymentBackend:
 
     def deploy(self, deployment):
         project = deployment.version.project
-        image = (
-            deployment.build.image_uri
-            or f"build-{deployment.build.public_id}:latest"
-        )
+        image = immutable_image_reference(deployment.build)
         container_name = f"deploy-{deployment.build.public_id}"
         target_port = 5002 if deployment.version.flavor in {"pytorch", "tensorflow"} else 5001
         internal_url = f"http://{container_name}:{target_port}"
@@ -168,7 +169,8 @@ class DockerDeploymentBackend:
             image=image,
             name=container_name,
             environment={
-                "MODEL_ID": str(deployment.version.public_id),
+                "PROJECT_ID": str(project.public_id),
+                "MODEL_VERSION_ID": str(deployment.version.public_id),
                 "MODEL_VERSION": deployment.version.version,
                 "MODEL_URI": "/app/model_artifact",
                 "TENANT_ID": project.owner.tenant_id,
@@ -254,7 +256,8 @@ class DockerDriftBackend:
         environment = {
             "JOB_ID": str(drift_run.public_id),
             "TENANT_ID": project.owner.tenant_id,
-            "MODEL_ID": str(monitor.version.public_id),
+            "PROJECT_ID": str(project.public_id),
+            "MODEL_VERSION_ID": str(monitor.version.public_id),
             "MODEL_NAME": project.name,
             "MODEL_URI": source.uri if source else "",
             "REFERENCE_DATA_URL": self.storage.presigned_get(monitor.reference_asset.s3_uri, 7200),

@@ -67,6 +67,20 @@ data. A completed TrainingJob first owns its TrainingOutput. Build & Register
 copies that output into a Build snapshot; only a successful build allocates the
 next immutable ModelVersion and image artifact.
 
+## Model Image Identity
+
+Every project owns one image repository. Local Docker uses
+`image-{project_uuid}`; production uses
+`{registry}/user-images/image-{project_uuid}`. A build first writes the temporary
+tag `build-{build_uuid}`. Successful registration adds the human-readable tag
+`v{version_number}` to the same manifest and removes the temporary tag.
+
+Tags are references, not identities. `Build.image_digest` and the image artifact
+checksum store the Docker image ID locally or the OCI manifest digest in Harbor.
+Runtime deployment is pinned to that image ID locally and to
+`repository@sha256:...` in production. This preserves immutable rollouts while
+allowing Docker and Harbor to deduplicate shared layers across versions.
+
 ## Ownership Rules
 
 1. API endpoints may import their own serializers, domain services, and selectors.

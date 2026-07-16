@@ -8,6 +8,12 @@ from infrastructure.http import HttpClient
 from infrastructure.storage import S3Storage
 from infrastructure.storage.paths import build_prefix, drift_run_prefix
 
+from .image_references import (
+    build_image_tag,
+    image_repository,
+    immutable_image_reference,
+)
+
 
 class _ArgoBackend:
     setting_name = ""
@@ -42,7 +48,14 @@ class ArgoBuildBackend(_ArgoBackend):
         return self.trigger(
             {
                 "build_id": str(build.public_id),
+                "project_id": str(project.public_id),
                 "tenant_id": project.owner.tenant_id,
+                "image_repository": image_repository(
+                    project.public_id,
+                    registry=settings.HARBOR_REGISTRY_URL,
+                    registry_project=settings.HARBOR_USER_PROJECT,
+                ),
+                "image_tag": build_image_tag(build.public_id),
                 "flavor": build.flavor,
                 "task_type": "TEST_ZIP" if build.artifact_format == "mlflow_zip" else "BUILD",
                 "requirements_text": build.requirements_snapshot,
@@ -149,11 +162,10 @@ class ArgoDeploymentBackend(_ArgoBackend):
                 "deployment_id": str(deployment.public_id),
                 "tenant_id": project.owner.tenant_id,
                 "project_id": str(project.public_id),
-                "version_id": str(version.public_id),
-                "model_id": str(version.public_id),
+                "model_version_id": str(version.public_id),
                 "version": version.version,
-                "image_uri": deployment.build.image_uri,
-                "image_name": deployment.build.image_uri,
+                "image_uri": immutable_image_reference(deployment.build),
+                "image_name": immutable_image_reference(deployment.build),
                 "container_name": container_name,
                 "model_type": model_type,
                 "target_port": str(target_port),
@@ -226,7 +238,8 @@ class ArgoDriftBackend(_ArgoBackend):
                 "job_id": str(drift_run.public_id),
                 "monitor_id": str(monitor.public_id),
                 "tenant_id": project.owner.tenant_id,
-                "model_id": str(monitor.version.public_id),
+                "project_id": str(project.public_id),
+                "model_version_id": str(monitor.version.public_id),
                 "model_name": project.name,
                 "model_uri": "",
                 "reference_data_url": self.storage.presigned_get(monitor.reference_asset.s3_uri, 7200),

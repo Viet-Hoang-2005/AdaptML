@@ -29,7 +29,7 @@ export default function DriftMonitoringPage() {
   const navigate = useNavigate();
   
   const { data: jobs, isLoading: isLoadingJobs } = useDriftMonitoringJobs(modelId);
-  const activeJob = jobs?.find(j => j.status === 'active');
+  const activeJob = jobs?.find((job) => job.is_active);
   
   const { data: results, isLoading: isLoadingResults, refetch: refetchResults } = useDriftMonitoringResults(activeJob?.id);
   const { mutate: deleteJob, isPending: isDeleting } = useDeleteDriftMonitoringJob();
@@ -40,14 +40,12 @@ export default function DriftMonitoringPage() {
 
   const handleRunNow = async () => {
     if (!modelId || !activeJob) return;
-    const run = await runJob({ id: activeJob.id, model_id: modelId });
+    const run = await runJob({ id: activeJob.id, project_id: modelId });
     setActiveRunId(run.id);
   };
 
-  const handleViewReport = (reportUrl: string) => {
-    navigate(`/dashboard/drift-monitoring/${modelId}/report`, { 
-      state: { reportS3Uri: reportUrl } 
-    });
+  const handleViewReport = (runId: string) => {
+    navigate(`/dashboard/drift-monitoring/${modelId}/report/${runId}`);
   };
 
   if (isLoadingJobs) {
@@ -77,26 +75,37 @@ export default function DriftMonitoringPage() {
 
   const columns: ColumnDef<DriftMonitoringResult>[] = [
     {
-      accessorKey: 'run_at',
+      accessorKey: 'created_at',
       header: t('runAt'),
-      cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{new Date(row.original.run_at).toLocaleString(i18n.language)}</span>,
+      cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{new Date(row.original.created_at).toLocaleString(i18n.language)}</span>,
     },
     {
       accessorKey: 'drift_score',
       header: t('driftScore'),
-      cell: ({ row }) => <span className="font-mono font-semibold">{(row.original.drift_score * 100).toFixed(1)}%</span>,
+      cell: ({ row }) => <span className="font-mono font-semibold">{row.original.drift_score == null ? t('none') : `${(row.original.drift_score * 100).toFixed(1)}%`}</span>,
     },
     {
       id: 'status',
       header: t('status'),
-      cell: ({ row }) => <Badge variant={row.original.dataset_drift ? 'danger' : 'success'}>{row.original.dataset_drift ? t('driftDetected') : t('healthy')}</Badge>,
+      cell: ({ row }) => {
+        if (row.original.status !== 'completed') return <Badge variant="neutral">{row.original.status}</Badge>;
+        return <Badge variant={row.original.has_drift ? 'danger' : 'success'}>{row.original.has_drift ? t('driftDetected') : t('healthy')}</Badge>;
+      },
     },
     {
       id: 'action',
       header: t('report'),
       enableSorting: false,
       cell: ({ row }) => (
-        <Button variant="ghost" size="sm" icon={<ExternalLink className="h-4 w-4" />} onClick={() => handleViewReport(row.original.report_url)}>{t('viewReport')}</Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<ExternalLink className="h-4 w-4" />}
+          disabled={!row.original.report_html_uri}
+          onClick={() => handleViewReport(row.original.id)}
+        >
+          {t('viewReport')}
+        </Button>
       ),
     },
   ];
@@ -145,7 +154,7 @@ export default function DriftMonitoringPage() {
             />
             <SummaryCard 
               label={t('referencePath')}
-              value={activeJob.reference_data_s3_path || t('none')}
+              value={activeJob.reference_asset_name || t('none')}
             />
           </div>
         </div>
@@ -182,7 +191,7 @@ export default function DriftMonitoringPage() {
         tone="danger"
         loading={isDeleting}
         onConfirm={() => {
-          deleteJob({ id: activeJob.id, model_id: modelId! });
+          deleteJob({ id: activeJob.id, project_id: modelId! });
           setIsDeleteModalOpen(false);
         }}
         onCancel={() => setIsDeleteModalOpen(false)}

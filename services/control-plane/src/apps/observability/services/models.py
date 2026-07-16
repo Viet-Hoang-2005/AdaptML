@@ -27,9 +27,11 @@ def model_observability(project, prometheus=None):
         "training": _resource(latest_training),
         "drift": _resource(latest_drift),
         "metrics": {
-            "requests": metrics_client.query(f'paas_predictions_total{{model_id=~"{project.public_id}.*"}}'),
+            "requests": metrics_client.query(
+                f'paas_predictions_total{{project_id="{project.public_id}"}}'
+            ),
             "latency": metrics_client.query(
-                f'paas_prediction_latency_seconds_count{{model_id=~"{project.public_id}.*"}}'
+                f'paas_prediction_latency_seconds_count{{project_id="{project.public_id}"}}'
             ),
         },
     }

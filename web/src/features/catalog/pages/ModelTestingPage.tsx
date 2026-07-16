@@ -197,7 +197,7 @@ export default function ModelTestingPage() {
     if (running) {
       isRunningRef.current = false;
       setRunning(false);
-      pushLog(makeLog('warning', 'Testing paused by user.'));
+      pushLog(makeLog('info', 'Testing paused by user.'));
       return;
     }
 

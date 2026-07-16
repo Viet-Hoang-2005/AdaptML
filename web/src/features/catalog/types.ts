@@ -202,7 +202,7 @@ export interface BuildInputAssetSummary {
 }
 
 export interface ModelEndpointLogsResponse {
-  model_id: ResourceId;
+  project_id: ResourceId;
   container_name: string;
   logs: string;
 }
@@ -212,5 +212,5 @@ export interface ModelPredictionResponse {
   prediction: unknown;
   confidence: number | null;
   tenant_id: ResourceId;
-  model_id: ResourceId;
+  model_version_id: ResourceId;
 }

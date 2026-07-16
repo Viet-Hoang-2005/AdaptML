@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 from infrastructure.execution.cleanup_backends import project_cleanup_backend
+from infrastructure.execution.image_references import temporary_image_reference
 from infrastructure.storage import S3Storage
 from infrastructure.storage.paths import project_prefix
 from rest_framework.exceptions import ValidationError
@@ -38,9 +39,13 @@ def project_cleanup_manifest(project):
     builds = list(project.builds.all())
     image_uris = sorted(
         {
-            build.image_uri
+            image_uri
             for build in builds
-            if build.image_uri
+            for image_uri in (
+                build.image_uri,
+                temporary_image_reference(project.public_id, build.public_id),
+            )
+            if image_uri
         }
     )
     container_names = sorted(

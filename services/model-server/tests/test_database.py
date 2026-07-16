@@ -57,6 +57,9 @@ def test_fetch_model_version_normalizes_values(monkeypatch):
     assert database._fetch_model_version_from_db("uuid") == {
         "id": "1", "project_id": "2", "tenant_id": "t", "version": "v1"
     }
+    query = str(conn.execute.call_args.args[0])
+    assert "version.flavor" in query
+    assert "project.model_type" not in query
     mappings.first.return_value = None
     assert database._fetch_model_version_from_db("missing") is None
 

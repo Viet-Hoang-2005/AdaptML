@@ -23,15 +23,16 @@ class Context:
 
 def test_validate_runtime_config(monkeypatch):
     monkeypatch.setattr(main, "TENANT_ID", "t")
-    monkeypatch.setattr(main, "MODEL_ID", "m")
+    monkeypatch.setattr(main, "PROJECT_ID", "p")
+    monkeypatch.setattr(main, "MODEL_VERSION_ID", "v")
     monkeypatch.setattr(main, "DRIFT_THRESHOLD", 0.5)
     main.validate_runtime_config()
     monkeypatch.setattr(main, "DRIFT_THRESHOLD", 1.5)
     with pytest.raises(ValueError, match="DRIFT_THRESHOLD"):
         main.validate_runtime_config()
     monkeypatch.setattr(main, "DRIFT_THRESHOLD", 0.5)
-    monkeypatch.setattr(main, "MODEL_ID", None)
-    with pytest.raises(ValueError, match="TENANT_ID and MODEL_ID"):
+    monkeypatch.setattr(main, "MODEL_VERSION_ID", None)
+    with pytest.raises(ValueError, match="MODEL_VERSION_ID"):
         main.validate_runtime_config()
 
 
@@ -70,7 +71,7 @@ def test_load_reference_local_csv(monkeypatch, tmp_path):
 
 
 def test_load_reference_http_success_and_failure(monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "MODEL_ID", "unit")
+    monkeypatch.setattr(main, "MODEL_VERSION_ID", "unit")
     monkeypatch.setattr(main, "TEMP_ROOT", tmp_path)
     monkeypatch.setattr(main, "REFERENCE_DATA_URL", "https://storage/reference.csv")
     monkeypatch.setattr(main.requests, "get", Mock(return_value=SimpleNamespace(status_code=200, content=b"x\n1\n", text="")))
@@ -87,7 +88,7 @@ def test_load_reference_requires_url(monkeypatch):
 
 
 def test_load_production_data_flattens_json(monkeypatch):
-    monkeypatch.setattr(main, "MODEL_ID", "m")
+    monkeypatch.setattr(main, "MODEL_VERSION_ID", "m")
     monkeypatch.setattr(main, "MIN_SAMPLES", 2)
     raw = pd.DataFrame({"features": [json.dumps({"a": 1}), json.dumps({"a": 2})], "prediction": ["x", "y"]})
     monkeypatch.setattr(main, "create_engine", lambda *_: SimpleNamespace(connect=lambda: Context(object())))
@@ -184,7 +185,8 @@ def test_run_drift_analysis_summary(monkeypatch):
     monkeypatch.setattr(main, "Report", FakeReport)
     monkeypatch.setattr(main, "save_drift_report", lambda *a: {"summary_json_s3_uri": "s3://report"})
     monkeypatch.setattr(main, "TENANT_ID", "t")
-    monkeypatch.setattr(main, "MODEL_ID", "m")
+    monkeypatch.setattr(main, "PROJECT_ID", "p")
+    monkeypatch.setattr(main, "MODEL_VERSION_ID", "v")
     monkeypatch.setattr(main, "DRIFT_THRESHOLD", 0.6)
     frame = pd.DataFrame({"a": [1.0], "b": [2.0]})
     summary = main.run_drift_analysis(frame, frame.copy(), main.ColumnMapping())
@@ -230,14 +232,16 @@ def test_trigger_webhook_payload(monkeypatch):
     monkeypatch.setattr(main, "CONTROL_PLANE_WEBHOOK_URL", "http://control")
     monkeypatch.setattr(main, "CONTROL_PLANE_WEBHOOK_SECRET", "secret")
     monkeypatch.setattr(main, "TENANT_ID", "t")
-    monkeypatch.setattr(main, "MODEL_ID", "m")
+    monkeypatch.setattr(main, "PROJECT_ID", "p")
+    monkeypatch.setattr(main, "MODEL_VERSION_ID", "v")
     response = SimpleNamespace(status_code=200, text="")
     session = Mock()
     session.post.return_value = response
     monkeypatch.setattr(main.requests, "Session", lambda: session)
     main.trigger_django_webhook({"dataset_drift": True})
     assert session.post.call_args.kwargs["headers"]["Authorization"] == "Bearer secret"
-    assert session.post.call_args.kwargs["json"]["model_id"] == "m"
+    assert session.post.call_args.kwargs["json"]["project_id"] == "p"
+    assert session.post.call_args.kwargs["json"]["model_version_id"] == "v"
 
 
 def test_main_success_and_failure_paths(monkeypatch):

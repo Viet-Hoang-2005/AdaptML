@@ -107,11 +107,11 @@ export const getModelEndpointLogs = async (modelId: string): Promise<ModelEndpoi
     results?: Array<{ id: string; version_id: string; runtime_name: string }>;
   }>(controlPlaneURL('/endpoints/'));
   const endpoint = (endpointPage.results ?? []).find((item) => versionIds.has(item.version_id));
-  if (!endpoint) return { model_id: modelId, container_name: '', logs: '' };
+  if (!endpoint) return { project_id: modelId, container_name: '', logs: '' };
   const { data } = await apiClient.get<{ runtime_name: string; logs: string }>(
     controlPlaneURL(`/endpoints/${endpoint.id}/logs/`),
   );
-  return { model_id: modelId, container_name: data.runtime_name, logs: data.logs };
+  return { project_id: modelId, container_name: data.runtime_name, logs: data.logs };
 };
 
 export const listSourceCodeFiles = async (modelId: string): Promise<WorkspaceFile[]> =>

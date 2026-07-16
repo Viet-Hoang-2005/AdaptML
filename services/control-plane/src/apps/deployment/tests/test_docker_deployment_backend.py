@@ -41,7 +41,8 @@ def test_local_deployment_uses_embedded_model_artifact_and_becomes_healthy():
         version=version,
         flavor="xgboost",
         status="ready",
-        image_uri="build-runtime:latest",
+        image_uri=f"image-{project.public_id}:v1",
+        image_digest="sha256:local-image-id",
     )
     deployment = Deployment.objects.create(version=version, build=build, status="deploying")
     docker = RecordingDockerClient()
@@ -49,11 +50,13 @@ def test_local_deployment_uses_embedded_model_artifact_and_becomes_healthy():
     endpoint = DockerDeploymentBackend(docker_client=docker, http=HealthyHttpClient()).deploy(deployment)
 
     assert docker.kwargs["environment"] == {
-        "MODEL_ID": str(version.public_id),
+        "PROJECT_ID": str(project.public_id),
+        "MODEL_VERSION_ID": str(version.public_id),
         "MODEL_VERSION": "1",
         "MODEL_URI": "/app/model_artifact",
         "TENANT_ID": owner.tenant_id,
     }
+    assert docker.kwargs["image"] == "sha256:local-image-id"
     assert endpoint.internal_url == f"http://deploy-{build.public_id}:5001"
     assert endpoint.health_status == "healthy"
 

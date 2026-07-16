@@ -72,6 +72,11 @@ def test_docker_build_backend_uses_build_input_s3_uri():
     assert DockerBuildBackend(docker_client=docker, storage=storage).run(build) == "build complete"
     assert storage.downloaded_uri == asset.s3_uri
     assert docker.environment["SOURCE_DOWNLOAD_URL"] == "https://storage.example/download"
+    assert docker.environment["PROJECT_ID"] == str(build.project.public_id)
+    assert docker.environment["BUILD_ID"] == str(build.public_id)
+    assert "MODEL_VERSION_ID" not in docker.environment
+    assert docker.environment["IMAGE_REPOSITORY"] == f"image-{build.project.public_id}"
+    assert docker.environment["IMAGE_TAG"] == f"build-{build.public_id}"
 
 
 @pytest.mark.django_db
@@ -85,3 +90,6 @@ def test_argo_build_backend_uses_build_input_s3_uri():
     assert result["dispatched"] is True
     assert storage.downloaded_uri == asset.s3_uri
     assert result["response"]["source_download_url"] == "https://storage.example/download"
+    assert result["response"]["project_id"] == str(build.project.public_id)
+    assert result["response"]["image_repository"].endswith(f"image-{build.project.public_id}")
+    assert result["response"]["image_tag"] == f"build-{build.public_id}"

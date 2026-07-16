@@ -9,7 +9,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.catalog.selectors import project_for_user
+from apps.observability.selectors import latest_production_data
 from apps.observability.services.models import model_observability
+
+from .serializers import ProductionDataQuerySerializer
 
 
 class LiveEndpoint(APIView):
@@ -53,3 +56,16 @@ class ModelObservabilityEndpoint(APIView):
     def get(self, request, project_id):
         project = project_for_user(request.user, project_id)
         return Response(model_observability(project))
+
+
+class ProductionDataEndpoint(APIView):
+    def get(self, request, project_id):
+        project = project_for_user(request.user, project_id)
+        serializer = ProductionDataQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        return Response(
+            latest_production_data(
+                project,
+                limit=serializer.validated_data.get("limit"),
+            )
+        )

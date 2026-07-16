@@ -63,15 +63,15 @@ def test_count_queries_and_fallback(monkeypatch):
     monkeypatch.setattr(database, "engine_ro", engine)
     monkeypatch.setattr(database, "engine_rw", None)
     assert database.get_production_data_count() == 7
-    assert database.get_production_data_count_by_model("m") == 7
-    assert conn.execute.call_args.args[1] == {"model_id": "m"}
+    assert database.get_production_data_count_by_model_version("m") == 7
+    assert conn.execute.call_args.args[1] == {"model_version_id": "m"}
 
 
 def test_count_without_engine_returns_zero(monkeypatch):
     monkeypatch.setattr(database, "engine_ro", None)
     monkeypatch.setattr(database, "engine_rw", None)
     assert database.get_production_data_count() == 0
-    assert database.get_production_data_count_by_model("m") == 0
+    assert database.get_production_data_count_by_model_version("m") == 0
 
 
 def test_get_drift_thresholds(monkeypatch):

@@ -20,7 +20,7 @@ Evidently Service là container thực thi phân tích **Data Drift** theo mô h
 Argo Workflows kích hoạt evidently-workflowtemplate
   ↓
 1. Tải Reference Data từ S3 (presigned URL do Control Plane cấp)
-2. Query Production Logs từ PostgreSQL theo model_id + tenant_id
+2. Query Production Logs từ PostgreSQL theo model_version_id + tenant_id
 3. Flatten JSONB features → Pandas DataFrame
 4. Chạy Evidently DataDriftPreset
 5. Xuất report.html + summary.json
@@ -60,7 +60,8 @@ src/
 | `JOB_ID` | ID của DriftJob trên Control Plane |
 | `DRIFT_RUN_ID` | UUID của DriftRun; nếu không đặt sẽ dùng `JOB_ID` làm Redis log key |
 | `TENANT_ID` | Tenant sở hữu model |
-| `MODEL_ID` | ID của model cần phân tích |
+| `PROJECT_ID` | UUID của model project cần phân tích |
+| `MODEL_VERSION_ID` | UUID của model version bất biến cần phân tích |
 | `MODEL_NAME` | Tên model (dùng để query production logs) |
 | `MODEL_URI` | URI của model (tham khảo) |
 | `REFERENCE_DATA_URL` | Presigned URL tải Reference Data từ S3 |

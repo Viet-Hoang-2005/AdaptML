@@ -4,7 +4,11 @@ from .models import DriftMonitor, DriftRun
 
 
 def monitors_for_user(user):
-    return DriftMonitor.objects.filter(version__project__owner=user).select_related("version", "reference_asset")
+    return (
+        DriftMonitor.objects.filter(version__project__owner=user)
+        .select_related("version", "reference_asset")
+        .order_by("-created_at")
+    )
 
 
 def monitor_for_user(user, public_id):

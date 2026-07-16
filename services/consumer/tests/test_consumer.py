@@ -58,11 +58,17 @@ def test_check_threshold_ignores_invalid_batches(monkeypatch):
 
 def test_check_threshold_triggers_models_independently(monkeypatch):
     monkeypatch.setattr(main, "get_model_drift_thresholds", lambda: {"a": 5, "b": 10})
-    monkeypatch.setattr(main, "get_production_data_count_by_model", lambda model: {"a": 8, "b": 9}[model])
+    monkeypatch.setattr(
+        main,
+        "get_production_data_count_by_model_version",
+        lambda version_id: {"a": 8, "b": 9}[version_id],
+    )
     trigger = Mock()
     monkeypatch.setattr(main, "trigger_django_webhook", trigger)
 
-    state = main.check_threshold_and_trigger({"a": 2}, pd.DataFrame({"model_id": ["a", "b", None]}))
+    state = main.check_threshold_and_trigger(
+        {"a": 2}, pd.DataFrame({"model_version_id": ["a", "b", None]})
+    )
 
     assert state == {"a": 8}
     trigger.assert_called_once_with("a", 8)
@@ -85,7 +91,11 @@ def test_trigger_webhook_sends_bearer_payload(monkeypatch):
     post.assert_called_once_with(
         "http://control/run",
         headers={"Authorization": "Bearer secret", "Content-Type": "application/json"},
-        json={"event_type": "trigger_drift_check", "model_id": "model", "current_data_count": 12},
+        json={
+            "event_type": "trigger_drift_check",
+            "model_version_id": "model",
+            "current_data_count": 12,
+        },
         timeout=10,
     )
 
@@ -103,12 +113,12 @@ def test_trigger_webhook_non_success_and_exception_are_nonfatal(monkeypatch, cap
 def test_flush_batch_commits_only_after_success(monkeypatch):
     consumer = FakeConsumer([])
     monkeypatch.setattr(main, "save_dataframe_to_db", Mock(return_value=False))
-    saved, state = main.flush_batch(consumer, [{"model_id": "m"}], {})
+    saved, state = main.flush_batch(consumer, [{"model_version_id": "m"}], {})
     assert not saved and state == {} and consumer.commits == 0
 
     monkeypatch.setattr(main, "save_dataframe_to_db", Mock(return_value=True))
     monkeypatch.setattr(main, "check_threshold_and_trigger", lambda state, df: {"m": len(df)})
-    saved, state = main.flush_batch(consumer, [{"model_id": "m"}], {})
+    saved, state = main.flush_batch(consumer, [{"model_version_id": "m"}], {})
     assert saved and state == {"m": 1} and consumer.commits == 1
 
 
@@ -120,7 +130,9 @@ def test_flush_empty_batch_is_noop():
 
 
 def test_main_flushes_valid_message_and_closes(monkeypatch):
-    fake = FakeConsumer([FakeMessage({"id": "1", "model_id": "m", "timestamp": "2026-01-01"}), None])
+    fake = FakeConsumer(
+        [FakeMessage({"id": "1", "model_version_id": "m", "timestamp": "2026-01-01"}), None]
+    )
     monkeypatch.setattr(main, "Consumer", lambda conf: fake)
     monkeypatch.setattr(main.signal, "signal", lambda *args: None)
     monkeypatch.setattr(main, "save_dataframe_to_db", Mock(return_value=True))

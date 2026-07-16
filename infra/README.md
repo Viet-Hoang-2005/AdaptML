@@ -71,7 +71,7 @@ Mỗi module có thể bật/tắt độc lập qua `terraform.tfvars`:
 S3 Bucket `mlops-paas-artifacts`:
 ```
 mlops-paas-artifacts/
-├── user-models/{tenant_id}/{model_id}/    # Model artifact ZIPs (upload từ Tenant)
+├── users/{tenant_id}/models/{project_id}/ # Workspace và model artifacts theo project
 ├── training-data/                          # Training datasets
 ├── training-artifacts/{job_id}/            # model.tar.gz output từ Training Runner
 ├── drift-reports/{job_id}/                 # HTML + JSON drift reports từ Evidently
