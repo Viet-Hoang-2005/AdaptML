@@ -174,6 +174,23 @@ def stub_package_helpers(monkeypatch):
     monkeypatch.setattr(cli, "save_mlflow_model", save)
 
 
+def test_read_training_summaries_from_mlops_bundle(tmp_path):
+    mlops_dir = tmp_path / "nested" / "_mlops"
+    mlops_dir.mkdir(parents=True)
+    (mlops_dir / "metrics.json").write_text(json.dumps({"accuracy": 0.97}), encoding="utf-8")
+    (mlops_dir / "params.json").write_text(json.dumps({"epochs": 10}), encoding="utf-8")
+    (mlops_dir / "model_insights.json").write_text("not-json", encoding="utf-8")
+
+    summaries, discovered = cli.read_training_summaries(tmp_path)
+
+    assert discovered == mlops_dir
+    assert summaries == {
+        "metrics_summary": {"accuracy": 0.97},
+        "params_summary": {"epochs": 10},
+        "insights_summary": {},
+    }
+
+
 @pytest.mark.parametrize("flavor,base", [
     ("sklearn", "machine-learning-serving"),
     ("pytorch", "deep-learning-serving"),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/app/theme/useTheme';
 import { LazyCodeEditor } from '@/shared/ui/LazyCodeEditor';
@@ -38,7 +38,11 @@ export interface SourceEditorProps {
   entryPointExtension?: string;
 }
 
-export function SourceEditor({ 
+export interface SourceEditorHandle {
+  save: () => Promise<boolean>;
+}
+
+export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(function SourceEditor({
   modelId, 
   fileType,
   title, 
@@ -50,7 +54,7 @@ export function SourceEditor({
   currentEntryPoint,
   setAsMainLabel,
   entryPointExtension = '.py',
-}: SourceEditorProps) {
+}, ref) {
   const { t } = useTranslation('catalog');
   const { resolvedTheme } = useTheme();
   const [files, setFiles] = useState<S3File[]>([]);
@@ -183,7 +187,8 @@ export function SourceEditor({
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
+    if (Object.keys(unsavedContents).length === 0) return true;
     try {
       setSaving(true);
       const promises = Object.entries(unsavedContents).map(async ([path, content]) => {
@@ -201,13 +206,17 @@ export function SourceEditor({
       setUnsavedContents({});
       toast.success(t('sourceEditor.saved', { title }));
       await fetchFiles();
+      return true;
     } catch (err) {
       console.error(err);
       toast.error(t('sourceEditor.saveFailed', { title }));
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({ save: handleSave }));
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = e.target.files;
@@ -535,4 +544,4 @@ export function SourceEditor({
       />
     </div>
   );
-}
+});

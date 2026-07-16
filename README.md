@@ -480,7 +480,7 @@ kubectl get pods -A
 
 1. Đăng nhập vào giao diện React Dashboard.
 2. Tải lên mã nguồn mô hình hoặc file trọng số (`.pkl`, `.pt`, `.tar.gz`).
-3. Tạo registry version từ artifact upload hoặc output của training job.
+3. Bấm Build; chỉ callback build thành công mới tự động cấp registry version kế tiếp.
 4. Tạo build qua `/api/builds/` và theo dõi trạng thái/log trên giao diện.
 5. Xác nhận Docker image đã được đóng gói và push lên Harbor Registry.
 
@@ -503,7 +503,7 @@ curl -X POST https://api.mlops-nids-nt114.id.vn/{tenant_id}/models/{project_uuid
 2. Quan sát Celery task gửi Argo webhook và workflow khởi tạo **Kubeflow PyTorchJob** trên Kubernetes.
 3. Nếu ở Production: **Karpenter** tự động provision node EC2 GPU mới trong vòng vài mươi giây. Nếu ở Local: Job chạy trực tiếp trên engine local.
 4. Theo dõi log huấn luyện trực tiếp trên Web UI (cập nhật realtime mỗi 3 giây qua Redis).
-5. Sau khi hoàn tất, kiểm tra `model.tar.gz`, metadata bundle và MLflow run theo job; sau đó đăng ký output thành immutable `ModelVersion` trong Control Plane Registry.
+5. Sau khi hoàn tất, kiểm tra `model.tar.gz`, metadata bundle và MLflow run theo job; bấm **Build & Register** để tạo image và chỉ cấp immutable `ModelVersion` khi build thành công. Deployment của version training được thực hiện từ Model Evolution.
 
 ### Giai đoạn 5: Kiểm thử Phát hiện Data Drift (Evidently AI)
 

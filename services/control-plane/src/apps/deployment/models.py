@@ -10,6 +10,13 @@ class Build(models.Model):
     )
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     project = models.ForeignKey("catalog.ModelProject", on_delete=models.CASCADE, related_name="builds")
+    source_job = models.ForeignKey(
+        "training.TrainingJob",
+        on_delete=models.PROTECT,
+        related_name="builds",
+        null=True,
+        blank=True,
+    )
     version = models.ForeignKey(
         "registry.ModelVersion", on_delete=models.CASCADE, related_name="builds", null=True, blank=True
     )
@@ -33,6 +40,13 @@ class Build(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["project", "status"], name="build_project_status_idx")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_job"],
+                condition=models.Q(source_job__isnull=False, status__in=("pending", "queued", "building", "ready")),
+                name="build_active_source_job_unique",
+            )
+        ]
 
     def __str__(self):
         return f"Build {self.public_id} ({self.status})"
@@ -41,6 +55,7 @@ class Build(models.Model):
 class BuildInputAsset(models.Model):
     KINDS = (
         ("source_artifact", "Source Artifact"),
+        ("training_output", "Training Output"),
         ("label_mapping", "Label Mapping"),
         ("metrics", "Metrics"),
         ("params", "Parameters"),

@@ -28,7 +28,13 @@ POST /api/training-jobs/{job_uuid}/submit/
   -> internal webhook -> status, TrainingOutput, event
 ```
 
-Job API có detail, `submit/`, `cancel/`, `events/` và `download/`. Sử dụng UUID `job_uuid` ở mọi route/callback.
+Job API có detail, `submit/`, `cancel/`, `events/`, `logs/`, `download/`, `outputs/` và `build/`. Runtime options được đọc từ `/api/training-jobs/runtime-capabilities/`. Sử dụng UUID `job_uuid` ở mọi route/callback.
+
+## Build & Register
+
+Training hoàn tất chỉ tạo `TrainingOutput`, chưa tạo deployment. `POST /api/training-jobs/{job_uuid}/build/` snapshot output vào prefix của Build và chạy model-packager. Callback Build thành công mới cấp version tuần tự, tạo image artifact và import `_mlops` metadata. Một job chỉ có tối đa một version thành công; retry chỉ áp dụng cho Build failed/cancelled. Deployment của version training chỉ thực hiện từ Registry.
+
+`DELETE /api/training-jobs/{job_uuid}/outputs/` xóa toàn bundle output nhưng giữ job/events/logs. Chặn xóa khi Build đang active; xóa sau khi version ready không ảnh hưởng image/version.
 
 ## Training runner contract
 
@@ -54,17 +60,17 @@ Argo chọn template CPU/GPU theo `accelerator_type` và `accelerator_count`. GP
 ## Cancel và callback
 
 - Cancel API enqueue Celery `cancel_training_job`; backend hủy container hoặc gửi Argo cancel workflow.
-- Callback là `POST /internal/webhooks/training-jobs/{job_uuid}/` với shared secret.
+- Callback là `POST /internal/webhooks/training-jobs/{job_uuid}/` với capability Bearer token giới hạn theo job/purpose.
 - Dùng `Idempotency-Key` cho callback có thể lặp; terminal state không được ghi đè.
 
 ## Kiểm tra tối thiểu
 
 ```bash
 cd services/control-plane
-python -m pytest src/apps/training
+python -m pytest src/apps/training src/apps/deployment src/apps/registry
 
 cd ../training-runner
-python -m unittest discover -s src -p 'test_*.py' -v
+python -m pytest tests
 ```
 
 Khi thay đổi artifact metadata, chạy thêm `scripts/validate_training_artifact.py` và cập nhật test metadata của runner.

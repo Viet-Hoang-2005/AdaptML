@@ -8,6 +8,7 @@ from apps.registry.models import ModelVersion
 class BuildSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
     project_id = serializers.UUIDField(source="project.public_id", read_only=True)
+    source_job_id = serializers.UUIDField(source="source_job.public_id", allow_null=True, read_only=True)
     version_id = serializers.UUIDField(source="version.public_id", allow_null=True, read_only=True)
     version_number = serializers.CharField(source="version.version", allow_null=True, read_only=True)
     version = serializers.SlugRelatedField(
@@ -20,6 +21,7 @@ class BuildSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "project_id",
+            "source_job_id",
             "version",
             "version_id",
             "version_number",

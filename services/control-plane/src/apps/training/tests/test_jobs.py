@@ -18,6 +18,7 @@ def test_training_job_paths_are_project_scoped(monkeypatch):
         {
             "project": str(project.public_id),
             "name": "nightly",
+            "model_flavor": "xgboost",
             "requirements_text": "xgboost==2.0.3",
             "code_snapshot_uri": "s3://other-tenant/source.zip",
             "data_snapshot_uri": "s3://other-tenant/train.csv",
@@ -42,3 +43,23 @@ def test_training_job_paths_are_project_scoped(monkeypatch):
     download = client.get(f"/api/training-jobs/{job.public_id}/download/")
     assert download.status_code == 200
     assert download.data["download_url"] == "https://s3.example/download"
+
+
+@pytest.mark.django_db
+def test_runtime_capabilities_only_expose_configured_accelerators(settings):
+    user = get_user_model().objects.create_user("capabilities@example.com", "password123")
+    client = APIClient()
+    client.force_authenticate(user)
+    settings.TRAINING_BACKEND = "docker"
+    settings.TRAINING_GPU_ENABLED = False
+    settings.TRAINING_GPU_COUNTS = [1, 2]
+
+    cpu_only = client.get("/api/training-jobs/runtime-capabilities/")
+
+    assert cpu_only.status_code == 200
+    assert cpu_only.data["backend"] == "docker"
+    assert cpu_only.data["accelerators"] == [{"type": "none", "counts": [0]}]
+
+    settings.TRAINING_GPU_ENABLED = True
+    with_gpu = client.get("/api/training-jobs/runtime-capabilities/")
+    assert with_gpu.data["accelerators"][-1] == {"type": "gpu", "counts": [1, 2]}

@@ -56,6 +56,8 @@ spec:
                       value: ""
                     - name: source_artifact_name
                       value: ""
+                    - name: source_type
+                      value: "manual_upload"
                     - name: source_download_url
                       value: ""
                     - name: output_upload_url
@@ -89,16 +91,20 @@ spec:
               dest: spec.arguments.parameters.5.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.source_download_url
+                dataKey: body.source_type
               dest: spec.arguments.parameters.6.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.output_upload_url
+                dataKey: body.source_download_url
               dest: spec.arguments.parameters.7.value
             - src:
                 dependencyName: build-dep
-                dataKey: body.control_plane_webhook_url
+                dataKey: body.output_upload_url
               dest: spec.arguments.parameters.8.value
+            - src:
+                dependencyName: build-dep
+                dataKey: body.control_plane_webhook_url
+              dest: spec.arguments.parameters.9.value
     - template:
         name: deploy-workflow-trigger
         conditions: "deploy-dep"

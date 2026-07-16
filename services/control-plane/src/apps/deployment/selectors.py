@@ -4,7 +4,11 @@ from .models import Build, Deployment, Endpoint
 
 
 def builds_for_user(user):
-    return Build.objects.filter(project__owner=user).select_related("project", "version").prefetch_related("input_assets")
+    return (
+        Build.objects.filter(project__owner=user)
+        .select_related("project", "version")
+        .prefetch_related("input_assets")
+    )
 
 
 def build_for_user(user, public_id):

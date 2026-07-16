@@ -4,10 +4,11 @@ from infrastructure.storage.paths import build_prefix, version_prefix
 from rest_framework.exceptions import ValidationError
 
 from apps.observability.services.outbox import enqueue_event
-from apps.registry.models import ModelArtifact, ModelVersion, RegistryEvent
+from apps.registry.models import ModelArtifact, ModelMetric, ModelVersion, RegistryEvent
 
 BUILD_INPUT_ARTIFACT_KINDS = {
     "source_artifact": "source",
+    "training_output": "training_output",
     "label_mapping": "label_mapping",
     "metrics": "metrics",
     "params": "params",
@@ -17,61 +18,25 @@ BUILD_INPUT_ARTIFACT_KINDS = {
 }
 
 
-def register_version(*, project, actor, validated_data):
-    source_artifact = validated_data.pop("source_artifact", None)
-    source_job = validated_data.get("source_job")
-    if source_job and source_job.project_id != project.id:
-        raise ValidationError({"source_job": "The training job belongs to another project."})
-    requirements = source_job.requirements_text if source_job else validated_data.pop("requirements_snapshot", "")
-    with transaction.atomic():
-        version = ModelVersion.objects.create(project=project, requirements_snapshot=requirements, **validated_data)
-        if source_job:
-            for output in source_job.outputs.all():
-                ModelArtifact.objects.create(
-                    version=version,
-                    kind="training_output"
-                    if output.kind == "model"
-                    else "mlflow"
-                    if output.kind == "metric"
-                    else "training_output",
-                    name=output.relative_path,
-                    uri=output.s3_uri,
-                    checksum=output.checksum,
-                    size_bytes=output.size_bytes,
-                    content_type=output.content_type,
-                    metadata=output.metadata,
-                )
-        elif source_artifact:
-            storage = S3Storage()
-            key = (
-                f"{version_prefix(project.owner.tenant_id, project.public_id, version.public_id)}"
-                f"/source/{source_artifact.name}"
-            )
-            stored = storage.put(
-                key,
-                source_artifact,
-                source_artifact.content_type or "application/octet-stream",
-            )
-            ModelArtifact.objects.create(
-                version=version,
-                kind="source",
-                name=source_artifact.name,
-                uri=stored.uri,
-                checksum=stored.checksum,
-                size_bytes=stored.size_bytes,
-                content_type=stored.content_type,
-            )
-        RegistryEvent.objects.create(version=version, actor=actor, event_type="registered", to_state=version.stage)
-    return version
-
-
-def register_successful_build(*, build, image_uri, image_digest="", storage=None):
+def register_successful_build(
+    *,
+    build,
+    image_uri,
+    image_digest="",
+    metrics_summary=None,
+    params_summary=None,
+    insights_summary=None,
+    storage=None,
+):
     """Idempotently publish a manual build as an immutable registry version."""
 
     storage = storage or S3Storage()
     with transaction.atomic():
-        build = type(build).objects.select_for_update().select_related("project", "project__owner", "version").get(
-            pk=build.pk
+        build = (
+            type(build)
+            .objects.select_for_update()
+            .select_related("project", "project__owner")
+            .get(pk=build.pk)
         )
         project = type(build.project).objects.select_for_update().get(pk=build.project_id)
         if build.version_id is None:
@@ -80,10 +45,14 @@ def register_successful_build(*, build, image_uri, image_digest="", storage=None
                 version_number += 1
             version = ModelVersion.objects.create(
                 project=project,
+                source_job=build.source_job,
                 version=str(version_number),
                 requirements_snapshot=build.requirements_snapshot,
                 flavor=build.flavor,
                 deployability="deployable",
+                metrics_summary=metrics_summary or {},
+                params_summary=params_summary or {},
+                insights_summary=insights_summary or {},
             )
             for asset in build.input_assets.all():
                 destination_key = (
@@ -99,7 +68,14 @@ def register_successful_build(*, build, image_uri, image_digest="", storage=None
                     checksum=stored.checksum,
                     size_bytes=stored.size_bytes,
                     content_type=stored.content_type,
-                    metadata={"artifact_format": build.artifact_format} if asset.kind == "source_artifact" else {},
+                    metadata={
+                        "artifact_format": build.artifact_format,
+                        "source_job_id": str(build.source_job.public_id),
+                    }
+                    if asset.kind == "training_output"
+                    else {"artifact_format": build.artifact_format}
+                    if asset.kind == "source_artifact"
+                    else {},
                 )
             if build.package_uri:
                 package_name = "model-package.zip"
@@ -124,8 +100,15 @@ def register_successful_build(*, build, image_uri, image_digest="", storage=None
                 actor=project.owner,
                 event_type="registered",
                 to_state=version.stage,
-                metadata={"source": "manual_build", "build_id": str(build.public_id)},
+                metadata={
+                    "source": "training_job" if build.source_job_id else "manual_build",
+                    "build_id": str(build.public_id),
+                    "source_job_id": str(build.source_job.public_id) if build.source_job_id else None,
+                },
             )
+            for name, value in (metrics_summary or {}).items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    ModelMetric.objects.create(version=version, name=str(name)[:160], value=float(value))
             build.version = version
         else:
             version = build.version

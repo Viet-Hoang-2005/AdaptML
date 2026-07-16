@@ -29,13 +29,32 @@ const toWorkspaceFile = (file: WorkspaceFileDTO): WorkspaceFile => ({
   key: file.relative_path,
 });
 
+const toModelProject = (project: ModelProject): ModelProject => {
+  const endpoint = project.active_endpoint;
+  const endpointStatus = endpoint?.deployment_status === 'deploying' || endpoint?.deployment_status === 'pending'
+    ? 'deploying'
+    : endpoint?.health_status === 'healthy'
+      ? 'healthy'
+      : endpoint
+        ? 'unhealthy'
+        : 'not_deployed';
+  return {
+    ...project,
+    endpoint_url: endpoint?.url ?? '',
+    health_url: endpoint?.health_url ?? '',
+    endpoint_status: endpointStatus,
+    deployment_id: endpoint?.deployment_id,
+    endpoint_last_checked_at: endpoint?.last_checked_at ?? null,
+  };
+};
+
 export const listModelProjects = async (): Promise<ModelProjectListResponse> => {
   const { data } = await apiClient.get<{ results?: ModelProject[] } | ModelProject[]>(controlPlaneURL('/models/'));
-  return { models: Array.isArray(data) ? data : data.results ?? [] };
+  return { models: (Array.isArray(data) ? data : data.results ?? []).map(toModelProject) };
 };
 
 export const getModelProject = async (modelId: string): Promise<ModelProject> =>
-  (await apiClient.get<ModelProject>(controlPlaneURL(`/models/${modelId}/`))).data;
+  toModelProject((await apiClient.get<ModelProject>(controlPlaneURL(`/models/${modelId}/`))).data);
 
 export const createModelProject = async (payload: ModelProjectFormValues): Promise<ModelProject> => {
   const { data } = await apiClient.post<ModelProject>(controlPlaneURL('/models/'), {

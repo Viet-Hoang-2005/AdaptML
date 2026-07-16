@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { RegistryFamily, RegistryModelInsightItem, RegistryVersion } from '@/features/registry/types';
-import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck, Package, Rocket, HeartPulse, Play, BarChart3 } from 'lucide-react';
+import { Copy, Terminal, ExternalLink, ArrowUpCircle, RotateCcw, GitCompare, Check, FileText, Gauge, SlidersHorizontal, ShieldCheck, Rocket, HeartPulse, Play, BarChart3 } from 'lucide-react';
 import { formatVersion } from '@/shared/lib/formatters';
 import { Button } from '@/shared/ui/Button';
 import { toast } from '@/shared/ui/toastStore';
-import { buildRegistryVersionPackage, checkRegistryVersionHealth, deployRegistryVersion, smokeTestRegistryVersion } from '@/features/registry/api/registryApi';
+import { checkRegistryVersionHealth, deployRegistryVersion, smokeTestRegistryVersion } from '@/features/registry/api/registryApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
 
 import { ModelMetricsPanel } from './ModelMetricsPanel';
@@ -180,7 +180,7 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
-  const [actionLoading, setActionLoading] = useState<'build' | 'deploy' | 'health' | 'smoke' | null>(null);
+  const [actionLoading, setActionLoading] = useState<'deploy' | 'health' | 'smoke' | null>(null);
   const [smokePayload, setSmokePayload] = useState('{\n  "features": {}\n}');
   const [actionResult, setActionResult] = useState<string>('');
   const [smokeResult, setSmokeResult] = useState<unknown>(null);
@@ -241,16 +241,12 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
     setActiveTab('details');
   };
 
-  const runAction = async (action: 'build' | 'deploy' | 'health') => {
+  const runAction = async (action: 'deploy' | 'health') => {
     setActionLoading(action);
     setActionResult('');
     setTechnicalDetail('');
     try {
-      if (action === 'build') {
-        await buildRegistryVersionPackage(version.id);
-        setActionResult('Build package request accepted.');
-        toast.success('Build package started.');
-      } else if (action === 'deploy') {
+      if (action === 'deploy') {
         await deployRegistryVersion(version.id);
         setActionResult('Deploy request accepted. Endpoint health will update after startup.');
         toast.success('Deploy started.');
@@ -522,16 +518,6 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                 <div className="flex flex-wrap items-center gap-3">
                   <Button
                     size="md"
-                    variant="secondary"
-                    icon={<Package className="h-4 w-4" />}
-                    disabled={!version.can_build || actionLoading !== null}
-                    onClick={() => void runAction('build')}
-                    title={!version.can_build ? version.build_disabled_reason : 'Build deploy package'}
-                  >
-                    {actionLoading === 'build' ? 'Building...' : 'Build Package'}
-                  </Button>
-                  <Button
-                    size="md"
                     variant="primary"
                     icon={<Rocket className="h-4 w-4" />}
                     disabled={!version.can_deploy || actionLoading !== null}
@@ -562,11 +548,9 @@ export function ModelVersionDetail({ family, version, allVersions, onActionSucce
                   </Button>
                 </div>
 
-                {(!version.can_build || !version.can_deploy) && (
+                {!version.can_deploy && (
                   <div className="rounded-lg border border-warning/20 bg-warning-subtle p-3 text-sm text-warning">
-                    {!version.can_build
-                      ? (version.build_disabled_reason || version.deployability_reason || 'Build is disabled for this version.')
-                      : (version.deploy_disabled_reason || 'Build package before deploying this version.')}
+                    {version.deploy_disabled_reason || version.deployability_reason || 'This version cannot be deployed.'}
                   </div>
                 )}
 

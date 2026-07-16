@@ -1,9 +1,8 @@
 import { apiClient } from '@/shared/api/client';
 import { controlPlaneURL } from '@/shared/api/config';
 import { pageResults } from '@/shared/api/pagination';
-import { getModelProject } from '@/features/catalog/api/catalogApi';
-import type { ModelProject } from '@/features/catalog/types';
 import type {
+  TrainingBuild,
   TrainingJob,
   TrainingJobDownloadURLResponse,
   TrainingJobEventsResponse,
@@ -11,14 +10,16 @@ import type {
   TrainingJobListResponse,
   TrainingJobLogsResponse,
   TrainingJobMetricsResponse,
-  TrainingJobRegisterModelValues,
+  TrainingJobStatus,
+  TrainingRuntimeCapabilities,
   TrainingUsageResponse,
 } from '@/features/training/types';
 
 const trainingJobFormData = (payload: TrainingJobFormValues) => {
   const formData = new FormData();
   formData.append('name', payload.name);
-  formData.append('project', payload.registered_model_id || payload.project_id || '');
+  formData.append('model_flavor', payload.model_flavor);
+  formData.append('project', payload.project_id || '');
   formData.append('entry_point', payload.entry_point || 'train.py');
   formData.append('requirements_text', payload.requirements_text);
   formData.append('vcpu', String(payload.vcpu));
@@ -28,7 +29,6 @@ const trainingJobFormData = (payload: TrainingJobFormValues) => {
   formData.append('accelerator_count', String(payload.accelerator_count));
   if (payload.source_zip) formData.append('source_zip', payload.source_zip);
   if (payload.training_data) formData.append('training_data', payload.training_data);
-  if (payload.registered_model_id) formData.append('registered_model_id', payload.registered_model_id);
   return formData;
 };
 
@@ -73,31 +73,31 @@ export const refreshTrainingJobStatus = getTrainingJob;
 export const getTrainingJobDownloadUrl = async (jobId: string): Promise<TrainingJobDownloadURLResponse> =>
   (await apiClient.get<TrainingJobDownloadURLResponse>(controlPlaneURL(`/training-jobs/${jobId}/download/`))).data;
 
-export const registerTrainingJobModel = async (
-  jobId: string,
-  payload: TrainingJobRegisterModelValues,
-): Promise<ModelProject> => {
-  const job = await getTrainingJob(jobId);
-  const project = await getModelProject(job.project_id);
-  await apiClient.post(controlPlaneURL(`/registry/models/${job.project_id}/versions/`), {
-    version: payload.model_version || '1',
-    description: payload.description || '',
-    flavor: payload.flavor || '',
-    source_job: job.id,
-  });
-  return project;
-};
+export const buildAndRegisterTrainingJob = async (jobId: string): Promise<TrainingBuild> =>
+  (await apiClient.post<TrainingBuild>(controlPlaneURL(`/training-jobs/${jobId}/build/`))).data;
+
+export const deleteTrainingOutputs = async (jobId: string): Promise<TrainingJob> =>
+  (await apiClient.delete<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/outputs/`))).data;
+
+export const getTrainingRuntimeCapabilities = async (): Promise<TrainingRuntimeCapabilities> =>
+  (await apiClient.get<TrainingRuntimeCapabilities>(controlPlaneURL('/training-jobs/runtime-capabilities/'))).data;
 
 export const getTrainingJobLogs = async (jobId: string, offset = 0): Promise<TrainingJobLogsResponse> => {
-  const job = await getTrainingJob(jobId);
-  const logs = String(job.tracking?.logs_tail ?? job.error_message ?? '');
+  const { data } = await apiClient.get<{
+    training_job_id: string;
+    logs: string[];
+    next_offset: number;
+    status: TrainingJobStatus;
+    error_message: string;
+  }>(controlPlaneURL(`/training-jobs/${jobId}/logs/`), { params: { offset } });
   return {
-    job_id: job.id,
-    training_job_id: job.id,
-    status: job.status,
-    logs: logs.slice(offset),
-    text: logs.slice(offset),
-    next_offset: logs.length,
+    job_id: data.training_job_id,
+    training_job_id: data.training_job_id,
+    status: data.status,
+    logs: data.logs,
+    text: data.logs.join('\n'),
+    next_offset: data.next_offset,
+    error_message: data.error_message,
   };
 };
 
@@ -134,6 +134,7 @@ export const retryTrainingJob = async (jobId: string): Promise<TrainingJob> => {
   const { data: job } = await apiClient.post<TrainingJob>(controlPlaneURL('/training-jobs/'), {
     project: previous.project_id,
     name: previous.name,
+    model_flavor: previous.model_flavor,
     entry_point: previous.entry_point,
     requirements_text: previous.requirements_text,
     code_snapshot_uri: previous.code_snapshot_uri,

@@ -29,6 +29,7 @@ spec:
           - name: task_type
           - name: requirements_text
           - name: source_artifact_name
+          - name: source_type
           - name: source_download_url
           - name: output_upload_url
           - name: control_plane_webhook_url
@@ -43,6 +44,7 @@ spec:
                 - {name: task_type, value: "{{inputs.parameters.task_type}}"}
                 - {name: requirements_text, value: "{{inputs.parameters.requirements_text}}"}
                 - {name: source_artifact_name, value: "{{inputs.parameters.source_artifact_name}}"}
+                - {name: source_type, value: "{{inputs.parameters.source_type}}"}
                 - {name: source_download_url, value: "{{inputs.parameters.source_download_url}}"}
                 - {name: output_upload_url, value: "{{inputs.parameters.output_upload_url}}"}
                 - {name: control_plane_webhook_url, value: "{{inputs.parameters.control_plane_webhook_url}}"}
@@ -69,6 +71,7 @@ spec:
           - {name: task_type}
           - {name: requirements_text}
           - {name: source_artifact_name}
+          - {name: source_type}
           - {name: source_download_url}
           - {name: output_upload_url}
           - {name: control_plane_webhook_url}
@@ -87,6 +90,7 @@ spec:
           - {name: FLAVOR, value: "{{inputs.parameters.flavor}}"}
           - {name: REQUIREMENTS_TEXT, value: "{{inputs.parameters.requirements_text}}"}
           - {name: SOURCE_ARTIFACT_NAME, value: "{{inputs.parameters.source_artifact_name}}"}
+          - {name: SOURCE_TYPE, value: "{{inputs.parameters.source_type}}"}
           - {name: SOURCE_DOWNLOAD_URL, value: "{{inputs.parameters.source_download_url}}"}
           - {name: OUTPUT_UPLOAD_URL, value: "{{inputs.parameters.output_upload_url}}"}
           - {name: CONTROL_PLANE_WEBHOOK_URL, value: "{{inputs.parameters.control_plane_webhook_url}}"}

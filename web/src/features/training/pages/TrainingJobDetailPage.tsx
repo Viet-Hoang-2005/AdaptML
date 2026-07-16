@@ -37,29 +37,21 @@ import {
   deleteTrainingJob,
   restoreTrainingJob,
   refreshTrainingJobStatus,
-  registerTrainingJobModel,
+  buildAndRegisterTrainingJob,
+  deleteTrainingOutputs,
 } from '@/features/training/api/trainingApi';
-import {
-  triggerModelProjectBuild,
-  deployModelProject,
-  checkModelEndpointHealth,
-  redeployModelProject,
-  stopModelEndpoint,
-} from '@/features/build-deploy/api/buildDeployApi';
-import { getModelEndpointLogs } from '@/features/catalog/api/catalogApi';
 import { trainingQueryKeys } from '@/features/training/queryKeys';
-import { catalogQueryKeys } from '@/features/catalog/queryKeys';
 import { toast } from '@/shared/ui/toastStore';
 import { getApiErrorMessage } from '@/shared/api/errors';
 import { formatDuration, computeElapsed } from '@/shared/lib/formatDuration';
-import type { ModelAccessMode, ModelFlavor } from '@/features/catalog/types';
 import type {
   TrainingJob,
   TrainingJobMetricsResponse,
   TrainingJobStatus,
 } from '@/features/training/types';
 
-import { ModelDeploymentCard } from '@/features/build-deploy/components/ModelDeploymentCard';
+import { ConfirmModal } from '@/shared/ui/ConfirmModal';
+import { TerminalViewer } from '@/shared/ui/TerminalViewer';
 import {
   LiveStatusBadge,
   MetadataRow,
@@ -85,16 +77,7 @@ export default function TrainingJobDetailPage() {
   const queryClient = useQueryClient();
   const [refreshingSection, setRefreshingSection] = useState<'header' | 'logs' | 'metrics' | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'logs' | 'metrics' | 'artifacts' | 'config'>('overview');
-  const [registerModalOpen, setRegisterModalOpen] = useState(false);
-  const [registerForm, setRegisterForm] = useState({
-    model_name: '',
-    model_version: '',
-    flavor: 'sklearn' as ModelFlavor,
-    access_mode: 'public' as ModelAccessMode,
-    description: '',
-  });
-  const [endpointLogs, setEndpointLogs] = useState('');
-  const [endpointLogsOpen, setEndpointLogsOpen] = useState(false);
+  const [deleteOutputsOpen, setDeleteOutputsOpen] = useState(false);
 
   const parsedJobId = jobId ?? '';
   const [liveElapsed, setLiveElapsed] = useState<number | null>(null);
@@ -262,132 +245,29 @@ export default function TrainingJobDetailPage() {
     }
   });
 
-  const registerModelMutation = useMutation({
-    mutationFn: () =>
-      registerTrainingJobModel(parsedJobId, {
-        model_name: registerForm.model_name.trim(),
-        model_version: registerForm.model_version.trim(),
-        flavor: registerForm.flavor,
-        access_mode: registerForm.access_mode,
-        description: registerForm.description.trim(),
-      }),
-    onSuccess: async (model) => {
-      toast.success(`Registered ${model.name} ${model.version || 'v1'} as a model.`);
-      setRegisterModalOpen(false);
-      queryClient.setQueryData(trainingQueryKeys.job(parsedJobId), (current: TrainingJob | undefined) =>
-        current ? { ...current, registered_model: model, registered_model_id: model.id } : current,
-      );
+  const buildAndRegisterMutation = useMutation({
+    mutationFn: () => buildAndRegisterTrainingJob(parsedJobId),
+    onSuccess: async () => {
+      toast.success(t('detail.buildStarted'));
+      await refetchJob();
       await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.jobs() });
-      await queryClient.invalidateQueries({ queryKey: catalogQueryKeys.projects() });
-      await refetchEvents();
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Unable to register training job as model.'));
+      toast.error(getApiErrorMessage(err, t('detail.buildFailed')));
     },
   });
 
-  const buildRegisteredModelMutation = useMutation({
-    mutationFn: (modelId: string) => triggerModelProjectBuild(modelId),
-    onSuccess: async (model) => {
-      toast.success(`Build started for ${model.name} ${model.version || 'v1'}.`);
-      queryClient.setQueryData(trainingQueryKeys.job(parsedJobId), (current: TrainingJob | undefined) =>
-        current ? { ...current, registered_model: model, registered_model_id: model.id } : current,
-      );
-      await queryClient.invalidateQueries({ queryKey: catalogQueryKeys.projects() });
-      await refetchJob();
+  const deleteOutputsMutation = useMutation({
+    mutationFn: () => deleteTrainingOutputs(parsedJobId),
+    onSuccess: async (updatedJob) => {
+      setDeleteOutputsOpen(false);
+      queryClient.setQueryData(trainingQueryKeys.job(parsedJobId), updatedJob);
+      await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.jobs() });
+      toast.success(t('detail.outputsDeleted'));
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Unable to start package build.'));
+      toast.error(getApiErrorMessage(err, t('detail.outputDeleteFailed')));
     },
-  });
-
-  const deployRegisteredModelMutation = useMutation({
-    mutationFn: async (modelId: string) => {
-      const res = await deployModelProject(modelId);
-      let isDeployed = false;
-      let attempts = 0;
-      while (!isDeployed && attempts < 30) {
-        attempts++;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        try {
-          const status = await checkModelEndpointHealth(modelId);
-          if (status.status === 'deployed') {
-            isDeployed = true;
-          }
-        } catch (err) {
-          toast.error(getApiErrorMessage(err, "Endpoint is not healthy yet."));
-        }
-      }
-      if (!isDeployed) throw new Error('Deployment is taking longer than expected.');
-      return res;
-    },
-    onSuccess: async () => {
-      toast.success('Model deployed successfully!');
-      await queryClient.invalidateQueries({ queryKey: catalogQueryKeys.projects() });
-      await refetchJob();
-    },
-    onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Unable to deploy endpoint.'));
-    },
-  });
-
-  const checkHealthMutation = useMutation({
-    mutationFn: (modelId: string) => checkModelEndpointHealth(modelId),
-    onSuccess: async (model) => {
-      toast[model.endpoint_status === 'healthy' ? 'success' : 'warning'](
-        model.endpoint_status === 'healthy' ? 'Endpoint is healthy.' : 'Endpoint is unhealthy.',
-      );
-      await queryClient.invalidateQueries({ queryKey: catalogQueryKeys.projects() });
-      await refetchJob();
-    },
-    onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to check endpoint health.')),
-  });
-
-  const redeployMutation = useMutation({
-    mutationFn: async (modelId: string) => {
-      const res = await redeployModelProject(modelId);
-      let isDeployed = false;
-      let attempts = 0;
-      while (!isDeployed && attempts < 30) {
-        attempts++;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        try {
-          const status = await checkModelEndpointHealth(modelId);
-          if (status.status === 'deployed') {
-            isDeployed = true;
-          }
-        } catch (err) {
-          toast.error(getApiErrorMessage(err, "Endpoint is not healthy yet."));
-        }
-      }
-      if (!isDeployed) throw new Error('Redeployment is taking longer than expected.');
-      return res;
-    },
-    onSuccess: async () => {
-      toast.success('Model redeployed successfully!');
-      await queryClient.invalidateQueries({ queryKey: catalogQueryKeys.projects() });
-      await refetchJob();
-    },
-    onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to redeploy endpoint.')),
-  });
-
-  const stopEndpointMutation = useMutation({
-    mutationFn: (modelId: string) => stopModelEndpoint(modelId),
-    onSuccess: async () => {
-      toast.success('Endpoint stopped.');
-      await queryClient.invalidateQueries({ queryKey: catalogQueryKeys.projects() });
-      await refetchJob();
-    },
-    onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to stop endpoint.')),
-  });
-
-  const endpointLogsMutation = useMutation({
-    mutationFn: (modelId: string) => getModelEndpointLogs(modelId),
-    onSuccess: (payload) => {
-      setEndpointLogs(payload.logs || 'No endpoint logs available.');
-      setEndpointLogsOpen(true);
-    },
-    onError: (err) => toast.error(getApiErrorMessage(err, 'Unable to read endpoint logs.')),
   });
 
   const restoreMutation = useMutation({
@@ -406,17 +286,6 @@ export default function TrainingJobDetailPage() {
     navigator.clipboard.writeText(value);
     toast.success(t('detail.copied'));
   }, [t]);
-
-  const openRegisterModal = () => {
-    setRegisterForm({
-      model_name: job?.name || '',
-      model_version: job?.model_version || 'v1',
-      flavor: 'sklearn',
-      access_mode: 'public',
-      description: job ? `Registered from training job #${job.id}` : '',
-    });
-    setRegisterModalOpen(true);
-  };
 
   if (!parsedJobId) {
     return (
@@ -836,50 +705,48 @@ export default function TrainingJobDetailPage() {
 
         {activeTab === 'artifacts' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            {!job.registered_model ? (
-              <div className="rounded-xl border border-primary/20 bg-primary-subtle p-5 mb-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-primary">Deploy this training artifact</p>
-                    <p className="mt-1 text-sm text-primary">
-                      Register the completed model artifact as a Model API before building and deploying an endpoint.
-                    </p>
-                  </div>
+            <div className="rounded-xl border border-primary/20 bg-primary-subtle p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-primary">{t('detail.registry.title')}</p>
+                  <p className="mt-1 text-sm text-primary">{t('detail.registry.description')}</p>
+                </div>
+                {job.registration_build?.status === 'ready' ? (
                   <Button
                     icon={<Rocket className="h-4 w-4" />}
-                    loading={registerModelMutation.isPending}
-                    onClick={openRegisterModal}
-                    disabled={job.status !== 'completed'}
+                    onClick={() => navigate(`/dashboard/model-evolution/${job.project_id}`)}
                   >
-                    Register as Model
+                    {t('detail.registry.open')}
                   </Button>
+                ) : (
+                  <Button
+                    icon={<Rocket className="h-4 w-4" />}
+                    loading={buildAndRegisterMutation.isPending}
+                    disabled={
+                      job.status !== 'completed' ||
+                      !job.output_available ||
+                      ['pending', 'queued', 'building'].includes(job.registration_build?.status || '')
+                    }
+                    onClick={() => buildAndRegisterMutation.mutate()}
+                  >
+                    {['pending', 'queued', 'building'].includes(job.registration_build?.status || '')
+                      ? t('detail.registry.building')
+                      : job.registration_build
+                        ? t('detail.registry.retry')
+                        : t('detail.registry.build')}
+                  </Button>
+                )}
+              </div>
+              {job.registration_build && (
+                <div className="mt-5">
+                  <TerminalViewer
+                    buildId={job.registration_build.id}
+                    title={t('detail.registry.console')}
+                    onCompleted={() => void refetchJob()}
+                  />
                 </div>
-              </div>
-            ) : (
-              <div className="mb-6">
-                <ModelDeploymentCard
-                  model={job.registered_model}
-                  variant="compact"
-                  onBuild={(model) => buildRegisteredModelMutation.mutate(model.id)}
-                  isBuilding={buildRegisteredModelMutation.isPending && buildRegisteredModelMutation.variables === job.registered_model.id}
-                  onDeploy={(model) => deployRegisteredModelMutation.mutate(model.id)}
-                  isDeploying={deployRegisteredModelMutation.isPending && deployRegisteredModelMutation.variables === job.registered_model.id}
-                  onRedeploy={(model) => redeployMutation.mutate(model.id)}
-                  isRedeploying={redeployMutation.isPending}
-                  onStop={(model) => stopEndpointMutation.mutate(model.id)}
-                  isStopping={stopEndpointMutation.isPending}
-                  onCheckHealth={(model) => checkHealthMutation.mutate(model.id)}
-                  isCheckingHealth={checkHealthMutation.isPending}
-                  onOpenLogs={(model) => {
-                    setEndpointLogs('Loading endpoint logs...');
-                    setEndpointLogsOpen(true);
-                    endpointLogsMutation.mutate(model.id);
-                  }}
-                  onOpenApiManagement={(model) => navigate(`/dashboard/management/model/${model.id}`)}
-                  onTestPrediction={() => navigate('/dashboard/home/model-testing')}
-                />
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-border bg-muted/50 flex flex-wrap gap-4 justify-between items-center">
@@ -887,15 +754,23 @@ export default function TrainingJobDetailPage() {
                 <Button
                   size="sm"
                   icon={<Download className="h-4 w-4" />}
-                  disabled={job.status !== 'completed'}
+                  disabled={!job.output_available}
                   loading={downloadMutation.isPending}
                   onClick={() => downloadMutation.mutate()}
                 >
                   Download Model
                 </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  disabled={!job.output_available}
+                  onClick={() => setDeleteOutputsOpen(true)}
+                >
+                  {t('detail.deleteOutput')}
+                </Button>
               </div>
               <div className="p-6 space-y-6">
-                {job.status === 'completed' ? (
+                {job.output_available ? (
                   <>
                     <div className="space-y-2">
                       <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Model Artifact URI</p>
@@ -969,97 +844,16 @@ export default function TrainingJobDetailPage() {
         )}
       </div>
 
-      {registerModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-surface p-6 shadow-xl">
-            <div className="mb-5">
-              <h3 className="text-lg font-bold text-foreground">Register training artifact as model</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                This creates a Model API record first. You can build and deploy it after registration.
-              </p>
-            </div>
-            <div className="space-y-4">
-              <label className="block text-sm font-semibold text-foreground">
-                Model name
-                <input
-                  value={registerForm.model_name}
-                  onChange={(event) => setRegisterForm((current) => ({ ...current, model_name: event.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
-                />
-              </label>
-              <label className="block text-sm font-semibold text-foreground">
-                Version
-                <input
-                  value={registerForm.model_version}
-                  onChange={(event) => setRegisterForm((current) => ({ ...current, model_version: event.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
-                />
-              </label>
-              <label className="block text-sm font-semibold text-foreground">
-                Flavor
-                <select
-                  value={registerForm.flavor}
-                  onChange={(event) => setRegisterForm((current) => ({ ...current, flavor: event.target.value as ModelFlavor }))}
-                  className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
-                >
-                  <option value="sklearn">Scikit-learn</option>
-                  <option value="xgboost">XGBoost</option>
-                </select>
-              </label>
-              <label className="block text-sm font-semibold text-foreground">
-                Access mode
-                <select
-                  value={registerForm.access_mode}
-                  onChange={(event) => setRegisterForm((current) => ({ ...current, access_mode: event.target.value as ModelAccessMode }))}
-                  className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
-                >
-                  <option value="public">Public</option>
-                  <option value="private">Private</option>
-                </select>
-              </label>
-              <label className="block text-sm font-semibold text-foreground">
-                Description
-                <textarea
-                  value={registerForm.description}
-                  onChange={(event) => setRegisterForm((current) => ({ ...current, description: event.target.value }))}
-                  className="mt-1 min-h-20 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary"
-                />
-              </label>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setRegisterModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                disabled={!registerForm.model_name.trim() || !registerForm.model_version.trim()}
-                loading={registerModelMutation.isPending}
-                onClick={() => registerModelMutation.mutate()}
-              >
-                Register model
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {endpointLogsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-4xl rounded-xl bg-surface p-6 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-foreground">Endpoint logs</h3>
-                <p className="text-sm text-muted-foreground">Recent Docker logs for the deployed model endpoint.</p>
-              </div>
-              <Button variant="secondary" onClick={() => setEndpointLogsOpen(false)}>
-                Close
-              </Button>
-            </div>
-            <pre className="max-h-120t overflow-auto rounded-lg bg-primary p-4 text-xs text-green-100">
-              {endpointLogs}
-            </pre>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={deleteOutputsOpen}
+        title={t('detail.deleteOutputTitle')}
+        description={t('detail.deleteOutputDescription')}
+        confirmText={t('detail.deleteOutputConfirm')}
+        tone="danger"
+        loading={deleteOutputsMutation.isPending}
+        onCancel={() => setDeleteOutputsOpen(false)}
+        onConfirm={() => deleteOutputsMutation.mutate()}
+      />
     </section>
   );
 }

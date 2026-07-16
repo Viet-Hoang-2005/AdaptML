@@ -1,5 +1,6 @@
 import { FileText, Hammer, Rocket } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   Outlet,
@@ -20,6 +21,7 @@ import {
 import type { UploadModelContext, UploadStep, UploadTransitionState } from '@/features/build-deploy/uploadModelContext';
 import type { Build, BuildInputForm, Deployment, ProjectMetadataForm } from '@/features/catalog/types';
 import { getModelProject } from '@/features/catalog/api/catalogApi';
+import { catalogQueryKeys } from '@/features/catalog/queryKeys';
 import { getApiErrorMessage } from '@/shared/api/errors';
 import { ConfirmModal } from '@/shared/ui/ConfirmModal';
 import { LineSteps } from '@/shared/ui/LineSteps';
@@ -76,6 +78,7 @@ export default function UploadModelPage() {
   const { t } = useTranslation('buildDeploy');
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const requestedModelId = searchParams.get('modelId');
   const requestedBuildId = searchParams.get('buildId');
@@ -314,6 +317,9 @@ export default function UploadModelPage() {
 
   const handleDeploymentCompleted = (status: string) => {
     setDeployment((current) => current ? { ...current, status: status as Deployment['status'] } : current);
+    if (['healthy', 'unhealthy', 'failed', 'stopped'].includes(status)) {
+      void queryClient.invalidateQueries({ queryKey: catalogQueryKeys.projects() });
+    }
   };
 
   const context: UploadModelContext = {

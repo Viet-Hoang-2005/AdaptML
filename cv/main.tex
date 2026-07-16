@@ -96,23 +96,24 @@
 {\textbf{MLOps PaaS System} $|$ \href{https://github.com/Viet-Hoang-2005/mlops-paas-system}{GitHub} $|$ \emph{Django, FastAPI, Docker, Kubernetes, AWS, GitHub Actions, ArgoCD, Argo Workflows, MLflow, Kubeflow, BentoML}}
 {3/2026 -- Present}
 \resumeItemListStart
-\resumeItem{Architected a multi-tenant MLOps platform with React Dashboard, Django REST Control Plane, FastAPI, PostgreSQL, Redis, Redpanda, MLflow artifacts, and Kubeflow Training Operator}
-\resumeItem{Engineered an end-to-end ML model lifecycle, automating metadata tracking, immutable versioning, asynchronous image building, deployment, endpoint health checks, and data drift monitoring.}
-\resumeItem{Containerized microservices utilizing Docker and orchestrated highly available deployments on Kubernetes.}
-\resumeItem{Provisioned scalable AWS infrastructure (VPC, EC2, ALB, S3, EBS) and configured security policies (IAM, ACM, Secrets Manager) via Terraform (IaC).}
-\resumeItem{Integrated and deployed cloud-native ecosystem components on Kubernetes, including Harbor (image registry), Argo Workflows (orchestrator), Prometheus \& Grafana (observability), and KEDA (event-driven autoscaling).}
-\resumeItem{Implemented a GitOps-driven CI/CD pipeline utilizing GitHub Actions and ArgoCD, automating code quality checks, testing, image security scanning, building, and declarative cluster state synchronization.}
+\resumeItem{Built a multi-tenant MLOps platform automating model training, dynamic deployment, version management, and data drift monitoring for diverse ML/DL models (XGBoost, Scikit-Learn, PyTorch, TensorFlow).}
+\resumeItem{Developed a Django REST as the central control system for managing user resources, model state, and an immutable registry, with Argo Workflows orchestrating all Kubernetes workloads (build, deploy, train, drift).}
+\resumeItem{Packaged multi-framework models via MLflow Model Packaging, then dynamically served ML models through FastAPI + MLflow Model Loading and DL models through BentoML, each deployed as isolated per-version pods.}
+\resumeItem{Implemented data drift monitoring using Evidently AI, comparing reference datasets against live production data streamed through a Redpanda event pipeline and persisted by a KEDA-scaled consumer.}
+\resumeItem{Orchestrated distributed model training with Kubeflow Training Operator (PyTorchJob) and dynamically provisioned GPU/CPU compute nodes on-demand via Karpenter auto-scaling.}
+\resumeItem{Achieved zero-downtime model serving using rolling updates and HPA, benchmarked at \textasciitilde100 concurrent users with p95 latency $\leq$ 100\,ms and throughput of $\geq$ 50\,req/s.}
+\resumeItem{Implemented a GitOps-driven CI/CD pipeline using GitHub Actions and ArgoCD, automating code quality checks, unit testing, container image scanning, building, and declarative cluster state synchronization via Kustomize.}
 \resumeItemListEnd
 
 \resumeProjectHeading
 {\textbf{SageLMS} $|$ \href{https://github.com/daithang59/sagelms}{GitHub} $|$ \emph{Spring Boot, FastAPI, LangChain, PostgreSQL, Docker, Kubernetes, GCP, GitHub Actions, FluxCD }}
 {4/2026 -- 6/2026}
 \resumeItemListStart
-\resumeItem{Architected a secure-by-design microservices platform for an AI-integrated Learning Management System, comprising gateway, authentication, lesson, challenge, and AI tutor services.}
-\resumeItem{Provisioned scalable and secure Google Cloud Platform (GCP) infrastructure, configuring VPC, GKE, Cloud Storage, and Google Secret Manager.}
-\resumeItem{Integrated shift-left security practices by establishing comprehensive security and vulnerability testing protocols for both source code and Dockerfiles.}
-\resumeItem{Built a robust DevSecOps CI/CD pipeline via GitHub Actions and FluxCD (GitOps), automating unit tests, secret scanning (Gitleaks), static code analysis (SonarCloud), container vulnerability scanning (Trivy), and image signing (Cosign).}
-\resumeItem{Enforced zero-trust runtime security within the Kubernetes cluster by implementing Kyverno for pod admission policies, Network Policies for strict traffic isolation, and centralized credential injection.}
+\resumeItem{Architected a secure-by-design microservices platform (Spring Boot gateway, auth, course, assessment, challenge, and a FastAPI + LangChain AI tutor) following DevSecOps principles across the entire software lifecycle.}
+\resumeItem{Implemented a shift-left CI gate on every PR: secret scanning (Gitleaks), Conventional Commit linting, path-filtered unit tests (JUnit/pytest/Vitest), Dockerfile linting (Hadolint) and security scanning (Checkov), dependency vulnerability scanning (Trivy filesystem), IaC validation (OpenTofu fmt/validate + Checkov), and static code analysis with quality gate enforcement (SonarCloud).}
+\resumeItem{Built an automated CD pipeline that detects changed services, builds Docker images, scans for HIGH/CRITICAL vulnerabilities (Trivy), pushes to a private Harbor registry, then cryptographically signs each image and attests its CycloneDX SBOM using keyless Cosign (Sigstore OIDC), and finally opens a deploy PR that pins image digests in the Kustomization manifest for FluxCD to reconcile.}
+\resumeItem{Enforced supply-chain and runtime security in the Kubernetes cluster via Kyverno admission policies: requiring images from the trusted Harbor registry only, pinning by immutable SHA-256 digest, disallowing the mutable \texttt{:latest} tag, verifying Cosign keyless signatures against the CI workflow identity, enforcing Pod Security Baseline, requiring resource limits/health probes, and mandating non-root containers with no privilege escalation.}
+\resumeItem{Managed secrets securely through GCP Workload Identity Federation for passwordless CI/CD authentication, External Secrets Operator for runtime credential injection, and automated post-deploy verification (GKE rollout status checks and endpoint health probes).}
 \resumeItemListEnd
 
 \resumeSubHeadingListEnd

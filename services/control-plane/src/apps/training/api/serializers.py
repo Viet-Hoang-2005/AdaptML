@@ -39,6 +39,8 @@ class TrainingJobSerializer(serializers.ModelSerializer):
     outputs = TrainingOutputSerializer(many=True, read_only=True)
     source_zip = serializers.FileField(write_only=True, required=False)
     training_data = serializers.FileField(write_only=True, required=False)
+    output_available = serializers.SerializerMethodField()
+    registration_build = serializers.SerializerMethodField()
 
     class Meta:
         model = TrainingJob
@@ -47,6 +49,7 @@ class TrainingJobSerializer(serializers.ModelSerializer):
             "project",
             "project_id",
             "name",
+            "model_flavor",
             "entry_point",
             "requirements_text",
             "source_zip",
@@ -70,6 +73,9 @@ class TrainingJobSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "runtime_seconds",
+            "outputs_purged_at",
+            "output_available",
+            "registration_build",
             "outputs",
             "created_at",
             "updated_at",
@@ -88,6 +94,7 @@ class TrainingJobSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "runtime_seconds",
+            "outputs_purged_at",
             "created_at",
             "updated_at",
         )
@@ -98,3 +105,29 @@ class TrainingJobSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             self.fields["project"].queryset = ModelProject.objects.filter(owner=request.user, is_active=True)
+
+    @staticmethod
+    def get_output_available(instance):
+        return instance.outputs_purged_at is None and instance.outputs.filter(kind="model").exists()
+
+    @staticmethod
+    def get_registration_build(instance):
+        build = instance.builds.order_by("-created_at").first()
+        if not build:
+            return None
+        return TrainingBuildSerializer(build).data
+
+
+class TrainingBuildSerializer(serializers.Serializer):
+    id = serializers.UUIDField(source="public_id", read_only=True)
+    project_id = serializers.UUIDField(source="project.public_id", read_only=True)
+    source_job_id = serializers.UUIDField(source="source_job.public_id", read_only=True)
+    version_id = serializers.UUIDField(source="version.public_id", allow_null=True, read_only=True)
+    version_number = serializers.CharField(source="version.version", allow_null=True, read_only=True)
+    flavor = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    image_uri = serializers.CharField(read_only=True)
+    image_digest = serializers.CharField(read_only=True)
+    error_message = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)

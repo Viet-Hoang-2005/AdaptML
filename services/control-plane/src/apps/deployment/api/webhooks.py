@@ -10,6 +10,10 @@ from apps.deployment.tasks import cleanup_failed_build_artifacts
 from apps.registry.services.versions import register_successful_build
 
 
+def _dict_payload(value):
+    return value if isinstance(value, dict) else {}
+
+
 class BuildWebhookEndpoint(APIView):
     authentication_classes = ()
     permission_classes = (HasInternalWebhookSecret,)
@@ -49,6 +53,9 @@ class BuildWebhookEndpoint(APIView):
                     build=build,
                     image_uri=image_uri,
                     image_digest=image_digest,
+                    metrics_summary=_dict_payload(request.data.get("metrics_summary")),
+                    params_summary=_dict_payload(request.data.get("params_summary")),
+                    insights_summary=_dict_payload(request.data.get("insights_summary")),
                 )
                 build.completed_at = timezone.now()
                 build.save(update_fields=["completed_at", "updated_at"])

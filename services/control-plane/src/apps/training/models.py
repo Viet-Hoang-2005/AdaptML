@@ -5,6 +5,12 @@ from django.utils import timezone
 
 
 class TrainingJob(models.Model):
+    MODEL_FLAVORS = (
+        ("sklearn", "Scikit-learn"),
+        ("xgboost", "XGBoost"),
+        ("pytorch", "PyTorch"),
+        ("tensorflow", "TensorFlow"),
+    )
     STATUSES = tuple(
         (value, value.replace("_", " ").title())
         for value in (
@@ -17,12 +23,13 @@ class TrainingJob(models.Model):
             "cancelled",
         )
     )
-    ACCELERATORS = (("none", "None"), ("gpu", "GPU"), ("tpu", "TPU"), ("trainium", "Trainium"))
+    ACCELERATORS = (("none", "None"), ("gpu", "GPU"))
 
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     project = models.ForeignKey("catalog.ModelProject", on_delete=models.CASCADE, related_name="training_jobs")
     retry_of = models.ForeignKey("self", on_delete=models.SET_NULL, related_name="retries", null=True, blank=True)
     name = models.CharField(max_length=160)
+    model_flavor = models.CharField(max_length=40, choices=MODEL_FLAVORS)
     entry_point = models.CharField(max_length=512, default="train.py")
     requirements_text = models.TextField(blank=True)
     code_snapshot_uri = models.CharField(max_length=1024)
@@ -44,6 +51,7 @@ class TrainingJob(models.Model):
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     runtime_seconds = models.PositiveIntegerField(default=0)
+    outputs_purged_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

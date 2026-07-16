@@ -101,6 +101,14 @@ class Migration(migrations.Migration):
             constraint=models.UniqueConstraint(fields=('project', 'version'), name='registry_project_version_unique'),
         ),
         migrations.AddConstraint(
+            model_name='modelversion',
+            constraint=models.UniqueConstraint(
+                condition=models.Q(('source_job__isnull', False)),
+                fields=('source_job',),
+                name='registry_source_job_unique',
+            ),
+        ),
+        migrations.AddConstraint(
             model_name='modelartifact',
             constraint=models.UniqueConstraint(fields=('version', 'kind', 'name'), name='registry_artifact_unique'),
         ),

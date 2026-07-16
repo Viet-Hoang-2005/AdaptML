@@ -16,7 +16,6 @@ import { getApiErrorMessage } from '@/shared/api/errors';
 import { trainingQueryKeys } from '@/features/training/queryKeys';
 import { toast } from '@/shared/ui/toastStore';
 import { formatDuration } from '@/shared/lib/formatDuration';
-import { useModelSelection } from '@/features/catalog/hooks/useModelSelection';
 import type { TrainingJob, TrainingJobStatus } from '@/features/training/types';
 import {
   SegmentedJobFilter,
@@ -108,7 +107,6 @@ export default function TrainModelPage() {
   const { t } = useTranslation('training');
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { selectedModel } = useModelSelection();
 
   const [refreshingJobId, setRefreshingJobId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'retry'; job: TrainingJob } | null>(null);
@@ -265,9 +263,7 @@ export default function TrainModelPage() {
       void invalidateUsage();
       setConfirmAction(null);
       toast.success(`Retry job created for ${jobLabel(newJob)}.`);
-      if (selectedModel) {
-        navigate(`/dashboard/model-training/${selectedModel.id}/job/${newJob.id}`);
-      }
+      navigate(`/dashboard/model-training/jobs/${newJob.id}`);
     },
     onError: (error, job) => {
       toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to retry training job.')}`);
@@ -285,7 +281,7 @@ export default function TrainModelPage() {
         </div>
         <Button
           icon={<Rocket className="h-4 w-4" />}
-          onClick={() => navigate(selectedModel ? `/dashboard/model-training/${selectedModel.id}/new` : '/dashboard/model-training')}
+          onClick={() => navigate('/dashboard/model-training/create/metadata')}
         >
           {t('newJob')}
         </Button>
@@ -374,7 +370,7 @@ export default function TrainModelPage() {
           <FileCode2 className="mx-auto h-8 w-8 text-muted-foreground" />
           <h2 className="mt-3 text-base font-bold text-foreground">{t('noJobs')}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{t('noJobsDescription')}</p>
-          <Button className="mt-4" icon={<Rocket className="h-4 w-4" />} onClick={() => navigate(selectedModel ? `/dashboard/model-training/${selectedModel.id}/new` : '/dashboard/model-training')}>
+          <Button className="mt-4" icon={<Rocket className="h-4 w-4" />} onClick={() => navigate('/dashboard/model-training/create/metadata')}>
             {t('firstJob')}
           </Button>
         </div>

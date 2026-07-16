@@ -18,6 +18,7 @@ def workspace_prefix(tenant_id, project_id, kind):
 def build_input_prefix(tenant_id, project_id, build_id, kind):
     if kind not in {
         "source_artifact",
+        "training_output",
         "label_mapping",
         "metrics",
         "params",

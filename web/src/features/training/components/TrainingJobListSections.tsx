@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { Clock3, Cpu, Download, Eye, HardDrive, RefreshCw, Rocket } from 'lucide-react';
 
 import { Button } from '@/shared/ui/Button';
-import { useModelSelection } from '@/features/catalog/hooks/useModelSelection';
 import type { TrainingJob, TrainingJobStatus } from '@/features/training/types';
 import { useTranslation } from 'react-i18next';
 
@@ -98,14 +97,11 @@ export function TrainingJobRow({
   retrying,
 }: TrainingJobRowProps) {
   const { t } = useTranslation('training');
-  const { selectedModel } = useModelSelection();
   const isArchived = job.is_deleted;
   const backendLabel = job.training_backend || 'kubeflow';
   const isActive = activeStatuses.includes(job.status);
   const canRetry = job.status === 'failed' || job.status === 'cancelled';
-  const detailsUrl = selectedModel
-    ? `/dashboard/model-training/${selectedModel.id}/job/${job.id}`
-    : '#';
+  const detailsUrl = `/dashboard/model-training/jobs/${job.id}`;
 
   const elapsedSeconds = (() => {
     if (job.completed_at && job.started_at) {

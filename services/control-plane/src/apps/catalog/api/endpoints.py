@@ -26,7 +26,7 @@ class ModelProjectListCreateEndpoint(generics.ListCreateAPIView):
     def get_queryset(self):
         return (
             ModelProject.objects.filter(owner=self.request.user, is_active=True)
-            .prefetch_related("workspace_assets", "versions__deployments", "builds")
+            .prefetch_related("workspace_assets", "versions__deployments__endpoint", "builds")
         )
 
     def create(self, request, *args, **kwargs):
@@ -44,7 +44,7 @@ class ModelProjectDetailEndpoint(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return (
             ModelProject.objects.filter(owner=self.request.user, is_active=True)
-            .prefetch_related("workspace_assets", "versions__deployments", "builds")
+            .prefetch_related("workspace_assets", "versions__deployments__endpoint", "builds")
         )
 
     def update(self, request, *args, **kwargs):

@@ -31,7 +31,7 @@ const asRegistryVersion = (version: ModelVersion): RegistryVersion => ({
   model_insights_summary: version.insights_summary,
   deployability_status: version.deployability,
   deployability_reason: version.deployability_reason,
-  can_build: ['unknown', 'deployable'].includes(version.deployability),
+  can_build: false,
   can_deploy: version.deployability === 'deployable',
   created_at: version.registered_at,
   updated_at: version.registered_at,
@@ -177,11 +177,6 @@ export const rollbackRegistryFamily = async (
   versionId: string,
 ): Promise<RegistryVersion> => {
   await promoteRegistryVersion(familyId, versionId, 'production');
-  return getRegistryVersion(versionId);
-};
-
-export const buildRegistryVersionPackage = async (versionId: string): Promise<RegistryVersion> => {
-  await apiClient.post(controlPlaneURL('/builds/'), { version: versionId });
   return getRegistryVersion(versionId);
 };
 

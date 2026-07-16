@@ -6,12 +6,12 @@ from apps.catalog.selectors import project_for_user
 from apps.registry.models import ModelVersion, RegistryAlias
 from apps.registry.selectors import version_for_user
 from apps.registry.services.routing import predict_alias, predict_version
-from apps.registry.services.versions import register_version, set_alias
+from apps.registry.services.versions import set_alias
 
 from .serializers import ModelVersionSerializer, RegistryAliasSerializer
 
 
-class ProjectVersionListCreateEndpoint(generics.ListCreateAPIView):
+class ProjectVersionListCreateEndpoint(generics.ListAPIView):
     serializer_class = ModelVersionSerializer
 
     def project(self):
@@ -28,12 +28,6 @@ class ProjectVersionListCreateEndpoint(generics.ListCreateAPIView):
 
     def get_serializer_context(self):
         return {**super().get_serializer_context(), "project": self.project()}
-
-    def perform_create(self, serializer):
-        serializer.instance = register_version(
-            project=self.project(), actor=self.request.user, validated_data=serializer.validated_data
-        )
-
 
 class ModelVersionDetailEndpoint(generics.RetrieveAPIView):
     serializer_class = ModelVersionSerializer

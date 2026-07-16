@@ -30,7 +30,14 @@ class ModelVersion(models.Model):
 
     class Meta:
         ordering = ["-registered_at"]
-        constraints = [models.UniqueConstraint(fields=["project", "version"], name="registry_project_version_unique")]
+        constraints = [
+            models.UniqueConstraint(fields=["project", "version"], name="registry_project_version_unique"),
+            models.UniqueConstraint(
+                fields=["source_job"],
+                condition=models.Q(source_job__isnull=False),
+                name="registry_source_job_unique",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.project.name}@{self.version}"

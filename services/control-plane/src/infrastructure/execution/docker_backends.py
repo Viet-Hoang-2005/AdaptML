@@ -12,7 +12,7 @@ from django.utils import timezone
 from infrastructure.docker import DockerClient
 from infrastructure.http import HttpClient
 from infrastructure.storage import S3Storage
-from infrastructure.storage.paths import build_prefix, drift_run_prefix, version_prefix
+from infrastructure.storage.paths import build_prefix, drift_run_prefix
 
 
 def _wait_and_cleanup(container):
@@ -33,11 +33,16 @@ class DockerBuildBackend:
 
     def run(self, build):
         project = build.project
-        source = build.input_assets.filter(kind="source_artifact").first()
+        source = build.input_assets.filter(kind__in=("source_artifact", "training_output")).first()
         if source is None and build.version_id:
-            source = build.version.artifacts.filter(kind__in=("source", "training_output")).order_by("-created_at").first()
+            source = (
+                build.version.artifacts.filter(kind__in=("source", "training_output"))
+                .order_by("-created_at")
+                .first()
+            )
         if not source:
             raise RuntimeError("The build has no source artifact.")
+        source_uri = getattr(source, "s3_uri", "") or source.uri
         package_root = build_prefix(project.owner.tenant_id, project.public_id, build.public_id)
         package_uri = f"s3://{self.storage.bucket}/{package_root}/artifacts/model-package.zip"
         build.package_uri = package_uri
@@ -52,7 +57,8 @@ class DockerBuildBackend:
             "FLAVOR": build.flavor,
             "REQUIREMENTS_TEXT": build.requirements_snapshot,
             "SOURCE_ARTIFACT_NAME": source.name,
-            "SOURCE_DOWNLOAD_URL": self.storage.presigned_get(source.uri, 14400),
+            "SOURCE_TYPE": "training_job" if build.source_job_id else "manual_upload",
+            "SOURCE_DOWNLOAD_URL": self.storage.presigned_get(source_uri, 14400),
             "OUTPUT_UPLOAD_URL": self.storage.presigned_put(package_uri, 14400),
             "CONTROL_PLANE_WEBHOOK_URL": webhook,
             "CONTROL_PLANE_WEBHOOK_SECRET": settings.CONTROL_PLANE_WEBHOOK_SECRET,

@@ -8,7 +8,7 @@ from apps.deployment.tasks import execute_deployment, stop_deployment
 
 def request_deployment(build, backend):
     with transaction.atomic():
-        build = type(build).objects.select_for_update().select_related("version").get(pk=build.pk)
+        build = type(build).objects.select_for_update().get(pk=build.pk)
         if build.status != "ready" or build.version_id is None:
             raise ValidationError({"build": "Only a ready build can be deployed."})
         deployment = Deployment.objects.create(version=build.version, build=build, backend=backend, status="pending")

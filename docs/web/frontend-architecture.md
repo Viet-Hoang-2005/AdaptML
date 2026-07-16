@@ -74,6 +74,16 @@ Manual model upload is coordinated by `UploadModelPage`, which owns the in-memor
 
 Project metadata is latest-only and never creates a registry version. Every successful manual Build creates exactly one immutable registry version and stores its image automatically. Failed or cancelled Builds keep audit metadata while their binary input and partial image are cleaned up. Deployment accepts only a tenant-owned ready Build with a registered version.
 
+## Training lifecycle
+
+`CreateTrainingJobPage` coordinates three nested, model-selection-independent routes:
+
+- `/dashboard/model-training/create/metadata` creates a project or selects and updates an existing one.
+- `/dashboard/model-training/create/source?modelId=<uuid>` saves source, reference data, flavor, entry point, and optional requirements.
+- `/dashboard/model-training/create/execution?modelId=<uuid>&jobId=<uuid>` selects server-advertised CPU/GPU capabilities and creates a new immutable TrainingJob for every run.
+
+Back/LineSteps preserve unsaved editor state inside the coordinator. Direct URLs rehydrate project/job server state, while browser refresh cannot preserve unsent files. Training completion stores a TrainingOutput only. `TrainingJobDetailPage` then exposes Build & Register, retry, output deletion, build logs, and Open in Registry. A successful Build creates the next model version; Training never deploys a worker directly.
+
 ## Routing and bundles
 
 All route pages use `React.lazy`. The global error boundary prevents a render error from blanking the entire application. Loading fallbacks use shared skeleton/state components.

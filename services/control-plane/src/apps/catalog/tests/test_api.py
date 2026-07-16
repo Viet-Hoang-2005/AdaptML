@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ModelProject
-from apps.deployment.models import Build, Deployment
+from apps.deployment.models import Build, Deployment, Endpoint
 from apps.registry.models import ModelVersion
 
 
@@ -54,7 +54,12 @@ def test_project_list_returns_metadata_image_ready_and_deployed_lifecycle_status
     Build.objects.create(project=image_project, version=image_version, flavor="sklearn", status="ready")
 
     deployed_version = ModelVersion.objects.create(project=deployed_project, version="1")
-    deployed_build = Build.objects.create(project=deployed_project, version=deployed_version, flavor="sklearn", status="ready")
+    deployed_build = Build.objects.create(
+        project=deployed_project,
+        version=deployed_version,
+        flavor="sklearn",
+        status="ready",
+    )
     Deployment.objects.create(version=deployed_version, build=deployed_build, status="healthy")
 
     client = APIClient()
@@ -67,4 +72,35 @@ def test_project_list_returns_metadata_image_ready_and_deployed_lifecycle_status
         metadata_project.name: "metadata",
         image_project.name: "image_ready",
         deployed_project.name: "deployed",
+    }
+
+
+@pytest.mark.django_db
+def test_project_list_returns_latest_active_endpoint_for_the_owner():
+    owner = get_user_model().objects.create_user("endpoint-owner@example.com", "password123") # type: ignore[attr-defined]
+    project = ModelProject.objects.create(owner=owner, name="NIDS")
+    version = ModelVersion.objects.create(project=project, version="1")
+    build = Build.objects.create(project=project, version=version, flavor="xgboost", status="ready")
+    deployment = Deployment.objects.create(version=version, build=build, status="healthy")
+    endpoint = Endpoint.objects.create(
+        deployment=deployment,
+        public_url="http://localhost:5002/tenant/models/project/version",
+        health_status="healthy",
+    )
+
+    client = APIClient()
+    client.force_authenticate(owner)
+    response = client.get("/api/models/")
+
+    assert response.status_code == 200
+    active_endpoint = response.data["results"][0]["active_endpoint"]
+    assert active_endpoint == {
+        "id": str(endpoint.public_id),
+        "deployment_id": str(deployment.public_id),
+        "version_id": str(version.public_id),
+        "url": f"{endpoint.public_url}/predict",
+        "health_url": f"{endpoint.public_url}/health",
+        "health_status": "healthy",
+        "deployment_status": "healthy",
+        "last_checked_at": None,
     }

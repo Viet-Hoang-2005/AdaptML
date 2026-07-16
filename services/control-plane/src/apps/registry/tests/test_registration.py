@@ -1,7 +1,6 @@
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from infrastructure.storage.s3 import StoredObject
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.test import APIClient
 
@@ -9,47 +8,13 @@ from apps.catalog.models import ModelProject
 from apps.deployment.models import Build, Deployment, Endpoint
 from apps.registry.models import ModelVersion, RegistryAlias
 from apps.registry.services.routing import predict_alias, predict_version
-from apps.registry.services.versions import register_version
-from apps.training.models import TrainingJob, TrainingOutput
 
 
 @pytest.mark.django_db
-def test_registration_maps_training_outputs_and_requirements_snapshot():
-    user = get_user_model().objects.create_user("owner@example.com", "password123")
-    project = ModelProject.objects.create(owner=user, name="NIDS")
-    job = TrainingJob.objects.create(
-        project=project,
-        name="job",
-        status="completed",
-        requirements_text="xgboost==2.0.3",
-        code_snapshot_uri="s3://bucket/code.zip",
-        data_snapshot_uri="s3://bucket/train.csv",
-        output_uri="s3://bucket/output/model.tar.gz",
-    )
-    TrainingOutput.objects.create(job=job, kind="model", relative_path="model.tar.gz", s3_uri=job.output_uri)
-
-    version = register_version(project=project, actor=user, validated_data={"version": "1", "source_job": job})
-
-    assert version.requirements_snapshot == "xgboost==2.0.3"
-    assert version.artifacts.get().uri == job.output_uri
-
-
-@pytest.mark.django_db
-def test_version_endpoint_accepts_multipart_source_artifact(monkeypatch):
+def test_version_endpoint_rejects_direct_manual_registration():
     user = get_user_model().objects.create_user("artifact-owner@example.com", "password123")
     project = ModelProject.objects.create(owner=user, name="Artifact upload")
 
-    class FakeStorage:
-        def put(self, key, body, content_type):
-            return StoredObject(
-                key=key,
-                uri=f"s3://test-bucket/{key}",
-                checksum="checksum",
-                size_bytes=len(body.read()),
-                content_type=content_type,
-            )
-
-    monkeypatch.setattr("apps.registry.services.versions.S3Storage", FakeStorage)
     client = APIClient()
     client.force_authenticate(user)
     response = client.post(
@@ -62,9 +27,8 @@ def test_version_endpoint_accepts_multipart_source_artifact(monkeypatch):
         format="multipart",
     )
 
-    assert response.status_code == 201
-    assert response.data["version"] == "v1"
-    assert ModelVersion.objects.get(project=project).artifacts.get().name == "model.pkl"
+    assert response.status_code == 405
+    assert not ModelVersion.objects.filter(project=project).exists()
 
 
 @pytest.mark.django_db
@@ -72,7 +36,7 @@ def test_version_smoke_test_is_tenant_scoped(monkeypatch):
     owner = get_user_model().objects.create_user("smoke-owner@example.com", "password123")
     other = get_user_model().objects.create_user("smoke-other@example.com", "password123")
     project = ModelProject.objects.create(owner=owner, name="Smoke")
-    version = register_version(project=project, actor=owner, validated_data={"version": "1"})
+    version = ModelVersion.objects.create(project=project, version="1")
     client = APIClient()
     url = f"/api/registry/versions/{version.public_id}/smoke-test/"
 

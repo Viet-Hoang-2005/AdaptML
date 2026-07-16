@@ -26,6 +26,9 @@ const ModelDetailPage = lazy(() => import('@/features/build-deploy/pages/ModelDe
 const TrainModelPage = lazy(() => import('@/features/training/pages/TrainModelPage'));
 const TrainingJobDetailPage = lazy(() => import('@/features/training/pages/TrainingJobDetailPage'));
 const CreateTrainingJobPage = lazy(() => import('@/features/training/pages/CreateTrainingJobPage'));
+const MetadataTrainingJobPage = lazy(() => import('@/features/training/pages/MetadataTrainingJobPage'));
+const SourceTrainingJobPage = lazy(() => import('@/features/training/pages/SourceTrainingJobPage'));
+const ExecutionTrainingJobPage = lazy(() => import('@/features/training/pages/ExecutionTrainingJobPage'));
 const RegistryPage = lazy(() => import('@/features/registry/pages/RegistryPage'));
 const DriftMonitoringPage = lazy(() => import('@/features/drift/pages/DriftMonitoringPage'));
 const CreateDriftMonitoringPage = lazy(() => import('@/features/drift/pages/CreateDriftMonitoringPage'));
@@ -74,12 +77,15 @@ const router = createBrowserRouter(
         </Route>
         <Route path="model-training">
           <Route index element={<TrainModelPage />} />
-          <Route path="new" element={<CreateTrainingJobPage />} />
           <Route path=":modelId" element={<TrainModelPage />} />
-          <Route path=":modelId/new" element={<CreateTrainingJobPage />} />
-          <Route path=":modelId/job/:jobId" element={<TrainingJobDetailPage />} />
+          <Route path="create" element={<CreateTrainingJobPage />}>
+            <Route index element={<Navigate to="metadata" replace />} />
+            <Route path="metadata" element={<MetadataTrainingJobPage />} />
+            <Route path="source" element={<SourceTrainingJobPage />} />
+            <Route path="execution" element={<ExecutionTrainingJobPage />} />
+          </Route>
+          <Route path="jobs/:jobId" element={<TrainingJobDetailPage />} />
         </Route>
-        <Route path="model-training/:modelId/job/:jobId" element={<TrainingJobDetailPage />} />
         <Route path="model-evolution">
           <Route index element={<RegistryPage />} />
           <Route path=":familyId" element={<RegistryPage />} />

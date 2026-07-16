@@ -27,7 +27,7 @@ HTTP request
 - `TrainingOutput`: files produced by a training job.
 - `ModelVersion`: immutable registry record sourced from an upload or job.
 - `ModelArtifact`: version artifact or metadata mapping.
-- `Build`: image/package build state for one version.
+- `Build`: immutable upload or training input snapshot; its version is assigned only after a successful image build.
 - `Deployment`: rollout state for one successful build.
 - `Endpoint`: routable runtime attached to one deployment.
 - `DriftMonitor` and `DriftRun`: monitoring configuration and executions.
@@ -41,7 +41,7 @@ keys remain internal implementation details and never appear in URLs or S3 keys.
 The web process validates commands and commits state. Celery owns build,
 training, deployment, drift, cleanup, polling, and outbox publication. Backends
 share a contract selected from settings: Docker for local development and Argo
-webhooks for production. Callbacks use UUID URLs and a required shared secret.
+webhooks for production. Build/deployment callbacks use UUID URLs and the internal secret; tenant training callbacks use short-lived, job-bound capability tokens.
 
 Tasks lock mutable rows, store `celery_task_id`, tolerate duplicate terminal
 callbacks, use time limits, and retry transient connection failures with backoff.
@@ -57,13 +57,15 @@ users/{tenant}/models/{project_uuid}/
 |   |-- input/data/train.csv           # Job snapshot
 |   |-- output/model.tar.gz            # User/trainer outputs
 |   `-- mlflow/                        # Job-scoped weights and run artifacts
+|-- builds/{build_uuid}/inputs/        # Immutable manual/training build inputs
 `-- versions/{version_uuid}/
     `-- artifacts/                     # Immutable registered/build artifacts
 ```
 
 There is no global MLflow artifact root and no version-scoped editable code or
-data. Registering a training result maps job snapshots and weights to an
-immutable model version without moving the mutable project workspace.
+data. A completed TrainingJob first owns its TrainingOutput. Build & Register
+copies that output into a Build snapshot; only a successful build allocates the
+next immutable ModelVersion and image artifact.
 
 ## Ownership Rules
 

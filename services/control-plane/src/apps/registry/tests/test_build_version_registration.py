@@ -10,15 +10,31 @@ from apps.registry.services.versions import register_successful_build
 
 class FakeCopyStorage:
     def copy(self, source_uri, destination_key):
-        return StoredObject(destination_key, f"s3://test-bucket/{destination_key}", "checksum", 12, "application/octet-stream")
+        return StoredObject(
+            destination_key,
+            f"s3://test-bucket/{destination_key}",
+            "checksum",
+            12,
+            "application/octet-stream",
+        )
 
     def delete_prefix(self, prefix):
         return prefix
 
 
 def build_for(project, name="model.pkl"):
-    build = Build.objects.create(project=project, flavor="sklearn", requirements_snapshot="numpy==1.26.4", status="building")
-    BuildInputAsset.objects.create(build=build, kind="source_artifact", name=name, s3_uri=f"s3://bucket/{build.public_id}/{name}")
+    build = Build.objects.create(
+        project=project,
+        flavor="sklearn",
+        requirements_snapshot="numpy==1.26.4",
+        status="building",
+    )
+    BuildInputAsset.objects.create(
+        build=build,
+        kind="source_artifact",
+        name=name,
+        s3_uri=f"s3://bucket/{build.public_id}/{name}",
+    )
     return build
 
 
@@ -29,9 +45,19 @@ def test_successful_manual_build_registers_one_version_and_is_idempotent(django_
     build = build_for(project)
     storage = FakeCopyStorage()
     with django_capture_on_commit_callbacks(execute=True):
-        first = register_successful_build(build=build, image_uri=f"build-{build.public_id}:latest", image_digest="sha256:first", storage=storage)
+        first = register_successful_build(
+            build=build,
+            image_uri=f"build-{build.public_id}:latest",
+            image_digest="sha256:first",
+            storage=storage,
+        )
     with django_capture_on_commit_callbacks(execute=True):
-        replay = register_successful_build(build=build, image_uri=f"build-{build.public_id}:latest", image_digest="sha256:first", storage=storage)
+        replay = register_successful_build(
+            build=build,
+            image_uri=f"build-{build.public_id}:latest",
+            image_digest="sha256:first",
+            storage=storage,
+        )
     assert first.version_id == replay.version_id
     assert ModelVersion.objects.filter(project=project).count() == 1
     version = ModelVersion.objects.get(project=project)

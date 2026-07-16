@@ -1,13 +1,41 @@
 import type { ResourceId } from '@/shared/types';
-import type { ModelAccessMode, ModelFlavor, ModelProject } from '@/features/catalog/types';
+import type { ModelFlavor } from '@/features/catalog/types';
 
 export type TrainingJobStatus = 'pending' | 'queued' | 'uploading' | 'running' | 'completed' | 'failed' | 'cancelled';
-export type TrainingAcceleratorType = 'none' | 'gpu' | 'tpu' | 'trainium';
+export type TrainingAcceleratorType = 'none' | 'gpu';
+
+export interface TrainingBuild {
+  id: ResourceId;
+  project_id: ResourceId;
+  source_job_id: ResourceId;
+  version_id: ResourceId | null;
+  version_number: string | null;
+  flavor: ModelFlavor;
+  status: 'pending' | 'queued' | 'building' | 'ready' | 'failed' | 'cancelled';
+  image_uri: string;
+  image_digest: string;
+  error_message: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrainingOutput {
+  id: ResourceId;
+  kind: 'model' | 'metric' | 'insight' | 'file';
+  relative_path: string;
+  s3_uri: string;
+  checksum: string;
+  size_bytes: number;
+  content_type: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
 
 export interface TrainingJob {
   id: ResourceId;
   project_id: ResourceId;
   name: string;
+  model_flavor: ModelFlavor;
   model_version: string;
   entry_point: string;
   requirements_text: string;
@@ -38,29 +66,24 @@ export interface TrainingJob {
   started_at: string | null;
   completed_at: string | null;
   runtime_seconds: number;
+  outputs: TrainingOutput[];
+  outputs_purged_at: string | null;
+  output_available: boolean;
+  registration_build: TrainingBuild | null;
   stop_reason: string;
   retry_of: ResourceId | null;
   deleted_at: string | null;
   is_deleted: boolean;
-  registered_model: ModelProject | null;
-  registered_model_id: ResourceId | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface TrainingJobRegisterModelValues {
-  model_name: string;
-  model_version?: string;
-  flavor?: ModelFlavor | '';
-  access_mode?: ModelAccessMode;
-  description?: string;
 }
 
 export interface TrainingJobListResponse { training_jobs: TrainingJob[] }
 
 export interface TrainingJobFormValues {
   name: string;
-  model_version: string;
+  model_version?: string;
+  model_flavor: ModelFlavor;
   entry_point: string;
   requirements_text: string;
   vcpu: number;
@@ -70,8 +93,13 @@ export interface TrainingJobFormValues {
   accelerator_count: number;
   source_zip: File | null;
   training_data: File | null;
-  registered_model_id?: ResourceId;
   project_id?: ResourceId;
+}
+
+export interface TrainingRuntimeCapabilities {
+  backend: 'docker' | 'argo';
+  cpu_profiles: Array<{ id: string; vcpu: number; memory_mb: number }>;
+  accelerators: Array<{ type: TrainingAcceleratorType; counts: number[] }>;
 }
 
 export interface TrainingJobDownloadURLResponse { download_url: string }

@@ -39,7 +39,7 @@ def execute_build(self, build_id):
     with transaction.atomic():
         build = (
             Build.objects.select_for_update()
-            .select_related("project", "project__owner", "version")
+            .select_related("project", "project__owner")
             .get(public_id=build_id)
         )
         if build.status in {"ready", "cancelled"}:

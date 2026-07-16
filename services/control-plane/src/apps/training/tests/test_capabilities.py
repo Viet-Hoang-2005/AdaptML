@@ -18,6 +18,7 @@ def _job(email="owner@example.com"):
     job = TrainingJob.objects.create(
         project=project,
         name="nightly",
+        model_flavor="sklearn",
         code_snapshot_uri="pending",
         data_snapshot_uri="pending",
         output_uri="pending",

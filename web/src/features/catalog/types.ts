@@ -26,6 +26,17 @@ export type ModelSourceType = 'manual_upload' | 'training_job';
 export type ModelLifecycleStatus = 'metadata' | 'image_ready' | 'deployed';
 export type ModelDeletionState = 'active' | 'deleting' | 'deleted' | 'delete_failed';
 
+export interface ActiveModelEndpoint {
+  id: ResourceId;
+  deployment_id: ResourceId;
+  version_id: ResourceId;
+  url: string;
+  health_url: string;
+  health_status: string;
+  deployment_status: Deployment['status'];
+  last_checked_at: string | null;
+}
+
 export interface ModelProject {
   id: ResourceId;
   name: string;
@@ -41,6 +52,7 @@ export interface ModelProject {
   source_artifact_uri?: string;
   model_uri?: string;
   endpoint_url?: string;
+  active_endpoint?: ActiveModelEndpoint | null;
   health_url?: string;
   status?: ModelProjectStatus;
   error_message?: string;

@@ -153,6 +153,17 @@ BUILD_BACKEND = execution_backend_override("BUILD_BACKEND")
 DEPLOYMENT_BACKEND = execution_backend_override("DEPLOYMENT_BACKEND")
 TRAINING_BACKEND = execution_backend_override("TRAINING_BACKEND")
 DRIFT_BACKEND = execution_backend_override("DRIFT_BACKEND")
+TRAINING_GPU_ENABLED = str(env("TRAINING_GPU_ENABLED", "true" if TRAINING_BACKEND == "argo" else "false")).lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+TRAINING_GPU_COUNTS = tuple(
+    int(value)
+    for value in env_list("TRAINING_GPU_COUNTS", "1")
+    if str(value).strip().isdigit() and int(value) > 0
+)
 ARGO_BUILD_WEBHOOK_URL = env("ARGO_BUILD_WEBHOOK_URL", "")
 ARGO_TRAINING_WEBHOOK_URL = env("ARGO_TRAINING_WEBHOOK_URL", "")
 ARGO_CANCEL_TRAINING_WEBHOOK_URL = env("ARGO_CANCEL_TRAINING_WEBHOOK_URL", "")

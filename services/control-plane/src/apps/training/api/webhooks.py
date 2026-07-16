@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 
 from apps.training.models import TrainingJob, TrainingJobEvent, TrainingOutput
 from apps.training.services.capabilities import capability_for_token
+from apps.training.services.logs import append_training_log
 from apps.training.services.storage_scope import validate_training_uri
 
 
@@ -81,6 +82,7 @@ class TrainingJobWebhookEndpoint(APIView):
                 metadata={"workflow_status": str(request.data.get("workflow_status", ""))},
                 idempotency_key=key,
             )
+        append_training_log(job.public_id, f"[SYSTEM] Training reached terminal status: {job.status}.")
         return Response({"status": job.status})
 
 

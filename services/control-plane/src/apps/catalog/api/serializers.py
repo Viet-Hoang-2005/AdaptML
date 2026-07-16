@@ -9,6 +9,7 @@ class ModelProjectSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
     flavor = serializers.SerializerMethodField()
     lifecycle_status = serializers.SerializerMethodField()
+    active_endpoint = serializers.SerializerMethodField()
     source_code = serializers.SerializerMethodField()
     reference_data = serializers.SerializerMethodField()
 
@@ -23,6 +24,7 @@ class ModelProjectSerializer(serializers.ModelSerializer):
             "source_code",
             "reference_data",
             "lifecycle_status",
+            "active_endpoint",
             "is_active",
             "deletion_state",
             "deletion_error",
@@ -63,6 +65,37 @@ class ModelProjectSerializer(serializers.ModelSerializer):
         if instance.builds.filter(status="ready").exists():
             return "image_ready"
         return "metadata"
+
+    def get_active_endpoint(self, instance):
+        """Return the newest non-terminal deployment endpoint for this project."""
+        deployments = (
+            deployment
+            for version in instance.versions.all()
+            for deployment in version.deployments.all()
+            if deployment.status not in {"failed", "stopped"}
+        )
+        for deployment in sorted(deployments, key=lambda item: item.created_at, reverse=True):
+            endpoint = getattr(deployment, "endpoint", None)
+            if endpoint is None:
+                continue
+            endpoint_base_url = endpoint.public_url.rstrip("/")
+            if endpoint_base_url.endswith("/predict"):
+                prediction_url = endpoint_base_url
+                health_url = f"{endpoint_base_url.removesuffix('/predict')}/health"
+            else:
+                prediction_url = f"{endpoint_base_url}/predict"
+                health_url = f"{endpoint_base_url}/health"
+            return {
+                "id": str(endpoint.public_id),
+                "deployment_id": str(deployment.public_id),
+                "version_id": str(deployment.version.public_id),
+                "url": prediction_url,
+                "health_url": health_url,
+                "health_status": endpoint.health_status,
+                "deployment_status": deployment.status,
+                "last_checked_at": endpoint.last_checked_at,
+            }
+        return None
 
     def _asset_summary(self, instance, kind):
         asset = instance.workspace_assets.filter(kind=kind).order_by("-updated_at").first()

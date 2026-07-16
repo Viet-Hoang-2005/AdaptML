@@ -20,16 +20,17 @@ description: Vòng đời hiện tại của model project, training output, reg
 1. Tạo draft tại `/api/training-jobs/`; service snapshot source/data và gán S3 URI theo job UUID.
 2. Submit tại `/api/training-jobs/{job_uuid}/submit/`.
 3. Celery chạy backend đã chọn; training runner upload `model.tar.gz`, metadata bundle và MLflow artifacts.
-4. Callback nội bộ cập nhật job/output; đọc trạng thái qua job detail và `/events/`, tải output qua `/download/`.
-5. Đăng ký upload hoặc training output thành `ModelVersion` qua `/api/registry/models/{project_uuid}/versions/`.
+4. Callback nội bộ cập nhật job/output; đọc trạng thái qua job detail, `/events/`, `/logs/`; tải hoặc xóa output qua `/download/`, `/outputs/`.
+5. `POST /api/training-jobs/{job_uuid}/build/` tạo/reuse Build từ immutable output của đúng job.
+6. Build callback thành công cấp version kế tiếp, tạo `ModelVersion`, image artifact và import `_mlops` metrics/params/insights.
 
-Không tự tạo registry version khi build thành công. `ModelVersion` là immutable; version mới thay vì mutate artifact/requirements của version cũ.
+Một TrainingJob tạo tối đa một version thành công. Build failed/cancelled không cấp version và có thể retry. `ModelVersion` là immutable; không còn API POST trực tiếp để tạo version.
 
 ## 3. Build và deployment
 
-1. Tạo build tại `/api/builds/` cho một registry version.
+1. Upload Model tạo build multipart từ artifact; Training tạo build qua `/{job_uuid}/build/`.
 2. Celery gọi `DockerBuildBackend` hoặc `ArgoBuildBackend`.
-3. Build callback tại `/internal/webhooks/builds/{build_uuid}/` đặt image URI và trạng thái `ready` hoặc `failed`.
+3. Build callback thành công atomically tạo version nếu Build chưa có version, rồi đặt image URI/digest và trạng thái `ready`.
 4. Tạo deployment tại `/api/deployments/` chỉ với build thành công.
 5. Backend tạo worker runtime; `Endpoint` lưu public URL, internal URL, runtime name và health.
 6. Dừng deployment tại `/api/deployments/{deployment_uuid}/stop/`; đọc endpoint/log tại `/api/endpoints/` và `/{endpoint_uuid}/logs/`.

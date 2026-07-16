@@ -6,7 +6,7 @@ from django.conf import settings
 from infrastructure.argo import ArgoWebhookClient
 from infrastructure.http import HttpClient
 from infrastructure.storage import S3Storage
-from infrastructure.storage.paths import build_prefix, drift_run_prefix, version_prefix
+from infrastructure.storage.paths import build_prefix, drift_run_prefix
 
 
 class _ArgoBackend:
@@ -26,11 +26,12 @@ class ArgoBuildBackend(_ArgoBackend):
 
     def run(self, build):
         project = build.project
-        source = build.input_assets.filter(kind="source_artifact").first()
+        source = build.input_assets.filter(kind__in=("source_artifact", "training_output")).first()
         if source is None and build.version_id:
             source = build.version.artifacts.filter(kind__in=("source", "training_output")).first()
         if not source:
             raise RuntimeError("The build has no source artifact.")
+        source_uri = getattr(source, "s3_uri", "") or source.uri
         package_uri = (
             f"s3://{self.storage.bucket}/"
             f"{build_prefix(project.owner.tenant_id, project.public_id, build.public_id)}"
@@ -46,7 +47,8 @@ class ArgoBuildBackend(_ArgoBackend):
                 "task_type": "TEST_ZIP" if build.artifact_format == "mlflow_zip" else "BUILD",
                 "requirements_text": build.requirements_snapshot,
                 "source_artifact_name": source.name,
-                "source_download_url": self.storage.presigned_get(source.uri, 14400),
+                "source_type": "training_job" if build.source_job_id else "manual_upload",
+                "source_download_url": self.storage.presigned_get(source_uri, 14400),
                 "output_upload_url": self.storage.presigned_put(package_uri, 14400),
                 "control_plane_webhook_url": (
                     f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/webhooks/builds/{build.public_id}/"

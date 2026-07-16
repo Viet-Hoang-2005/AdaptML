@@ -1,13 +1,15 @@
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from common.api.exceptions import Conflict
 from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 from infrastructure.storage import S3Storage
 
 from apps.training.models import TrainingJob, TrainingJobEvent
 from apps.training.services.storage_scope import expected_training_uris, validate_training_uri
-from apps.training.tasks import cancel_training_job, execute_training_job
+from apps.training.tasks import cancel_training_job, execute_training_job, purge_training_job_outputs
 
 
 def create_job(*, project, validated_data):
@@ -86,6 +88,28 @@ def cancel_job(job):
 
 
 def output_download_url(job):
+    if job.outputs_purged_at is not None or not job.outputs.filter(kind="model").exists():
+        raise Conflict("Training output is no longer available.")
     storage = S3Storage()
     validate_training_uri(job, storage.bucket, "output", job.output_uri)
     return storage.presigned_get(job.output_uri, settings.TRAINING_PRESIGNED_URL_TTL_SECONDS)
+
+
+def request_output_purge(job):
+    with transaction.atomic():
+        job = type(job).objects.select_for_update().get(pk=job.pk)
+        if job.outputs_purged_at is not None:
+            return job
+        if job.status != "completed" or not job.outputs.exists():
+            raise Conflict("This training job has no completed output to delete.")
+        if job.builds.filter(status__in=("pending", "queued", "building")).exists():
+            raise Conflict("Training output is being used by an active model build.")
+        job.outputs_purged_at = timezone.now()
+        job.save(update_fields=["outputs_purged_at", "updated_at"])
+        TrainingJobEvent.objects.create(
+            job=job,
+            event_type="outputs_purge_requested",
+            message="Training output deletion requested.",
+        )
+        transaction.on_commit(lambda: purge_training_job_outputs.delay(str(job.public_id)))
+    return job

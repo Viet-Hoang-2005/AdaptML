@@ -234,6 +234,29 @@ def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
             pip_requirements.extend(dep["pip"])
     return pip_requirements
 
+
+def read_training_summaries(extracted_dir: Path) -> tuple[dict[str, dict], Path | None]:
+    mlops_dir = next((path for path in sorted(extracted_dir.rglob("_mlops")) if path.is_dir()), None)
+    summaries = {"metrics_summary": {}, "params_summary": {}, "insights_summary": {}}
+    if mlops_dir is None:
+        return summaries, None
+    for filename, key in (
+        ("metrics.json", "metrics_summary"),
+        ("params.json", "params_summary"),
+        ("model_insights.json", "insights_summary"),
+    ):
+        path = mlops_dir / filename
+        if not path.exists():
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            print(f"Ignoring invalid training metadata file: {filename}")
+            continue
+        if isinstance(value, dict):
+            summaries[key] = value
+    return summaries, mlops_dir
+
 def run_build_task(model_id: str, webhook_url: str) -> None:
     flavor = os.environ.get("FLAVOR", "").lower()
     requirements_text = os.environ.get("REQUIREMENTS_TEXT", "")
@@ -261,6 +284,8 @@ def run_build_task(model_id: str, webhook_url: str) -> None:
     try:
         artifact_name = ""
         extracted_label_mapping_path = None
+        training_summaries = {"metrics_summary": {}, "params_summary": {}, "insights_summary": {}}
+        extracted_mlops_dir = None
 
         if source_type == "training_job":
             training_archive_path = workspace / "training-model.tar.gz"
@@ -270,6 +295,7 @@ def run_build_task(model_id: str, webhook_url: str) -> None:
             safe_extract_tar(training_archive_path, extracted_dir)
             artifact_path = find_supported_model_file(extracted_dir)
             artifact_name = artifact_path.name
+            training_summaries, extracted_mlops_dir = read_training_summaries(extracted_dir)
 
             if not requirements_text.strip():
                 requirements_file = next(iter(sorted(extracted_dir.rglob("requirements.txt"))), None)
@@ -302,6 +328,8 @@ def run_build_task(model_id: str, webhook_url: str) -> None:
             download_presigned_file(label_mapping_download_url, mapping_path)
         elif extracted_label_mapping_path:
             shutil.copy2(extracted_label_mapping_path, package_dir / extracted_label_mapping_path.name)
+        if extracted_mlops_dir:
+            shutil.copytree(extracted_mlops_dir, package_dir / "_mlops", dirs_exist_ok=True)
 
         preview_tree = build_preview_tree(package_dir)
         manifest = {
@@ -350,6 +378,7 @@ COPY model /app/model_artifact
                 "package_manifest": manifest,
                 "package_preview_tree": preview_tree,
                 "task_type": "BUILD",
+                **training_summaries,
             }
             (workspace / "webhook_payload.json").write_text(json.dumps(payload), encoding="utf-8")
             print("Build context prepared successfully for Kaniko! BUILD_PREPARE_SUCCESS")
@@ -370,6 +399,7 @@ COPY model /app/model_artifact
                 "package_manifest": manifest,
                 "package_preview_tree": preview_tree,
                 "task_type": "BUILD",
+                **training_summaries,
                 **built_image_metadata(),
             },
         )

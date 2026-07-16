@@ -19,7 +19,7 @@ def build_logs(build, offset: int) -> tuple[list[str], int]:
     short-lived transport only; ``Build.logs`` remains the durable history once
     the execution task has completed.
     """
-    key = f"build_logs:{build.version.public_id}"
+    key = f"build_logs:{build.public_id}"
     try:
         redis = Redis.from_url(settings.REDIS_URL)
         lines = redis.lrange(key, offset, -1)
