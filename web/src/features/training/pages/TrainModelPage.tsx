@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/Button';
+import { PageHeader } from '@/shared/ui/PageHeader';
 import {
   cancelTrainingJob,
   getTrainingJobDownloadUrl,
@@ -272,20 +273,7 @@ export default function TrainModelPage() {
 
   return (
     <section className="flex w-full flex-1 flex-col space-y-6">
-      <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t('description')}
-          </p>
-        </div>
-        <Button
-          icon={<Rocket className="h-4 w-4" />}
-          onClick={() => navigate('/dashboard/model-training/create/metadata')}
-        >
-          {t('newJob')}
-        </Button>
-      </div>
+      <PageHeader title={t('title')} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2 rounded-xl border border-border bg-surface p-5 shadow-sm">
@@ -398,6 +386,14 @@ export default function TrainModelPage() {
                   <option value="name">{t('name')}</option>
                 </select>
               </label>
+              <div className="ml-2 h-4 w-px bg-border hidden sm:block" />
+              <Button
+                icon={<Rocket className="h-4 w-4" />}
+                onClick={() => navigate('/dashboard/model-training/create/metadata')}
+                size="sm"
+              >
+                {t('newJob')}
+              </Button>
             </div>
             {isFetching && <span className="text-xs font-semibold text-muted-foreground">{t('refreshing')}</span>}
           </div>

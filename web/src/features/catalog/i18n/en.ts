@@ -8,7 +8,7 @@ export const catalogEn = {
     saved: '{{title}} saved successfully!', saveFailed: 'Failed to save {{title}}.', uploaded: '{{count}} file(s) uploaded successfully!',
     uploadFailed: 'Failed to upload files', folderCreated: 'Folder {{name}} created!', folderCreateFailed: 'Failed to create folder',
     folderDeleted: 'Folder deleted!', fileDeleted: 'File deleted!', deleteFailed: 'Failed to delete item', unsaved: 'Unsaved changes',
-    mainTitle: 'Set this file as the main entry point', selected: 'Selected', setMain: 'Set as Main', saveChanges: 'Save Changes', save: 'Save',
+    mainTitle: 'Set this file as the main script', selected: 'Selected', setMain: 'Set as Main', saveChanges: 'Save Changes', save: 'Save',
     uploadPrompt: 'Click to upload file', support: 'Support: {{types}}', selectFile: 'Select a file from the tree to view or edit',
     explorer: 'Explorer', newFile: 'New File', newFolder: 'New Folder', uploadFiles: 'Upload Files', deleteSelected: 'Delete Selected',
     noFiles: 'No files found.', fileFolderName: 'File or folder name', deleteTitle: 'Delete Item', deleteQuestion: 'Are you sure you want to delete {{kind}} “{{path}}”?',

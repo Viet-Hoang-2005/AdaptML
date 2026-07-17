@@ -250,10 +250,11 @@ export default function UploadModelPage() {
     }
   }, [buildForm, navigate, project, routeFor, t]);
 
+  const buildId = build?.id;
   const refreshBuild = useCallback(async () => {
-    if (!build) return;
-    setBuild(await getBuild(build.id));
-  }, [build]);
+    if (!buildId) return;
+    setBuild(await getBuild(buildId));
+  }, [buildId]);
 
   const continueFromBuild = useCallback(() => {
     if (!build || build.status !== 'ready') {
@@ -315,12 +316,12 @@ export default function UploadModelPage() {
     } else navigate(managementPath);
   };
 
-  const handleDeploymentCompleted = (status: string) => {
+  const handleDeploymentCompleted = useCallback((status: string) => {
     setDeployment((current) => current ? { ...current, status: status as Deployment['status'] } : current);
     if (['healthy', 'unhealthy', 'failed', 'stopped'].includes(status)) {
       void queryClient.invalidateQueries({ queryKey: catalogQueryKeys.projects() });
     }
-  };
+  }, [queryClient]);
 
   const context: UploadModelContext = {
     project,

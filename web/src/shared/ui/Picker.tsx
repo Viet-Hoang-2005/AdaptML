@@ -28,20 +28,15 @@ export function Picker<T extends string | number>({
           type="button"
           onClick={() => onChange(option.value)}
           className={cn(
-            'rounded-2xl border px-6 py-6 text-left transition-colors',
+            'rounded-xl border p-4 text-left transition-colors',
             value === option.value
-              ? 'border-primary bg-primary text-primary-foreground'
+              ? 'border-primary bg-primary-subtle ring-1 ring-primary text-foreground'
               : 'border-border bg-surface text-foreground hover:border-primary'
           )}
         >
-          <span className="text-base font-bold">{option.title}</span>
+          <span className="text-base font-semibold">{option.title}</span>
           {option.description && (
-            <p
-              className={cn(
-                'mt-1 text-xs',
-                value === option.value ? 'text-primary-foreground/80' : 'text-muted-foreground'
-              )}
-            >
+            <p className="mt-2 text-sm text-muted-foreground">
               {option.description}
             </p>
           )}

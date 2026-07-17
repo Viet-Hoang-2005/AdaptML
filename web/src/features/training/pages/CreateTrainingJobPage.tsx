@@ -40,7 +40,7 @@ const createPath = `${trainingPath}/create`;
 const emptyMetadata: TrainingMetadataForm = { name: '', description: '', access_mode: 'private' };
 const emptySource: TrainingSourceForm = {
   model_flavor: 'sklearn',
-  entry_point: 'train.py',
+  entry_point: '',
   requirements_text: '',
 };
 const emptyExecution: TrainingExecutionForm = {
@@ -256,7 +256,10 @@ export default function CreateTrainingJobPage() {
       const missing = [];
       if (!codeFiles.length) missing.push(t('createFlow.source.sourceCode'));
       if (!dataFiles.length) missing.push(t('createFlow.source.referenceData'));
-      if (!sourceForm.entry_point.trim()) missing.push(t('createFlow.source.entryPoint'));
+      const selectedEntryPoint = sourceForm.entry_point.trim();
+      if (!selectedEntryPoint || !codeFiles.some((file) => file.relative_path === selectedEntryPoint)) {
+        missing.push(t('createFlow.source.entryPoint'));
+      }
       if (missing.length) {
         toast.warning(t('createFlow.messages.sourceRequired', { fields: missing.join(', ') }));
         return;

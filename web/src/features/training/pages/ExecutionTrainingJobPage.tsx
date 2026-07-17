@@ -1,13 +1,15 @@
-import { ArrowLeft, Check, Clock, Cpu, Zap } from 'lucide-react';
+import { ArrowLeft, Check, Play, Square } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateTrainingJob } from '@/features/training/trainingFlowContext';
 import type { TrainingAcceleratorType } from '@/features/training/types';
+import { useRuntimeLogStream } from '@/shared/hooks/useRuntimeLogStream';
 import { Button } from '@/shared/ui/Button';
 import { Slider } from '@/shared/ui/Slider';
 import { StepTitle } from '@/shared/ui/StepTitle';
-import { SummaryCard } from '@/shared/ui/SummaryCard';
-import { TerminalViewer } from '@/shared/ui/TerminalViewer';
+import { TerminalActionButton, TerminalViewer } from '@/shared/ui/TerminalViewer';
+import { Picker } from '@/shared/ui/Picker';
 
 const runtimeOptions = [
   { label: '15m', value: 900 },
@@ -18,60 +20,67 @@ const runtimeOptions = [
   { label: '12h', value: 43200 },
 ];
 
+const TRAINING_TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'] as const;
+
 export default function ExecutionTrainingJobPage() {
   const { t } = useTranslation('training');
   const flow = useCreateTrainingJob();
+  const handledTerminalState = useRef('');
   const active = flow.job && ['pending', 'queued', 'uploading', 'running'].includes(flow.job.status);
   const profiles = flow.capabilities?.cpu_profiles ?? [];
   const accelerators = flow.capabilities?.accelerators ?? [{ type: 'none' as const, counts: [0] }];
+  const stream = useRuntimeLogStream({
+    source: flow.job?.id ? { kind: 'training', id: flow.job.id } : null,
+    enabled: Boolean(flow.job),
+    terminalStatuses: TRAINING_TERMINAL_STATUSES,
+  });
+
+  useEffect(() => {
+    const terminalKey = `${flow.job?.id ?? ''}:${stream.status ?? ''}`;
+    if (
+      stream.status
+      && TRAINING_TERMINAL_STATUSES.includes(stream.status as typeof TRAINING_TERMINAL_STATUSES[number])
+      && handledTerminalState.current !== terminalKey
+    ) {
+      handledTerminalState.current = terminalKey;
+      void flow.refreshJob(stream.status);
+    }
+  }, [flow, stream.status]);
 
   return (
     <div className="space-y-6 rounded-lg border border-border bg-surface p-6">
       <StepTitle title={t('createFlow.execution.title')} subtitle={t('createFlow.execution.description')} />
-      <div className="grid gap-4 md:grid-cols-3">
-        {profiles.map((profile) => {
-          const selected = profile.vcpu === flow.executionForm.vcpu && profile.memory_mb === flow.executionForm.memory_mb;
-          return (
-            <button
-              key={profile.id}
-              type="button"
-              onClick={() => {
-                flow.setExecutionField('vcpu', profile.vcpu);
-                flow.setExecutionField('memory_mb', profile.memory_mb);
-              }}
-              className={`rounded-xl border p-4 text-left transition-colors ${selected ? 'border-primary bg-primary-subtle ring-1 ring-primary' : 'border-border bg-surface hover:border-primary'}`}
-            >
-              <p className="font-semibold capitalize text-foreground">{profile.id}</p>
-              <p className="mt-2 text-sm text-muted-foreground">{profile.vcpu} vCPU / {profile.memory_mb} MB</p>
-            </button>
-          );
-        })}
-      </div>
+      <Picker
+        value={`${flow.executionForm.vcpu}-${flow.executionForm.memory_mb}`}
+        onChange={(val) => {
+          const [vcpu, memory_mb] = val.split('-');
+          flow.setExecutionField('vcpu', Number(vcpu));
+          flow.setExecutionField('memory_mb', Number(memory_mb));
+        }}
+        className="md:grid-cols-3"
+        options={profiles.map((profile) => ({
+          value: `${profile.vcpu}-${profile.memory_mb}`,
+          title: <span className="capitalize">{profile.id}</span>,
+          description: `${profile.vcpu} vCPU / ${profile.memory_mb} MB`,
+        }))}
+      />
 
       <div className="space-y-3">
         <p className="text-sm font-medium text-foreground">{t('createFlow.execution.accelerator')}</p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {accelerators.flatMap((accelerator) => accelerator.counts.map((count) => {
-            const selected = flow.executionForm.accelerator_type === accelerator.type
-              && flow.executionForm.accelerator_count === count;
-            return (
-              <button
-                key={`${accelerator.type}-${count}`}
-                type="button"
-                onClick={() => {
-                  flow.setExecutionField('accelerator_type', accelerator.type as TrainingAcceleratorType);
-                  flow.setExecutionField('accelerator_count', count);
-                }}
-                className={`rounded-xl border p-3 text-left ${selected ? 'border-primary bg-primary-subtle ring-1 ring-primary' : 'border-border bg-surface hover:border-primary'}`}
-              >
-                <p className="font-semibold text-foreground">
-                  {accelerator.type === 'none' ? t('createFlow.execution.cpuOnly') : `GPU x${count}`}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{flow.capabilities?.backend ?? '-'}</p>
-              </button>
-            );
-          }))}
-        </div>
+        <Picker
+          value={`${flow.executionForm.accelerator_type}-${flow.executionForm.accelerator_count}`}
+          onChange={(val) => {
+            const [type, count] = val.split('-');
+            flow.setExecutionField('accelerator_type', type as TrainingAcceleratorType);
+            flow.setExecutionField('accelerator_count', Number(count));
+          }}
+          className="gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          options={accelerators.flatMap((accelerator) => accelerator.counts.map((count) => ({
+            value: `${accelerator.type}-${count}`,
+            title: accelerator.type === 'none' ? t('createFlow.execution.cpuOnly') : `GPU x${count}`,
+            description: flow.capabilities?.backend ?? '-',
+          })))}
+        />
       </div>
 
       <div>
@@ -83,25 +92,29 @@ export default function ExecutionTrainingJobPage() {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <SummaryCard label={t('createFlow.execution.model')} value={flow.project?.name ?? '-'} icon={<Cpu className="h-4 w-4" />} />
-        <SummaryCard label={t('createFlow.source.flavor')} value={flow.sourceForm.model_flavor} icon={<Zap className="h-4 w-4" />} />
-        <SummaryCard label={t('createFlow.execution.compute')} value={`${flow.executionForm.vcpu} vCPU / ${flow.executionForm.memory_mb} MB`} icon={<Cpu className="h-4 w-4" />} />
-        <SummaryCard label={t('createFlow.execution.maxRuntime')} value={`${flow.executionForm.max_runtime_seconds / 60} min`} icon={<Clock className="h-4 w-4" />} />
-      </div>
-
       <TerminalViewer
         key={flow.job?.id ?? 'new-training'}
-        trainingJobId={flow.job?.id}
         title={t('createFlow.execution.console')}
+        logs={stream.error ? [...stream.logs, `Error: ${stream.error}`] : stream.logs}
         placeholder={t('createFlow.execution.placeholder')}
-        startLabel={t('createFlow.execution.train')}
-        restartLabel={t('createFlow.execution.retrain')}
-        stopLabel={t('createFlow.execution.stop')}
-        onRebuild={() => flow.startTraining()}
-        onCancel={() => void flow.cancelTraining()}
-        onCompleted={(status) => void flow.refreshJob(status)}
-        buildDisabled={flow.transitionState !== 'idle' || Boolean(active)}
+        actions={active ? (
+          <TerminalActionButton
+            tone="danger"
+            icon={<Square className="h-3 w-3" />}
+            onClick={() => void flow.cancelTraining()}
+          >
+            {t('createFlow.execution.stop')}
+          </TerminalActionButton>
+        ) : (
+          <TerminalActionButton
+            icon={<Play className="h-3 w-3" />}
+            loading={flow.transitionState === 'starting-training'}
+            disabled={flow.transitionState !== 'idle'}
+            onClick={() => void flow.startTraining()}
+          >
+            {flow.job ? t('createFlow.execution.retrain') : t('createFlow.execution.train')}
+          </TerminalActionButton>
+        )}
       />
 
       <div className="grid gap-3 border-t border-border pt-5 sm:grid-cols-2">

@@ -55,9 +55,9 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onCloseMobile
     <>
       {mobileOpen && <button type="button" className="fixed inset-0 z-30 bg-slate-950/40 md:hidden" onClick={onCloseMobile} aria-label={t('actions.closeNavigation')} />}
       <aside className={cn(
-        'fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-border bg-surface transition-[transform,width] duration-200 md:static md:z-20 md:w-[68px] md:translate-x-0 xl:w-56',
+        'fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-border bg-surface transition-[transform,width] duration-200 md:static md:z-20 md:w-17 md:translate-x-0 xl:w-56',
         mobileOpen ? 'translate-x-0' : '-translate-x-full',
-        collapsed && 'xl:w-[68px]',
+        collapsed && 'xl:w-17',
       )}>
         <div className="flex h-16 items-center justify-between border-b border-border px-3 md:hidden">
           <span className="text-sm text-muted-foreground">{t('navigation.workspace')}</span>

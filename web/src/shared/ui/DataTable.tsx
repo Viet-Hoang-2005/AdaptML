@@ -49,7 +49,7 @@ export function DataTable<T>({
   });
 
   return (
-    <div className={`overflow-hidden rounded-[8px] border border-border bg-surface ${className}`}>
+    <div className={`overflow-hidden rounded-lg border border-border bg-surface ${className}`}>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-sm">
           <thead className="border-b border-border bg-surface text-xs font-semibold text-foreground">

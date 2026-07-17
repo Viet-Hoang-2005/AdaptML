@@ -63,7 +63,7 @@ export default function Header({ onOpenNavigation }: { onOpenNavigation: () => v
             </button>
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content align="center" sideOffset={8} className="z-50 w-[min(92vw,26.25rem)] rounded-[8px] border border-border bg-surface p-2 shadow-[var(--shadow-overlay)] animate-fade-in">
+            <Popover.Content align="center" sideOffset={8} className="z-50 w-[min(92vw,26.25rem)] rounded-[8px] border border-border bg-surface p-2 shadow-(--shadow-overlay) animate-fade-in">
               <div className="relative mb-2">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('modelSelector.search')} className="h-10 w-full rounded-[8px] border border-input bg-surface pl-9 pr-9 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/15" autoFocus />
@@ -97,7 +97,7 @@ export default function Header({ onOpenNavigation }: { onOpenNavigation: () => v
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content align="end" sideOffset={8} className="z-50 min-w-44 rounded-[8px] border border-border bg-surface p-1.5 shadow-[var(--shadow-overlay)] animate-fade-in">
+            <DropdownMenu.Content align="end" sideOffset={8} className="z-50 min-w-44 rounded-[8px] border border-border bg-surface p-1.5 shadow-(--shadow-overlay) animate-fade-in">
               <DropdownMenu.Label className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('theme.appearance')}</DropdownMenu.Label>
               {themeOptions.map((option) => {
                 const Icon = option.icon;
@@ -116,7 +116,7 @@ export default function Header({ onOpenNavigation }: { onOpenNavigation: () => v
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content align="end" sideOffset={8} className="z-50 w-56 rounded-[8px] border border-border bg-surface p-2 shadow-[var(--shadow-overlay)] animate-fade-in">
+            <DropdownMenu.Content align="end" sideOffset={8} className="z-50 w-56 rounded-[8px] border border-border bg-surface p-2 shadow-(--shadow-overlay) animate-fade-in">
               <DropdownMenu.Label className="border-b border-border px-3 py-2"><p className="truncate text-sm font-semibold text-foreground">{profile?.full_name || t('profile.fallbackName')}</p><p className="truncate text-xs text-muted-foreground">{profile?.email || t('profile.signedIn')}</p></DropdownMenu.Label>
               <DropdownMenu.Item onSelect={() => navigate('/dashboard/settings/profile')} className="mt-2 flex h-10 items-center gap-2 rounded-[6px] px-2 text-sm text-foreground outline-none hover:bg-muted focus:bg-muted"><Settings className="h-4 w-4 text-muted-foreground" /> {t('navigation.setting')}</DropdownMenu.Item>
               <DropdownMenu.Item onSelect={logout} className="flex h-10 items-center gap-2 rounded-[6px] px-2 text-sm text-danger outline-none hover:bg-danger-subtle focus:bg-danger-subtle"><LogOut className="h-4 w-4" /> {t('actions.logout')}</DropdownMenu.Item>

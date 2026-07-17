@@ -64,8 +64,8 @@ export const trainingEn = {
       access: 'Access mode', accessMode: 'Access mode', private: 'Private', public: 'Public',
     },
     source: {
-      title: 'Source and training data', description: 'Review the latest project workspace and define the reproducible training entry point.',
-      flavor: 'Model flavor', entryPoint: 'Entry point', requirements: 'Requirements (optional)',
+      title: 'Source and training data', description: 'Review the latest project workspace, then select the main training script in Source code.',
+      flavor: 'Model flavor', entryPoint: 'Main training script', requirements: 'Requirements (optional)',
       requirementsPlaceholder: 'One Python dependency per line', requirementsHelper: 'One dependency per line.',
       sourceCode: 'Source code', referenceData: 'Reference data',
     },

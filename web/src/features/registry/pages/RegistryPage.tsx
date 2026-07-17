@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RefreshCw, Component } from 'lucide-react';
 import { Button } from '@/shared/ui/Button';
+import { PageHeader } from '@/shared/ui/PageHeader';
 import { getRegistryFamilies, getRegistryVersion, getRegistryVersions } from '@/features/registry/api/registryApi';
 import type { RegistryFamily, RegistryVersion } from '@/features/registry/types';
 import { getApiErrorMessage } from '@/shared/api/errors';
@@ -163,18 +164,12 @@ export default function ModelEvolutionPage() {
   )).length;
 
   return (
-    <div className="flex flex-col min-h-full pb-10">
+    <section className="flex w-full flex-1 flex-col space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6 px-6 pt-6">
-        <div>
-          <h1 className="text-2xl font-extrabold text-foreground tracking-tight">{t('title')}</h1>
-          <p className="mt-1 text-sm text-muted-foreground max-w-3xl">
-            {t('description')}
-          </p>
-        </div>
+      <PageHeader title={t('title')}>
         <div className="flex gap-3">
           <Button 
-            size="md" 
+            size="sm" 
             variant="secondary" 
             icon={<RefreshCw className="h-4 w-4" />} 
             onClick={() => void handleRefresh()}
@@ -182,10 +177,10 @@ export default function ModelEvolutionPage() {
             {t('refresh')}
           </Button>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 px-6 lg:grid-cols-4 mb-6">
+      <div className="grid gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-center">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t('totalFamilies')}</p>
           <p className="text-3xl font-extrabold text-foreground">{loadingFamilies ? '-' : totalFamilies}</p>
@@ -212,7 +207,7 @@ export default function ModelEvolutionPage() {
       </div>
 
       {/* Main Content Split */}
-      <div className="flex flex-col lg:flex-row gap-6 px-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
         
         {/* Left Panel: Family List */}
         <div className="w-full lg:w-1/3 flex flex-col rounded-2xl border border-border bg-surface shadow-sm overflow-hidden sticky top-6">
@@ -267,6 +262,6 @@ export default function ModelEvolutionPage() {
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

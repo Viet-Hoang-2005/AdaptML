@@ -22,10 +22,7 @@ export const commonEn = {
   csv: { empty: 'No CSV data', range: 'Row {{start}} - {{end}} of {{total}}', column: 'Column {{index}}', previous: 'Previous CSV page', next: 'Next CSV page' },
   errors: { title: 'Something went wrong', description: 'The page could not be displayed safely. Your request was not submitted again.', reload: 'Reload application' },
   terminal: {
-    starting: '[SYSTEM] Starting process...', buildSuccess: 'Build completed successfully!', process: 'Process',
-    completed: '{{name}} completed successfully!', cancelled: 'Process cancelled.', failed: 'Process failed.',
-    title: 'Build Console', placeholder: 'Click "Build" button to start building your model...', build: 'Build',
-    stop: 'Stop', rebuild: 'Re-Build', cancelledByUser: '[SYSTEM] Process cancelled by user.',
+    title: 'Console', build: 'Build', stop: 'Stop', rebuild: 'Re-Build',
     copied: 'Logs copied.', copyTitle: 'Copy log', copy: 'Copy', error: 'Error:',
   },
   accessibility: { closeModal: 'Close modal', dismissNotification: 'Dismiss notification', pageSections: 'Page sections', showPassword: 'Show password', hidePassword: 'Hide password' },

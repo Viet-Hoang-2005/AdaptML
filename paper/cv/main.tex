@@ -110,8 +110,8 @@
 {4/2026 -- 6/2026}
 \resumeItemListStart
 \resumeItem{Architected a secure-by-design microservices platform (Spring Boot gateway, auth, course, assessment, challenge, and a FastAPI + LangChain AI tutor) following DevSecOps principles across the entire software lifecycle.}
-\resumeItem{Implemented a shift-left CI gate on every PR: secret scanning (Gitleaks), Conventional Commit linting, path-filtered unit tests (JUnit/pytest/Vitest), Dockerfile linting (Hadolint) and security scanning (Checkov), dependency vulnerability scanning (Trivy filesystem), IaC validation (OpenTofu fmt/validate + Checkov), and static code analysis with quality gate enforcement (SonarCloud).}
-\resumeItem{Built an automated CD pipeline that detects changed services, builds Docker images, scans for HIGH/CRITICAL vulnerabilities (Trivy), pushes to a private Harbor registry, then cryptographically signs each image and attests its CycloneDX SBOM using keyless Cosign (Sigstore OIDC), and finally opens a deploy PR that pins image digests in the Kustomization manifest for FluxCD to reconcile.}
+\resumeItem{Implemented a shift-left CI gate on every PR: Conventional Commit linting, secret scanning (Gitleaks), path-filtered unit tests (JUnit/pytest/Vitest), Dockerfile linting (Hadolint), dependency vulnerability scanning (Trivy filesystem), IaC validation (OpenTofu fmt/validate + Checkov), and static code analysis with quality gate enforcement (SonarCloud).}
+\resumeItem{Built an automated CD pipeline that detects changed services, builds Docker images, Trivy scans for HIGH/CRITICAL vulnerabilities, pushes to a private Harbor registry, then cryptographically signs each image and attests its CycloneDX SBOM using Cosign, and finally opens a deploy PR that pins image digests in the Kustomization manifest for FluxCD to reconcile.}
 \resumeItem{Enforced supply-chain and runtime security in the Kubernetes cluster via Kyverno admission policies: requiring images from the trusted Harbor registry only, pinning by immutable SHA-256 digest, disallowing the mutable \texttt{:latest} tag, verifying Cosign keyless signatures against the CI workflow identity, enforcing Pod Security Baseline, requiring resource limits/health probes, and mandating non-root containers with no privilege escalation.}
 \resumeItem{Managed secrets securely through GCP Workload Identity Federation for passwordless CI/CD authentication, External Secrets Operator for runtime credential injection, and automated post-deploy verification (GKE rollout status checks and endpoint health probes).}
 \resumeItemListEnd
@@ -121,18 +121,25 @@
 \section{Research}
 \resumeSubHeadingListStart
   \resumeProjectHeading
-    {\parbox[t]{0.79\textwidth}{\textbf{\href{https://csonet-conf.github.io/csonet26/index.html}{A Drift-Aware MLOps Framework for Multi-Model Serving: A Network Intrusion Detection Case Study}}}}{CSoNet 2026}
+    {\parbox[t]{0.79\textwidth}{\textbf{\href{https://csonet-conf.github.io/csonet26/index.html}{CSoNet 2026: A Drift-Aware MLOps Framework for Multi-Model Serving: A Network Intrusion Detection Case Study}}}}{Preview}
   \resumeItemListStart
-    \resumeItem{First author; paper is currently under review (awaiting decision).}
+    \resumeItem{First author; proposed a cloud-native MLOps architecture for multi-model ML and DL lifecycle management, featuring a decoupled control-plane/data-plane design to separate model governance from online prediction serving.}
+    \resumeItem{Addressed the data drift problem---where changing production data distributions degrade model reliability---by designing a monitoring pipeline that asynchronously logs predictions, computes statistical drift scores over production windows, and triggers review-driven adaptation actions (e.g., alerts, retraining).}
+    \resumeItem{Validated the framework on a CIC-IDS2017 Network Intrusion Detection case study across 3 attack families $\times$ 3 severity levels; drift-triggered retraining recovered Macro-F1 from 0.13--0.46 (fixed model) to 0.98--1.00 (retrained challenger), demonstrating $\Delta$Macro-F1 gains of +0.54 to +0.87.}
   \resumeItemListEnd
 \resumeSubHeadingListEnd
 
 %-----------AWARDS-----------
 \section{Awards}
-\begin{itemize}[leftmargin=0.15in]
-  \small
-  \item Encouragement Scholarship for Academic Excellence: Semester 1, 2023--2024; Semester 1, 2024--2025; Semester 2, 2024--2025.
-\end{itemize}
+\resumeSubHeadingListStart
+  \resumeProjectHeading
+    {\parbox[t]{0.79\textwidth}{\textbf{Encouragement Scholarship for Academic Excellence}}}{}
+  \resumeItemListStart
+    \resumeItem{Semester 1, 2023--2024}
+    \resumeItem{Semester 1, 2024--2025}
+    \resumeItem{Semester 2, 2024--2025}
+  \resumeItemListEnd
+\resumeSubHeadingListEnd
 
 %-----------TECHNICAL SKILLS-----------
 \section{Technical Skills}
@@ -143,8 +150,7 @@
     \textbf{Infrastructure:} GCP, AWS, Terraform, Ansible \\
     \textbf{CI/CD \& GitOps:} Git, GitHub, GitHub Actions, Argo CD, Flux CD \\
     \textbf{MLOps:} MLflow, Kubeflow, BentoML \\
-    \textbf{Observability \& Networking:} Prometheus, Grafana, Cloudflare, Cisco Packet Tracer \quad | \quad
-    \textbf{Tools:} VS Code
+    \textbf{Observability \& Networking:} Prometheus, Grafana, Cloudflare, Cisco Packet Tracer
   }}
 \end{itemize}
 

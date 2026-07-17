@@ -50,7 +50,7 @@ export default function ModelManagementPage() {
       cell: ({ row }) => (
         <button
           type="button"
-          className="font-semibold text-foreground hover:text-primary"
+          className="text-left font-semibold text-foreground hover:text-primary"
           onClick={() => navigate(`/dashboard/management/model/${row.original.id}`)}
         >
           {row.original.name}
@@ -82,7 +82,7 @@ export default function ModelManagementPage() {
       cell: ({ row }) => {
         const status = row.original.lifecycle_status ?? 'metadata';
         const label = status === 'image_ready'
-          ? t('status.imageReady')
+          ? t('status.builded')
           : status === 'deployed'
             ? t('status.deployed')
             : t('status.metadata');

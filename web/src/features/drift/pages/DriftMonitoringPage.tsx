@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, Settings, Trash2, ExternalLink, LineChart, Loader2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -9,8 +9,9 @@ import { Button } from '@/shared/ui/Button';
 import { PageHeader } from '@/shared/ui/PageHeader';
 import { PageContent } from '@/shared/ui/PageContent';
 import { StepTitle } from '@/shared/ui/StepTitle';
-import { SummaryCard } from '@/shared/ui/SummaryCard';
+import { CardSummary } from '@/shared/ui/Card';
 import { ConfirmModal } from '@/shared/ui/ConfirmModal';
+import { useRuntimeLogStream } from '@/shared/hooks/useRuntimeLogStream';
 import { TerminalViewer } from '@/shared/ui/TerminalViewer';
 import { DataTable } from '@/shared/ui/DataTable';
 import { Badge } from '@/shared/ui/Badge';
@@ -22,6 +23,8 @@ import {
   useRunDriftMonitoringJob,
   type DriftMonitoringResult
 } from '@/features/drift/hooks/useDriftMonitoring';
+
+const DRIFT_TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'] as const;
 
 export default function DriftMonitoringPage() {
   const { t, i18n } = useTranslation('drift');
@@ -37,6 +40,20 @@ export default function DriftMonitoringPage() {
   
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const stream = useRuntimeLogStream({
+    source: activeRunId ? { kind: 'drift', id: activeRunId } : null,
+    enabled: Boolean(activeRunId),
+    terminalStatuses: DRIFT_TERMINAL_STATUSES,
+  });
+
+  useEffect(() => {
+    if (
+      stream.status
+      && DRIFT_TERMINAL_STATUSES.includes(stream.status as typeof DRIFT_TERMINAL_STATUSES[number])
+    ) {
+      void refetchResults();
+    }
+  }, [refetchResults, stream.status]);
 
   const handleRunNow = async () => {
     if (!modelId || !activeJob) return;
@@ -122,7 +139,7 @@ export default function DriftMonitoringPage() {
               <IconButton
                 label={t('edit')}
                 icon={<Settings className="h-5 w-5" />}
-                onClick={() => navigate(`/dashboard/drift-monitoring/${modelId}/new`)}
+                onClick={() => navigate(`/dashboard/drift-monitoring/${modelId}/edit`)}
               />
               <IconButton
                 label={t('delete')}
@@ -148,11 +165,11 @@ export default function DriftMonitoringPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SummaryCard 
+            <CardSummary 
               label={t('trigger')}
               value={activeJob.trigger_threshold.toString()} 
             />
-            <SummaryCard 
+            <CardSummary 
               label={t('referencePath')}
               value={activeJob.reference_asset_name || t('none')}
             />
@@ -163,10 +180,8 @@ export default function DriftMonitoringPage() {
           {activeRunId && (
             <TerminalViewer
               key={activeRunId}
-              modelId={modelId}
-              driftRunId={activeRunId}
               title={t('console')}
-              onCompleted={() => { void refetchResults(); }}
+              logs={stream.error ? [...stream.logs, `Error: ${stream.error}`] : stream.logs}
             />
           )}
           <StepTitle title={t('history')} />

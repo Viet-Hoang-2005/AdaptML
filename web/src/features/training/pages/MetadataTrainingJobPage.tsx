@@ -6,6 +6,8 @@ import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
 import { StepTitle } from '@/shared/ui/StepTitle';
 import { Switch } from '@/shared/ui/Switch';
+import { Picker } from '@/shared/ui/Picker';
+import { Select } from '@/shared/ui/Select';
 import { TextArea } from '@/shared/ui/TextArea';
 
 export default function MetadataTrainingJobPage() {
@@ -30,19 +32,18 @@ export default function MetadataTrainingJobPage() {
       />
 
       {flow.mode === 'existing' && (
-        <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
-          {t('createFlow.metadata.selectModel')}
-          <select
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-foreground">{t('createFlow.metadata.selectModel')}</p>
+          <Select
             value={flow.project?.id ?? ''}
-            onChange={(event) => flow.selectProject(event.target.value)}
-            className="h-14 rounded-2xl border border-input bg-surface px-4 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/15"
-          >
-            <option value="">{t('createFlow.metadata.selectPlaceholder')}</option>
-            {flow.projects.map((project) => (
-              <option key={project.id} value={project.id}>{project.name}</option>
-            ))}
-          </select>
-        </label>
+            onChange={(value) => flow.selectProject(value)}
+            placeholder={t('createFlow.metadata.selectPlaceholder')}
+            options={flow.projects.map((project) => ({
+              value: project.id,
+              label: project.name,
+            }))}
+          />
+        </div>
       )}
 
       <Input
@@ -60,13 +61,12 @@ export default function MetadataTrainingJobPage() {
       />
       <div className="space-y-2">
         <p className="text-sm font-medium text-foreground">{t('createFlow.metadata.accessMode')}</p>
-        <Switch
+        <Picker
           value={flow.metadataForm.access_mode}
-          onChange={(value) => flow.setMetadataField('access_mode', value)}
-          ariaLabel={t('createFlow.metadata.accessMode')}
+          onChange={(value) => flow.setMetadataField('access_mode', value as 'public' | 'private')}
           options={[
-            { value: 'private', title: t('createFlow.metadata.private') },
-            { value: 'public', title: t('createFlow.metadata.public') },
+            { value: 'private', title: 'Private API', description: 'Requires JWT or API key.' },
+            { value: 'public', title: 'Public API', description: 'Allows public prediction requests.' },
           ]}
         />
       </div>

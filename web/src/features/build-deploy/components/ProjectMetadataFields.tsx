@@ -1,4 +1,4 @@
-import { AccessModePicker } from '@/features/catalog/components/AccessModePicker';
+import { Picker } from '@/shared/ui/Picker';
 import { useTranslation } from 'react-i18next';
 import type { ModelProject, ProjectMetadataForm } from '@/features/catalog/types';
 import { FileDropzone } from '@/shared/ui/FileDropzone';
@@ -32,7 +32,14 @@ export function ProjectMetadataFields({ form, project, setField }: ProjectMetada
           onChange={(value) => setField('description', value)}
           placeholder={t('uploadFlow.metadata.descriptionPlaceholder')}
         />
-        <AccessModePicker value={form.access_mode} onChange={(value) => setField('access_mode', value)} />
+        <Picker
+          value={form.access_mode}
+          onChange={(value) => setField('access_mode', value as ProjectMetadataForm['access_mode'])}
+          options={[
+            { value: 'private', title: 'Private API', description: 'Requires JWT or API key.' },
+            { value: 'public', title: 'Public API', description: 'Allows public prediction requests.' },
+          ]}
+        />
       </section>
 
       <hr className="border-border" />

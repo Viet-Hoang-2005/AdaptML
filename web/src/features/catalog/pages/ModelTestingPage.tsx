@@ -10,7 +10,7 @@ import { getApiErrorMessage } from '@/shared/api/errors';
 import { toast } from '@/shared/ui/toastStore';
 import { FileDropzone } from '@/shared/ui/FileDropzone';
 import { CSVEditor } from '@/shared/ui/CSVEditor';
-import { SummaryCard } from '@/shared/ui/SummaryCard';
+import { CardSummary } from '@/shared/ui/Card';
 import { PageContent } from '@/shared/ui/PageContent';
 
 const TARGET_COLUMN_NAMES = new Set([
@@ -107,8 +107,6 @@ const extractPredictionError = (error: unknown) => {
     detail: [message, received, hint].filter(Boolean).join('\n'),
   };
 };
-
-
 
 export default function ModelTestingPage() {
   const { selectedModel } = useModelSelection();
@@ -430,28 +428,28 @@ export default function ModelTestingPage() {
               </div>
               
               <div className="grid gap-3 md:grid-cols-4">
-                <SummaryCard 
+                <CardSummary 
                   label="Processed" 
                   value={`${summary.success + summary.failed}/${rows.length}`} 
                   helper="rows completed" 
                   tone={testFinished && rows.length > 0 ? 'info' : 'default'}
                   icon={<SendHorizontal className="h-4 w-4" />}
                 />
-                <SummaryCard 
+                <CardSummary 
                   label="Failed" 
                   value={String(summary.failed)} 
                   tone={summary.failed ? 'error' : 'default'} 
                   helper="backend/API errors" 
                   icon={<X className="h-4 w-4" />}
                 />
-                <SummaryCard 
+                <CardSummary 
                   label="Successful" 
                   value={String(summary.success)} 
                   tone={summary.success > 0 ? 'success' : 'default'} 
                   helper="backend/API successes" 
                   icon={<Check className="h-4 w-4" />}
                 />
-                <SummaryCard
+                <CardSummary
                   label="Accuracy"
                   value={accuracy === null ? '-' : `${accuracy}%`}
                   tone={accuracy === null ? 'default' : summary.mismatch > 0 ? 'warning' : 'success'}
@@ -464,7 +462,7 @@ export default function ModelTestingPage() {
                 <TerminalViewer 
                   title="Testing Console" 
                   placeholder='Click "Run" to start processing the CSV file...' 
-                  logsOverride={stringLogs} 
+                  logs={stringLogs}
                 />
               </div>
             </div>

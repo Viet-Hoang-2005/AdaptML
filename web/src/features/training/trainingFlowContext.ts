@@ -21,6 +21,7 @@ export interface TrainingSourceForm {
   model_flavor: ModelFlavor;
   entry_point: string;
   requirements_text: string;
+  requirements_file?: File | null;
 }
 
 export interface TrainingExecutionForm {

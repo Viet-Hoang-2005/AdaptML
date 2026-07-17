@@ -1,11 +1,15 @@
 import { ArrowLeft, Check, Rocket } from 'lucide-react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { BuildSummaryItem } from '@/features/build-deploy/components/BuildSummaryItem';
 import { useUploadModel } from '@/features/build-deploy/uploadModelContext';
+import { useRuntimeLogStream } from '@/shared/hooks/useRuntimeLogStream';
 import { Button } from '@/shared/ui/Button';
 import { TerminalViewer } from '@/shared/ui/TerminalViewer';
+
+const DEPLOYMENT_TERMINAL_STATUSES = ['healthy', 'unhealthy', 'failed', 'stopped'] as const;
 
 export default function DeployModelPage() {
   const { t } = useTranslation('buildDeploy');
@@ -19,6 +23,21 @@ export default function DeployModelPage() {
     goToStep,
     handleDeploymentCompleted,
   } = useUploadModel();
+  const stream = useRuntimeLogStream({
+    source: deployment?.id ? { kind: 'deployment', id: deployment.id } : null,
+    enabled: Boolean(deployment),
+    terminalStatuses: DEPLOYMENT_TERMINAL_STATUSES,
+  });
+
+  useEffect(() => {
+    if (
+      stream.status
+      && DEPLOYMENT_TERMINAL_STATUSES.includes(stream.status as typeof DEPLOYMENT_TERMINAL_STATUSES[number])
+    ) {
+      handleDeploymentCompleted(stream.status);
+    }
+  }, [handleDeploymentCompleted, stream.status]);
+
   if (!project || !build) return null;
 
   const running = Boolean(deployment && ['pending', 'deploying'].includes(deployment.status));
@@ -38,11 +57,9 @@ export default function DeployModelPage() {
       <div className="mt-8">
         <TerminalViewer
           key={deployment?.id ?? 'new-deployment'}
-          modelId={project.id}
-          deploymentId={deployment?.id}
           title={t('uploadFlow.deploy.console')}
+          logs={stream.error ? [...stream.logs, `Error: ${stream.error}`] : stream.logs}
           placeholder={t('uploadFlow.deploy.consolePlaceholder')}
-          onCompleted={handleDeploymentCompleted}
         />
       </div>
 

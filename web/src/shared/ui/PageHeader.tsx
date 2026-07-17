@@ -15,7 +15,7 @@ export interface PageHeaderProps {
 
 export function PageHeader({ title, backLink, tabs, children }: PageHeaderProps) {
   return (
-    <header className={`flex flex-col gap-4 border-b border-border md:flex-row md:items-end md:justify-between ${!tabs ? 'pb-2' : ''}`}>
+    <header className={`flex min-h-10 flex-col gap-4 border-b border-border md:flex-row md:items-end md:justify-between ${!tabs ? 'pb-2' : ''}`}>
       <div className={tabs ? "mb-2" : ""}>
         {backLink && (
           <Link to={backLink.to} className="inline-flex min-h-9 items-center gap-2 rounded-lg text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">

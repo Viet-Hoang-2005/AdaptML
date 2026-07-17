@@ -51,6 +51,7 @@ import type {
 } from '@/features/training/types';
 
 import { ConfirmModal } from '@/shared/ui/ConfirmModal';
+import { useRuntimeLogStream } from '@/shared/hooks/useRuntimeLogStream';
 import { TerminalViewer } from '@/shared/ui/TerminalViewer';
 import {
   LiveStatusBadge,
@@ -69,6 +70,41 @@ const formatMegabytes = (mb: number) => {
 
 const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
 const AUTO_SYNC_INTERVAL_MS = 3000;
+const BUILD_TERMINAL_STATUSES = ['ready', 'failed', 'cancelled'] as const;
+
+function RegistrationBuildTerminal({
+  buildId,
+  title,
+  onCompleted,
+}: {
+  buildId: string;
+  title: string;
+  onCompleted: () => void;
+}) {
+  const handledStatus = useRef<string | null>(null);
+  const stream = useRuntimeLogStream({
+    source: { kind: 'build', id: buildId },
+    terminalStatuses: BUILD_TERMINAL_STATUSES,
+  });
+
+  useEffect(() => {
+    if (
+      stream.status
+      && BUILD_TERMINAL_STATUSES.includes(stream.status as typeof BUILD_TERMINAL_STATUSES[number])
+      && handledStatus.current !== stream.status
+    ) {
+      handledStatus.current = stream.status;
+      onCompleted();
+    }
+  }, [onCompleted, stream.status]);
+
+  return (
+    <TerminalViewer
+      title={title}
+      logs={stream.error ? [...stream.logs, `Error: ${stream.error}`] : stream.logs}
+    />
+  );
+}
 
 export default function TrainingJobDetailPage() {
   const { t } = useTranslation('training');
@@ -739,7 +775,7 @@ export default function TrainingJobDetailPage() {
               </div>
               {job.registration_build && (
                 <div className="mt-5">
-                  <TerminalViewer
+                  <RegistrationBuildTerminal
                     buildId={job.registration_build.id}
                     title={t('detail.registry.console')}
                     onCompleted={() => void refetchJob()}

@@ -29,7 +29,7 @@ export function DriftSummaryCard({ driftSummary, modelProjectId }: DriftSummaryC
   const presentation = statusPresentation(status);
 
   return (
-    <section className="rounded-xl border border-border bg-surface p-5 shadow-[var(--shadow-card)]" aria-labelledby="drift-summary-title">
+    <section className="rounded-xl border border-border bg-surface p-5 shadow-(--shadow-card)" aria-labelledby="drift-summary-title">
       <header className="flex items-center justify-between gap-3 border-b border-border pb-3">
         <h3 id="drift-summary-title" className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
           <Activity className="h-4 w-4 text-brand-accent" />Drift summary

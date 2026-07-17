@@ -6,7 +6,8 @@ import { SourceEditor, type SourceEditorHandle } from '@/features/catalog/compon
 import { useCreateTrainingJob } from '@/features/training/trainingFlowContext';
 import type { ModelFlavor } from '@/features/catalog/types';
 import { Button } from '@/shared/ui/Button';
-import { Input } from '@/shared/ui/Input';
+import { FileDropzone } from '@/shared/ui/FileDropzone';
+import { Picker } from '@/shared/ui/Picker';
 import { StepTitle } from '@/shared/ui/StepTitle';
 import { TextArea } from '@/shared/ui/TextArea';
 
@@ -22,25 +23,17 @@ export default function SourceTrainingJobPage() {
   return (
     <div className="space-y-8 rounded-lg border border-border bg-surface p-6">
       <StepTitle title={t('createFlow.source.title')} subtitle={t('createFlow.source.description')} />
-      <div className="grid gap-5 md:grid-cols-2">
-        <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
-          {t('createFlow.source.flavor')}
-          <select
-            value={flow.sourceForm.model_flavor}
-            onChange={(event) => flow.setSourceField('model_flavor', event.target.value as ModelFlavor)}
-            className="h-14 rounded-2xl border border-input bg-surface px-4 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/15"
-          >
-            <option value="sklearn">Scikit-learn</option>
-            <option value="xgboost">XGBoost</option>
-            <option value="pytorch">PyTorch</option>
-            <option value="tensorflow">TensorFlow</option>
-          </select>
-        </label>
-        <Input
-          label={t('createFlow.source.entryPoint')}
-          value={flow.sourceForm.entry_point}
-          placeholder="train.py"
-          onChange={(event) => flow.setSourceField('entry_point', event.target.value)}
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-foreground">{t('createFlow.source.flavor')}</p>
+        <Picker
+          value={flow.sourceForm.model_flavor}
+          onChange={(value) => flow.setSourceField('model_flavor', value as ModelFlavor)}
+          options={[
+            { value: 'sklearn', title: 'Scikit-learn', description: 'Pickle or joblib estimators.' },
+            { value: 'xgboost', title: 'XGBoost', description: 'Booster or XGBModel artifacts.' },
+            { value: 'pytorch', title: 'PyTorch', description: 'PyTorch or MLflow artifacts.' },
+            { value: 'tensorflow', title: 'TensorFlow', description: 'Keras, SavedModel, or MLflow artifacts.' },
+          ]}
         />
       </div>
 
@@ -66,14 +59,24 @@ export default function SourceTrainingJobPage() {
         editorType="csv"
         onDirtyChange={(dirty) => flow.setEditorDirty('data', dirty)}
       />
-      <TextArea
-        label={t('createFlow.source.requirements')}
-        helperText={t('createFlow.source.requirementsHelper')}
-        minHeight="min-h-40"
-        value={flow.sourceForm.requirements_text}
-        placeholder="pandas==2.2.3"
-        onChange={(value) => flow.setSourceField('requirements_text', value)}
-      />
+      <div className="space-y-4">
+        <p className="text-sm font-medium text-foreground">{t('createFlow.source.requirements')}</p>
+        <FileDropzone
+          accept=".txt,text/plain"
+          title={flow.sourceForm.requirements_file?.name || t('createFlow.source.requirementsFile', { defaultValue: 'Upload requirements.txt' })}
+          subtitle={t('createFlow.source.optional', { defaultValue: 'Optional' })}
+          onChange={(file) => {
+            flow.setSourceField('requirements_file', file);
+            if (file) void file.text().then((content) => flow.setSourceField('requirements_text', content));
+          }}
+        />
+        <TextArea
+          minHeight="min-h-40"
+          value={flow.sourceForm.requirements_text}
+          placeholder="pandas==2.2.3"
+          onChange={(value) => flow.setSourceField('requirements_text', value)}
+        />
+      </div>
 
       <div className="grid gap-3 border-t border-border pt-5 sm:grid-cols-2">
         <Button variant="secondary" icon={<ArrowLeft className="h-4 w-4" />} onClick={() => void flow.goToStep(1)}>

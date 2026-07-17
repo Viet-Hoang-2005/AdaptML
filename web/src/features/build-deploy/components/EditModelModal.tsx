@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
 import { TextArea } from '@/shared/ui/TextArea';
-import { AccessModePicker } from '@/features/catalog/components/AccessModePicker';
+import { Picker } from '@/shared/ui/Picker';
 import type { ModelProject, ModelProjectFormValues } from '@/features/catalog/types';
 import { useModelProjectMutations } from '@/features/catalog/hooks/useModelProjects';
 
@@ -96,9 +96,13 @@ export default function EditModelModal({
               />
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">Access Mode</label>
-                <AccessModePicker
+                <Picker
                   value={form.access_mode}
-                  onChange={(v) => setField('access_mode', v)}
+                  onChange={(v) => setField('access_mode', v as ModelProjectFormValues['access_mode'])}
+                  options={[
+                    { value: 'private', title: 'Private API', description: 'Requires JWT or API key.' },
+                    { value: 'public', title: 'Public API', description: 'Allows public prediction requests.' },
+                  ]}
                 />
               </div>
             </div>
