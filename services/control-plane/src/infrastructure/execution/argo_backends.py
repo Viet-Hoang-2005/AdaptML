@@ -128,13 +128,25 @@ class ArgoTrainingBackend(_ArgoBackend):
 
     def cancel(self, job):
         if settings.ARGO_CANCEL_TRAINING_WEBHOOK_URL:
-            return self.client.trigger(
+            cancellation_capability = issue_capability(
+                job,
+                "cancel_reporter",
+                ttl_seconds=min(600, settings.TRAINING_CAPABILITY_MAX_TTL_SECONDS),
+            )
+            response = self.client.trigger(
                 settings.ARGO_CANCEL_TRAINING_WEBHOOK_URL,
                 {
+                    "job_id": str(job.public_id),
                     "job_name": job.external_job_id or f"training-{str(job.public_id).lower()}",
                     "namespace": "user-jobs",
+                    "control_plane_callback_url": (
+                        f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/webhooks/"
+                        f"training-jobs/{job.public_id}/cancellation/"
+                    ),
+                    "cancel_reporter_capability": cancellation_capability,
                 },
             )
+            return {"dispatched": True, "response": response}
         return None
 
 

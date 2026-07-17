@@ -1,282 +1,248 @@
-import { useNavigate } from 'react-router-dom';
-import { Archive, FileCode2, RefreshCw, Rocket } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Eye, Rocket, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/shared/ui/Button';
-import { PageHeader } from '@/shared/ui/PageHeader';
+import { useNavigate } from 'react-router-dom';
+
+import { deleteTrainingJob, getTrainingUsage, listTrainingJobs } from '@/features/training/api/trainingApi';
 import {
-  cancelTrainingJob,
-  getTrainingJobDownloadUrl,
-  getTrainingUsage,
-  listTrainingJobs,
-  refreshTrainingJobStatus,
-  retryTrainingJob,
-} from '@/features/training/api/trainingApi';
-import { getApiErrorMessage } from '@/shared/api/errors';
-import { trainingQueryKeys } from '@/features/training/queryKeys';
-import { toast } from '@/shared/ui/toastStore';
-import { formatDuration } from '@/shared/lib/formatDuration';
-import type { TrainingJob, TrainingJobStatus } from '@/features/training/types';
-import {
-  SegmentedJobFilter,
-  TrainingJobRow,
-  TrainingJobsSkeleton,
-  type JobVisibilityFilter,
+  TrainingJobStatusFilter,
+  type TrainingStatusFilter,
 } from '@/features/training/components/TrainingJobListSections';
+import { trainingQueryKeys } from '@/features/training/queryKeys';
+import type { TrainingJob, TrainingJobStatus } from '@/features/training/types';
+import { getApiErrorMessage } from '@/shared/api/errors';
+import { formatDuration } from '@/shared/lib/formatDuration';
+import { Badge } from '@/shared/ui/Badge';
+import { IconButton } from '@/shared/ui/IconButton';
+import { Button } from '@/shared/ui/Button';
+import { ConfirmModal } from '@/shared/ui/ConfirmModal';
+import { DataTable } from '@/shared/ui/DataTable';
+import { PageHeader } from '@/shared/ui/PageHeader';
+import { toast } from '@/shared/ui/toastStore';
 
-const statusLabels: Record<TrainingJobStatus, string> = {
-  pending: 'Pending',
-  queued: 'Queued',
-  uploading: 'Uploading',
-  running: 'Running',
-  completed: 'Completed',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-};
-
-const jobLabel = (job: Pick<TrainingJob, 'name' | 'model_version'>) => `${job.name} ${job.model_version}`.trim();
-
-const AUTO_SYNC_INTERVAL_MS = 4000;
-const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
+const ACTIVE_STATUSES: TrainingJobStatus[] = [
+  'pending',
+  'queued',
+  'uploading',
+  'running',
+  'cancelling',
+];
 
 const elapsedForJob = (job: TrainingJob) => {
   if (job.runtime_seconds) return job.runtime_seconds;
-  if (job.status === 'running' && job.started_at) {
+  if (job.started_at && ACTIVE_STATUSES.includes(job.status)) {
     return Math.max(Math.floor((Date.now() - new Date(job.started_at).getTime()) / 1000), 0);
   }
   return 0;
 };
 
-const isActiveJob = (job: TrainingJob) => ACTIVE_STATUSES.includes(job.status);
-
-const transitionToast = (previousJob: TrainingJob, updatedJob: TrainingJob) => {
-  if (previousJob.status === updatedJob.status) return;
-  const wasStarting = ['pending', 'uploading'].includes(previousJob.status);
-  if (wasStarting && updatedJob.status === 'running') {
-    toast.success(`${jobLabel(updatedJob)} started.`);
-    return;
-  }
-  if (previousJob.status === 'running' && updatedJob.status === 'completed') {
-    toast.success(`${jobLabel(updatedJob)} completed in ${formatDuration(elapsedForJob(updatedJob))}.`);
-    return;
-  }
-  if (previousJob.status === 'running' && updatedJob.status === 'failed') {
-    const reason = updatedJob.stop_reason || updatedJob.error_message || 'Check the training log for details.';
-    toast.error(`${jobLabel(updatedJob)} failed: ${reason}`);
-  }
-};
-
-type JobSortMode = 'newest' | 'oldest' | 'status' | 'name';
-
-const statusRank: Record<TrainingJobStatus, number> = {
-  running: 0,
-  uploading: 1,
-  queued: 2,
-  pending: 3,
-  failed: 4,
-  cancelled: 5,
-  completed: 6,
-};
-
-const sortTrainingJobs = (jobs: TrainingJob[], sortMode: JobSortMode) => {
-  const nextJobs = [...jobs];
-  if (sortMode === 'oldest') {
-    return nextJobs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }
-  if (sortMode === 'status') {
-    return nextJobs.sort((a, b) => statusRank[a.status] - statusRank[b.status] || b.id.localeCompare(a.id));
-  }
-  if (sortMode === 'name') {
-    return nextJobs.sort((a, b) => `${a.name} ${a.model_version}`.localeCompare(`${b.name} ${b.model_version}`));
-  }
-  return nextJobs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-};
-
-const upsertTrainingJob = (jobs: TrainingJob[], job: TrainingJob) => {
-  const existingIndex = jobs.findIndex((item) => item.id === job.id);
-  if (existingIndex === -1) {
-    return [job, ...jobs];
-  }
-
-  const nextJobs = [...jobs];
-  nextJobs[existingIndex] = job;
-  return nextJobs;
+const displayStatus = (job: TrainingJob) => {
+  if (job.deletion_pending) return 'deleting';
+  if (job.status === 'completed') return 'success';
+  if (job.status === 'failed' || job.status === 'cancelled') return 'failed';
+  return 'pending';
 };
 
 export default function TrainModelPage() {
   const { t } = useTranslation('training');
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<TrainingStatusFilter>('all');
+  const [jobToDelete, setJobToDelete] = useState<TrainingJob | null>(null);
+  const pendingDeletionIds = useRef<Set<string>>(new Set());
 
-  const [refreshingJobId, setRefreshingJobId] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'retry'; job: TrainingJob } | null>(null);
-  const [visibilityFilter, setVisibilityFilter] = useState<JobVisibilityFilter>('active');
-  const [sortMode, setSortMode] = useState<JobSortMode>('newest');
-  const statusNotificationRef = useRef<Record<string, TrainingJobStatus>>({});
   const {
     data,
     error: jobsError,
     isError,
-    isFetching,
     isLoading,
-    refetch,
   } = useQuery({
     queryKey: trainingQueryKeys.jobs(),
-    queryFn: () => listTrainingJobs(true),
+    queryFn: () => listTrainingJobs(),
+    refetchInterval: (query) => {
+      const jobs = query.state.data?.training_jobs ?? [];
+      return jobs.some(
+        (job) =>
+          (job.deletion_pending && !job.deletion_error) || ACTIVE_STATUSES.includes(job.status),
+      )
+        ? 4000
+        : false;
+    },
   });
   const { data: usage, isLoading: isUsageLoading } = useQuery({
     queryKey: trainingQueryKeys.usage(),
     queryFn: getTrainingUsage,
     refetchInterval: 15000,
   });
+
   const allTrainingJobs = useMemo(() => data?.training_jobs ?? [], [data?.training_jobs]);
-  const activeTrainingJobs = useMemo(
-    () => allTrainingJobs.filter((job) => !job.is_deleted && Boolean(job.id) && isActiveJob(job)),
-    [allTrainingJobs],
+  const trainingJobs = useMemo(
+    () =>
+      allTrainingJobs.filter((job) => {
+        const status = displayStatus(job);
+        return statusFilter === 'all' || (status === 'deleting' ? 'pending' : status) === statusFilter;
+      }),
+    [allTrainingJobs, statusFilter],
   );
   const activeUsageCount = usage?.active_jobs_count ?? usage?.running_jobs_count ?? 0;
-  const filteredTrainingJobs = allTrainingJobs.filter((job) => {
-    if (visibilityFilter === 'archived') return job.is_deleted;
-    if (visibilityFilter === 'active') return !job.is_deleted;
-    return true;
-  });
-  const trainingJobs = sortTrainingJobs(filteredTrainingJobs, sortMode);
-
-  const invalidateJobs = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: trainingQueryKeys.jobs() }),
-    [queryClient],
-  );
-  const invalidateUsage = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: trainingQueryKeys.usage() }),
-    [queryClient],
-  );
 
   useEffect(() => {
-    const syncableJobs = activeTrainingJobs;
+    if (!pendingDeletionIds.current.size) return;
+    const visibleIds = new Set(allTrainingJobs.map((job) => job.id));
+    const deletedIds = [...pendingDeletionIds.current].filter((id) => !visibleIds.has(id));
+    if (!deletedIds.length) return;
+    deletedIds.forEach((id) => pendingDeletionIds.current.delete(id));
+    toast.success(t('delete.completed'));
+  }, [allTrainingJobs, t]);
 
-    if (syncableJobs.length === 0) {
-      return undefined;
-    }
+  useEffect(() => {
+    const failedDeletion = allTrainingJobs.find(
+      (job) => pendingDeletionIds.current.has(job.id) && Boolean(job.deletion_error),
+    );
+    if (!failedDeletion) return;
+    pendingDeletionIds.current.delete(failedDeletion.id);
+    toast.error(failedDeletion.deletion_error);
+  }, [allTrainingJobs]);
 
-    let cancelled = false;
-
-    const intervalId = window.setInterval(async () => {
-      for (const job of syncableJobs) {
-        if (cancelled) break;
-        try {
-          const res = await refreshTrainingJobStatus(job.id);
-          const updated = Array.isArray(res) ? res[0] : res;
-          queryClient.setQueryData(trainingQueryKeys.jobs(), (oldData: { training_jobs: TrainingJob[] } | undefined) => {
-            if (!oldData?.training_jobs) return oldData;
-            return {
-              ...oldData,
-              training_jobs: upsertTrainingJob(oldData.training_jobs, updated),
-            };
-          });
-
-          if (statusNotificationRef.current[job.id] && statusNotificationRef.current[job.id] !== updated.status) {
-            transitionToast({ ...job, status: statusNotificationRef.current[job.id] }, updated);
-          }
-          statusNotificationRef.current[job.id] = updated.status;
-        } catch {
-          // ignore
-        }
-      }
-    }, AUTO_SYNC_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [activeTrainingJobs, queryClient]);
-
-    const handleRefreshJob = async (job: TrainingJob) => {
-    setRefreshingJobId(job.id);
-    try {
-      await refreshMutation.mutateAsync(job);
-    } finally {
-      setRefreshingJobId(null);
-    }
-  };
-
-  const refreshMutation = useMutation({
-    mutationFn: (job: TrainingJob) => refreshTrainingJobStatus(job.id),
-    onMutate: (job) => {
-      toast.warning(`Refreshing status for ${jobLabel(job)}...`);
+  const deleteMutation = useMutation({
+    mutationFn: (job: TrainingJob) => deleteTrainingJob(job.id),
+    onSuccess: (request, job) => {
+      pendingDeletionIds.current.add(job.id);
+      queryClient.setQueryData(
+        trainingQueryKeys.jobs(),
+        (current: { training_jobs: TrainingJob[] } | undefined) => ({
+          training_jobs: (current?.training_jobs ?? []).map((item) =>
+            item.id === job.id
+              ? {
+                  ...item,
+                  status: request.status,
+                  deletion_pending: true,
+                  deletion_requested_at: request.deletion_requested_at,
+                  deletion_error: request.deletion_error,
+                }
+              : item,
+          ),
+        }),
+      );
+      setJobToDelete(null);
+      toast.warning(t('delete.requested'));
     },
-    onSuccess: async (updatedJob, previousJob) => {
-      queryClient.setQueryData(trainingQueryKeys.jobs(), (current: { training_jobs: TrainingJob[] } | undefined) => ({
-        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
-      }));
-      void invalidateJobs();
-      void invalidateUsage();
-      if (updatedJob.status === previousJob.status) {
-        toast.success(`${jobLabel(updatedJob)} status unchanged: ${statusLabels[updatedJob.status]}.`);
-      } else if (updatedJob.status === 'failed') {
-        const reason = updatedJob.stop_reason || updatedJob.error_message || 'Check the training log for details.';
-        toast.error(`${jobLabel(updatedJob)} failed: ${reason}`);
-      } else {
-        toast.success(
-          `${jobLabel(updatedJob)} status changed: ${statusLabels[previousJob.status]} -> ${statusLabels[updatedJob.status]}.`,
-        );
-      }
-    },
-    onError: (error, job) => {
-      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to refresh training status. Check backend logs.')}`);
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, t('delete.failed')));
     },
   });
 
-  const downloadMutation = useMutation({
-    mutationFn: (job: TrainingJob) => getTrainingJobDownloadUrl(job.id),
-    onSuccess: ({ download_url }, job) => {
-      window.open(download_url, '_blank', 'noopener,noreferrer');
-      toast.success(`Download link opened for ${jobLabel(job)}.`);
-    },
-    onError: (error, job) => {
-      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Model artifact is not ready yet. Refresh status first.')}`);
-    },
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: (job: TrainingJob) => cancelTrainingJob(job.id),
-    onSuccess: (updatedJob) => {
-      queryClient.setQueryData(trainingQueryKeys.jobs(), (current: { training_jobs: TrainingJob[] } | undefined) => ({
-        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], updatedJob),
-      }));
-      void invalidateJobs();
-      void invalidateUsage();
-      setConfirmAction(null);
-      toast.success('Training job cancelled.');
-    },
-    onError: (error, job) => {
-      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to cancel training job.')}`);
-    },
-  });
-
-  const retryMutation = useMutation({
-    mutationFn: (job: TrainingJob) => retryTrainingJob(job.id),
-    onSuccess: (newJob) => {
-      queryClient.setQueryData(trainingQueryKeys.jobs(), (current: { training_jobs: TrainingJob[] } | undefined) => ({
-        training_jobs: upsertTrainingJob(current?.training_jobs ?? [], newJob),
-      }));
-      void invalidateJobs();
-      void invalidateUsage();
-      setConfirmAction(null);
-      toast.success(`Retry job created for ${jobLabel(newJob)}.`);
-      navigate(`/dashboard/model-training/jobs/${newJob.id}`);
-    },
-    onError: (error, job) => {
-      toast.error(`${jobLabel(job)}: ${getApiErrorMessage(error, 'Unable to retry training job.')}`);
-    },
-  });
+  const columns = useMemo<ColumnDef<TrainingJob>[]>(
+    () => [
+      {
+        accessorKey: 'started_at',
+        header: t('table.trainingAt'),
+        cell: ({ row }) =>
+          row.original.started_at ? new Date(row.original.started_at).toLocaleString() : '—',
+      },
+      {
+        accessorKey: 'model_flavor',
+        header: t('table.flavor'),
+        cell: ({ row }) => (
+          <Badge variant="neutral">
+            {t(`table.flavors.${row.original.model_flavor}`)}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: 'model_status',
+        header: t('table.modelStatus'),
+        cell: ({ row }) => {
+          const modelStatus = row.original.model_status ?? 'none';
+          const variant =
+            modelStatus === 'deployed'
+              ? 'success'
+              : modelStatus === 'built'
+                ? 'primary'
+                : modelStatus === 'trained'
+                  ? 'warning'
+                  : 'neutral';
+          return <Badge variant={variant}>{t(`table.modelStatuses.${modelStatus}`)}</Badge>;
+        },
+      },
+      {
+        id: 'accelerators',
+        header: t('table.accelerators'),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const job = row.original;
+          const memoryGb = (job.memory_mb / 1024).toFixed(
+            job.memory_mb % 1024 === 0 ? 0 : 1,
+          );
+          const gpu =
+            job.accelerator_type === 'gpu' && job.accelerator_count > 0
+              ? ` · GPU ×${job.accelerator_count}`
+              : '';
+          return `${job.vcpu} vCPU · ${memoryGb} GB${gpu}`;
+        },
+      },
+      {
+        id: 'runtime',
+        header: t('table.runtime'),
+        accessorFn: elapsedForJob,
+        cell: ({ row }) => formatDuration(elapsedForJob(row.original)),
+      },
+      {
+        id: 'status',
+        header: t('table.status'),
+        accessorFn: displayStatus,
+        cell: ({ row }) => {
+          const status = displayStatus(row.original);
+          const variant =
+            status === 'success'
+              ? 'success'
+              : status === 'failed'
+                ? 'danger'
+                : status === 'deleting'
+                  ? 'warning'
+                  : 'neutral';
+          return <Badge variant={variant}>{t(`table.statuses.${status}`)}</Badge>;
+        },
+      },
+      {
+        id: 'actions',
+        header: t('table.actions'),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const job = row.original;
+          const deleting =
+            (job.deletion_pending && !job.deletion_error) ||
+            pendingDeletionIds.current.has(job.id);
+          return (
+            <div className="flex items-center gap-2">
+              <IconButton
+                label={t('training:table.view')}
+                icon={<Eye className="h-4 w-4" />}
+                disabled={deleting}
+                onClick={() => navigate(`/dashboard/model-training/jobs/${job.id}`)}
+              />
+              <IconButton
+                label={t('training:table.delete')}
+                icon={<Trash2 className="h-4 w-4 text-red-500" />}
+                disabled={deleting}
+                onClick={() => setJobToDelete(job)}
+              />
+            </div>
+          );
+        },
+      },
+    ],
+    [navigate, t],
+  );
 
   return (
     <section className="flex w-full flex-1 flex-col space-y-6">
       <PageHeader title={t('title')} />
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="md:col-span-2 rounded-xl border border-border bg-surface p-5 shadow-sm">
+        <div className="rounded-xl border border-border bg-surface p-5 shadow-sm md:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('quota')}</p>
@@ -291,172 +257,71 @@ export default function TrainModelPage() {
             </div>
             <div className="text-right">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('remaining')}</p>
-              <p className={`mt-1 text-lg font-bold ${
-                usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.1) 
-                  ? 'text-danger'
-                  : usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.3) 
-                    ? 'text-warning'
-                    : 'text-success'
-              }`}>
+              <p className="mt-1 text-lg font-bold text-success">
                 {isUsageLoading ? '...' : formatDuration(usage?.remaining_seconds)}
               </p>
             </div>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className={`h-full transition-all duration-500 ease-out ${
-                usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.1) 
-                  ? 'bg-red-500' 
-                  : usage && usage.remaining_seconds < (usage.monthly_quota_seconds * 0.3) 
-                    ? 'bg-amber-500' 
-                    : 'bg-emerald-500'
-              }`}
-              style={{ width: `${Math.min(100, ((usage?.monthly_runtime_seconds || 0) / (usage?.monthly_quota_seconds || 1)) * 100)}%` }}
+              className="h-full bg-success transition-all duration-500 ease-out"
+              style={{
+                width: `${Math.min(
+                  100,
+                  ((usage?.monthly_runtime_seconds || 0) / (usage?.monthly_quota_seconds || 1)) *
+                    100,
+                )}%`,
+              }}
             />
           </div>
         </div>
 
-        <div className={`flex flex-col justify-center rounded-xl border p-5 shadow-sm transition-colors ${
-          activeUsageCount > 0
-            ? 'border-primary/20 bg-primary-subtle'
-            : 'border-border bg-surface'
-        }`}>
+        <div className="flex flex-col justify-center rounded-xl border border-border bg-surface p-5 shadow-sm">
           <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <Rocket className="h-4 w-4" />
             {t('activeJobs')}
           </p>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className={`text-3xl font-bold ${
-              activeUsageCount > 0 ? 'text-primary' : 'text-foreground'
-            }`}>
-              {activeUsageCount}
-            </span>
-            {activeUsageCount > 0 && (
-              <span className="relative flex h-3 w-3">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex h-3 w-3 rounded-full bg-blue-500"></span>
-              </span>
-            )}
-          </div>
+          <span className="mt-3 text-3xl font-bold text-foreground">{activeUsageCount}</span>
         </div>
       </div>
 
-      
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <TrainingJobStatusFilter value={statusFilter} onChange={setStatusFilter} />
+        <Button
+          size="md"
+          icon={<Rocket className="h-4 w-4" />}
+          onClick={() => navigate('/dashboard/model-training/create/metadata')}
+        >
+          {t('newJob')}
+        </Button>
+      </div>
 
-      {isLoading ? (
-        <TrainingJobsSkeleton />
-      ) : isError ? (
+      {isError ? (
         <div className="rounded-lg border border-danger/20 bg-danger-subtle p-5">
-          <h2 className="text-base font-bold text-danger">{t('loadFailed')}</h2>
-          <p className="mt-1 text-sm text-danger">{getApiErrorMessage(jobsError, t('checkApi'))}</p>
-          <Button className="mt-4" variant="secondary" size="sm" icon={<RefreshCw className="h-4 w-4" />} onClick={() => refetch()}>
-            {t('retry')}
-          </Button>
-        </div>
-      ) : allTrainingJobs.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-surface p-10 text-center">
-          <FileCode2 className="mx-auto h-8 w-8 text-muted-foreground" />
-          <h2 className="mt-3 text-base font-bold text-foreground">{t('noJobs')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('noJobsDescription')}</p>
-          <Button className="mt-4" icon={<Rocket className="h-4 w-4" />} onClick={() => navigate('/dashboard/model-training/create/metadata')}>
-            {t('firstJob')}
-          </Button>
+          <p className="text-sm text-danger">{getApiErrorMessage(jobsError, t('checkApi'))}</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/50 p-4 sm:flex-row sm:items-center sm:justify-between shadow-sm">
-            <div>
-              <h2 className="text-sm font-bold text-foreground">{t('history')}</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t('historyCount', { shown: trainingJobs.length, total: allTrainingJobs.length })}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <SegmentedJobFilter value={visibilityFilter} onChange={setVisibilityFilter} />
-              <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                {t('sort')}
-                <select
-                  className="h-8 rounded-lg border border-border bg-surface px-2 text-xs font-semibold text-foreground"
-                  value={sortMode}
-                  onChange={(event) => setSortMode(event.target.value as JobSortMode)}
-                >
-                  <option value="newest">{t('newest')}</option>
-                  <option value="oldest">{t('oldest')}</option>
-                  <option value="status">{t('status')}</option>
-                  <option value="name">{t('name')}</option>
-                </select>
-              </label>
-              <div className="ml-2 h-4 w-px bg-border hidden sm:block" />
-              <Button
-                icon={<Rocket className="h-4 w-4" />}
-                onClick={() => navigate('/dashboard/model-training/create/metadata')}
-                size="sm"
-              >
-                {t('newJob')}
-              </Button>
-            </div>
-            {isFetching && <span className="text-xs font-semibold text-muted-foreground">{t('refreshing')}</span>}
-          </div>
-          {trainingJobs.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center">
-              <Archive className="mx-auto h-7 w-7 text-muted-foreground" />
-              <h2 className="mt-3 text-sm font-bold text-foreground">{t('noView')}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{t('noViewDescription')}</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {trainingJobs.map((job) => (
-                <TrainingJobRow
-                  key={job.id}
-                  job={job}
-                  refreshing={refreshingJobId === job.id}
-                  downloading={downloadMutation.isPending}
-                  cancelling={cancelMutation.isPending}
-                  retrying={retryMutation.isPending}
-                  onRefresh={() => handleRefreshJob(job)}
-                  onDownload={() => downloadMutation.mutate(job)}
-                  onCancel={() => setConfirmAction({ type: 'cancel', job })}
-                  onRetry={() => setConfirmAction({ type: 'retry', job })}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        <DataTable
+          data={trainingJobs}
+          columns={columns}
+          getRowId={(job) => job.id}
+          loading={isLoading}
+          emptyMessage={t('table.empty')}
+        />
       )}
-      {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-surface p-5 shadow-xl">
-            <h3 className="text-base font-bold text-foreground">
-              {confirmAction.type === 'cancel' ? t('cancelTitle') : t('retryTitle')}
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {confirmAction.type === 'cancel'
-                ? t('cancelDescription', { job: jobLabel(confirmAction.job) })
-                : t('retryDescription', { job: jobLabel(confirmAction.job) })}
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setConfirmAction(null)}>
-                {t('close')}
-              </Button>
-              <Button
-                size="sm"
-                variant={confirmAction.type === 'cancel' ? 'danger' : 'primary'}
-                loading={cancelMutation.isPending || retryMutation.isPending}
-                onClick={() => {
-                  if (confirmAction.type === 'cancel') {
-                    cancelMutation.mutate(confirmAction.job);
-                  } else {
-                    retryMutation.mutate(confirmAction.job);
-                  }
-                }}
-              >
-                {confirmAction.type === 'cancel' ? t('cancelJob') : t('retryJob')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+
+      <ConfirmModal
+        open={Boolean(jobToDelete)}
+        title={t('delete.title')}
+        description={t('delete.description', { job: jobToDelete?.name ?? '' })}
+        confirmText={t('delete.confirm')}
+        tone="danger"
+        loading={deleteMutation.isPending}
+        onCancel={() => setJobToDelete(null)}
+        onConfirm={() => {
+          if (jobToDelete) deleteMutation.mutate(jobToDelete);
+        }}
+      />
     </section>
   );
 }
-

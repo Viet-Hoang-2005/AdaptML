@@ -470,12 +470,32 @@ spec:
                   name: mlops-paas-training-cancel-template
                 arguments:
                   parameters:
+                    - name: job_id
+                      value: ""
                     - name: job_name
                       value: ""
                     - name: namespace
                       value: ""
+                    - name: control_plane_callback_url
+                      value: ""
+                    - name: cancel_reporter_capability
+                      value: ""
           parameters:
-            - src: { dependencyName: cancel-train-dep, dataKey: body.job_name }
+            - src: { dependencyName: cancel-train-dep, dataKey: body.job_id }
               dest: spec.arguments.parameters.0.value
-            - src: { dependencyName: cancel-train-dep, dataKey: body.namespace }
+            - src: { dependencyName: cancel-train-dep, dataKey: body.job_name }
               dest: spec.arguments.parameters.1.value
+            - src: { dependencyName: cancel-train-dep, dataKey: body.namespace }
+              dest: spec.arguments.parameters.2.value
+            - src:
+                {
+                  dependencyName: cancel-train-dep,
+                  dataKey: body.control_plane_callback_url,
+                }
+              dest: spec.arguments.parameters.3.value
+            - src:
+                {
+                  dependencyName: cancel-train-dep,
+                  dataKey: body.cancel_reporter_capability,
+                }
+              dest: spec.arguments.parameters.4.value

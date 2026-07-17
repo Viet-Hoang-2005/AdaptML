@@ -35,7 +35,10 @@ class TrainingJobWebhookEndpoint(APIView):
     def post(self, request, job_id):
         key = request.headers.get("Idempotency-Key") or str(request.data.get("idempotency_key", ""))
         with transaction.atomic():
-            job = TrainingJob.objects.select_for_update().get(public_id=job_id)
+            try:
+                job = TrainingJob.objects.select_for_update().get(public_id=job_id)
+            except TrainingJob.DoesNotExist:
+                return Response({"status": "deleted", "ignored": True})
             capability = capability_for_token(
                 job=job,
                 purpose="trusted_reporter",
@@ -56,7 +59,7 @@ class TrainingJobWebhookEndpoint(APIView):
                     {"detail": "A terminal workflow_status is required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if job.status in {"completed", "failed", "cancelled"}:
+            if job.status in {"cancelling", "completed", "failed", "cancelled"} or job.deletion_requested_at:
                 capability.consumed_at = timezone.now()
                 capability.save(update_fields=["consumed_at"])
                 return Response({"status": job.status, "ignored": True})
@@ -84,6 +87,73 @@ class TrainingJobWebhookEndpoint(APIView):
             )
         append_training_log(job.public_id, f"[SYSTEM] Training reached terminal status: {job.status}.")
         return Response({"status": job.status})
+
+
+class TrainingCancellationWebhookEndpoint(APIView):
+    authentication_classes = ()
+    permission_classes = ()
+
+    def post(self, request, job_id):
+        from apps.training.tasks import confirm_training_cancellation
+
+        key = request.headers.get("Idempotency-Key") or str(
+            request.data.get("idempotency_key", "")
+        )
+        workflow_status = str(request.data.get("workflow_status", "")).lower()
+        with transaction.atomic():
+            try:
+                job = TrainingJob.objects.select_for_update().get(public_id=job_id)
+            except TrainingJob.DoesNotExist:
+                return Response({"status": "deleted", "duplicate": True})
+            capability = capability_for_token(
+                job=job,
+                purpose="cancel_reporter",
+                token=_bearer_token(request),
+            )
+            if not capability:
+                return Response(
+                    {"detail": "Invalid cancellation reporter capability."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if key and TrainingJobEvent.objects.filter(
+                job=job, idempotency_key=key
+            ).exists():
+                return Response({"status": job.status, "duplicate": True})
+            if capability.consumed_at:
+                return Response(
+                    {"detail": "Cancellation reporter capability was already consumed."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if workflow_status not in {"succeeded", "success", "completed", "failed", "error"}:
+                return Response(
+                    {"detail": "A terminal workflow_status is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            capability.consumed_at = timezone.now()
+            capability.save(update_fields=["consumed_at"])
+            succeeded = workflow_status in {"succeeded", "success", "completed"}
+            if not succeeded:
+                job.deletion_error = "Kubernetes training cancellation workflow failed."
+                job.save(update_fields=["deletion_error", "updated_at"])
+            TrainingJobEvent.objects.create(
+                job=job,
+                event_type="cancellation_confirmed" if succeeded else "cancellation_failed",
+                message=(
+                    "Kubernetes confirmed that the training runtime was removed."
+                    if succeeded
+                    else "Kubernetes could not remove the training runtime."
+                ),
+                metadata={"workflow_status": workflow_status},
+                idempotency_key=key,
+            )
+        if succeeded:
+            confirm_training_cancellation(str(job.public_id))
+        return Response(
+            {
+                "status": "cancelled" if succeeded else "cancelling",
+                "deletion_error": "" if succeeded else job.deletion_error,
+            }
+        )
 
 
 class TrainingOutputUploadURLEndpoint(APIView):

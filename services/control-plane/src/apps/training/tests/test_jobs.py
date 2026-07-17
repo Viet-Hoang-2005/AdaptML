@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ModelProject
+from apps.deployment.models import Build, Deployment
+from apps.registry.models import ModelVersion
 from apps.training.models import TrainingJob
 
 
@@ -63,3 +65,69 @@ def test_runtime_capabilities_only_expose_configured_accelerators(settings):
     settings.TRAINING_GPU_ENABLED = True
     with_gpu = client.get("/api/training-jobs/runtime-capabilities/")
     assert with_gpu.data["accelerators"][-1] == {"type": "gpu", "counts": [1, 2]}
+
+
+@pytest.mark.django_db
+def test_training_job_list_reports_model_lifecycle_status():
+    user = get_user_model().objects.create_user("model-status@example.com", "password123")
+    project = ModelProject.objects.create(owner=user, name="NIDS")
+
+    def create_job(name, status="completed"):
+        return TrainingJob.objects.create(
+            project=project,
+            name=name,
+            model_flavor="sklearn",
+            code_snapshot_uri=f"s3://bucket/{name}/source.zip",
+            data_snapshot_uri=f"s3://bucket/{name}/data.csv",
+            output_uri=f"s3://bucket/{name}/model.tar.gz",
+            status=status,
+        )
+
+    not_trained = create_job("failed", status="failed")
+    trained = create_job("trained")
+    built = create_job("built")
+    deployed = create_job("deployed")
+
+    built_version = ModelVersion.objects.create(
+        project=project,
+        source_job=built,
+        source_job_reference=built.public_id,
+        version="1",
+        flavor="sklearn",
+    )
+    built_build = Build.objects.create(
+        project=project,
+        source_job=built,
+        source_job_reference=built.public_id,
+        version=built_version,
+        flavor="sklearn",
+        status="ready",
+    )
+    deployed_version = ModelVersion.objects.create(
+        project=project,
+        source_job=deployed,
+        source_job_reference=deployed.public_id,
+        version="2",
+        flavor="sklearn",
+    )
+    deployed_build = Build.objects.create(
+        project=project,
+        source_job=deployed,
+        source_job_reference=deployed.public_id,
+        version=deployed_version,
+        flavor="sklearn",
+        status="ready",
+    )
+    Deployment.objects.create(version=deployed_version, build=deployed_build, status="healthy")
+
+    client = APIClient()
+    client.force_authenticate(user)
+    response = client.get("/api/training-jobs/")
+
+    assert response.status_code == 200
+    status_by_job = {item["id"]: item["model_status"] for item in response.data["results"]}
+    assert status_by_job[str(not_trained.public_id)] == "none"
+    assert status_by_job[str(trained.public_id)] == "trained"
+    assert status_by_job[str(built.public_id)] == "built"
+    assert status_by_job[str(deployed.public_id)] == "deployed"
+    assert built_build.status == "ready"

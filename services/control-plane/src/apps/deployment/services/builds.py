@@ -105,6 +105,7 @@ def request_training_build(*, job, backend, storage=None):
         build = Build.objects.create(
             project=job.project,
             source_job=job,
+            source_job_reference=job.public_id,
             flavor=job.model_flavor,
             artifact_format="training_output",
             requirements_snapshot=job.requirements_text,

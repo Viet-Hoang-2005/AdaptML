@@ -65,3 +65,32 @@ def test_argo_training_backend_records_runtime_selectors():
     assert "expires=900" in client.calls[0][1]["s3_training_data_uri"]
     assert "mlflow_tracking_uri" not in client.calls[0][1]
     assert "redis_url" not in client.calls[0][1]
+
+
+@pytest.mark.django_db
+def test_argo_cancel_uses_job_bound_callback_capability(settings):
+    user = get_user_model().objects.create_user("cancel-owner@example.com", "password123")
+    project = ModelProject.objects.create(owner=user, name="Cancel NIDS")
+    job = TrainingJob.objects.create(
+        project=project,
+        name="cancel-nightly",
+        code_snapshot_uri="s3://bucket/code.zip",
+        data_snapshot_uri="s3://bucket/train.csv",
+        output_uri="s3://bucket/model.tar.gz",
+        status="cancelling",
+    )
+    client = FakeArgoClient()
+    settings.ARGO_CANCEL_TRAINING_WEBHOOK_URL = "http://argo-events/cancel-train"
+    settings.CONTROL_PLANE_INTERNAL_URL = "http://control-plane:8000"
+
+    result = ArgoTrainingBackend(client=client, storage=FakeStorage()).cancel(job)
+
+    payload = client.calls[0][1]
+    assert result["dispatched"] is True
+    assert payload["job_id"] == str(job.public_id)
+    assert payload["job_name"] == f"training-{job.public_id}"
+    assert payload["namespace"] == "user-jobs"
+    assert payload["control_plane_callback_url"].endswith(
+        f"/internal/webhooks/training-jobs/{job.public_id}/cancellation/"
+    )
+    assert payload["cancel_reporter_capability"]

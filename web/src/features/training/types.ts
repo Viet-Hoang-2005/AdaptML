@@ -1,8 +1,17 @@
 import type { ResourceId } from '@/shared/types';
 import type { ModelFlavor } from '@/features/catalog/types';
 
-export type TrainingJobStatus = 'pending' | 'queued' | 'uploading' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TrainingJobStatus =
+  | 'pending'
+  | 'queued'
+  | 'uploading'
+  | 'running'
+  | 'cancelling'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 export type TrainingAcceleratorType = 'none' | 'gpu';
+export type TrainingModelStatus = 'none' | 'trained' | 'built' | 'deployed';
 
 export interface TrainingBuild {
   id: ResourceId;
@@ -70,15 +79,25 @@ export interface TrainingJob {
   outputs_purged_at: string | null;
   output_available: boolean;
   registration_build: TrainingBuild | null;
+  model_status: TrainingModelStatus;
   stop_reason: string;
   retry_of: ResourceId | null;
-  deleted_at: string | null;
-  is_deleted: boolean;
+  deletion_requested_at: string | null;
+  deletion_error: string;
+  deletion_pending: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export interface TrainingJobListResponse { training_jobs: TrainingJob[] }
+
+export interface TrainingJobDeletionRequest {
+  id: ResourceId;
+  status: TrainingJobStatus;
+  deletion_pending: true;
+  deletion_requested_at: string;
+  deletion_error: string;
+}
 
 export interface TrainingJobFormValues {
   name: string;

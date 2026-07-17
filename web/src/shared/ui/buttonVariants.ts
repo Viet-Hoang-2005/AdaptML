@@ -13,9 +13,9 @@ export const buttonVariants = cva(
         'danger-outline': 'border-danger/30 bg-danger-subtle text-danger hover:border-danger hover:bg-danger hover:text-white',
       },
       size: {
-        sm: 'h-8 gap-1.5 rounded-[12px] px-3 text-xs',
-        md: 'h-10 gap-2 rounded-[12px] px-4 text-sm',
-        lg: 'h-12 gap-2 rounded-[16px] px-5 text-sm',
+        sm: 'h-8 gap-1.5 rounded-lg px-3 text-xs',
+        md: 'h-10 gap-2 rounded-lg px-4 text-sm',
+        lg: 'h-12 gap-2 rounded-lg px-5 text-sm',
         icon: 'h-10 w-10 rounded-[8px] p-0',
       },
     },

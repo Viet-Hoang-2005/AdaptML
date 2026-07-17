@@ -1,12 +1,12 @@
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
-import { ProjectMetadataFields } from '@/features/build-deploy/components/ProjectMetadataFields';
-import { useUploadModel } from '@/features/build-deploy/uploadModelContext';
-import { Button } from '@/shared/ui/Button';
+import { ProjectMetadataFields } from "@/features/build-deploy/components/ProjectMetadataFields";
+import { useUploadModel } from "@/features/build-deploy/uploadModelContext";
+import { Button } from "@/shared/ui/Button";
 
 export default function MetadataPage() {
-  const { t } = useTranslation('buildDeploy');
+  const { t } = useTranslation("buildDeploy");
   const {
     project,
     metadataForm,
@@ -17,16 +17,33 @@ export default function MetadataPage() {
   } = useUploadModel();
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-6 lg:p-8">
-      <ProjectMetadataFields form={metadataForm} project={project} setField={setMetadataField} />
-      <footer className="mt-8 grid gap-3 border-t border-border pt-5 sm:grid-cols-2">
-        <Button variant="secondary" size="md" icon={<ArrowLeft className="h-4 w-4" />} disabled={transitionState !== 'idle'} onClick={requestExit}>
-          {t('uploadFlow.actions.back')}
+    <>
+      <div className="rounded-lg border border-border bg-surface p-6 lg:p-8">
+        <ProjectMetadataFields
+          form={metadataForm}
+          project={project}
+          setField={setMetadataField}
+        />
+      </div>
+      <footer className="grid gap-3 pb-6 sm:grid-cols-2">
+        <Button
+          variant="secondary"
+          size="md"
+          icon={<ArrowLeft className="h-4 w-4" />}
+          disabled={transitionState !== "idle"}
+          onClick={requestExit}
+        >
+          {t("uploadFlow.actions.back")}
         </Button>
-        <Button size="md" loading={transitionState === 'saving-metadata'} disabled={transitionState !== 'idle'} onClick={() => void continueFromMetadata()}>
-          {t('uploadFlow.actions.continue')} <ArrowRight className="h-4 w-4" />
+        <Button
+          size="md"
+          loading={transitionState === "saving-metadata"}
+          disabled={transitionState !== "idle"}
+          onClick={() => void continueFromMetadata()}
+        >
+          {t("uploadFlow.actions.continue")} <ArrowRight className="h-4 w-4" />
         </Button>
       </footer>
-    </div>
+    </>
   );
 }

@@ -9,7 +9,14 @@ from infrastructure.storage import S3Storage
 
 from apps.training.models import TrainingJob, TrainingJobEvent
 from apps.training.services.storage_scope import expected_training_uris, validate_training_uri
-from apps.training.tasks import cancel_training_job, execute_training_job, purge_training_job_outputs
+from apps.training.tasks import (
+    cancel_training_job,
+    delete_training_job,
+    execute_training_job,
+    purge_training_job_outputs,
+)
+
+ACTIVE_STATUSES = {"pending", "queued", "uploading", "running", "cancelling"}
 
 
 def create_job(*, project, validated_data):
@@ -69,6 +76,8 @@ def _snapshot_data(project, job, storage):
 
 
 def submit_job(job):
+    if job.deletion_requested_at:
+        raise Conflict("This training job is being deleted.")
     if job.status not in {"pending", "failed"}:
         return job
     job.status = "queued"
@@ -83,7 +92,53 @@ def _enqueue(job):
 
 
 def cancel_job(job):
-    transaction.on_commit(lambda: cancel_training_job.delay(str(job.public_id)))
+    with transaction.atomic():
+        job = type(job).objects.select_for_update().get(pk=job.pk)
+        if job.status in {"completed", "failed", "cancelled"}:
+            return job
+        job.status = "cancelling"
+        job.deletion_error = ""
+        job.save(update_fields=["status", "deletion_error", "updated_at"])
+        TrainingJobEvent.objects.create(
+            job=job,
+            event_type="cancellation_requested",
+            message="Training cancellation requested.",
+        )
+        transaction.on_commit(lambda: cancel_training_job.delay(str(job.public_id)))
+    return job
+
+
+def request_job_deletion(job):
+    with transaction.atomic():
+        job = type(job).objects.select_for_update().get(pk=job.pk)
+        if job.builds.filter(status__in=("pending", "queued", "building")).exists():
+            raise Conflict("A model build is still using this training output.")
+
+        retrying = bool(job.deletion_requested_at and job.deletion_error)
+        if job.deletion_requested_at and not retrying:
+            return job
+
+        job.deletion_requested_at = timezone.now()
+        job.deletion_error = ""
+        if job.status in ACTIVE_STATUSES:
+            job.status = "cancelling"
+            task = cancel_training_job
+            event_type = "delete_cancellation_requested"
+            message = "Training deletion requested; runtime cancellation started."
+        else:
+            task = delete_training_job
+            event_type = "deletion_requested"
+            message = "Training deletion requested."
+        job.save(
+            update_fields=[
+                "deletion_requested_at",
+                "deletion_error",
+                "status",
+                "updated_at",
+            ]
+        )
+        TrainingJobEvent.objects.create(job=job, event_type=event_type, message=message)
+        transaction.on_commit(lambda: task.delay(str(job.public_id)))
     return job
 
 

@@ -1,16 +1,19 @@
 import { cn } from '@/shared/lib/cn';
+import { type VariantProps } from 'class-variance-authority';
+import { switchVariants } from './switchVariants';
 
 export interface SegmentedControlOption<T extends string | number> {
   value: T;
   title: string;
 }
 
-export interface SwitchProps<T extends string | number> {
+export interface SwitchProps<T extends string | number> extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>, VariantProps<typeof switchVariants> {
   value: T;
   onChange: (value: T) => void;
   options: readonly SegmentedControlOption<T>[];
   className?: string;
   ariaLabel?: string;
+  fullWidth?: boolean;
 }
 
 export function Switch<T extends string | number>({
@@ -19,11 +22,14 @@ export function Switch<T extends string | number>({
   options,
   className,
   ariaLabel,
+  size = 'md',
+  fullWidth = false,
+  ...props
 }: SwitchProps<T>) {
   return (
-    <div className="flex justify-center">
+    <div className={cn('flex justify-center', fullWidth ? 'w-full' : 'inline-flex', className)} {...props}>
       <div 
-        className={cn('inline-flex rounded-lg shadow-sm w-100', className)} 
+        className={cn('inline-flex rounded-lg shadow-sm', fullWidth && 'w-full')} 
         role="tablist" 
         aria-label={ariaLabel}
       >
@@ -37,11 +43,9 @@ export function Switch<T extends string | number>({
               aria-selected={isSelected}
               onClick={() => onChange(option.value)}
               className={cn(
-                'flex-1 px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:z-10 border',
+                switchVariants({ size, selected: isSelected }),
                 index === 0 ? 'rounded-l-lg' : index === options.length - 1 ? 'rounded-r-lg -ml-px' : '-ml-px',
-                isSelected
-                  ? 'bg-primary border-primary text-primary-foreground z-10'
-                  : 'bg-surface border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                fullWidth && 'flex-1'
               )}
             >
               {option.title}

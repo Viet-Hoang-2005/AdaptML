@@ -18,6 +18,7 @@ class TrainingJob(models.Model):
             "queued",
             "uploading",
             "running",
+            "cancelling",
             "completed",
             "failed",
             "cancelled",
@@ -52,6 +53,8 @@ class TrainingJob(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     runtime_seconds = models.PositiveIntegerField(default=0)
     outputs_purged_at = models.DateTimeField(null=True, blank=True)
+    deletion_requested_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    deletion_error = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -98,7 +101,11 @@ class TrainingJobEvent(models.Model):
 
 
 class TrainingJobCapability(models.Model):
-    PURPOSES = (("output_upload", "Output upload"), ("trusted_reporter", "Trusted reporter"))
+    PURPOSES = (
+        ("output_upload", "Output upload"),
+        ("trusted_reporter", "Trusted reporter"),
+        ("cancel_reporter", "Cancellation reporter"),
+    )
 
     job = models.ForeignKey(TrainingJob, on_delete=models.CASCADE, related_name="capabilities")
     purpose = models.CharField(max_length=40, choices=PURPOSES)

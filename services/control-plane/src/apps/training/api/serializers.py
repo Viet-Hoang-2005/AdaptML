@@ -41,6 +41,8 @@ class TrainingJobSerializer(serializers.ModelSerializer):
     training_data = serializers.FileField(write_only=True, required=False)
     output_available = serializers.SerializerMethodField()
     registration_build = serializers.SerializerMethodField()
+    model_status = serializers.SerializerMethodField()
+    deletion_pending = serializers.SerializerMethodField()
 
     class Meta:
         model = TrainingJob
@@ -76,6 +78,10 @@ class TrainingJobSerializer(serializers.ModelSerializer):
             "outputs_purged_at",
             "output_available",
             "registration_build",
+            "model_status",
+            "deletion_requested_at",
+            "deletion_error",
+            "deletion_pending",
             "outputs",
             "created_at",
             "updated_at",
@@ -95,6 +101,8 @@ class TrainingJobSerializer(serializers.ModelSerializer):
             "completed_at",
             "runtime_seconds",
             "outputs_purged_at",
+            "deletion_requested_at",
+            "deletion_error",
             "created_at",
             "updated_at",
         )
@@ -112,16 +120,44 @@ class TrainingJobSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def get_registration_build(instance):
-        build = instance.builds.order_by("-created_at").first()
+        builds = list(instance.builds.all())
+        build = max(builds, key=lambda item: item.created_at, default=None)
         if not build:
             return None
         return TrainingBuildSerializer(build).data
+
+    @staticmethod
+    def get_model_status(instance):
+        """Return the lifecycle state of the model produced by this training job."""
+        if instance.status != "completed":
+            return "none"
+
+        ready_builds = [
+            build
+            for build in instance.builds.all()
+            if build.status == "ready" and build.version_id is not None
+        ]
+        if not ready_builds:
+            return "trained"
+
+        active_deployment_statuses = {"pending", "deploying", "healthy"}
+        for build in ready_builds:
+            if any(
+                deployment.status in active_deployment_statuses
+                for deployment in build.version.deployments.all()
+            ):
+                return "deployed"
+        return "built"
+
+    @staticmethod
+    def get_deletion_pending(instance):
+        return instance.deletion_requested_at is not None
 
 
 class TrainingBuildSerializer(serializers.Serializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
     project_id = serializers.UUIDField(source="project.public_id", read_only=True)
-    source_job_id = serializers.UUIDField(source="source_job.public_id", read_only=True)
+    source_job_id = serializers.SerializerMethodField()
     version_id = serializers.UUIDField(source="version.public_id", allow_null=True, read_only=True)
     version_number = serializers.CharField(source="version.version", allow_null=True, read_only=True)
     flavor = serializers.CharField(read_only=True)
@@ -131,3 +167,9 @@ class TrainingBuildSerializer(serializers.Serializer):
     error_message = serializers.CharField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
+
+    @staticmethod
+    def get_source_job_id(instance):
+        return instance.source_job_reference or (
+            instance.source_job.public_id if instance.source_job_id else None
+        )

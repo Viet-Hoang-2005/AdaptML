@@ -5,6 +5,7 @@ import type {
   TrainingBuild,
   TrainingJob,
   TrainingJobDownloadURLResponse,
+  TrainingJobDeletionRequest,
   TrainingJobEventsResponse,
   TrainingJobFormValues,
   TrainingJobListResponse,
@@ -41,8 +42,7 @@ export const createTrainingJob = async (payload: TrainingJobFormValues): Promise
   return (await apiClient.post<TrainingJob>(controlPlaneURL(`/training-jobs/${job.id}/submit/`))).data;
 };
 
-export const listTrainingJobs = async (includeDeleted = false): Promise<TrainingJobListResponse> => {
-  void includeDeleted;
+export const listTrainingJobs = async (): Promise<TrainingJobListResponse> => {
   const { data } = await apiClient.get<{ results: TrainingJob[] } | TrainingJob[]>(controlPlaneURL('/training-jobs/'));
   return { training_jobs: pageResults(data) };
 };
@@ -56,7 +56,9 @@ export const getTrainingUsage = async (): Promise<TrainingUsageResponse> => {
     monthly_quota_seconds: 0,
     monthly_runtime_seconds: monthlyRuntime,
     remaining_seconds: 0,
-    active_jobs_count: jobs.filter((job) => ['queued', 'running'].includes(job.status)).length,
+    active_jobs_count: jobs.filter((job) =>
+      ['pending', 'queued', 'uploading', 'running', 'cancelling'].includes(job.status),
+    ).length,
     running_jobs_count: jobs.filter((job) => job.status === 'running').length,
     completed_jobs_count: jobs.filter((job) => job.status === 'completed').length,
     failed_jobs_count: jobs.filter((job) => job.status === 'failed').length,
@@ -149,7 +151,5 @@ export const retryTrainingJob = async (jobId: string): Promise<TrainingJob> => {
   return (await apiClient.post<TrainingJob>(controlPlaneURL(`/training-jobs/${job.id}/submit/`))).data;
 };
 
-export const deleteTrainingJob = async (jobId: string): Promise<TrainingJob> =>
-  (await apiClient.delete<TrainingJob>(controlPlaneURL(`/training-jobs/${jobId}/`))).data;
-
-export const restoreTrainingJob = getTrainingJob;
+export const deleteTrainingJob = async (jobId: string): Promise<TrainingJobDeletionRequest> =>
+  (await apiClient.delete<TrainingJobDeletionRequest>(controlPlaneURL(`/training-jobs/${jobId}/`))).data;

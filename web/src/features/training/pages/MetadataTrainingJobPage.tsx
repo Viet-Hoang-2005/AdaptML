@@ -16,12 +16,15 @@ export default function MetadataTrainingJobPage() {
   const transitioning = flow.transitionState !== 'idle';
 
   return (
-    <div className="space-y-6 rounded-lg border border-border bg-surface p-6">
+    <>
+      <div className="space-y-6 rounded-lg border border-border bg-surface p-6">
       <StepTitle
         title={t('createFlow.metadata.title')}
         subtitle={t('createFlow.metadata.description')}
       />
       <Switch
+        fullWidth
+        className="mx-auto w-100"
         value={flow.mode}
         onChange={(mode) => flow.setMode(mode)}
         ariaLabel={t('createFlow.metadata.modeLabel')}
@@ -71,7 +74,9 @@ export default function MetadataTrainingJobPage() {
         />
       </div>
 
-      <div className="grid gap-3 border-t border-border pt-5 sm:grid-cols-2">
+      </div>
+
+      <footer className="grid gap-3 pb-6 sm:grid-cols-2">
         <Button variant="secondary" icon={<ArrowLeft className="h-4 w-4" />} onClick={() => flow.requestExit()}>
           {t('createFlow.actions.back')}
         </Button>
@@ -82,7 +87,7 @@ export default function MetadataTrainingJobPage() {
         >
           {t('createFlow.actions.continue')} <ArrowRight className="h-4 w-4" />
         </Button>
-      </div>
-    </div>
+      </footer>
+    </>
   );
 }

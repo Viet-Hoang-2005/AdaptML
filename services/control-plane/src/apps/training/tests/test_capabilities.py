@@ -136,3 +136,60 @@ def test_trusted_reporter_cannot_overwrite_cancelled_job():
     job.refresh_from_db()
     assert job.status == "cancelled"
     assert response.data["ignored"] is True
+
+
+@pytest.mark.django_db
+def test_cancel_reporter_is_job_bound_one_time_and_confirms_cancellation():
+    job = _job()
+    job.status = "cancelling"
+    job.save(update_fields=["status", "updated_at"])
+    token = issue_capability(job, "cancel_reporter", ttl_seconds=600)
+    client = APIClient()
+    url = f"/internal/webhooks/training-jobs/{job.public_id}/cancellation/"
+    headers = {
+        "HTTP_AUTHORIZATION": f"Bearer {token}",
+        "HTTP_IDEMPOTENCY_KEY": "cancel-workflow-1",
+    }
+
+    response = client.post(
+        url,
+        {"workflow_status": "Succeeded"},
+        format="json",
+        **headers,
+    )
+
+    assert response.status_code == 200
+    job.refresh_from_db()
+    assert job.status == "cancelled"
+    duplicate = client.post(
+        url,
+        {"workflow_status": "Succeeded"},
+        format="json",
+        **headers,
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.data["duplicate"] is True
+
+
+@pytest.mark.django_db
+def test_late_callbacks_are_ignored_after_training_job_is_deleted():
+    job = _job()
+    job_id = job.public_id
+    job.delete()
+    client = APIClient()
+
+    training_response = client.post(
+        f"/internal/webhooks/training-jobs/{job_id}/",
+        {"workflow_status": "Succeeded"},
+        format="json",
+    )
+    cancellation_response = client.post(
+        f"/internal/webhooks/training-jobs/{job_id}/cancellation/",
+        {"workflow_status": "Succeeded"},
+        format="json",
+    )
+
+    assert training_response.status_code == 200
+    assert training_response.data == {"status": "deleted", "ignored": True}
+    assert cancellation_response.status_code == 200
+    assert cancellation_response.data == {"status": "deleted", "duplicate": True}

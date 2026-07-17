@@ -1,14 +1,17 @@
 from django.conf import settings
+from django.db.models import Prefetch
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.deployment.models import Build
 from apps.deployment.services.builds import request_training_build
 from apps.training.selectors import job_for_user, jobs_for_user
 from apps.training.services.jobs import (
     cancel_job,
     create_job,
     output_download_url,
+    request_job_deletion,
     request_output_purge,
     submit_job,
 )
@@ -21,7 +24,13 @@ class TrainingJobListCreateEndpoint(generics.ListCreateAPIView):
     serializer_class = TrainingJobSerializer
 
     def get_queryset(self):
-        return jobs_for_user(self.request.user).prefetch_related("outputs", "builds__version")
+        return jobs_for_user(self.request.user).prefetch_related(
+            "outputs",
+            Prefetch(
+                "builds",
+                queryset=Build.objects.select_related("version").prefetch_related("version__deployments"),
+            ),
+        )
 
     def perform_create(self, serializer):
         project = serializer.validated_data.pop("project")
@@ -34,7 +43,26 @@ class TrainingJobDetailEndpoint(generics.RetrieveUpdateDestroyAPIView):
     lookup_url_kwarg = "job_id"
 
     def get_queryset(self):
-        return jobs_for_user(self.request.user).prefetch_related("outputs", "builds__version")
+        return jobs_for_user(self.request.user).prefetch_related(
+            "outputs",
+            Prefetch(
+                "builds",
+                queryset=Build.objects.select_related("version").prefetch_related("version__deployments"),
+            ),
+        )
+
+    def delete(self, request, *args, **kwargs):
+        job = request_job_deletion(self.get_object())
+        return Response(
+            {
+                "id": str(job.public_id),
+                "deletion_pending": True,
+                "status": job.status,
+                "deletion_requested_at": job.deletion_requested_at,
+                "deletion_error": job.deletion_error,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
 
 
 class TrainingJobSubmitEndpoint(APIView):

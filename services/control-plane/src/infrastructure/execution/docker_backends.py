@@ -138,11 +138,30 @@ class DockerTrainingBackend:
         return logs
 
     def cancel(self, job):
+        if getattr(job, "started_at", None) and not job.external_job_id:
+            return {
+                "dispatched": False,
+                "confirmed": False,
+                "retry": True,
+                "detail": "Training execution started but the runtime container is not registered yet.",
+            }
         if job.external_job_id:
             try:
-                self.docker.client.containers.get(job.external_job_id).kill()
+                container = self.docker.client.containers.get(job.external_job_id)
+                try:
+                    container.kill()
+                except docker.errors.APIError:
+                    container.reload()
+                    if container.status not in {"exited", "dead"}:
+                        raise
+                container.wait(timeout=30)
+                try:
+                    container.remove(force=True)
+                except docker.errors.NotFound:
+                    pass
             except docker.errors.NotFound:
                 pass
+        return {"dispatched": False, "confirmed": True}
 
 
 class DockerDeploymentBackend:

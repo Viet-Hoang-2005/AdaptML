@@ -15,7 +15,7 @@ class ModelArtifactSerializer(serializers.ModelSerializer):
 class ModelVersionSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
     project_id = serializers.UUIDField(source="project.public_id", read_only=True)
-    source_job_id = serializers.UUIDField(source="source_job.public_id", allow_null=True, read_only=True)
+    source_job_id = serializers.SerializerMethodField()
     source_job = serializers.SlugRelatedField(
         slug_field="public_id", queryset=TrainingJob.objects.none(), required=False, allow_null=True, write_only=True
     )
@@ -65,6 +65,12 @@ class ModelVersionSerializer(serializers.ModelSerializer):
 
     def get_metrics(self, instance):
         return ModelMetricSerializer(instance.metrics.all(), many=True).data
+
+    @staticmethod
+    def get_source_job_id(instance):
+        return instance.source_job_reference or (
+            instance.source_job.public_id if instance.source_job_id else None
+        )
 
     def get_events(self, instance):
         return RegistryEventSerializer(instance.events.all(), many=True).data

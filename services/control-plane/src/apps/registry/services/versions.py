@@ -50,6 +50,8 @@ def register_successful_build(
             version = ModelVersion.objects.create(
                 project=project,
                 source_job=build.source_job,
+                source_job_reference=build.source_job_reference
+                or (build.source_job.public_id if build.source_job_id else None),
                 version=str(version_number),
                 requirements_snapshot=build.requirements_snapshot,
                 flavor=build.flavor,

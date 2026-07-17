@@ -12,11 +12,12 @@ class Build(models.Model):
     project = models.ForeignKey("catalog.ModelProject", on_delete=models.CASCADE, related_name="builds")
     source_job = models.ForeignKey(
         "training.TrainingJob",
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         related_name="builds",
         null=True,
         blank=True,
     )
+    source_job_reference = models.UUIDField(null=True, blank=True, db_index=True)
     version = models.ForeignKey(
         "registry.ModelVersion", on_delete=models.CASCADE, related_name="builds", null=True, blank=True
     )

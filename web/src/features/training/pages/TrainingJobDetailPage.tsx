@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
-  Archive,
   AlertTriangle,
   Clipboard,
   Cloud,
@@ -13,7 +12,7 @@ import {
   FileArchive,
   HardDrive,
   RefreshCw,
-  RotateCcw,
+  Trash2,
   Rocket,
   Clock,
   UploadCloud,
@@ -35,7 +34,6 @@ import {
   getTrainingJobMetrics,
   getTrainingJobDownloadUrl,
   deleteTrainingJob,
-  restoreTrainingJob,
   refreshTrainingJobStatus,
   buildAndRegisterTrainingJob,
   deleteTrainingOutputs,
@@ -68,7 +66,7 @@ const formatMegabytes = (mb: number) => {
   return `${Math.round(mb)} MB`;
 };
 
-const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'uploading', 'running'];
+const ACTIVE_STATUSES: TrainingJobStatus[] = ['pending', 'queued', 'uploading', 'running', 'cancelling'];
 const AUTO_SYNC_INTERVAL_MS = 3000;
 const BUILD_TERMINAL_STATUSES = ['ready', 'failed', 'cancelled'] as const;
 
@@ -114,13 +112,15 @@ export default function TrainingJobDetailPage() {
   const [refreshingSection, setRefreshingSection] = useState<'header' | 'logs' | 'metrics' | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'logs' | 'metrics' | 'artifacts' | 'config'>('overview');
   const [deleteOutputsOpen, setDeleteOutputsOpen] = useState(false);
+  const [deleteJobOpen, setDeleteJobOpen] = useState(false);
 
   const parsedJobId = jobId ?? '';
   const [liveElapsed, setLiveElapsed] = useState<number | null>(null);
   const lastToastedStatus = useRef<string | null>(null);
   const statusLabels: Record<TrainingJobStatus, string> = {
     pending: t('detail.statuses.pending'), queued: t('detail.statuses.queued'), uploading: t('detail.statuses.uploading'),
-    running: t('detail.statuses.running'), completed: t('detail.statuses.completed'), failed: t('detail.statuses.failed'),
+    running: t('detail.statuses.running'), cancelling: t('detail.statuses.cancelling'),
+    completed: t('detail.statuses.completed'), failed: t('detail.statuses.failed'),
     cancelled: t('detail.statuses.cancelled'),
   };
 
@@ -269,15 +269,16 @@ export default function TrainingJobDetailPage() {
     },
   });
 
-  const archiveMutation = useMutation({
+  const deleteJobMutation = useMutation({
     mutationFn: () => deleteTrainingJob(parsedJobId),
-    onSuccess: () => {
-      toast.success(t('detail.archived'));
-      refetchJob();
-      queryClient.invalidateQueries({ queryKey: trainingQueryKeys.jobs() });
+    onSuccess: async () => {
+      setDeleteJobOpen(false);
+      toast.warning(t('delete.requested'));
+      await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.jobs() });
+      navigate('/dashboard/model-training');
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, t('detail.archiveFailed')));
+      toast.error(getApiErrorMessage(err, t('delete.failed')));
     }
   });
 
@@ -304,18 +305,6 @@ export default function TrainingJobDetailPage() {
     onError: (err) => {
       toast.error(getApiErrorMessage(err, t('detail.outputDeleteFailed')));
     },
-  });
-
-  const restoreMutation = useMutation({
-    mutationFn: () => restoreTrainingJob(parsedJobId),
-    onSuccess: () => {
-      toast.success(t('detail.restored'));
-      refetchJob();
-      queryClient.invalidateQueries({ queryKey: trainingQueryKeys.jobs() });
-    },
-    onError: (err) => {
-      toast.error(getApiErrorMessage(err, t('detail.restoreFailed')));
-    }
   });
 
   const handleCopyUri = useCallback((value: string) => {
@@ -367,7 +356,6 @@ export default function TrainingJobDetailPage() {
   };
 
   const getAccentBorderClass = () => {
-    if (job.is_deleted) return 'border-t-2 border-t-border';
     if (job.status === 'completed') return 'border-t-2 border-t-emerald-400';
     if (job.status === 'failed') return 'border-t-2 border-t-red-400';
     if (job.status === 'cancelled') return 'border-t-2 border-t-amber-400';
@@ -471,7 +459,7 @@ export default function TrainingJobDetailPage() {
       </button>
 
       {/* Header Card */}
-      <div className={`rounded-2xl border border-border bg-surface shadow-sm hover:shadow-md transition-shadow overflow-hidden border-t-4 ${getAccentBorderClass()} ${job.is_deleted ? 'opacity-80 grayscale-[0.2]' : ''}`}>
+      <div className={`rounded-2xl border border-border bg-surface shadow-sm hover:shadow-md transition-shadow overflow-hidden border-t-4 ${getAccentBorderClass()}`}>
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between p-6 lg:p-8 gap-6 border-b border-border">
           <div className="flex items-start gap-4 min-w-0">
             {/* Model/Job Icon */}
@@ -486,14 +474,13 @@ export default function TrainingJobDetailPage() {
                   {job.model_version}
                 </span>
                 <span className={`w-fit rounded-full px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider ring-1 ${
-                  job.is_deleted ? 'bg-muted text-muted-foreground ring-border' :
                   job.status === 'completed' ? 'bg-success-subtle text-success ring-success/20' :
                   job.status === 'failed' ? 'bg-danger-subtle text-danger ring-danger/20' :
                   job.status === 'cancelled' ? 'bg-warning-subtle text-warning ring-warning/20' :
                   job.status === 'running' ? 'bg-primary-subtle text-primary ring-primary/30 animate-pulse' :
                   'bg-primary-subtle text-primary ring-primary/20'
                 }`}>
-                  {job.is_deleted ? t('detail.statuses.archived') : statusLabels[job.status]}
+                  {statusLabels[job.status]}
                 </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground font-medium">
@@ -551,15 +538,14 @@ export default function TrainingJobDetailPage() {
                 {t('detail.download')}
               </Button>
             </div>
-            {job.is_deleted ? (
-              <button onClick={() => restoreMutation.mutate()} disabled={restoreMutation.isPending} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors mt-1">
-                <RotateCcw className="h-3.5 w-3.5" /> {t('detail.restore')}
-              </button>
-            ) : (
-              <button onClick={() => archiveMutation.mutate()} disabled={archiveMutation.isPending} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-danger transition-colors mt-1">
-                <Archive className="h-3.5 w-3.5" /> {t('detail.archive')}
-              </button>
-            )}
+            <button
+              onClick={() => setDeleteJobOpen(true)}
+              disabled={job.deletion_pending || deleteJobMutation.isPending}
+              className="mt-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-danger disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {job.deletion_pending ? t('table.deleting') : t('table.delete')}
+            </button>
           </div>
         </div>
 
@@ -569,14 +555,13 @@ export default function TrainingJobDetailPage() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">{t('detail.status')}</p>
             <div className="flex items-center">
                <span className={`w-fit rounded-md px-2.5 py-0.5 text-sm font-bold border ${
-                  job.is_deleted ? 'bg-muted text-muted-foreground border-border' :
                   job.status === 'completed' ? 'bg-success-subtle text-success border-success/20' :
                   job.status === 'failed' ? 'bg-danger-subtle text-danger border-danger/20' :
                   job.status === 'cancelled' ? 'bg-warning-subtle text-warning border-warning/20' :
                   job.status === 'running' ? 'bg-primary-subtle text-primary border-primary/20' :
                   'bg-surface text-foreground border-border'
                 }`}>
-                  {job.is_deleted ? t('detail.statuses.archived') : statusLabels[job.status]}
+                  {statusLabels[job.status]}
                 </span>
             </div>
           </div>
@@ -880,6 +865,16 @@ export default function TrainingJobDetailPage() {
         )}
       </div>
 
+      <ConfirmModal
+        open={deleteJobOpen}
+        title={t('delete.title')}
+        description={t('delete.description', { job: job.name })}
+        confirmText={t('delete.confirm')}
+        tone="danger"
+        loading={deleteJobMutation.isPending}
+        onCancel={() => setDeleteJobOpen(false)}
+        onConfirm={() => deleteJobMutation.mutate()}
+      />
       <ConfirmModal
         open={deleteOutputsOpen}
         title={t('detail.deleteOutputTitle')}

@@ -33,3 +33,10 @@ def append_training_log(job_id, message: str) -> None:
         redis.expire(key, LOG_TTL_SECONDS)
     except RedisError:
         return
+
+
+def delete_training_logs(job_id) -> None:
+    try:
+        Redis.from_url(settings.REDIS_URL).delete(f"training_logs:{job_id}")
+    except RedisError:
+        return

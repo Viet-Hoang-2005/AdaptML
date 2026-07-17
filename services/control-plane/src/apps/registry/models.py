@@ -15,8 +15,9 @@ class ModelVersion(models.Model):
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     project = models.ForeignKey("catalog.ModelProject", on_delete=models.CASCADE, related_name="versions")
     source_job = models.ForeignKey(
-        "training.TrainingJob", on_delete=models.PROTECT, related_name="registered_versions", null=True, blank=True
+        "training.TrainingJob", on_delete=models.SET_NULL, related_name="registered_versions", null=True, blank=True
     )
+    source_job_reference = models.UUIDField(null=True, blank=True, db_index=True)
     version = models.CharField(max_length=80)
     requirements_snapshot = models.TextField(blank=True)
     flavor = models.CharField(max_length=80, blank=True)
