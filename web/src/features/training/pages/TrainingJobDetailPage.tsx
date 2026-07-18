@@ -1,72 +1,59 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  Outlet,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowLeft,
+  Activity,
   AlertTriangle,
-  Clipboard,
+  ArrowLeft,
+  Bot,
   Download,
   FileArchive,
-  HardDrive,
-  RefreshCw,
-  Trash2,
-  Clock,
-  UploadCloud,
-  Loader2,
-  CheckCircle,
-  XCircle,
-  ScrollText,
-  Activity,
-  Bot,
-  Settings,
-  Rocket,
-  Cpu,
   Info,
+  RefreshCw,
+  ScrollText,
+  Settings,
+  Trash2,
 } from "lucide-react";
-import type { ReactNode } from "react";
 
-import { Button } from "@/shared/ui/Button";
-import { PageTabs } from "@/shared/ui/PageTabs";
-import { PageContent } from "@/shared/ui/PageContent";
 import {
+  buildAndRegisterTrainingJob,
+  deleteTrainingJob,
+  deleteTrainingOutputs,
   getTrainingJob,
+  getTrainingJobDownloadUrl,
   getTrainingJobEvents,
   getTrainingJobLogs,
   getTrainingJobMetrics,
-  getTrainingJobDownloadUrl,
-  deleteTrainingJob,
   refreshTrainingJobStatus,
-  buildAndRegisterTrainingJob,
-  deleteTrainingOutputs,
 } from "@/features/training/api/trainingApi";
+import { LiveStatusBadge } from "@/features/training/components/TrainingOverviewSections";
 import { trainingQueryKeys } from "@/features/training/queryKeys";
-import { toast } from "@/shared/ui/toastStore";
-import { getApiErrorMessage } from "@/shared/api/errors";
-import { formatDuration, computeElapsed } from "@/shared/lib/formatDuration";
 import type {
   TrainingJob,
-  TrainingJobMetricsResponse,
   TrainingJobStatus,
 } from "@/features/training/types";
-
+import type {
+  TrainingJobDetailContextValue,
+  TrainingJobDetailSection,
+} from "@/features/training/trainingJobDetailContext";
+import { getApiErrorMessage } from "@/shared/api/errors";
+import { computeElapsed, formatDuration } from "@/shared/lib/formatDuration";
+import { Button } from "@/shared/ui/Button";
 import { ConfirmModal } from "@/shared/ui/ConfirmModal";
-import { useRuntimeLogStream } from "@/shared/hooks/useRuntimeLogStream";
-import { TerminalViewer } from "@/shared/ui/TerminalViewer";
-import {
-  LiveStatusBadge,
-  MetadataRow,
-  MilestoneTracker,
-  TrainingEventHistory,
-} from "@/features/training/components/TrainingOverviewSections";
-
-// -- Shared formatting helpers --
-const backendLabel = (backend?: TrainingJob["backend"]) => backend || "Unknown";
-const formatMetricPercent = (val: number) => `${Math.round(val)}%`;
-const formatMegabytes = (mb: number) => {
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-  return `${Math.round(mb)} MB`;
-};
+import { PageTabs } from "@/shared/ui/PageTabs";
+import { toast } from "@/shared/ui/toastStore";
 
 const ACTIVE_STATUSES: TrainingJobStatus[] = [
   "pending",
@@ -75,64 +62,36 @@ const ACTIVE_STATUSES: TrainingJobStatus[] = [
   "running",
   "cancelling",
 ];
+const DETAIL_SECTIONS: TrainingJobDetailSection[] = [
+  "overview",
+  "logs",
+  "metrics",
+  "artifacts",
+  "config",
+];
 const AUTO_SYNC_INTERVAL_MS = 3000;
-const BUILD_TERMINAL_STATUSES = ["ready", "failed", "cancelled"] as const;
-
-function RegistrationBuildTerminal({
-  buildId,
-  title,
-  onCompleted,
-}: {
-  buildId: string;
-  title: string;
-  onCompleted: () => void;
-}) {
-  const handledStatus = useRef<string | null>(null);
-  const stream = useRuntimeLogStream({
-    source: { kind: "build", id: buildId },
-    terminalStatuses: BUILD_TERMINAL_STATUSES,
-  });
-
-  useEffect(() => {
-    if (
-      stream.status &&
-      BUILD_TERMINAL_STATUSES.includes(
-        stream.status as (typeof BUILD_TERMINAL_STATUSES)[number],
-      ) &&
-      handledStatus.current !== stream.status
-    ) {
-      handledStatus.current = stream.status;
-      onCompleted();
-    }
-  }, [onCompleted, stream.status]);
-
-  return (
-    <TerminalViewer
-      title={title}
-      logs={
-        stream.error ? [...stream.logs, `Error: ${stream.error}`] : stream.logs
-      }
-    />
-  );
-}
 
 export default function TrainingJobDetailPage() {
   const { t } = useTranslation("training");
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const parsedJobId = jobId ?? "";
+  const pathnameSection = location.pathname.split("/").filter(Boolean).at(-1);
+  const activeSection = DETAIL_SECTIONS.includes(
+    pathnameSection as TrainingJobDetailSection,
+  )
+    ? (pathnameSection as TrainingJobDetailSection)
+    : "overview";
   const [refreshingSection, setRefreshingSection] = useState<
     "header" | "logs" | "metrics" | null
   >(null);
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "logs" | "metrics" | "artifacts" | "config"
-  >("overview");
   const [deleteOutputsOpen, setDeleteOutputsOpen] = useState(false);
   const [deleteJobOpen, setDeleteJobOpen] = useState(false);
-
-  const parsedJobId = jobId ?? "";
   const [liveElapsed, setLiveElapsed] = useState<number | null>(null);
   const lastToastedStatus = useRef<string | null>(null);
+
   const statusLabels: Record<TrainingJobStatus, string> = {
     pending: t("detail.statuses.pending"),
     queued: t("detail.statuses.queued"),
@@ -144,7 +103,6 @@ export default function TrainingJobDetailPage() {
     cancelled: t("detail.statuses.cancelled"),
   };
 
-  // -- Queries --
   const {
     data: job,
     isLoading: jobLoading,
@@ -155,25 +113,12 @@ export default function TrainingJobDetailPage() {
     queryFn: () => getTrainingJob(parsedJobId),
     enabled: Boolean(parsedJobId),
     refetchInterval: (query) => {
-      const data = query.state.data;
-      if (data && ACTIVE_STATUSES.includes(data.status))
-        return AUTO_SYNC_INTERVAL_MS;
-      return false;
+      const currentJob = query.state.data;
+      return currentJob && ACTIVE_STATUSES.includes(currentJob.status)
+        ? AUTO_SYNC_INTERVAL_MS
+        : false;
     },
   });
-
-  useEffect(() => {
-    if (!job?.status) return;
-    const nextStatus = job.status;
-    const prevStatus = lastToastedStatus.current;
-    if (prevStatus && prevStatus !== nextStatus) {
-      if (nextStatus === "completed") toast.success(t("detail.completedToast"));
-      else if (nextStatus === "failed") toast.error(t("detail.failedToast"));
-      else if (nextStatus === "cancelled")
-        toast.warning(t("detail.cancelledToast"));
-    }
-    lastToastedStatus.current = nextStatus;
-  }, [job?.status, t]);
 
   const {
     data: logsResponse,
@@ -182,13 +127,13 @@ export default function TrainingJobDetailPage() {
   } = useQuery({
     queryKey: trainingQueryKeys.logs(parsedJobId),
     queryFn: () => getTrainingJobLogs(parsedJobId),
-    enabled:
-      !!job && (activeTab === "logs" || ACTIVE_STATUSES.includes(job.status)),
-    refetchInterval: () => {
-      if (job && ACTIVE_STATUSES.includes(job.status) && activeTab === "logs")
-        return AUTO_SYNC_INTERVAL_MS;
-      return false;
-    },
+    enabled: Boolean(job) && activeSection === "logs",
+    refetchInterval:
+      job &&
+      activeSection === "logs" &&
+      ACTIVE_STATUSES.includes(job.status)
+        ? AUTO_SYNC_INTERVAL_MS
+        : false,
   });
 
   const {
@@ -198,33 +143,40 @@ export default function TrainingJobDetailPage() {
   } = useQuery({
     queryKey: trainingQueryKeys.metrics(parsedJobId),
     queryFn: () => getTrainingJobMetrics(parsedJobId),
-    enabled:
-      !!job &&
-      (activeTab === "metrics" || ACTIVE_STATUSES.includes(job.status)),
-    refetchInterval: () => {
-      if (
-        job &&
-        ACTIVE_STATUSES.includes(job.status) &&
-        activeTab === "metrics"
-      )
-        return AUTO_SYNC_INTERVAL_MS;
-      return false;
-    },
+    enabled: Boolean(job) && activeSection === "metrics",
+    refetchInterval:
+      job &&
+      activeSection === "metrics" &&
+      ACTIVE_STATUSES.includes(job.status)
+        ? AUTO_SYNC_INTERVAL_MS
+        : false,
   });
 
   const { data: eventsResponse, refetch: refetchEvents } = useQuery({
     queryKey: trainingQueryKeys.events(parsedJobId),
     queryFn: () => getTrainingJobEvents(parsedJobId),
-    enabled: !!job,
-    refetchInterval: () => {
-      if (job && ACTIVE_STATUSES.includes(job.status))
-        return AUTO_SYNC_INTERVAL_MS;
-      return false;
-    },
+    enabled: Boolean(job) && activeSection === "logs",
+    refetchInterval:
+      job &&
+      activeSection === "logs" &&
+      ACTIVE_STATUSES.includes(job.status)
+        ? AUTO_SYNC_INTERVAL_MS
+        : false,
   });
 
-  // -- Live elapsed ticker for running jobs --
-  // Placed AFTER queries so 'job' is in scope
+  useEffect(() => {
+    if (!job?.status) return;
+    const previousStatus = lastToastedStatus.current;
+    if (previousStatus && previousStatus !== job.status) {
+      if (job.status === "completed")
+        toast.success(t("detail.completedToast"));
+      else if (job.status === "failed") toast.error(t("detail.failedToast"));
+      else if (job.status === "cancelled")
+        toast.warning(t("detail.cancelledToast"));
+    }
+    lastToastedStatus.current = job.status;
+  }, [job?.status, t]);
+
   useEffect(() => {
     if (!job || job.status !== "running" || !job.started_at) return;
     const startedAt = job.started_at;
@@ -233,69 +185,42 @@ export default function TrainingJobDetailPage() {
       setLiveElapsed(elapsed != null ? Math.round(elapsed) : null);
     };
     tick();
-    const id = setInterval(tick, 1000);
+    const intervalId = window.setInterval(tick, 1000);
     return () => {
-      clearInterval(id);
+      window.clearInterval(intervalId);
       setLiveElapsed(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.status, job?.started_at]);
-
-  // -- Mutations --
-
-  const handleRefreshHeader = async () => {
-    setRefreshingSection("header");
-    try {
-      await refreshStatusMutation.mutateAsync();
-    } finally {
-      setRefreshingSection(null);
-    }
-  };
-
-  const handleRefreshLogs = async () => {
-    setRefreshingSection("logs");
-    try {
-      await refetchLogs();
-    } finally {
-      setRefreshingSection(null);
-    }
-  };
-
-  const handleRefreshMetrics = async () => {
-    setRefreshingSection("metrics");
-    try {
-      await refetchMetrics();
-    } finally {
-      setRefreshingSection(null);
-    }
-  };
+  }, [job]);
 
   const refreshStatusMutation = useMutation({
     mutationFn: () => refreshTrainingJobStatus(parsedJobId),
-    onSuccess: (data) => {
-      queryClient.setQueryData(trainingQueryKeys.job(parsedJobId), data);
-      refetchLogs();
-      refetchMetrics();
-      refetchEvents();
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData(
+        trainingQueryKeys.job(parsedJobId),
+        updatedJob,
+      );
+      if (activeSection === "logs") {
+        void refetchLogs();
+        void refetchEvents();
+      }
+      if (activeSection === "metrics") void refetchMetrics();
       toast.success(t("detail.refreshed"));
     },
-    onError: (err) => {
-      toast.error(getApiErrorMessage(err, t("detail.refreshFailed")));
-    },
+    onError: (error) =>
+      toast.error(getApiErrorMessage(error, t("detail.refreshFailed"))),
   });
 
   const downloadMutation = useMutation({
     mutationFn: () => getTrainingJobDownloadUrl(parsedJobId),
-    onSuccess: (data) => {
+    onSuccess: ({ download_url: downloadUrl }) => {
       const link = document.createElement("a");
-      link.href = data.download_url;
+      link.href = downloadUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     },
-    onError: (err) => {
-      toast.error(getApiErrorMessage(err, t("detail.downloadFailed")));
-    },
+    onError: (error) =>
+      toast.error(getApiErrorMessage(error, t("detail.downloadFailed"))),
   });
 
   const deleteJobMutation = useMutation({
@@ -308,9 +233,8 @@ export default function TrainingJobDetailPage() {
       });
       navigate("/dashboard/model-training");
     },
-    onError: (err) => {
-      toast.error(getApiErrorMessage(err, t("delete.failed")));
-    },
+    onError: (error) =>
+      toast.error(getApiErrorMessage(error, t("delete.failed"))),
   });
 
   const buildAndRegisterMutation = useMutation({
@@ -322,29 +246,57 @@ export default function TrainingJobDetailPage() {
         queryKey: trainingQueryKeys.jobs(),
       });
     },
-    onError: (err) => {
-      toast.error(getApiErrorMessage(err, t("detail.buildFailed")));
-    },
+    onError: (error) =>
+      toast.error(getApiErrorMessage(error, t("detail.buildFailed"))),
   });
 
   const deleteOutputsMutation = useMutation({
     mutationFn: () => deleteTrainingOutputs(parsedJobId),
     onSuccess: async (updatedJob) => {
       setDeleteOutputsOpen(false);
-      queryClient.setQueryData(trainingQueryKeys.job(parsedJobId), updatedJob);
+      queryClient.setQueryData(
+        trainingQueryKeys.job(parsedJobId),
+        updatedJob,
+      );
       await queryClient.invalidateQueries({
         queryKey: trainingQueryKeys.jobs(),
       });
       toast.success(t("detail.outputsDeleted"));
     },
-    onError: (err) => {
-      toast.error(getApiErrorMessage(err, t("detail.outputDeleteFailed")));
-    },
+    onError: (error) =>
+      toast.error(getApiErrorMessage(error, t("detail.outputDeleteFailed"))),
   });
 
-  const handleCopyUri = useCallback(
+  const refreshHeader = async () => {
+    setRefreshingSection("header");
+    try {
+      await refreshStatusMutation.mutateAsync();
+    } finally {
+      setRefreshingSection(null);
+    }
+  };
+
+  const refreshLogs = async () => {
+    setRefreshingSection("logs");
+    try {
+      await Promise.all([refetchLogs(), refetchEvents()]);
+    } finally {
+      setRefreshingSection(null);
+    }
+  };
+
+  const refreshMetrics = async () => {
+    setRefreshingSection("metrics");
+    try {
+      await refetchMetrics();
+    } finally {
+      setRefreshingSection(null);
+    }
+  };
+
+  const copyUri = useCallback(
     (value: string) => {
-      navigator.clipboard.writeText(value);
+      void navigator.clipboard.writeText(value);
       toast.success(t("detail.copied"));
     },
     [t],
@@ -353,7 +305,7 @@ export default function TrainingJobDetailPage() {
   if (!parsedJobId) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
-        <p className="text-muted-foreground text-lg font-medium">
+        <p className="text-lg font-medium text-muted-foreground">
           {t("detail.invalidId")}
         </p>
       </div>
@@ -364,7 +316,7 @@ export default function TrainingJobDetailPage() {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
         <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-muted-foreground font-medium">
+        <p className="font-medium text-muted-foreground">
           {t("detail.loading")}
         </p>
       </div>
@@ -377,10 +329,10 @@ export default function TrainingJobDetailPage() {
         <div className="rounded-full bg-danger-subtle p-4">
           <AlertTriangle className="h-10 w-10 text-danger" />
         </div>
-        <p className="text-foreground font-bold text-lg">
+        <p className="text-lg font-bold text-foreground">
           {t("detail.notFound")}
         </p>
-        <p className="text-muted-foreground max-w-md text-center">
+        <p className="max-w-md text-center text-muted-foreground">
           {t("detail.notFoundDescription")}
         </p>
         <Button
@@ -394,185 +346,86 @@ export default function TrainingJobDetailPage() {
     );
   }
 
-  const elapsedForJob = (j: TrainingJob): number | null => {
-    if (j.status === "running" && liveElapsed != null) return liveElapsed;
-    if (j.runtime_seconds) return Math.round(j.runtime_seconds);
-    if (j.completed_at && j.started_at) {
-      return Math.round(
-        (new Date(j.completed_at).getTime() -
-          new Date(j.started_at).getTime()) /
-          1000,
-      );
-    }
-    return null;
-  };
-
-  const getMilestones = () => {
-    const isCompleted = job.status === "completed";
-    const isFailed = job.status === "failed";
-    const isCancelled = job.status === "cancelled";
-    const isRunning = job.status === "running";
-    const isUploading = job.status === "uploading";
-
-    const hasStarted = Boolean(job.started_at);
-
-    const createdState = "completed";
-
-    let submittedState: "pending" | "active" | "completed" = "pending";
-    if (isUploading) submittedState = "active";
-    else if (isRunning || isCompleted || isFailed || isCancelled)
-      submittedState = "completed";
-
-    let runningState: "pending" | "active" | "completed" | "skipped" =
-      "pending";
-    if (isRunning) runningState = "active";
-    else if (isCompleted) runningState = "completed";
-    else if (isFailed || isCancelled) {
-      runningState = hasStarted ? "completed" : "skipped";
-    }
-
-    let finalLabel = t("detail.milestones.completed");
-    let finalState: "pending" | "completed" | "failed" | "cancelled" =
-      "pending";
-    if (isCompleted) {
-      finalState = "completed";
-    } else if (isFailed) {
-      finalLabel = t("detail.milestones.failed");
-      finalState = "failed";
-    } else if (isCancelled) {
-      finalLabel = t("detail.milestones.cancelled");
-      finalState = "cancelled";
-    }
-
-    const formatTime = (iso?: string | null) =>
-      iso ? new Date(iso).toLocaleString() : t("detail.milestones.unavailable");
-    const formatDurationDiff = (start?: string | null, end?: string | null) => {
-      const elapsed = computeElapsed(start, end ?? undefined);
-      return elapsed != null ? formatDuration(elapsed) : undefined;
-    };
-
-    return [
-      {
-        id: "created",
-        label: t("detail.milestones.created"),
-        state: createdState as "completed",
-        icon: Clock,
-        timestamp: formatTime(job.created_at),
-        helper: undefined,
-      },
-      {
-        id: "submitted",
-        label: t("detail.milestones.submitted"),
-        state: submittedState as "pending" | "active" | "completed",
-        icon: UploadCloud,
-        timestamp:
-          submittedState === "completed" || submittedState === "active"
-            ? formatTime(job.updated_at)
-            : t("detail.milestones.pending"),
-        helper: undefined,
-      },
-      {
-        id: "running",
-        label: t("detail.milestones.running"),
-        state: runningState as "pending" | "active" | "completed" | "skipped",
-        icon: Loader2,
-        timestamp:
-          runningState === "completed" || runningState === "active"
-            ? formatTime(job.started_at)
-            : runningState === "skipped"
-              ? t("detail.milestones.skipped")
-              : t("detail.milestones.pending"),
-        helper:
-          hasStarted && job.created_at
-            ? t("detail.milestones.startedAfter", {
-                duration: formatDurationDiff(job.created_at, job.started_at),
-              })
-            : undefined,
-      },
-      {
-        id: "final",
-        label: finalLabel,
-        state: finalState as "pending" | "completed" | "failed" | "cancelled",
-        icon:
-          finalState === "failed" || finalState === "cancelled"
-            ? XCircle
-            : CheckCircle,
-        timestamp:
-          finalState === "completed" ||
-          finalState === "failed" ||
-          finalState === "cancelled"
-            ? formatTime(job.completed_at)
-            : t("detail.milestones.pending"),
-        helper:
-          job.completed_at && job.started_at
-            ? t("detail.milestones.finishedIn", {
-                duration: formatDurationDiff(job.started_at, job.completed_at),
-              })
-            : undefined,
-      },
-    ];
-  };
-
+  const elapsedSeconds = getElapsedSeconds(job, liveElapsed);
   const tabs = [
     { id: "overview", label: t("detail.tabs.overview"), icon: Info },
     { id: "logs", label: t("detail.tabs.logs"), icon: ScrollText },
     { id: "metrics", label: t("detail.tabs.metrics"), icon: Activity },
-    { id: "artifacts", label: t("detail.tabs.artifacts"), icon: FileArchive },
+    {
+      id: "artifacts",
+      label: t("detail.tabs.artifacts"),
+      icon: FileArchive,
+    },
     { id: "config", label: t("detail.tabs.config"), icon: Settings },
   ] as const;
+  const context: TrainingJobDetailContextValue = {
+    job,
+    statusLabels,
+    activeStatuses: ACTIVE_STATUSES,
+    logsResponse,
+    loadingLogs,
+    metrics,
+    loadingMetrics,
+    eventsResponse,
+    refreshingSection,
+    refreshLogs,
+    refreshMetrics,
+    refreshJob: async () => {
+      await refetchJob();
+    },
+    downloadOutput: () => downloadMutation.mutate(),
+    downloadingOutput: downloadMutation.isPending,
+    buildAndRegister: () => buildAndRegisterMutation.mutate(),
+    buildingAndRegistering: buildAndRegisterMutation.isPending,
+    requestDeleteOutputs: () => setDeleteOutputsOpen(true),
+    copyUri,
+  };
 
   return (
     <section className="flex w-full flex-1 flex-col space-y-6">
-      {/* Back button */}
       <button
+        type="button"
         onClick={() => navigate("/dashboard/model-training")}
-        className="mb-6 flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors group"
+        className="group mb-6 flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4 text-muted-foreground group-hover:text-muted-foreground group-hover:-translate-x-0.5 transition-all" />
+        <ArrowLeft className="h-4 w-4 transition-all group-hover:-translate-x-0.5" />
         {t("detail.backTraining")}
       </button>
 
-      {/* Header Card */}
-      <div className="rounded-2xl border border-border bg-surface shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between p-6 lg:p-8 gap-6 border-b border-border">
-          <div className="flex items-start gap-4 min-w-0">
-            {/* Model/Job Icon */}
-            <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted border border-border text-muted-foreground shadow-inner">
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-shadow hover:shadow-md">
+        <div className="flex flex-col gap-6 border-b border-border p-6 sm:flex-row sm:items-start sm:justify-between lg:p-8">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground shadow-inner sm:flex">
               <Bot className="h-6 w-6" />
             </div>
-
-            <div className="flex flex-col min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-extrabold tracking-tight text-foreground truncate">
-                  {job.name}
-                </h1>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground font-medium">
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-2xl font-extrabold tracking-tight text-foreground">
+                {job.name}
+              </h1>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
                 {t("detail.jobNumber", { id: job.id })}
               </p>
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-col sm:flex-row items-end sm:items-center gap-3 mt-2 sm:mt-0">
-            {ACTIVE_STATUSES.includes(job.status) && (
-              <div className="flex shrink-0 mb-1 sm:mb-0">
-                <LiveStatusBadge />
-              </div>
-            )}
+          <div className="flex shrink-0 flex-col items-end gap-3 sm:flex-row sm:items-center">
+            {ACTIVE_STATUSES.includes(job.status) && <LiveStatusBadge />}
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Button
                 size="icon"
                 variant="secondary"
                 icon={
                   <RefreshCw
-                    className={`h-4 w-4 ${refreshingSection === "header" ? "animate-spin" : ""}`}
+                    className={`h-4 w-4 ${
+                      refreshingSection === "header" ? "animate-spin" : ""
+                    }`}
                   />
                 }
                 disabled={refreshingSection === "header"}
-                onClick={handleRefreshHeader}
+                onClick={() => void refreshHeader()}
                 aria-label={t("detail.refreshStatus")}
                 title={t("detail.refreshStatus")}
-                className="border border-border rounded-xl shadow-sm hover:border-foreground/30 transition-all"
+                className="rounded-xl border border-border shadow-sm transition-all hover:border-foreground/30"
               />
               <Button
                 size="icon"
@@ -584,7 +437,7 @@ export default function TrainingJobDetailPage() {
                 onClick={() => downloadMutation.mutate()}
                 aria-label={t("detail.download")}
                 title={t("detail.download")}
-                className="border border-border rounded-xl shadow-sm hover:border-foreground/30 transition-all"
+                className="rounded-xl border border-border shadow-sm transition-all hover:border-foreground/30"
               />
               <Button
                 size="icon"
@@ -594,502 +447,57 @@ export default function TrainingJobDetailPage() {
                 onClick={() => setDeleteJobOpen(true)}
                 aria-label={t("table.delete")}
                 title={t("table.delete")}
-                className="border border-danger/30 rounded-xl shadow-sm transition-all text-danger hover:bg-danger-subtle hover:text-danger hover:border-danger"
+                className="rounded-xl border border-danger/30 text-danger shadow-sm transition-all hover:border-danger hover:bg-danger-subtle hover:text-danger"
               />
             </div>
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-border bg-muted/50">
-          <div className="p-5 flex flex-col justify-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-              {t("table.status", { defaultValue: "Training Status" })}
-            </p>
-            <div className="flex items-center">
-              <span
-                className={`w-fit rounded-md px-2.5 py-0.5 text-sm font-bold border ${
-                  job.status === "completed"
-                    ? "bg-success-subtle text-success border-success/20"
-                    : job.status === "failed"
-                      ? "bg-danger-subtle text-danger border-danger/20"
-                      : job.status === "cancelled"
-                        ? "bg-warning-subtle text-warning border-warning/20"
-                        : job.status === "running"
-                          ? "bg-primary-subtle text-primary border-primary/20"
-                          : "bg-surface text-foreground border-border"
-                }`}
-              >
-                {statusLabels[job.status]}
-              </span>
-            </div>
-          </div>
-          <div className="p-5 flex flex-col justify-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-              {t("detail.runtimeElapsed")}
-            </p>
+        <div className="grid grid-cols-2 divide-y divide-border bg-muted/50 lg:grid-cols-4 lg:divide-x lg:divide-y-0">
+          <SummaryCell label={t("table.status", { defaultValue: "Training Status" })}>
+            <span className={statusBadgeClass(job.status)}>
+              {statusLabels[job.status]}
+            </span>
+          </SummaryCell>
+          <SummaryCell label={t("detail.runtimeElapsed")}>
             <p className="text-xl font-bold text-foreground">
-              {formatDuration(elapsedForJob(job)) || "-"}
+              {formatDuration(elapsedSeconds) || "-"}
               {job.status === "running" && (
-                <span className="ml-1 text-xs font-normal text-primary animate-pulse">
+                <span className="ml-1 animate-pulse text-xs font-normal text-primary">
                   {t("detail.live")}
                 </span>
               )}
             </p>
-          </div>
-          <div className="p-5 flex flex-col justify-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-              {t("table.modelStatus")}
-            </p>
-            <div className="flex items-center">
-              <span
-                className={`w-fit rounded-md px-2.5 py-0.5 text-sm font-bold border ${
-                  (job.model_status ?? "none") === "deployed"
-                    ? "bg-success-subtle text-success border-success/20"
-                    : (job.model_status ?? "none") === "built"
-                      ? "bg-primary-subtle text-primary border-primary/20"
-                      : (job.model_status ?? "none") === "trained"
-                        ? "bg-warning-subtle text-warning border-warning/20"
-                        : "bg-surface text-foreground border-border"
-                }`}
-              >
-                {t(`table.modelStatuses.${job.model_status ?? "none"}`)}
-              </span>
-            </div>
-          </div>
-          <div className="p-5 flex flex-col justify-center">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-              Updated At
-            </p>
+          </SummaryCell>
+          <SummaryCell label={t("table.modelStatus")}>
+            <span className={modelStatusBadgeClass(job.model_status ?? "none")}>
+              {t(`table.modelStatuses.${job.model_status ?? "none"}`)}
+            </span>
+          </SummaryCell>
+          <SummaryCell label="Updated At">
             <p className="text-xl font-bold text-foreground">
               {new Date(job.updated_at).toLocaleString()}
             </p>
-          </div>
+          </SummaryCell>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-border mt-2">
+      <div className="mt-2 border-b border-border">
         <PageTabs
           tabs={tabs.map((tab) => ({
             label: tab.label,
             icon: tab.icon,
-            isActive: activeTab === tab.id,
+            isActive: activeSection === tab.id,
             onClick: () =>
-              setActiveTab(
-                tab.id as
-                  | "overview"
-                  | "logs"
-                  | "metrics"
-                  | "artifacts"
-                  | "config",
+              navigate(
+                `/dashboard/model-training/jobs/${job.id}/details/${tab.id}`,
               ),
           }))}
         />
       </div>
 
-      {/* Tab Content */}
       <div className="min-h-100">
-        {activeTab === "overview" && (
-          <div className="space-y-6">
-            {job.status === "failed" && (
-              <div className="rounded-xl border border-danger/20 bg-danger-subtle p-5">
-                <h4 className="flex items-center gap-2 text-base font-bold text-danger mb-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  Training Failed
-                </h4>
-                <p className="text-sm font-medium text-danger mb-3">
-                  {job.stop_reason || "The training job exited unexpectedly."}
-                </p>
-                {job.error_message && (
-                  <div className="rounded-xl border border-danger/20 bg-surface p-4 overflow-x-auto">
-                    <code className="whitespace-pre-wrap wrap-break-words text-xs text-danger font-mono">
-                      {job.error_message}
-                    </code>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {job.status === "cancelled" && (
-              <div className="rounded-xl border border-warning/20 bg-warning-subtle p-5">
-                <h4 className="flex items-center gap-2 text-base font-bold text-warning mb-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  Training Cancelled
-                </h4>
-                <p className="text-sm font-medium text-warning">
-                  {job.stop_reason ||
-                    "This training job was cancelled before completion."}
-                </p>
-              </div>
-            )}
-
-            <PageContent title="Job Metadata">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8 p-6">
-                <MetadataRow label="Internal Job ID" value={String(job.id)} />
-                <MetadataRow
-                  label="External Job ID"
-                  value={job.external_job_id || job.sagemaker_job_name || "-"}
-                />
-                <MetadataRow label="Model Name" value={job.name} />
-                <MetadataRow label="Model Version" value={job.model_version} />
-                <MetadataRow
-                  label="Backend"
-                  value={backendLabel(job.backend)}
-                />
-                <MetadataRow label="Status" value={statusLabels[job.status]} />
-                <MetadataRow
-                  label="Created At"
-                  value={new Date(job.created_at).toLocaleString()}
-                />
-                <MetadataRow
-                  label="Updated At"
-                  value={new Date(job.updated_at).toLocaleString()}
-                />
-                <MetadataRow
-                  label="Started At"
-                  value={
-                    job.started_at
-                      ? new Date(job.started_at).toLocaleString()
-                      : "-"
-                  }
-                />
-                <MetadataRow
-                  label="Completed At"
-                  value={
-                    job.completed_at
-                      ? new Date(job.completed_at).toLocaleString()
-                      : "-"
-                  }
-                />
-              </div>
-            </PageContent>
-
-            <PageContent title="Status Timeline">
-              <div className="p-6 sm:p-8">
-                <div className="w-full overflow-x-auto pb-4">
-                  <MilestoneTracker milestones={getMilestones()} />
-                </div>
-                {job.status === "failed" &&
-                  (job.error_message || job.stop_reason) && (
-                    <div className="mt-6 rounded-xl border border-danger/20 bg-danger-subtle p-4">
-                      <p className="text-xs font-bold uppercase tracking-wider text-danger mb-1 flex items-center gap-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5" /> Failure Reason
-                      </p>
-                      <p className="text-sm font-medium text-danger">
-                        {job.error_message || job.stop_reason}
-                      </p>
-                    </div>
-                  )}
-                {job.status === "cancelled" && job.stop_reason && (
-                  <div className="mt-6 rounded-xl border border-warning/20 bg-warning-subtle p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-warning mb-1 flex items-center gap-1.5">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Cancel Reason
-                    </p>
-                    <p className="text-sm font-medium text-warning">
-                      {job.stop_reason}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </PageContent>
-          </div>
-        )}
-
-        {activeTab === "logs" && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            {job.status === "failed" && job.stop_reason && (
-              <div className="rounded-xl border border-danger/20 bg-danger-subtle p-4 flex gap-3 items-start text-sm text-danger font-medium">
-                <AlertTriangle className="h-5 w-5 shrink-0 text-danger mt-0.5" />
-                <div>
-                  <p className="font-bold mb-1 text-danger">Stop Reason</p>
-                  <p>{job.stop_reason}</p>
-                </div>
-              </div>
-            )}
-            <TerminalViewer
-              title="Training output"
-              bodyClassName="min-h-100 max-h-150"
-              actions={
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleRefreshLogs}
-                  disabled={loadingLogs || refreshingSection === "logs"}
-                  icon={
-                    <RefreshCw
-                      className={`h-3 w-3 ${loadingLogs || refreshingSection === "logs" ? "animate-spin" : ""}`}
-                    />
-                  }
-                >
-                  Refresh
-                </Button>
-              }
-              logs={
-                logsResponse?.text
-                  ? logsResponse.text.split("\n")
-                  : ACTIVE_STATUSES.includes(job.status)
-                    ? [
-                        "Logs will appear after the training container starts...",
-                      ]
-                    : ["No logs available for this job."]
-              }
-            />
-
-            <PageContent title="Event History" className="mt-8">
-              <div className="p-6">
-                <TrainingEventHistory events={eventsResponse?.events || []} />
-              </div>
-            </PageContent>
-          </div>
-        )}
-
-        {activeTab === "metrics" && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            {!metrics?.metrics_available &&
-            ACTIVE_STATUSES.includes(job.status) ? (
-              <div className="flex flex-col items-center justify-center py-16 px-4 rounded-xl border border-border border-dashed bg-muted text-center shadow-sm">
-                <Activity className="h-10 w-10 text-muted-foreground mb-4" />
-                <p className="text-base font-bold text-foreground">
-                  Metrics are starting up
-                </p>
-                <p className="text-sm text-muted-foreground mt-2 max-w-md">
-                  Runtime metrics will appear here automatically once the runner
-                  emits them.
-                </p>
-              </div>
-            ) : !metrics?.metrics_available ? (
-              <div className="flex flex-col items-center justify-center py-16 px-4 rounded-xl border border-border bg-surface text-center shadow-sm">
-                <Activity className="mb-4 h-10 w-10 text-muted-foreground" />
-                <p className="text-base font-bold text-foreground">
-                  No metrics available
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  This job did not emit any runtime metrics.
-                </p>
-              </div>
-            ) : (
-              <RuntimeMetricsPanel
-                metrics={metrics}
-                loading={loadingMetrics || refreshingSection === "metrics"}
-                onRefresh={handleRefreshMetrics}
-              />
-            )}
-          </div>
-        )}
-
-        {activeTab === "artifacts" && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="rounded-xl border border-primary/20 bg-primary-subtle p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-bold text-primary">
-                    {t("detail.registry.title")}
-                  </p>
-                  <p className="mt-1 text-sm text-primary">
-                    {t("detail.registry.description")}
-                  </p>
-                </div>
-                {job.registration_build?.status === "ready" ? (
-                  <Button
-                    icon={<Rocket className="h-4 w-4" />}
-                    onClick={() =>
-                      navigate(`/dashboard/model-evolution/${job.project_id}`)
-                    }
-                  >
-                    {t("detail.registry.open")}
-                  </Button>
-                ) : (
-                  <Button
-                    icon={<Rocket className="h-4 w-4" />}
-                    loading={buildAndRegisterMutation.isPending}
-                    disabled={
-                      job.status !== "completed" ||
-                      !job.output_available ||
-                      ["pending", "queued", "building"].includes(
-                        job.registration_build?.status || "",
-                      )
-                    }
-                    onClick={() => buildAndRegisterMutation.mutate()}
-                  >
-                    {["pending", "queued", "building"].includes(
-                      job.registration_build?.status || "",
-                    )
-                      ? t("detail.registry.building")
-                      : job.registration_build
-                        ? t("detail.registry.retry")
-                        : t("detail.registry.build")}
-                  </Button>
-                )}
-              </div>
-              {job.registration_build && (
-                <div className="mt-5">
-                  <RegistrationBuildTerminal
-                    buildId={job.registration_build.id}
-                    title={t("detail.registry.console")}
-                    onCompleted={() => void refetchJob()}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-border bg-muted/50 flex flex-wrap gap-4 justify-between items-center">
-                <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">
-                  Output Artifacts
-                </h3>
-                <Button
-                  size="sm"
-                  icon={<Download className="h-4 w-4" />}
-                  disabled={!job.output_available}
-                  loading={downloadMutation.isPending}
-                  onClick={() => downloadMutation.mutate()}
-                >
-                  Download Model
-                </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  disabled={!job.output_available}
-                  onClick={() => setDeleteOutputsOpen(true)}
-                >
-                  {t("detail.deleteOutput")}
-                </Button>
-              </div>
-              <div className="p-6 space-y-6">
-                {job.output_available ? (
-                  <>
-                    <div className="space-y-2">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                        Model Artifact URI
-                      </p>
-                      <UriLine
-                        label="Model URI"
-                        value={job.model_artifact_uri}
-                        onCopy={handleCopyUri}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                        Output S3 URI
-                      </p>
-                      <UriLine
-                        label="Output URI"
-                        value={job.output_s3_uri}
-                        onCopy={handleCopyUri}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="py-10 text-center">
-                    <FileArchive className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
-                    <p className="text-base font-bold text-muted-foreground">
-                      Model artifact is not ready yet.
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-                      Artifacts will be available for download and URI
-                      inspection once the training completes successfully.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-border bg-muted/50">
-                <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">
-                  Source Files
-                </h3>
-              </div>
-              <div className="p-6 space-y-6">
-                <div className="space-y-2">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    Source ZIP URI
-                  </p>
-                  <UriLine
-                    label="Source ZIP"
-                    value={job.s3_source_uri}
-                    onCopy={handleCopyUri}
-                  />
-                </div>
-                {job.s3_training_data_uri && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      Training Data URI
-                    </p>
-                    <UriLine
-                      label="Data URI"
-                      value={job.s3_training_data_uri}
-                      onCopy={handleCopyUri}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "config" && (
-          <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden animate-in fade-in duration-300">
-            <div className="px-6 py-4 border-b border-border bg-muted/50">
-              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">
-                Submitted Configuration
-              </h3>
-            </div>
-            <div className="p-6 space-y-8">
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4 border-b border-border pb-2">
-                  Compute & Runtime
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-8">
-                  <MetadataRow
-                    label="Training Backend"
-                    value={backendLabel(job.backend)}
-                  />
-                  <MetadataRow label="vCPU" value={String(job.vcpu)} />
-                  <MetadataRow label="Memory (MB)" value={String(job.memory)} />
-                  <MetadataRow
-                    label="Max Runtime (Seconds)"
-                    value={String(job.max_runtime_seconds)}
-                  />
-                </div>
-              </div>
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4 border-b border-border pb-2">
-                  Accelerator
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-8">
-                  <MetadataRow
-                    label="Accelerator Type"
-                    value={
-                      job.accelerator_type === "none"
-                        ? "None"
-                        : job.accelerator_type.toUpperCase()
-                    }
-                  />
-                  {job.accelerator_type !== "none" && (
-                    <MetadataRow
-                      label="Accelerator Count"
-                      value={String(job.accelerator_count)}
-                    />
-                  )}
-                </div>
-              </div>
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4 border-b border-border pb-2">
-                  Source
-                </h4>
-                <div className="grid grid-cols-1 gap-y-6 gap-x-8">
-                  <MetadataRow
-                    label="Entry Point"
-                    value={job.entry_point}
-                    monospace
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <Outlet context={context} />
       </div>
 
       <ConfirmModal
@@ -1116,204 +524,56 @@ export default function TrainingJobDetailPage() {
   );
 }
 
-// === Reused Components ===
-
-function RuntimeMetricsPanel({
-  metrics,
-  loading,
-  onRefresh,
-}: {
-  metrics?: TrainingJobMetricsResponse;
-  loading: boolean;
-  onRefresh: () => void;
-}) {
-  const isHighCpu =
-    metrics?.latest?.cpu_percent != null && metrics.latest.cpu_percent > 85;
-  const isHighRam =
-    metrics?.latest?.memory_percent != null &&
-    metrics.latest.memory_percent > 85;
-
-  const latest = metrics?.latest;
-  const memoryValue =
-    latest?.memory_percent != null
-      ? `${formatMetricPercent(latest.memory_percent)}`
-      : latest?.memory_used_mb != null
-        ? `${formatMegabytes(latest.memory_used_mb)} used`
-        : "-";
-  const memoryDetail =
-    latest?.memory_used_mb != null && latest?.memory_limit_mb != null
-      ? `${formatMegabytes(latest.memory_used_mb)} / ${formatMegabytes(latest.memory_limit_mb)}`
-      : latest?.memory_used_mb != null
-        ? `${formatMegabytes(latest.memory_used_mb)} used`
-        : metrics?.message || "Waiting for runner metrics";
-  const gpuValue =
-    latest?.gpu_available && latest.gpu_percent != null
-      ? formatMetricPercent(latest.gpu_percent)
-      : "N/A";
-  const gpuDetail =
-    latest?.gpu_available &&
-    latest.gpu_memory_used_mb != null &&
-    latest.gpu_memory_total_mb != null
-      ? `${formatMegabytes(latest.gpu_memory_used_mb)} / ${formatMegabytes(latest.gpu_memory_total_mb)}`
-      : "No GPU detected by runner";
-
-  return (
-    <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-      <div className="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4">
-        <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground">
-          <Activity className="h-4 w-4 text-blue-500" />
-          Runtime metrics
-        </p>
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-bold text-muted-foreground">
-            {latest?.timestamp
-              ? `Sampled ${new Date(latest.timestamp).toLocaleTimeString()}`
-              : "Pending metrics..."}
-          </span>
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="flex h-7 items-center gap-1.5 rounded bg-muted border border-border px-2.5 text-[11px] font-bold text-muted-foreground hover:bg-muted disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
-        </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCell
-          icon={<Cpu className="h-3.5 w-3.5" />}
-          label="CPU"
-          value={
-            latest?.cpu_percent == null
-              ? "-"
-              : formatMetricPercent(latest.cpu_percent)
-          }
-          detail={
-            latest?.cpu_limit_cores
-              ? `${latest.cpu_limit_cores} vCPU limit`
-              : "Container CPU usage"
-          }
-          warning={isHighCpu}
-          progress={latest?.cpu_percent}
-          progressColor={isHighCpu ? "bg-amber-500" : "bg-emerald-500"}
-        />
-        <MetricCell
-          icon={<HardDrive className="h-3.5 w-3.5" />}
-          label="RAM"
-          value={memoryValue}
-          detail={memoryDetail}
-          warning={isHighRam}
-          progress={latest?.memory_percent}
-          progressColor={isHighRam ? "bg-red-500" : "bg-blue-500"}
-        />
-        <MetricCell
-          icon={<Rocket className="h-3.5 w-3.5" />}
-          label="GPU"
-          value={gpuValue}
-          detail={gpuDetail}
-          muted={!latest?.gpu_available}
-          progress={latest?.gpu_percent}
-          progressColor="bg-purple-500"
-        />
-      </div>
-    </div>
-  );
+function getElapsedSeconds(job: TrainingJob, liveElapsed: number | null) {
+  if (job.status === "running" && liveElapsed != null) return liveElapsed;
+  if (job.runtime_seconds) return Math.round(job.runtime_seconds);
+  if (job.completed_at && job.started_at) {
+    return Math.round(
+      (new Date(job.completed_at).getTime() -
+        new Date(job.started_at).getTime()) /
+        1000,
+    );
+  }
+  return null;
 }
 
-function MetricCell({
-  icon,
+function SummaryCell({
   label,
-  value,
-  detail,
-  muted = false,
-  warning = false,
-  progress,
-  progressColor,
+  children,
 }: {
-  icon: ReactNode;
   label: string;
-  value: string;
-  detail: string;
-  muted?: boolean;
-  warning?: boolean;
-  progress?: number | null;
-  progressColor?: string;
+  children: ReactNode;
 }) {
   return (
-    <div
-      className={`min-w-0 flex flex-col justify-between rounded-xl bg-muted px-5 py-4 border ${warning ? "border-amber-300 ring-1 ring-amber-100" : "border-border"} ${muted ? "opacity-50 grayscale border-dashed" : ""}`}
-    >
-      <div>
-        <div className="flex items-start justify-between">
-          <p
-            className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${warning ? "text-amber-600" : "text-muted-foreground"}`}
-          >
-            {icon}
-            {label}
-          </p>
-          <p
-            className={`truncate text-2xl font-black tracking-tight ${warning ? "text-amber-700" : muted ? "text-muted-foreground" : "text-foreground"}`}
-            title={value}
-          >
-            {value}
-          </p>
-        </div>
-
-        {progress != null && !muted && (
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full transition-all duration-500 ${progressColor || "bg-border"}`}
-              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-            />
-          </div>
-        )}
-      </div>
-
-      <p
-        className={`mt-3 truncate text-[11px] font-bold ${warning ? "text-amber-600/80" : "text-muted-foreground"}`}
-        title={detail}
-      >
-        {detail}
+    <div className="flex flex-col justify-center p-5">
+      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        {label}
       </p>
+      <div className="flex items-center">{children}</div>
     </div>
   );
 }
 
-function UriLine({
-  icon,
-  label,
-  value,
-  onCopy,
-}: {
-  icon?: ReactNode;
-  label: string;
-  value: string;
-  onCopy: (value: string) => void;
-}) {
-  return (
-    <div className="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-muted px-4 py-2 shadow-sm">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          {icon}
-          {label}
-        </div>
-        <code
-          className="mt-1 block truncate text-xs sm:text-sm font-semibold text-foreground max-w-50 sm:max-w-md lg:max-w-xl"
-          title={value || "-"}
-        >
-          {value || "-"}
-        </code>
-      </div>
-      <button
-        type="button"
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-surface text-muted-foreground hover:bg-muted hover:text-foreground shadow-sm transition-all disabled:opacity-40"
-        disabled={!value}
-        onClick={() => onCopy(value)}
-        aria-label={`Copy ${label}`}
-      >
-        <Clipboard className="h-4 w-4" />
-      </button>
-    </div>
-  );
+function statusBadgeClass(status: TrainingJobStatus) {
+  const base = "w-fit rounded-md border px-2.5 py-0.5 text-sm font-bold";
+  if (status === "completed")
+    return `${base} border-success/20 bg-success-subtle text-success`;
+  if (status === "failed")
+    return `${base} border-danger/20 bg-danger-subtle text-danger`;
+  if (status === "cancelled")
+    return `${base} border-warning/20 bg-warning-subtle text-warning`;
+  if (status === "running")
+    return `${base} border-primary/20 bg-primary-subtle text-primary`;
+  return `${base} border-border bg-surface text-foreground`;
+}
+
+function modelStatusBadgeClass(status: TrainingJob["model_status"]) {
+  const base = "w-fit rounded-md border px-2.5 py-0.5 text-sm font-bold";
+  if (status === "deployed")
+    return `${base} border-success/20 bg-success-subtle text-success`;
+  if (status === "built")
+    return `${base} border-primary/20 bg-primary-subtle text-primary`;
+  if (status === "trained")
+    return `${base} border-warning/20 bg-warning-subtle text-warning`;
+  return `${base} border-border bg-surface text-foreground`;
 }

@@ -326,7 +326,7 @@ export default function CreateTrainingJobPage() {
       return;
     }
     allowExit.current = true;
-    navigate(`${trainingPath}/jobs/${job.id}`);
+    navigate(`${trainingPath}/jobs/${job.id}/details/overview`);
   };
 
   const goToStep = useCallback(async (step: TrainingStep) => {

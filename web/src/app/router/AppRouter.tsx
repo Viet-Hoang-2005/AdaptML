@@ -69,6 +69,21 @@ const TrainingModelPage = lazy(
 const TrainingJobDetailPage = lazy(
   () => import("@/features/training/pages/TrainingJobDetailPage"),
 );
+const TrainingJobOverviewPage = lazy(
+  () => import("@/features/training/pages/TrainingJobOverviewPage"),
+);
+const TrainingJobLogsPage = lazy(
+  () => import("@/features/training/pages/TrainingJobLogsPage"),
+);
+const TrainingJobMetricsPage = lazy(
+  () => import("@/features/training/pages/TrainingJobMetricsPage"),
+);
+const TrainingJobArtifactsPage = lazy(
+  () => import("@/features/training/pages/TrainingJobArtifactsPage"),
+);
+const TrainingJobConfigPage = lazy(
+  () => import("@/features/training/pages/TrainingJobConfigPage"),
+);
 const CreateTrainingJobPage = lazy(
   () => import("@/features/training/pages/CreateTrainingJobPage"),
 );
@@ -164,7 +179,22 @@ const router = createBrowserRouter(
             <Route path="source" element={<SourceTrainingJobPage />} />
             <Route path="execution" element={<ExecutionTrainingJobPage />} />
           </Route>
-          <Route path="jobs/:jobId" element={<TrainingJobDetailPage />} />
+          <Route
+            path="jobs/:jobId"
+            element={<Navigate to="details/overview" replace />}
+          />
+          <Route
+            path="jobs/:jobId/details"
+            element={<TrainingJobDetailPage />}
+          >
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route path="overview" element={<TrainingJobOverviewPage />} />
+            <Route path="logs" element={<TrainingJobLogsPage />} />
+            <Route path="metrics" element={<TrainingJobMetricsPage />} />
+            <Route path="artifacts" element={<TrainingJobArtifactsPage />} />
+            <Route path="config" element={<TrainingJobConfigPage />} />
+            <Route path="*" element={<Navigate to="overview" replace />} />
+          </Route>
         </Route>
         <Route path="model-evolution">
           <Route index element={<RegistryPage />} />

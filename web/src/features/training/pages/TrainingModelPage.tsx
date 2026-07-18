@@ -195,7 +195,9 @@ export default function TrainingModelPage() {
             type="button"
             className="text-left font-medium hover:text-primary transition-colors focus:outline-none"
             onClick={() =>
-              navigate(`/dashboard/model-training/jobs/${row.original.id}`)
+              navigate(
+                `/dashboard/model-training/jobs/${row.original.id}/details/overview`,
+              )
             }
           >
             {row.original.started_at
@@ -293,7 +295,9 @@ export default function TrainingModelPage() {
                 icon={<Eye className="h-4 w-4" />}
                 disabled={deleting}
                 onClick={() =>
-                  navigate(`/dashboard/model-training/jobs/${job.id}`)
+                  navigate(
+                    `/dashboard/model-training/jobs/${job.id}/details/overview`,
+                  )
                 }
               />
               <Button
