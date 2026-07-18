@@ -1,5 +1,5 @@
-import { useRef, useState, useCallback } from 'react';
-import type { KeyboardEvent, ClipboardEvent, ChangeEvent } from 'react';
+import { useRef, useState, useCallback } from "react";
+import type { KeyboardEvent, ClipboardEvent, ChangeEvent } from "react";
 
 interface OTPInputProps {
   length?: number;
@@ -7,15 +7,22 @@ interface OTPInputProps {
   disabled?: boolean;
 }
 
-export function OTPInput({ length = 6, onComplete, disabled = false }: OTPInputProps) {
-  const [values, setValues] = useState<string[]>(Array(length).fill(''));
+export function OTPInput({
+  length = 6,
+  onComplete,
+  disabled = false,
+}: OTPInputProps) {
+  const [values, setValues] = useState<string[]>(Array(length).fill(""));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const focusInput = useCallback((index: number) => {
-    if (index >= 0 && index < length) {
-      inputRefs.current[index]?.focus();
-    }
-  }, [length]);
+  const focusInput = useCallback(
+    (index: number) => {
+      if (index >= 0 && index < length) {
+        inputRefs.current[index]?.focus();
+      }
+    },
+    [length],
+  );
 
   const handleChange = (index: number, e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -31,18 +38,18 @@ export function OTPInput({ length = 6, onComplete, disabled = false }: OTPInputP
     }
 
     // Tự động gọi onComplete khi nhập đủ
-    const otpString = newValues.join('');
-    if (otpString.length === length && !newValues.includes('')) {
+    const otpString = newValues.join("");
+    if (otpString.length === length && !newValues.includes("")) {
       onComplete(otpString);
     }
   };
 
   const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace') {
+    if (e.key === "Backspace") {
       if (!values[index] && index > 0) {
         focusInput(index - 1);
         const newValues = [...values];
-        newValues[index - 1] = '';
+        newValues[index - 1] = "";
         setValues(newValues);
       }
     }
@@ -50,7 +57,10 @@ export function OTPInput({ length = 6, onComplete, disabled = false }: OTPInputP
 
   const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
+    const pastedData = e.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, length);
     if (pastedData.length === 0) return;
 
     const newValues = [...values];
@@ -70,7 +80,9 @@ export function OTPInput({ length = 6, onComplete, disabled = false }: OTPInputP
       {values.map((val, index) => (
         <input
           key={index}
-          ref={(el) => { inputRefs.current[index] = el; }}
+          ref={(el) => {
+            inputRefs.current[index] = el;
+          }}
           type="text"
           inputMode="numeric"
           maxLength={1}

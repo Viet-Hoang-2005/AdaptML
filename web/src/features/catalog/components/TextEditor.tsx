@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { LazyCodeEditor } from '@/shared/ui/LazyCodeEditor';
-import { Trash2, RotateCcw, Upload, Save, FileArchive } from 'lucide-react';
-import { toast } from '@/shared/ui/toastStore';
-import type { ModelProject } from '@/features/catalog/types';
+import { useState, useRef, useEffect, useCallback } from "react";
+import { LazyCodeEditor } from "@/shared/ui/LazyCodeEditor";
+import { Trash2, RotateCcw, Upload, Save, FileArchive } from "lucide-react";
+import { toast } from "@/shared/ui/toastStore";
+import type { ModelProject } from "@/features/catalog/types";
 
 export interface TextEditorProps {
   modelProject: ModelProject;
@@ -12,9 +12,14 @@ export interface TextEditorProps {
   onSaveSuccess?: () => void;
 }
 
-export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSaveSuccess }: TextEditorProps) {
-  const [content, setContent] = useState<string>('');
-  const [originalContent, setOriginalContent] = useState<string>('');
+export function TextEditor({
+  modelProject,
+  onDirtyChange,
+  onContentChange,
+  onSaveSuccess,
+}: TextEditorProps) {
+  const [content, setContent] = useState<string>("");
+  const [originalContent, setOriginalContent] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -34,24 +39,27 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
   const [prevModelId, setPrevModelId] = useState(modelProject.id);
   if (prevModelId !== modelProject.id) {
     setPrevModelId(modelProject.id);
-    setContent('');
-    setOriginalContent('');
+    setContent("");
+    setOriginalContent("");
   }
 
-  const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      setContent(text);
-    } catch {
-      toast.error('Failed to read file');
-    }
-    e.target.value = '';
-  }, []);
+  const handleUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        setContent(text);
+      } catch {
+        toast.error("Failed to read file");
+      }
+      e.target.value = "";
+    },
+    [],
+  );
 
   const handleDelete = useCallback(() => {
-    setContent('');
+    setContent("");
   }, []);
 
   const handleReset = useCallback(() => {
@@ -63,25 +71,28 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
     try {
       setOriginalContent(content);
       onSaveSuccess?.();
-      toast.success('requirements.txt attached to this training job.');
+      toast.success("requirements.txt attached to this training job.");
     } catch {
-      toast.error('Failed to accept requirements.txt');
+      toast.error("Failed to accept requirements.txt");
     } finally {
       setSaving(false);
     }
   }, [content, onSaveSuccess]);
 
-  const isEmpty = content.trim() === '';
+  const isEmpty = content.trim() === "";
 
   return (
-    <div className="flex flex-col h-96 border border-border rounded-lg overflow-hidden bg-surface shadow-sm">
+    <div className="flex flex-col h-96 border border-border rounded-xl overflow-hidden bg-surface shadow-sm">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-2">
         <div className="text-sm font-semibold text-foreground flex items-center gap-2">
           <FileArchive className="w-4 h-4" />
           requirements.txt
           {isDirty && (
-            <span className="ml-1 inline-block h-2 w-2 rounded-full bg-yellow-400" title="Unsaved changes" />
+            <span
+              className="ml-1 inline-block h-2 w-2 rounded-full bg-yellow-400"
+              title="Unsaved changes"
+            />
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -143,9 +154,7 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
             <p className="text-sm text-muted-foreground mt-1">
               Or start typing in the editor after clicking a file
             </p>
-            <p className="text-xs text-muted-foreground mt-3">
-              Accepted: .txt
-            </p>
+            <p className="text-xs text-muted-foreground mt-3">Accepted: .txt</p>
           </button>
         ) : (
           <LazyCodeEditor
@@ -153,14 +162,14 @@ export function TextEditor({ modelProject, onDirtyChange, onContentChange, onSav
             language="plaintext"
             theme="light"
             value={content}
-            onChange={(val) => setContent(val ?? '')}
+            onChange={(val) => setContent(val ?? "")}
             options={{
               minimap: { enabled: false },
               fontSize: 14,
-              wordWrap: 'on',
+              wordWrap: "on",
               scrollBeyondLastLine: false,
-              lineNumbers: 'on',
-              occurrencesHighlight: 'off',
+              lineNumbers: "on",
+              occurrencesHighlight: "off",
               selectionHighlight: false,
             }}
           />

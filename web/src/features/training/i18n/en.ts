@@ -1,7 +1,12 @@
 export const trainingEn = {
   title: 'Model Training', create: 'Create training job', empty: 'Create a training job to track runtime progress and artifacts.',
   description: 'Train new model artifacts or retrain the model selected in the header.', newJob: 'New Training Job',
-  quota: 'Monthly Training Quota', used: '/ {{duration}} used', remaining: 'Remaining', activeJobs: 'Active Jobs',
+  quota: 'Monthly Training Quota', used: '/ {{duration}} used', remaining: 'Remaining', totalJobs: 'Total Jobs',
+  statusDistribution: {
+    label: 'Training job status distribution',
+    tooltip: '{{status}}: {{percentage}}%',
+    empty: 'No training jobs yet.',
+  },
   loadFailed: 'Unable to load training jobs', checkApi: 'Please check the control plane API.', noJobs: 'No training jobs yet',
   noJobsDescription: 'Submit a source zip and CSV dataset to start your first training job.', firstJob: 'Create your first training job',
   history: 'Training history', historyCount: '{{shown}} shown / {{total}} total', sort: 'Sort', newest: 'Newest', oldest: 'Oldest',

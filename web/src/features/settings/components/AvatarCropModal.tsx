@@ -1,24 +1,24 @@
-import { useState } from 'react';
-import Cropper, { type Area, type Point } from 'react-easy-crop';
-import { X } from 'lucide-react';
-import { Button } from '@/shared/ui/Button';
-import { useTranslation } from 'react-i18next';
+import { useState } from "react";
+import Cropper, { type Area, type Point } from "react-easy-crop";
+import { X } from "lucide-react";
+import { Button } from "@/shared/ui/Button";
+import { useTranslation } from "react-i18next";
 
 const createImage = (url: string) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
-    image.addEventListener('load', () => resolve(image));
-    image.addEventListener('error', reject);
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", reject);
     image.src = url;
   });
 
 const getCroppedAvatarFile = async (imageSrc: string, cropPixels: Area) => {
   const image = await createImage(imageSrc);
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
 
   if (!context) {
-    throw new Error('Unable to create image context.');
+    throw new Error("Unable to create image context.");
   }
 
   canvas.width = cropPixels.width;
@@ -40,12 +40,14 @@ const getCroppedAvatarFile = async (imageSrc: string, cropPixels: Area) => {
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(new Error('Unable to crop avatar.'));
+          reject(new Error("Unable to crop avatar."));
           return;
         }
-        resolve(new File([blob], `avatar-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+        resolve(
+          new File([blob], `avatar-${Date.now()}.jpg`, { type: "image/jpeg" }),
+        );
       },
-      'image/jpeg',
+      "image/jpeg",
       0.9,
     );
   });
@@ -66,7 +68,7 @@ export function AvatarCropModal({
   onConfirm,
   onError,
 }: AvatarCropModalProps) {
-  const { t } = useTranslation('settings');
+  const { t } = useTranslation("settings");
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
@@ -98,12 +100,14 @@ export function AvatarCropModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-xl rounded-xl border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="text-xl font-bold text-foreground">{t('avatarDialog.crop')}</h2>
+          <h2 className="text-xl font-bold text-foreground">
+            {t("avatarDialog.crop")}
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label={t('avatarDialog.closeCrop')}
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={t("avatarDialog.closeCrop")}
           >
             <X className="h-6 w-6" />
           </button>
@@ -119,11 +123,16 @@ export function AvatarCropModal({
               showGrid={false}
               onCropChange={setCrop}
               onZoomChange={setZoom}
-              onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels)}
+              onCropComplete={(_, croppedPixels) =>
+                setCroppedAreaPixels(croppedPixels)
+              }
             />
           </div>
-          <label htmlFor="avatar-zoom" className="flex flex-col gap-2 text-sm font-medium text-foreground">
-            {t('avatarDialog.zoom')}
+          <label
+            htmlFor="avatar-zoom"
+            className="flex flex-col gap-2 text-sm font-medium text-foreground"
+          >
+            {t("avatarDialog.zoom")}
             <input
               id="avatar-zoom"
               type="range"
@@ -137,10 +146,14 @@ export function AvatarCropModal({
           </label>
           <div className="flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={onClose}>
-              {t('avatarDialog.cancel')}
+              {t("avatarDialog.cancel")}
             </Button>
-            <Button type="button" loading={loading || internalLoading} onClick={handleConfirm}>
-              {t('avatarDialog.use')}
+            <Button
+              type="button"
+              loading={loading || internalLoading}
+              onClick={handleConfirm}
+            >
+              {t("avatarDialog.use")}
             </Button>
           </div>
         </div>

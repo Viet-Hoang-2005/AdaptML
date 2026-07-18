@@ -1,20 +1,47 @@
-import type { HTMLAttributes, ReactNode } from 'react';
-import { cn } from '@/shared/lib/cn';
+import type { HTMLAttributes, ReactNode } from "react";
+import { cn } from "@/shared/lib/cn";
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('rounded-[8px] border border-border bg-surface text-foreground', className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        "rounded-[8px] border border-border bg-surface text-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
-export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex flex-col gap-1.5 p-5 pb-0', className)} {...props} />;
+export function CardHeader({
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("flex flex-col gap-1.5 p-5 pb-0", className)}
+      {...props}
+    />
+  );
 }
 
-export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('p-5', className)} {...props} />;
+export function CardContent({
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("p-5", className)} {...props} />;
 }
 
-export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex items-center gap-3 p-5 pt-0', className)} {...props} />;
+export function CardFooter({
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("flex items-center gap-3 p-5 pt-0", className)}
+      {...props}
+    />
+  );
 }
 
 export function CardSummary({
@@ -22,29 +49,47 @@ export function CardSummary({
   value,
   helper,
   icon,
-  tone = 'default',
+  tone = "default",
 }: {
   label: string;
   value: ReactNode;
   helper?: string;
   icon?: ReactNode;
-  tone?: 'default' | 'success' | 'warning' | 'error' | 'info';
+  tone?: "default" | "success" | "warning" | "error" | "info";
 }) {
   const iconColor =
-    tone === 'success' ? 'text-success' :
-    tone === 'error' ? 'text-danger' :
-    tone === 'warning' ? 'text-warning' :
-    tone === 'info' ? 'text-primary' :
-    'text-muted-foreground';
+    tone === "success"
+      ? "text-success"
+      : tone === "error"
+        ? "text-danger"
+        : tone === "warning"
+          ? "text-warning"
+          : tone === "info"
+            ? "text-primary"
+            : "text-muted-foreground";
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-xl border border-border bg-surface p-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
         <div className={iconColor}>{icon}</div>
       </div>
-      <p className="mt-2 text-xl font-bold text-foreground truncate" title={typeof value === 'string' ? value : undefined}>{value}</p>
-      {helper && <p className="mt-1 text-xs text-muted-foreground truncate" title={helper}>{helper}</p>}
+      <p
+        className="mt-2 text-xl font-bold text-foreground truncate"
+        title={typeof value === "string" ? value : undefined}
+      >
+        {value}
+      </p>
+      {helper && (
+        <p
+          className="mt-1 text-xs text-muted-foreground truncate"
+          title={helper}
+        >
+          {helper}
+        </p>
+      )}
     </div>
   );
 }

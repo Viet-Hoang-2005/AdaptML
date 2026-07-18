@@ -14,7 +14,7 @@ import { useModelSelection } from '@/features/catalog/hooks/useModelSelection';
 import { getProfile } from '@/features/settings/api/profileApi';
 import { settingsQueryKeys } from '@/features/settings/queryKeys';
 import type { UserProfile } from '@/features/settings/types';
-import { IconButton } from '@/shared/ui/IconButton';
+import { Button } from '@/shared/ui/Button';
 
 const getInitials = (profile: UserProfile | null) => {
   const source = profile?.full_name || profile?.email || 'User';
@@ -88,7 +88,7 @@ export default function Header({ onOpenNavigation }: { onOpenNavigation: () => v
       </div>
 
       <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 sm:min-w-40 xl:min-w-48">
-        <IconButton label={t('actions.createModel')} icon={<Plus className="h-5 w-5" />} variant="secondary" onClick={() => navigate(routes.uploadModel)} className="hidden sm:inline-flex" />
+        <Button size="icon" aria-label={t('actions.createModel')} title={t('actions.createModel')} icon={<Plus className="h-5 w-5" />} variant="secondary" onClick={() => navigate(routes.uploadModel)} className="hidden sm:inline-flex" />
 
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
@@ -107,7 +107,7 @@ export default function Header({ onOpenNavigation }: { onOpenNavigation: () => v
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
 
-        <IconButton label={t('navigation.notification')} icon={<Bell className="h-5 w-5" />} variant="secondary" onClick={() => navigate('/dashboard/notifications')} />
+        <Button size="icon" aria-label={t('navigation.notification')} title={t('navigation.notification')} icon={<Bell className="h-5 w-5" />} variant="secondary" onClick={() => navigate('/dashboard/notifications')} />
 
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>

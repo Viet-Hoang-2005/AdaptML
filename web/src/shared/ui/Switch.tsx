@@ -1,13 +1,16 @@
-import { cn } from '@/shared/lib/cn';
-import { type VariantProps } from 'class-variance-authority';
-import { switchVariants } from './switchVariants';
+import { cn } from "@/shared/lib/cn";
+import { type VariantProps } from "class-variance-authority";
+import { switchVariants } from "./switchVariants";
 
 export interface SegmentedControlOption<T extends string | number> {
   value: T;
   title: string;
 }
 
-export interface SwitchProps<T extends string | number> extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>, VariantProps<typeof switchVariants> {
+export interface SwitchProps<T extends string | number>
+  extends
+    Omit<React.HTMLAttributes<HTMLDivElement>, "onChange">,
+    VariantProps<typeof switchVariants> {
   value: T;
   onChange: (value: T) => void;
   options: readonly SegmentedControlOption<T>[];
@@ -22,15 +25,25 @@ export function Switch<T extends string | number>({
   options,
   className,
   ariaLabel,
-  size = 'md',
+  size = "md",
   fullWidth = false,
   ...props
 }: SwitchProps<T>) {
   return (
-    <div className={cn('flex justify-center', fullWidth ? 'w-full' : 'inline-flex', className)} {...props}>
-      <div 
-        className={cn('inline-flex rounded-lg shadow-sm', fullWidth && 'w-full')} 
-        role="tablist" 
+    <div
+      className={cn(
+        "flex justify-center",
+        fullWidth ? "w-full" : "inline-flex",
+        className,
+      )}
+      {...props}
+    >
+      <div
+        className={cn(
+          "inline-flex rounded-xl shadow-sm",
+          fullWidth && "w-full",
+        )}
+        role="tablist"
         aria-label={ariaLabel}
       >
         {options.map((option, index) => {
@@ -44,8 +57,12 @@ export function Switch<T extends string | number>({
               onClick={() => onChange(option.value)}
               className={cn(
                 switchVariants({ size, selected: isSelected }),
-                index === 0 ? 'rounded-l-lg' : index === options.length - 1 ? 'rounded-r-lg -ml-px' : '-ml-px',
-                fullWidth && 'flex-1'
+                index === 0
+                  ? "rounded-l-lg"
+                  : index === options.length - 1
+                    ? "rounded-r-lg -ml-px"
+                    : "-ml-px",
+                fullWidth && "flex-1",
               )}
             >
               {option.title}

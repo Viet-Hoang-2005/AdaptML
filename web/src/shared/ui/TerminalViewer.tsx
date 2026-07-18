@@ -1,31 +1,30 @@
-import Anser from 'anser';
-import { Clipboard, Loader2, Terminal } from 'lucide-react';
-import type {
-  ButtonHTMLAttributes,
-  CSSProperties,
-  ReactNode,
-} from 'react';
-import { useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import Anser from "anser";
+import { Clipboard, Terminal } from "lucide-react";
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
+import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
-import { cn } from '@/shared/lib/cn';
-import { toast } from '@/shared/ui/toastStore';
+import { cn } from "@/shared/lib/cn";
+import { toast } from "@/shared/ui/toastStore";
+import { Button } from "@/shared/ui/Button";
 
 function getAnsiStyle(segment: Anser.AnserJsonEntry): CSSProperties {
   const decorations = new Set(segment.decorations);
   const textDecorations = [
-    decorations.has('underline') ? 'underline' : '',
-    decorations.has('strikethrough') ? 'line-through' : '',
+    decorations.has("underline") ? "underline" : "",
+    decorations.has("strikethrough") ? "line-through" : "",
   ].filter(Boolean);
 
   return {
     color: segment.fg_truecolor || segment.fg || undefined,
     backgroundColor: segment.bg_truecolor || segment.bg || undefined,
-    fontWeight: decorations.has('bold') ? 700 : undefined,
-    fontStyle: decorations.has('italic') ? 'italic' : undefined,
-    opacity: decorations.has('dim') ? 0.7 : undefined,
-    visibility: decorations.has('hidden') ? 'hidden' : undefined,
-    textDecoration: textDecorations.length ? textDecorations.join(' ') : undefined,
+    fontWeight: decorations.has("bold") ? 700 : undefined,
+    fontStyle: decorations.has("italic") ? "italic" : undefined,
+    opacity: decorations.has("dim") ? 0.7 : undefined,
+    visibility: decorations.has("hidden") ? "hidden" : undefined,
+    textDecoration: textDecorations.length
+      ? textDecorations.join(" ")
+      : undefined,
   };
 }
 
@@ -54,7 +53,7 @@ export function TerminalViewer({
   className,
   bodyClassName,
 }: TerminalViewerProps) {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation("common");
   const terminalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,53 +63,64 @@ export function TerminalViewer({
   }, [logs]);
 
   const copyLogs = async () => {
-    await navigator.clipboard.writeText(logs.join('\n'));
-    toast.success(t('terminal.copied'));
+    await navigator.clipboard.writeText(logs.join("\n"));
+    toast.success(t("terminal.copied"));
   };
 
   return (
-    <div className={cn('overflow-hidden rounded-xl border border-gray-800 bg-gray-900 shadow-lg', className)}>
-      <div className="flex min-h-13 items-center border-b border-gray-700 bg-gray-800/80 px-4 py-3">
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border border-border bg-gray-900 shadow-lg",
+        className,
+      )}
+    >
+      <div className="flex min-h-13 items-center border-b border-border bg-gray-800/80 px-4 py-3">
         <Terminal className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
-        <span className="truncate font-mono text-xs text-slate-300">
-          {title ?? t('terminal.title')}
+        <span className="truncate font-mono text-sm text-slate-300">
+          {title ?? t("terminal.title")}
         </span>
         <div className="ml-auto flex items-center gap-2">
           {actions}
-          <button
+          <Button
             type="button"
             onClick={() => void copyLogs()}
-            className="flex items-center gap-1.5 rounded-md bg-gray-700 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-gray-600"
-            title={t('terminal.copyTitle')}
+            variant="secondary"
+            size="sm"
+            title={t("terminal.copyTitle")}
+            icon={<Clipboard className="h-3.5 w-3.5" />}
           >
-            <Clipboard className="h-3 w-3" />
-            {t('terminal.copy')}
-          </button>
+            {t("terminal.copy")}
+          </Button>
         </div>
       </div>
       <div
         ref={terminalRef}
         className={cn(
-          'custom-scrollbar h-72 w-full overflow-y-auto bg-gray-900 p-4 font-mono text-sm text-slate-200 antialiased',
+          "custom-scrollbar h-72 w-full overflow-y-auto bg-gray-900 p-4 font-mono text-sm text-slate-200 antialiased",
           bodyClassName,
         )}
-        style={{ scrollBehavior: 'smooth' }}
+        style={{ scrollBehavior: "smooth" }}
       >
-        {logs.length > 0
-          ? logs.map((log, index) => (
-              <div key={`${index}-${log}`} className="mb-1 break-all whitespace-pre-wrap leading-tight">
-                <AnsiLogLine log={log} />
-              </div>
-            ))
-          : placeholder
-            ? <div className="break-all whitespace-pre-wrap text-slate-400 italic">{placeholder}</div>
-            : null}
+        {logs.length > 0 ? (
+          logs.map((log, index) => (
+            <div
+              key={`${index}-${log}`}
+              className="mb-1 break-all whitespace-pre-wrap leading-tight"
+            >
+              <AnsiLogLine log={log} />
+            </div>
+          ))
+        ) : placeholder ? (
+          <div className="break-all whitespace-pre-wrap text-slate-400 italic">
+            {placeholder}
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
-type TerminalActionTone = 'default' | 'danger';
+type TerminalActionTone = "secondary" | "danger";
 
 export interface TerminalActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   tone?: TerminalActionTone;
@@ -119,7 +129,7 @@ export interface TerminalActionButtonProps extends ButtonHTMLAttributes<HTMLButt
 }
 
 export function TerminalActionButton({
-  tone = 'default',
+  tone = "secondary",
   loading = false,
   icon,
   children,
@@ -128,21 +138,17 @@ export function TerminalActionButton({
   ...props
 }: TerminalActionButtonProps) {
   return (
-    <button
+    <Button
       type="button"
-      disabled={disabled || loading}
-      className={cn(
-        'flex items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-medium transition-colors',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        tone === 'danger'
-          ? 'border-red-800/50 bg-red-900/30 text-red-400 hover:bg-red-800/50'
-          : 'border-transparent bg-gray-700 text-white hover:bg-gray-600',
-        className,
-      )}
+      disabled={disabled}
+      loading={loading}
+      variant={tone}
+      size="sm"
+      className={className}
+      icon={icon}
       {...props}
     >
-      {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : icon}
       {children}
-    </button>
+    </Button>
   );
 }

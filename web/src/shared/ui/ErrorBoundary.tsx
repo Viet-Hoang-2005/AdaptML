@@ -1,7 +1,7 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { Button } from './Button';
-import { useTranslation } from 'react-i18next';
+import { Component, type ErrorInfo, type ReactNode } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Button } from "./Button";
+import { useTranslation } from "react-i18next";
 
 type ErrorBoundaryProps = {
   children: ReactNode;
@@ -12,20 +12,35 @@ type ErrorBoundaryState = {
 };
 
 function ErrorFallback() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation("common");
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 text-center text-foreground">
       <section className="max-w-md rounded-[8px] border border-border bg-surface p-8 shadow-[var(--shadow-overlay)]">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-danger-subtle text-danger"><AlertTriangle className="h-6 w-6" /></span>
-        <h1 className="mt-5 text-xl font-bold text-foreground">{t('errors.title')}</h1>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">{t('errors.description')}</p>
-        <Button icon={<RefreshCw className="h-4 w-4" />} onClick={() => window.location.reload()} className="mt-6">{t('errors.reload')}</Button>
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-danger-subtle text-danger">
+          <AlertTriangle className="h-6 w-6" />
+        </span>
+        <h1 className="mt-5 text-xl font-bold text-foreground">
+          {t("errors.title")}
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          {t("errors.description")}
+        </p>
+        <Button
+          icon={<RefreshCw className="h-4 w-4" />}
+          onClick={() => window.location.reload()}
+          className="mt-6"
+        >
+          {t("errors.reload")}
+        </Button>
       </section>
     </main>
   );
 }
 
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   state: ErrorBoundaryState = { hasError: false };
 
   static getDerivedStateFromError(): ErrorBoundaryState {
@@ -33,7 +48,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Unhandled application error', error, errorInfo);
+    console.error("Unhandled application error", error, errorInfo);
   }
 
   render() {

@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { cn } from '@/shared/lib/cn';
+import type { ReactNode } from "react";
+import { cn } from "@/shared/lib/cn";
 
 export interface PickerOption<T> {
   value: T;
@@ -21,17 +21,17 @@ export function Picker<T extends string | number>({
   className,
 }: PickerProps<T>) {
   return (
-    <div className={cn('grid gap-4 sm:grid-cols-2', className)}>
+    <div className={cn("grid gap-4 sm:grid-cols-2", className)}>
       {options.map((option) => (
         <button
           key={String(option.value)}
           type="button"
           onClick={() => onChange(option.value)}
           className={cn(
-            'rounded-xl border p-4 text-left transition-colors',
+            "rounded-xl border p-4 text-left transition-colors",
             value === option.value
-              ? 'border-primary bg-primary-subtle ring-1 ring-primary text-foreground'
-              : 'border-border bg-surface text-foreground hover:border-primary'
+              ? "border-primary bg-primary-subtle text-foreground"
+              : "border-border bg-surface text-foreground hover:border-primary",
           )}
         >
           <span className="text-base font-semibold">{option.title}</span>

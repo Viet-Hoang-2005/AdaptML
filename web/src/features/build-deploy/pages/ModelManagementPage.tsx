@@ -6,7 +6,6 @@ import { Button } from "@/shared/ui/Button";
 import { Input } from "@/shared/ui/Input";
 import { ConfirmModal } from "@/shared/ui/ConfirmModal";
 import { DataTable } from "@/shared/ui/DataTable";
-import { IconButton } from "@/shared/ui/IconButton";
 import { Badge } from "@/shared/ui/Badge";
 import { Placeholder } from "@/shared/ui/Placeholder";
 import {
@@ -123,8 +122,11 @@ export default function ModelManagementPage() {
         const record = row.original;
         return (
           <div className="flex items-center gap-1">
-            <IconButton
-              label="Download model"
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Download model"
+              title="Download model"
               icon={<Download className="h-4 w-4" />}
               onClick={() => {
                 if (record.model_uri)
@@ -136,17 +138,24 @@ export default function ModelManagementPage() {
               }}
               disabled={!record.model_uri}
             />
-            <IconButton
-              label="Edit model"
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Edit model"
+              title="Edit model"
               icon={<Edit3 className="h-4 w-4" />}
               onClick={() => {
                 setSelectedModel(record);
                 setIsModalVisible(true);
               }}
             />
-            <IconButton
-              label="Delete model"
-              icon={<Trash2 className="h-4 w-4 text-red-500" />}
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Delete model"
+              title="Delete model"
+              className="text-danger hover:text-red-300"
+              icon={<Trash2 className="h-4 w-4" />}
               onClick={() => setModelToDelete(record)}
             />
           </div>
@@ -167,7 +176,7 @@ export default function ModelManagementPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               icon={<Search className="h-4 w-4" />}
-              className="h-10! rounded-lg!"
+              className="h-10! rounded-xl!"
             />
           </div>
           <Button
@@ -183,7 +192,7 @@ export default function ModelManagementPage() {
 
         <div className="flex flex-1 flex-col">
           {isLoading ? (
-            <div className="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
               {t("loading")}
             </div>
           ) : filteredModels.length === 0 ? (

@@ -1,6 +1,15 @@
-import type { HTMLAttributes } from 'react';
-import { cn } from '@/shared/lib/cn';
+import type { HTMLAttributes } from "react";
+import { cn } from "@/shared/lib/cn";
 
-export function Skeleton({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div aria-hidden="true" className={cn('animate-pulse rounded-lg bg-muted', className)} {...props} />;
+export function Skeleton({
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn("animate-pulse rounded-xl bg-muted", className)}
+      {...props}
+    />
+  );
 }

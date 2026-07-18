@@ -5,7 +5,7 @@ import { ProjectMetadataFields } from "@/features/build-deploy/components/Projec
 import { useUploadModel } from "@/features/build-deploy/uploadModelContext";
 import { Button } from "@/shared/ui/Button";
 
-export default function MetadataPage() {
+export default function MetadataModelPage() {
   const { t } = useTranslation("buildDeploy");
   const {
     project,
@@ -18,7 +18,7 @@ export default function MetadataPage() {
 
   return (
     <>
-      <div className="rounded-lg border border-border bg-surface p-6 lg:p-8">
+      <div className="rounded-xl border border-border bg-surface p-6 lg:p-8">
         <ProjectMetadataFields
           form={metadataForm}
           project={project}

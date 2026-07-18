@@ -15,28 +15,31 @@ import {
   Settings,
   TerminalSquare,
   XCircle,
-} from 'lucide-react';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/shared/ui/Button';
-import { ConfirmModal } from '@/shared/ui/ConfirmModal';
-import { BuildLogsPanel } from './BuildLogsPanel';
-import { toast } from '@/shared/ui/toastStore';
-import type { ModelProject } from '@/features/catalog/types';
+} from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/shared/ui/Button";
+import { ConfirmModal } from "@/shared/ui/ConfirmModal";
+import { BuildLogsPanel } from "./BuildLogsPanel";
+import { toast } from "@/shared/ui/toastStore";
+import type { ModelProject } from "@/features/catalog/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function isActiveModel(model: ModelProject) {
   return (
-    model.build_status === 'building' ||
-    model.endpoint_status === 'deploying' ||
-    model.endpoint_status === 'unhealthy'
+    model.build_status === "building" ||
+    model.endpoint_status === "deploying" ||
+    model.endpoint_status === "unhealthy"
   );
 }
 
 function LiveBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary ring-1 ring-inset ring-primary/20" title="Monitored via Prometheus Observability Engine">
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary ring-1 ring-inset ring-primary/20"
+      title="Monitored via Prometheus Observability Engine"
+    >
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
       Prometheus Sync
     </span>
@@ -47,7 +50,7 @@ function LiveBadge() {
 
 export interface ModelDeploymentCardProps {
   model: ModelProject;
-  variant?: 'full' | 'compact';
+  variant?: "full" | "compact";
   onCheckHealth?: (model: ModelProject) => void;
   isCheckingHealth?: boolean;
   onRedeploy?: (model: ModelProject) => void;
@@ -67,7 +70,7 @@ export interface ModelDeploymentCardProps {
 
 export function ModelDeploymentCard({
   model,
-  variant = 'full',
+  variant = "full",
   onCheckHealth,
   isCheckingHealth,
   onRedeploy,
@@ -89,79 +92,86 @@ export function ModelDeploymentCard({
   const [showStopModal, setShowStopModal] = useState(false);
   const [showCleanupModal, setShowCleanupModal] = useState(false);
 
-  const endpointStatus = model.endpoint_status || 'not_deployed';
-  const readyToDeploy = model.build_status === 'ready';
-  const isHealthy = endpointStatus === 'healthy';
-  const isDeployingState = endpointStatus === 'deploying';
-  const isBuildingState = model.build_status === 'building';
-  const isStopped = endpointStatus === 'stopped';
+  const endpointStatus = model.endpoint_status || "not_deployed";
+  const readyToDeploy = model.build_status === "ready";
+  const isHealthy = endpointStatus === "healthy";
+  const isDeployingState = endpointStatus === "deploying";
+  const isBuildingState = model.build_status === "building";
+  const isStopped = endpointStatus === "stopped";
 
   // Actions
   const canRedeploy = readyToDeploy && !isDeployingState;
-  const canStop = endpointStatus !== 'not_deployed' && !isStopped && !isDeployingState;
+  const canStop =
+    endpointStatus !== "not_deployed" && !isStopped && !isDeployingState;
 
   const copyEndpoint = async () => {
     if (!model.endpoint_url) return;
     await navigator.clipboard.writeText(model.endpoint_url);
     setCopied(true);
-    toast.success('Endpoint URL copied');
+    toast.success("Endpoint URL copied");
     setTimeout(() => setCopied(false), 2000);
   };
 
   // Top Accent Logic
-  let accentClass = 'border-t-gray-200';
-  let badgeClass = 'bg-muted text-foreground border-border';
-  let statusText = 'Not Deployed';
+  let accentClass = "border-t-gray-200";
+  let badgeClass = "bg-muted text-foreground border-border";
+  let statusText = "Not Deployed";
 
   if (isHealthy) {
-    accentClass = 'border-t-emerald-500';
-    badgeClass = 'bg-success-subtle text-success border-success/20';
-    statusText = 'Healthy';
-  } else if (endpointStatus === 'unhealthy' || endpointStatus === 'deploy_failed' || model.build_status === 'error') {
-    accentClass = 'border-t-red-500';
-    badgeClass = 'bg-danger-subtle text-danger border-danger/20';
-    statusText = model.build_status === 'error' ? 'Build Failed' : 'Unhealthy';
+    accentClass = "border-t-emerald-500";
+    badgeClass = "bg-success-subtle text-success border-success/20";
+    statusText = "Healthy";
+  } else if (
+    endpointStatus === "unhealthy" ||
+    endpointStatus === "deploy_failed" ||
+    model.build_status === "error"
+  ) {
+    accentClass = "border-t-red-500";
+    badgeClass = "bg-danger-subtle text-danger border-danger/20";
+    statusText = model.build_status === "error" ? "Build Failed" : "Unhealthy";
   } else if (isDeployingState || isBuildingState) {
-    accentClass = 'border-t-blue-500';
-    badgeClass = 'bg-primary-subtle text-primary border-primary/20 animate-pulse';
-    statusText = isBuildingState ? 'Building...' : 'Deploying...';
+    accentClass = "border-t-blue-500";
+    badgeClass =
+      "bg-primary-subtle text-primary border-primary/20 animate-pulse";
+    statusText = isBuildingState ? "Building..." : "Deploying...";
   } else if (isStopped) {
-    accentClass = 'border-t-gray-400';
-    badgeClass = 'bg-muted text-muted-foreground border-border';
-    statusText = 'Stopped';
+    accentClass = "border-t-gray-400";
+    badgeClass = "bg-muted text-muted-foreground border-border";
+    statusText = "Stopped";
   } else if (readyToDeploy) {
-    accentClass = 'border-t-blue-300';
-    badgeClass = 'bg-primary-subtle text-primary border-primary/20';
-    statusText = 'Build Ready';
+    accentClass = "border-t-blue-300";
+    badgeClass = "bg-primary-subtle text-primary border-primary/20";
+    statusText = "Build Ready";
   }
 
   // Lifecycle Tracker State
-  const stage0 = 'completed' as const;
-  let stage1: 'pending' | 'active' | 'completed' | 'failed' = 'pending';
-  let stage2: 'pending' | 'active' | 'completed' | 'failed' | 'neutral' = 'pending';
-  let stage3: 'pending' | 'active' | 'completed' | 'failed' = 'pending';
+  const stage0 = "completed" as const;
+  let stage1: "pending" | "active" | "completed" | "failed" = "pending";
+  let stage2: "pending" | "active" | "completed" | "failed" | "neutral" =
+    "pending";
+  let stage3: "pending" | "active" | "completed" | "failed" = "pending";
 
-  if (isBuildingState) stage1 = 'active';
-  else if (model.build_status === 'error') stage1 = 'failed';
-  else if (model.build_status === 'ready') stage1 = 'completed';
+  if (isBuildingState) stage1 = "active";
+  else if (model.build_status === "error") stage1 = "failed";
+  else if (model.build_status === "ready") stage1 = "completed";
 
-  if (stage1 === 'completed') {
-    if (isDeployingState) stage2 = 'active';
-    else if (endpointStatus === 'deploy_failed') stage2 = 'failed';
-    else if (isStopped) stage2 = 'neutral';
-    else if (endpointStatus !== 'not_deployed') stage2 = 'completed';
+  if (stage1 === "completed") {
+    if (isDeployingState) stage2 = "active";
+    else if (endpointStatus === "deploy_failed") stage2 = "failed";
+    else if (isStopped) stage2 = "neutral";
+    else if (endpointStatus !== "not_deployed") stage2 = "completed";
   }
 
-  if (stage2 === 'completed') {
-    if (isHealthy) stage3 = 'completed';
-    else if (endpointStatus === 'unhealthy') stage3 = 'failed';
-    else stage3 = 'active'; // checking
+  if (stage2 === "completed") {
+    if (isHealthy) stage3 = "completed";
+    else if (endpointStatus === "unhealthy") stage3 = "failed";
+    else stage3 = "active"; // checking
   }
 
   return (
     <article
       className={`relative flex flex-col rounded-2xl border bg-surface shadow-sm transition-all hover:shadow-md border-t-4 border-x-gray-200 border-b-gray-200 ${accentClass} ${
-        variant === 'compact' ? 'p-5' : 'p-6 lg:p-8'
+        variant === "compact" ? "p-5" : "p-6 lg:p-8"
       }`}
     >
       {/* ── Header Area ── */}
@@ -182,20 +192,22 @@ export function ModelDeploymentCard({
                 {model.name}
               </button>
               <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground border border-border">
-                {model.version || 'v1'}
+                {model.version || "v1"}
               </span>
-              <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badgeClass}`}>
+              <span
+                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badgeClass}`}
+              >
                 {statusText}
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground font-medium">
-              {model.source_type === 'training_job'
-                ? `Registered from training job #${model.source_training_job ?? '-'}`
-                : 'Manually uploaded model package'}
+              {model.source_type === "training_job"
+                ? `Registered from training job #${model.source_training_job ?? "-"}`
+                : "Manually uploaded model package"}
             </p>
           </div>
         </div>
-        
+
         {isActiveModel(model) && (
           <div className="flex shrink-0">
             <LiveBadge />
@@ -203,7 +215,7 @@ export function ModelDeploymentCard({
         )}
       </div>
 
-      {variant === 'full' && model.description && (
+      {variant === "full" && model.description && (
         <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground">
           {model.description}
         </p>
@@ -212,11 +224,31 @@ export function ModelDeploymentCard({
       {/* ── Lifecycle Tracker ── */}
       <div className="mt-8 flex items-center w-full max-w-2xl overflow-x-auto pb-2 scrollbar-none">
         <TrackerStep label="Registered" state={stage0} />
-        <TrackerLine state={stage1 === 'completed' || stage1 === 'active' ? 'completed' : 'pending'} />
+        <TrackerLine
+          state={
+            stage1 === "completed" || stage1 === "active"
+              ? "completed"
+              : "pending"
+          }
+        />
         <TrackerStep label="Build Ready" state={stage1} />
-        <TrackerLine state={stage2 === 'completed' || stage2 === 'active' || stage2 === 'neutral' ? 'completed' : 'pending'} />
+        <TrackerLine
+          state={
+            stage2 === "completed" ||
+            stage2 === "active" ||
+            stage2 === "neutral"
+              ? "completed"
+              : "pending"
+          }
+        />
         <TrackerStep label="Deployed" state={stage2} />
-        <TrackerLine state={stage3 === 'completed' || stage3 === 'active' || stage3 === 'failed' ? 'completed' : 'pending'} />
+        <TrackerLine
+          state={
+            stage3 === "completed" || stage3 === "active" || stage3 === "failed"
+              ? "completed"
+              : "pending"
+          }
+        />
         <TrackerStep label="Healthy" state={stage3} />
       </div>
 
@@ -228,11 +260,14 @@ export function ModelDeploymentCard({
             Endpoint URL
           </label>
           {model.endpoint_url ? (
-            <div className="group flex items-center overflow-hidden rounded-lg border border-border bg-muted shadow-sm transition-colors hover:border-border">
+            <div className="group flex items-center overflow-hidden rounded-xl border border-border bg-muted shadow-sm transition-colors hover:border-border">
               <div className="flex items-center justify-center bg-muted px-3 py-2 border-r border-border text-muted-foreground">
                 <Globe className="h-4 w-4" />
               </div>
-              <code className="flex-1 truncate px-3 py-2 text-xs font-mono text-foreground bg-transparent selection:bg-blue-100" title={model.endpoint_url}>
+              <code
+                className="flex-1 truncate px-3 py-2 text-xs font-mono text-foreground bg-transparent selection:bg-blue-100"
+                title={model.endpoint_url}
+              >
                 {model.endpoint_url}
               </code>
               <button
@@ -240,12 +275,18 @@ export function ModelDeploymentCard({
                 className="flex items-center justify-center px-3 py-2 text-muted-foreground hover:bg-surface hover:text-foreground border-l border-transparent hover:border-border transition-all focus:outline-none"
                 title="Copy URL"
               >
-                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? (
+                  <Check className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
               </button>
             </div>
           ) : (
-            <div className="flex h-9 items-center rounded-lg border border-border border-dashed bg-muted/50 px-3 py-2">
-              <p className="text-xs font-mono text-muted-foreground">Endpoint not yet deployed</p>
+            <div className="flex h-9 items-center rounded-xl border border-border border-dashed bg-muted/50 px-3 py-2">
+              <p className="text-xs font-mono text-muted-foreground">
+                Endpoint not yet deployed
+              </p>
             </div>
           )}
         </div>
@@ -253,15 +294,24 @@ export function ModelDeploymentCard({
         {/* Diagnostics Grid */}
         <div className="lg:col-span-5 grid grid-cols-2 gap-4">
           <div className="flex flex-col justify-end">
-            <span className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Container</span>
-            <span className="truncate text-xs font-mono text-foreground bg-muted rounded px-2 py-1 border border-border w-fit max-w-full" title={model.endpoint_container_name || ''}>
-              {model.endpoint_container_name || 'N/A'}
+            <span className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Container
+            </span>
+            <span
+              className="truncate text-xs font-mono text-foreground bg-muted rounded px-2 py-1 border border-border w-fit max-w-full"
+              title={model.endpoint_container_name || ""}
+            >
+              {model.endpoint_container_name || "N/A"}
             </span>
           </div>
           <div className="flex flex-col justify-end">
-            <span className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Last Checked</span>
+            <span className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Last Checked
+            </span>
             <span className="truncate text-xs text-foreground bg-muted rounded px-2 py-1 border border-border w-fit max-w-full">
-              {model.endpoint_last_checked_at ? new Date(model.endpoint_last_checked_at).toLocaleString() : 'N/A'}
+              {model.endpoint_last_checked_at
+                ? new Date(model.endpoint_last_checked_at).toLocaleString()
+                : "N/A"}
             </span>
           </div>
         </div>
@@ -269,7 +319,7 @@ export function ModelDeploymentCard({
 
       {/* Errors / Logs */}
       {(model.build_error || model.endpoint_error) && (
-        <div className="mt-6 rounded-lg border border-danger/20 bg-danger-subtle p-4">
+        <div className="mt-6 rounded-xl border border-danger/20 bg-danger-subtle p-4">
           <p className="text-sm font-bold text-danger flex items-center gap-2">
             <XCircle className="h-4 w-4" />
             Deployment Error
@@ -288,11 +338,10 @@ export function ModelDeploymentCard({
 
       {/* ── Action Toolbar ── */}
       <div className="mt-8 flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 border-t border-border pt-5">
-        
         {/* Primary / Operational Group */}
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto flex-1">
           {/* Primary Action */}
-          {(!readyToDeploy && onBuild) ? (
+          {!readyToDeploy && onBuild ? (
             <Button
               size="md"
               variant="primary"
@@ -303,7 +352,7 @@ export function ModelDeploymentCard({
             >
               Build Package
             </Button>
-          ) : (endpointStatus === 'not_deployed' && onDeploy) ? (
+          ) : endpointStatus === "not_deployed" && onDeploy ? (
             <Button
               size="md"
               variant="primary"
@@ -314,10 +363,10 @@ export function ModelDeploymentCard({
             >
               Deploy Endpoint
             </Button>
-          ) : (onRedeploy && readyToDeploy) ? (
+          ) : onRedeploy && readyToDeploy ? (
             <Button
               size="md"
-              variant={isHealthy ? 'secondary' : 'primary'}
+              variant={isHealthy ? "secondary" : "primary"}
               icon={<RefreshCw className="h-4 w-4" />}
               loading={isRedeploying}
               disabled={!canRedeploy}
@@ -329,25 +378,47 @@ export function ModelDeploymentCard({
 
           {/* Operational Actions */}
           {model.endpoint_url && onCheckHealth && (
-            <Button size="md" variant="secondary" icon={<Activity className="h-4 w-4" />} loading={isCheckingHealth} onClick={() => onCheckHealth(model)}>
+            <Button
+              size="md"
+              variant="secondary"
+              icon={<Activity className="h-4 w-4" />}
+              loading={isCheckingHealth}
+              onClick={() => onCheckHealth(model)}
+            >
               Check Health
             </Button>
           )}
 
           {onOpenLogs && model.endpoint_container_name && (
-            <Button size="md" variant="secondary" icon={<TerminalSquare className="h-4 w-4" />} onClick={() => onOpenLogs(model)}>
+            <Button
+              size="md"
+              variant="secondary"
+              icon={<TerminalSquare className="h-4 w-4" />}
+              onClick={() => onOpenLogs(model)}
+            >
               Logs
             </Button>
           )}
 
           {onTestPrediction && (
-            <Button size="md" variant="secondary" icon={<ExternalLink className="h-4 w-4" />} onClick={() => onTestPrediction(model)} disabled={!isHealthy}>
+            <Button
+              size="md"
+              variant="secondary"
+              icon={<ExternalLink className="h-4 w-4" />}
+              onClick={() => onTestPrediction(model)}
+              disabled={!isHealthy}
+            >
               Test Prediction
             </Button>
           )}
 
-          {onOpenApiManagement && variant === 'compact' && (
-            <Button size="md" variant="secondary" icon={<Settings className="h-4 w-4" />} onClick={() => onOpenApiManagement(model)}>
+          {onOpenApiManagement && variant === "compact" && (
+            <Button
+              size="md"
+              variant="secondary"
+              icon={<Settings className="h-4 w-4" />}
+              onClick={() => onOpenApiManagement(model)}
+            >
               Manage
             </Button>
           )}
@@ -356,7 +427,7 @@ export function ModelDeploymentCard({
         {/* Danger / Maintenance Group */}
         {(onStop || onCleanup) && (
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:border-l sm:border-border sm:pl-4">
-            {onStop && endpointStatus !== 'not_deployed' && (
+            {onStop && endpointStatus !== "not_deployed" && (
               <Button
                 size="md"
                 variant="danger-outline"
@@ -426,10 +497,10 @@ export function ModelDeploymentCard({
 // ── Lifecycle Tracker Components ──────────────────────────────────────────
 
 function TrackerStep({ label, state }: { label: string; state: string }) {
-  const isCompleted = state === 'completed';
-  const isActive = state === 'active';
-  const isFailed = state === 'failed';
-  const isNeutral = state === 'neutral';
+  const isCompleted = state === "completed";
+  const isActive = state === "active";
+  const isFailed = state === "failed";
+  const isNeutral = state === "neutral";
 
   let icon = <Circle className="h-2.5 w-2.5 fill-current" />;
   if (isCompleted) icon = <CheckCircle2 className="h-4 w-4" />;
@@ -437,34 +508,40 @@ function TrackerStep({ label, state }: { label: string; state: string }) {
   else if (isActive) icon = <Loader2 className="h-4 w-4 animate-spin" />;
   else if (isNeutral) icon = <PauseCircle className="h-4 w-4" />;
 
-  let colorClass = 'text-muted-foreground';
-  if (isCompleted) colorClass = 'text-emerald-500';
-  else if (isActive) colorClass = 'text-blue-500';
-  else if (isFailed) colorClass = 'text-red-500';
-  else if (isNeutral) colorClass = 'text-muted-foreground';
+  let colorClass = "text-muted-foreground";
+  if (isCompleted) colorClass = "text-emerald-500";
+  else if (isActive) colorClass = "text-blue-500";
+  else if (isFailed) colorClass = "text-red-500";
+  else if (isNeutral) colorClass = "text-muted-foreground";
 
-  let textClass = 'text-muted-foreground font-medium';
-  if (isCompleted) textClass = 'text-foreground font-bold';
-  else if (isActive) textClass = 'text-blue-700 font-bold';
-  else if (isFailed) textClass = 'text-red-700 font-bold';
-  else if (isNeutral) textClass = 'text-muted-foreground font-bold';
+  let textClass = "text-muted-foreground font-medium";
+  if (isCompleted) textClass = "text-foreground font-bold";
+  else if (isActive) textClass = "text-blue-700 font-bold";
+  else if (isFailed) textClass = "text-red-700 font-bold";
+  else if (isNeutral) textClass = "text-muted-foreground font-bold";
 
   return (
     <div className="flex flex-col items-center gap-2 w-20 shrink-0">
-      <div className={`flex h-6 w-6 items-center justify-center rounded-full bg-surface ring-4 ring-white ${colorClass}`}>
+      <div
+        className={`flex h-6 w-6 items-center justify-center rounded-full bg-surface ring-4 ring-white ${colorClass}`}
+      >
         {icon}
       </div>
-      <span className={`text-[10px] uppercase tracking-wider text-center ${textClass}`}>
+      <span
+        className={`text-[10px] uppercase tracking-wider text-center ${textClass}`}
+      >
         {label}
       </span>
     </div>
   );
 }
 
-function TrackerLine({ state }: { state: 'completed' | 'pending' }) {
+function TrackerLine({ state }: { state: "completed" | "pending" }) {
   return (
     <div className="flex-1 shrink-0 px-2 -mt-6">
-      <div className={`h-0.5 w-full rounded-full ${state === 'completed' ? 'bg-emerald-400' : 'bg-muted'}`} />
+      <div
+        className={`h-0.5 w-full rounded-full ${state === "completed" ? "bg-emerald-400" : "bg-muted"}`}
+      />
     </div>
   );
 }

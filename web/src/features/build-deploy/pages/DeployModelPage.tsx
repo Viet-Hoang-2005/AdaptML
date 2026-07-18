@@ -65,7 +65,7 @@ export default function DeployModelPage() {
 
   return (
     <>
-      <div className="rounded-lg border border-border bg-surface p-6 lg:p-8">
+      <div className="rounded-xl border border-border bg-surface p-6 lg:p-8">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <BuildSummaryItem
             label={t("uploadFlow.deploy.model")}

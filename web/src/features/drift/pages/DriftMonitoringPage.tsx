@@ -1,55 +1,70 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Settings, Trash2, ExternalLink, LineChart, Loader2 } from 'lucide-react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { useTranslation } from 'react-i18next';
+import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  Play,
+  Settings,
+  Trash2,
+  ExternalLink,
+  LineChart,
+  Loader2,
+} from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useTranslation } from "react-i18next";
 
-import { Placeholder } from '@/shared/ui/Placeholder';
-import { Button } from '@/shared/ui/Button';
-import { PageHeader } from '@/shared/ui/PageHeader';
-import { PageContent } from '@/shared/ui/PageContent';
-import { StepTitle } from '@/shared/ui/StepTitle';
-import { CardSummary } from '@/shared/ui/Card';
-import { ConfirmModal } from '@/shared/ui/ConfirmModal';
-import { useRuntimeLogStream } from '@/shared/hooks/useRuntimeLogStream';
-import { TerminalViewer } from '@/shared/ui/TerminalViewer';
-import { DataTable } from '@/shared/ui/DataTable';
-import { Badge } from '@/shared/ui/Badge';
-import { IconButton } from '@/shared/ui/IconButton';
-import { 
-  useDriftMonitoringJobs, 
-  useDriftMonitoringResults, 
-  useDeleteDriftMonitoringJob, 
+import { Placeholder } from "@/shared/ui/Placeholder";
+import { PageHeader } from "@/shared/ui/PageHeader";
+import { PageContent } from "@/shared/ui/PageContent";
+import { StepTitle } from "@/shared/ui/StepTitle";
+import { CardSummary } from "@/shared/ui/Card";
+import { ConfirmModal } from "@/shared/ui/ConfirmModal";
+import { useRuntimeLogStream } from "@/shared/hooks/useRuntimeLogStream";
+import { TerminalViewer } from "@/shared/ui/TerminalViewer";
+import { DataTable } from "@/shared/ui/DataTable";
+import { Badge } from "@/shared/ui/Badge";
+import { Button } from "@/shared/ui/Button";
+import {
+  useDriftMonitoringJobs,
+  useDriftMonitoringResults,
+  useDeleteDriftMonitoringJob,
   useRunDriftMonitoringJob,
-  type DriftMonitoringResult
-} from '@/features/drift/hooks/useDriftMonitoring';
+  type DriftMonitoringResult,
+} from "@/features/drift/hooks/useDriftMonitoring";
 
-const DRIFT_TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'] as const;
+const DRIFT_TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
 
 export default function DriftMonitoringPage() {
-  const { t, i18n } = useTranslation('drift');
+  const { t, i18n } = useTranslation("drift");
   const { modelId } = useParams<{ modelId: string }>();
   const navigate = useNavigate();
-  
-  const { data: jobs, isLoading: isLoadingJobs } = useDriftMonitoringJobs(modelId);
+
+  const { data: jobs, isLoading: isLoadingJobs } =
+    useDriftMonitoringJobs(modelId);
   const activeJob = jobs?.find((job) => job.is_active);
-  
-  const { data: results, isLoading: isLoadingResults, refetch: refetchResults } = useDriftMonitoringResults(activeJob?.id);
-  const { mutate: deleteJob, isPending: isDeleting } = useDeleteDriftMonitoringJob();
-  const { mutateAsync: runJob, isPending: isRunning } = useRunDriftMonitoringJob();
-  
+
+  const {
+    data: results,
+    isLoading: isLoadingResults,
+    refetch: refetchResults,
+  } = useDriftMonitoringResults(activeJob?.id);
+  const { mutate: deleteJob, isPending: isDeleting } =
+    useDeleteDriftMonitoringJob();
+  const { mutateAsync: runJob, isPending: isRunning } =
+    useRunDriftMonitoringJob();
+
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const stream = useRuntimeLogStream({
-    source: activeRunId ? { kind: 'drift', id: activeRunId } : null,
+    source: activeRunId ? { kind: "drift", id: activeRunId } : null,
     enabled: Boolean(activeRunId),
     terminalStatuses: DRIFT_TERMINAL_STATUSES,
   });
 
   useEffect(() => {
     if (
-      stream.status
-      && DRIFT_TERMINAL_STATUSES.includes(stream.status as typeof DRIFT_TERMINAL_STATUSES[number])
+      stream.status &&
+      DRIFT_TERMINAL_STATUSES.includes(
+        stream.status as (typeof DRIFT_TERMINAL_STATUSES)[number],
+      )
     ) {
       void refetchResults();
     }
@@ -66,23 +81,25 @@ export default function DriftMonitoringPage() {
   };
 
   if (isLoadingJobs) {
-    return <div className="p-8">{t('loading')}</div>;
+    return <div className="p-8">{t("loading")}</div>;
   }
 
   if (!activeJob) {
     return (
       <div className="flex w-full flex-1 flex-col space-y-6">
-        <PageHeader title={t('title')} />
+        <PageHeader title={t("title")} />
         <Placeholder
-          title={t('title')}
-          description={t('notConfigured')}
+          title={t("title")}
+          description={t("notConfigured")}
           icon={<LineChart className="h-6 w-6" />}
           action={
-            <Button 
+            <Button
               size="md"
-              onClick={() => navigate(`/dashboard/drift-monitoring/${modelId}/new`)}
+              onClick={() =>
+                navigate(`/dashboard/drift-monitoring/${modelId}/new`)
+              }
             >
-              {t('createMonitoring')}
+              {t("createMonitoring")}
             </Button>
           }
         />
@@ -92,26 +109,41 @@ export default function DriftMonitoringPage() {
 
   const columns: ColumnDef<DriftMonitoringResult>[] = [
     {
-      accessorKey: 'created_at',
-      header: t('runAt'),
-      cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{new Date(row.original.created_at).toLocaleString(i18n.language)}</span>,
+      accessorKey: "created_at",
+      header: t("runAt"),
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {new Date(row.original.created_at).toLocaleString(i18n.language)}
+        </span>
+      ),
     },
     {
-      accessorKey: 'drift_score',
-      header: t('driftScore'),
-      cell: ({ row }) => <span className="font-mono font-semibold">{row.original.drift_score == null ? t('none') : `${(row.original.drift_score * 100).toFixed(1)}%`}</span>,
+      accessorKey: "drift_score",
+      header: t("driftScore"),
+      cell: ({ row }) => (
+        <span className="font-mono font-semibold">
+          {row.original.drift_score == null
+            ? t("none")
+            : `${(row.original.drift_score * 100).toFixed(1)}%`}
+        </span>
+      ),
     },
     {
-      id: 'status',
-      header: t('status'),
+      id: "status",
+      header: t("status"),
       cell: ({ row }) => {
-        if (row.original.status !== 'completed') return <Badge variant="neutral">{row.original.status}</Badge>;
-        return <Badge variant={row.original.has_drift ? 'danger' : 'success'}>{row.original.has_drift ? t('driftDetected') : t('healthy')}</Badge>;
+        if (row.original.status !== "completed")
+          return <Badge variant="neutral">{row.original.status}</Badge>;
+        return (
+          <Badge variant={row.original.has_drift ? "danger" : "success"}>
+            {row.original.has_drift ? t("driftDetected") : t("healthy")}
+          </Badge>
+        );
       },
     },
     {
-      id: 'action',
-      header: t('report'),
+      id: "action",
+      header: t("report"),
       enableSorting: false,
       cell: ({ row }) => (
         <Button
@@ -121,7 +153,7 @@ export default function DriftMonitoringPage() {
           disabled={!row.original.report_html_uri}
           onClick={() => handleViewReport(row.original.id)}
         >
-          {t('viewReport')}
+          {t("viewReport")}
         </Button>
       ),
     },
@@ -129,26 +161,33 @@ export default function DriftMonitoringPage() {
 
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
-      <PageHeader title={t('title')} />
-      
+      <PageHeader title={t("title")} />
+
       <PageContent className="p-6 space-y-6">
         <div className="flex flex-col space-y-4">
           <div className="flex justify-between items-start">
-            <StepTitle title={t('configuration')} />
+            <StepTitle title={t("configuration")} />
             <div className="flex gap-2">
-              <IconButton
-                label={t('edit')}
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={t("edit")}
+                title={t("edit")}
                 icon={<Settings className="h-5 w-5" />}
-                onClick={() => navigate(`/dashboard/drift-monitoring/${modelId}/edit`)}
+                onClick={() =>
+                  navigate(`/dashboard/drift-monitoring/${modelId}/edit`)
+                }
               />
-              <IconButton
-                label={t('delete')}
+              <Button
+                size="icon"
+                aria-label={t("delete")}
+                title={t("delete")}
                 variant="danger-outline"
                 icon={<Trash2 className="h-5 w-5" />}
                 onClick={() => setIsDeleteModalOpen(true)}
               />
-              
-              <Button 
+
+              <Button
                 size="md"
                 onClick={handleRunNow}
                 disabled={isRunning}
@@ -159,19 +198,19 @@ export default function DriftMonitoringPage() {
                 ) : (
                   <Play className="w-4 h-4" />
                 )}
-                {isRunning ? t('running') : t('run')}
+                {isRunning ? t("running") : t("run")}
               </Button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <CardSummary 
-              label={t('trigger')}
-              value={activeJob.trigger_threshold.toString()} 
+            <CardSummary
+              label={t("trigger")}
+              value={activeJob.trigger_threshold.toString()}
             />
-            <CardSummary 
-              label={t('referencePath')}
-              value={activeJob.reference_asset_name || t('none')}
+            <CardSummary
+              label={t("referencePath")}
+              value={activeJob.reference_asset_name || t("none")}
             />
           </div>
         </div>
@@ -180,29 +219,31 @@ export default function DriftMonitoringPage() {
           {activeRunId && (
             <TerminalViewer
               key={activeRunId}
-              title={t('console')}
-              logs={stream.error ? [...stream.logs, `Error: ${stream.error}`] : stream.logs}
+              title={t("console")}
+              logs={
+                stream.error
+                  ? [...stream.logs, `Error: ${stream.error}`]
+                  : stream.logs
+              }
             />
           )}
-          <StepTitle title={t('history')} />
+          <StepTitle title={t("history")} />
           <DataTable
             data={results ?? []}
             columns={columns}
             getRowId={(result) => result.id}
             loading={isLoadingResults}
             pageSize={5}
-            emptyMessage={t('noRuns')}
+            emptyMessage={t("noRuns")}
           />
         </div>
-
-
       </PageContent>
 
       <ConfirmModal
         open={isDeleteModalOpen}
-        title={t('deleteTitle')}
-        description={t('deleteDescription')}
-        confirmText={t('deleteConfirm')}
+        title={t("deleteTitle")}
+        description={t("deleteDescription")}
+        confirmText={t("deleteConfirm")}
         tone="danger"
         loading={isDeleting}
         onConfirm={() => {

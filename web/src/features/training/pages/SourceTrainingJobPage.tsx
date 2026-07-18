@@ -25,7 +25,7 @@ export default function SourceTrainingJobPage() {
 
   return (
     <>
-      <div className="space-y-8 rounded-lg border border-border bg-surface p-6">
+      <div className="space-y-8 rounded-xl border border-border bg-surface p-6">
         <StepTitle
           title={t("createFlow.source.title")}
           subtitle={t("createFlow.source.description")}

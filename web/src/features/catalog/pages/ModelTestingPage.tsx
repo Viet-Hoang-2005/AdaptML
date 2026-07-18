@@ -1,26 +1,36 @@
-import { FileSpreadsheet, Play, Pause, Download, Trash2, SendHorizontal, X, Check, Percent } from 'lucide-react';
-import { useRef, useState, useMemo, useEffect } from 'react';
-import { useBlocker } from 'react-router-dom';
-import { ConfirmModal } from '@/shared/ui/ConfirmModal';
-import { TerminalViewer } from '@/shared/ui/TerminalViewer';
-import { Button } from '@/shared/ui/Button';
-import { useModelSelection } from '@/features/catalog/hooks/useModelSelection';
-import { predictWithModelProject } from '@/features/catalog/api/catalogApi';
-import { getApiErrorMessage } from '@/shared/api/errors';
-import { toast } from '@/shared/ui/toastStore';
-import { FileDropzone } from '@/shared/ui/FileDropzone';
-import { CSVEditor } from '@/shared/ui/CSVEditor';
-import { CardSummary } from '@/shared/ui/Card';
-import { PageContent } from '@/shared/ui/PageContent';
+import {
+  FileSpreadsheet,
+  Play,
+  Pause,
+  Download,
+  Trash2,
+  SendHorizontal,
+  X,
+  Check,
+  Percent,
+} from "lucide-react";
+import { useRef, useState, useMemo, useEffect } from "react";
+import { useBlocker } from "react-router-dom";
+import { ConfirmModal } from "@/shared/ui/ConfirmModal";
+import { TerminalViewer } from "@/shared/ui/TerminalViewer";
+import { Button } from "@/shared/ui/Button";
+import { useModelSelection } from "@/features/catalog/hooks/useModelSelection";
+import { predictWithModelProject } from "@/features/catalog/api/catalogApi";
+import { getApiErrorMessage } from "@/shared/api/errors";
+import { toast } from "@/shared/ui/toastStore";
+import { FileDropzone } from "@/shared/ui/FileDropzone";
+import { CSVEditor } from "@/shared/ui/CSVEditor";
+import { CardSummary } from "@/shared/ui/Card";
+import { PageContent } from "@/shared/ui/PageContent";
 
 const TARGET_COLUMN_NAMES = new Set([
-  'label',
-  'target',
-  'y',
-  'class',
-  'output',
-  'result',
-  'category',
+  "label",
+  "target",
+  "y",
+  "class",
+  "output",
+  "result",
+  "category",
 ]);
 
 type TestSummary = {
@@ -35,7 +45,7 @@ type TestSummary = {
 type TestLogEntry = {
   id: string;
   time: string;
-  level: 'info' | 'success' | 'warning' | 'error';
+  level: "info" | "success" | "warning" | "error";
   message: string;
   detail?: string;
 };
@@ -48,17 +58,25 @@ type PredictionErrorPayload = {
   detail?: PredictionErrorPayload | string;
 };
 
-const isTargetColumn = (name: string) => TARGET_COLUMN_NAMES.has(name.toLowerCase());
+const isTargetColumn = (name: string) =>
+  TARGET_COLUMN_NAMES.has(name.toLowerCase());
 
 const parseCSV = (text: string) => {
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
-  const headers = lines[0]?.split(',').map((header) => header.trim().replace(/^"|"$/g, '')) ?? [];
+  const headers =
+    lines[0]?.split(",").map((header) => header.trim().replace(/^"|"$/g, "")) ??
+    [];
   return lines.slice(1).map((line) => {
-    const values = line.split(',').map((value) => value.trim().replace(/^"|"$/g, ''));
+    const values = line
+      .split(",")
+      .map((value) => value.trim().replace(/^"|"$/g, ""));
     return headers.reduce<Record<string, unknown>>((record, header, index) => {
-      const rawValue = values[index] ?? '';
+      const rawValue = values[index] ?? "";
       const numericValue = Number(rawValue);
-      record[header] = rawValue !== '' && Number.isFinite(numericValue) ? numericValue : rawValue;
+      record[header] =
+        rawValue !== "" && Number.isFinite(numericValue)
+          ? numericValue
+          : rawValue;
       return record;
     }, {});
   });
@@ -79,7 +97,11 @@ const splitRow = (row: Record<string, unknown>) => {
   return { features, expectedLabel };
 };
 
-const makeLog = (level: TestLogEntry['level'], message: string, detail?: string): TestLogEntry => ({
+const makeLog = (
+  level: TestLogEntry["level"],
+  message: string,
+  detail?: string,
+): TestLogEntry => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   time: new Date().toLocaleTimeString(),
   level,
@@ -88,38 +110,56 @@ const makeLog = (level: TestLogEntry['level'], message: string, detail?: string)
 });
 
 const formatPrediction = (value: unknown) => {
-  if (value === null || value === undefined) return '-';
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 };
 
 const extractPredictionError = (error: unknown) => {
-  const response = (error as { response?: { status?: number; data?: PredictionErrorPayload } })?.response;
+  const response = (
+    error as { response?: { status?: number; data?: PredictionErrorPayload } }
+  )?.response;
   const rawPayload = response?.data;
-  const payload = typeof rawPayload?.detail === 'object' ? rawPayload.detail : rawPayload;
-  const message = payload?.message || payload?.error || getApiErrorMessage(error, 'Prediction failed.');
-  const hint = payload?.hint ? `Hint: ${payload.hint}` : '';
-  const received = payload?.received_features?.length ? `Received features: ${payload.received_features.join(', ')}` : '';
+  const payload =
+    typeof rawPayload?.detail === "object" ? rawPayload.detail : rawPayload;
+  const message =
+    payload?.message ||
+    payload?.error ||
+    getApiErrorMessage(error, "Prediction failed.");
+  const hint = payload?.hint ? `Hint: ${payload.hint}` : "";
+  const received = payload?.received_features?.length
+    ? `Received features: ${payload.received_features.join(", ")}`
+    : "";
 
   return {
     status: response?.status,
-    title: payload?.error || getApiErrorMessage(error, 'Prediction failed.'),
-    detail: [message, received, hint].filter(Boolean).join('\n'),
+    title: payload?.error || getApiErrorMessage(error, "Prediction failed."),
+    detail: [message, received, hint].filter(Boolean).join("\n"),
   };
 };
 
 export default function ModelTestingPage() {
   const { selectedModel } = useModelSelection();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
-  const [csvText, setCsvText] = useState('');
-  const [fileName, setFileName] = useState('');
+  const [csvText, setCsvText] = useState("");
+  const [fileName, setFileName] = useState("");
   const [logs, setLogs] = useState<TestLogEntry[]>([]);
-  
+
   const stringLogs = useMemo(() => {
-    return logs.map((log) => `[${log.time}] [${log.level.toUpperCase()}] ${log.message}${log.detail ? `\n${log.detail}` : ''}`);
+    return logs.map(
+      (log) =>
+        `[${log.time}] [${log.level.toUpperCase()}] ${log.message}${log.detail ? `\n${log.detail}` : ""}`,
+    );
   }, [logs]);
   const [predictions, setPredictions] = useState<string[]>([]);
-  const [summary, setSummary] = useState<TestSummary>({ total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 });
+  const [summary, setSummary] = useState<TestSummary>({
+    total: 0,
+    success: 0,
+    failed: 0,
+    withExpected: 0,
+    correct: 0,
+    mismatch: 0,
+  });
   const [running, setRunning] = useState(false);
   const [testFinished, setTestFinished] = useState(false);
   const isRunningRef = useRef(false);
@@ -136,42 +176,52 @@ export default function ModelTestingPage() {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!isDirty) return;
       e.preventDefault();
-      e.returnValue = '';
+      e.returnValue = "";
     };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
-  const pushLog = (entry: TestLogEntry) => setLogs((current) => [...current, entry]);
+  const pushLog = (entry: TestLogEntry) =>
+    setLogs((current) => [...current, entry]);
 
   const handleFileChange = async (file?: File) => {
     if (!file) return;
     const text = await file.text();
     const parsedRows = parseCSV(text);
-    const parsedTargetColumns = Object.keys(parsedRows[0] ?? {}).filter(isTargetColumn);
+    const parsedTargetColumns = Object.keys(parsedRows[0] ?? {}).filter(
+      isTargetColumn,
+    );
 
     setCsvText(text);
     setRows(parsedRows);
     setFileName(file.name);
-    setSummary({ total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 });
+    setSummary({
+      total: 0,
+      success: 0,
+      failed: 0,
+      withExpected: 0,
+      correct: 0,
+      mismatch: 0,
+    });
     setPredictions([]);
     setTestFinished(false);
     setCurrentRowIndex(0);
     setLogs([
-      makeLog('info', `Loaded ${file.name}: ${parsedRows.length} row(s).`),
+      makeLog("info", `Loaded ${file.name}: ${parsedRows.length} row(s).`),
       makeLog(
-        parsedTargetColumns.length > 0 ? 'warning' : 'info',
+        parsedTargetColumns.length > 0 ? "warning" : "info",
         parsedTargetColumns.length > 0
-          ? `Target columns will be excluded from features: ${parsedTargetColumns.join(', ')}.`
-          : 'No label/target columns detected in the uploaded CSV.',
+          ? `Target columns will be excluded from features: ${parsedTargetColumns.join(", ")}.`
+          : "No label/target columns detected in the uploaded CSV.",
       ),
     ]);
   };
 
   const handleRemoveFile = () => {
     setRows([]);
-    setFileName('');
-    setCsvText('');
+    setFileName("");
+    setCsvText("");
     setLogs([]);
     setPredictions([]);
     setTestFinished(false);
@@ -180,48 +230,70 @@ export default function ModelTestingPage() {
 
   const runTesting = async () => {
     if (!selectedModel) {
-      toast.warning('Please upload or select a model first.');
+      toast.warning("Please upload or select a model first.");
       return;
     }
     if (!rows.length) {
-      toast.warning('Please upload a CSV file first.');
+      toast.warning("Please upload a CSV file first.");
       return;
     }
     if (!selectedModel.endpoint_url) {
-      toast.error('Selected model does not have a prediction endpoint.');
+      toast.error("Selected model does not have a prediction endpoint.");
       return;
     }
 
     if (running) {
       isRunningRef.current = false;
       setRunning(false);
-      pushLog(makeLog('info', 'Testing paused by user.'));
+      pushLog(makeLog("info", "Testing paused by user."));
       return;
     }
 
     setRunning(true);
     isRunningRef.current = true;
-    
+
     const isStartingFresh = currentRowIndex === 0 || testFinished;
-    
+
     let currentSummary: TestSummary;
     let currentPredictions: string[];
-    
+
     if (isStartingFresh) {
       setCurrentRowIndex(0);
       setTestFinished(false);
       setPredictions([]);
-      setSummary({ total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 });
+      setSummary({
+        total: 0,
+        success: 0,
+        failed: 0,
+        withExpected: 0,
+        correct: 0,
+        mismatch: 0,
+      });
       setLogs([
-        makeLog('info', `Selected model: ${selectedModel.name}@${selectedModel.version || 'v1'}.`),
-        makeLog('info', `Endpoint: ${selectedModel.endpoint_url}.`),
-        makeLog('info', `Running prediction test for ${rows.length} row(s).`),
+        makeLog(
+          "info",
+          `Selected model: ${selectedModel.name}@${selectedModel.version || "v1"}.`,
+        ),
+        makeLog("info", `Endpoint: ${selectedModel.endpoint_url}.`),
+        makeLog("info", `Running prediction test for ${rows.length} row(s).`),
       ]);
-      
-      currentSummary = { total: 0, success: 0, failed: 0, withExpected: 0, correct: 0, mismatch: 0 };
+
+      currentSummary = {
+        total: 0,
+        success: 0,
+        failed: 0,
+        withExpected: 0,
+        correct: 0,
+        mismatch: 0,
+      };
       currentPredictions = [];
     } else {
-      pushLog(makeLog('info', `Resuming prediction from row ${currentRowIndex + 1}...`));
+      pushLog(
+        makeLog(
+          "info",
+          `Resuming prediction from row ${currentRowIndex + 1}...`,
+        ),
+      );
       currentSummary = { ...summary };
       currentPredictions = [...predictions];
     }
@@ -239,10 +311,18 @@ export default function ModelTestingPage() {
       if (expectedLabel !== undefined) currentSummary.withExpected += 1;
 
       try {
-        const response = await predictWithModelProject(selectedModel.endpoint_url, features);
+        const response = await predictWithModelProject(
+          selectedModel.endpoint_url,
+          features,
+        );
         const prediction = formatPrediction(response.prediction);
-        const confidence = response.confidence == null ? '' : ` | confidence=${response.confidence}%`;
-        const isCorrect = expectedLabel !== undefined && prediction.toLowerCase() === expectedLabel.toLowerCase();
+        const confidence =
+          response.confidence == null
+            ? ""
+            : ` | confidence=${response.confidence}%`;
+        const isCorrect =
+          expectedLabel !== undefined &&
+          prediction.toLowerCase() === expectedLabel.toLowerCase();
 
         currentSummary.success += 1;
         if (expectedLabel !== undefined) {
@@ -254,19 +334,23 @@ export default function ModelTestingPage() {
 
         pushLog(
           makeLog(
-            expectedLabel === undefined || isCorrect ? 'success' : 'warning',
-            `Row ${rowNumber}: Predicted=${prediction}${expectedLabel !== undefined ? ` | Expected=${expectedLabel}` : ''}${confidence} |`,
-            expectedLabel !== undefined ? (isCorrect ? 'Result: correct.' : 'Result: mismatch.') : undefined,
+            expectedLabel === undefined || isCorrect ? "success" : "warning",
+            `Row ${rowNumber}: Predicted=${prediction}${expectedLabel !== undefined ? ` | Expected=${expectedLabel}` : ""}${confidence} |`,
+            expectedLabel !== undefined
+              ? isCorrect
+                ? "Result: correct."
+                : "Result: mismatch."
+              : undefined,
           ),
         );
       } catch (error) {
         const parsedError = extractPredictionError(error);
         currentSummary.failed += 1;
-        currentPredictions.push('ERROR');
+        currentPredictions.push("ERROR");
         pushLog(
           makeLog(
-            'error',
-            `Row ${rowNumber}: request failed${parsedError.status ? ` with HTTP ${parsedError.status}` : ''} - ${parsedError.title}.`,
+            "error",
+            `Row ${rowNumber}: request failed${parsedError.status ? ` with HTTP ${parsedError.status}` : ""} - ${parsedError.title}.`,
             parsedError.detail,
           ),
         );
@@ -280,7 +364,7 @@ export default function ModelTestingPage() {
     if (isRunningRef.current) {
       pushLog(
         makeLog(
-          currentSummary.failed > 0 ? 'warning' : 'success',
+          currentSummary.failed > 0 ? "warning" : "success",
           `Finished: ${currentSummary.success}/${currentSummary.total} succeeded, ${currentSummary.failed} failed.`,
           currentSummary.withExpected > 0
             ? `Expected-label comparison: ${currentSummary.correct}/${currentSummary.withExpected} correct, ${currentSummary.mismatch} mismatch.`
@@ -296,35 +380,38 @@ export default function ModelTestingPage() {
 
   const handleDownloadCSV = () => {
     if (rows.length === 0 || predictions.length === 0) return;
-    
-    const headers = Object.keys(rows[0]);
-    const newHeaders = [...headers, 'Prediction'];
-    
-    const csvContent = [
-      newHeaders.join(','),
-      ...rows.slice(0, predictions.length).map((row, index) => {
-        const values = headers.map(h => row[h]);
-        values.push(predictions[index] || '');
-        return values.join(',');
-      })
-    ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const headers = Object.keys(rows[0]);
+    const newHeaders = [...headers, "Prediction"];
+
+    const csvContent = [
+      newHeaders.join(","),
+      ...rows.slice(0, predictions.length).map((row, index) => {
+        const values = headers.map((h) => row[h]);
+        values.push(predictions[index] || "");
+        return values.join(",");
+      }),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.setAttribute('download', `tested_${fileName}`);
+    link.setAttribute("download", `tested_${fileName}`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const accuracy = summary.withExpected > 0 ? Math.round((summary.correct / summary.withExpected) * 100) : null;
+  const accuracy =
+    summary.withExpected > 0
+      ? Math.round((summary.correct / summary.withExpected) * 100)
+      : null;
 
   return (
     <>
       <ConfirmModal
-        open={blocker.state === 'blocked'}
+        open={blocker.state === "blocked"}
         title="Leave Testing Page?"
         description="You have uploaded a CSV file for testing. If you leave this page, your test data and current progress will be lost. Are you sure you want to leave?"
         tone="danger"
@@ -341,24 +428,25 @@ export default function ModelTestingPage() {
           <div>
             <h2 className="text-xl font-bold text-foreground">Data Testing</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Upload a CSV file to test it with {selectedModel ? selectedModel.name : 'the selected model'}.
+              Upload a CSV file to test it with{" "}
+              {selectedModel ? selectedModel.name : "the selected model"}.
             </p>
           </div>
           <div className="flex gap-3">
             {rows.length > 0 && (
               <>
-                <Button 
-                  size="md" 
-                  variant="danger" 
-                  icon={<Trash2 className="h-4 w-4" />} 
+                <Button
+                  size="md"
+                  variant="danger"
+                  icon={<Trash2 className="h-4 w-4" />}
                   onClick={handleRemoveFile}
                 >
                   Remove
                 </Button>
-                <Button 
-                  size="md" 
+                <Button
+                  size="md"
                   variant="secondary"
-                  icon={<FileSpreadsheet className="h-4 w-4" />} 
+                  icon={<FileSpreadsheet className="h-4 w-4" />}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   Upload CSV
@@ -370,7 +458,7 @@ export default function ModelTestingPage() {
                   ref={fileInputRef}
                   onChange={(event) => {
                     void handleFileChange(event.target.files?.[0]);
-                    event.target.value = '';
+                    event.target.value = "";
                   }}
                 />
               </>
@@ -398,27 +486,36 @@ export default function ModelTestingPage() {
               </div>
             </div>
 
-            <div className='border-t border-border pt-6 space-y-6'>
+            <div className="border-t border-border pt-6 space-y-6">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h3 className="text-xl font-bold text-foreground">Run Test</h3>
+                  <h3 className="text-xl font-bold text-foreground">
+                    Run Test
+                  </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Send the CSV file and receive the prediction results from {selectedModel ? selectedModel.name : 'the selected model'}.
+                    Send the CSV file and receive the prediction results from{" "}
+                    {selectedModel ? selectedModel.name : "the selected model"}.
                   </p>
                 </div>
                 <div className="flex gap-3">
-                  <Button 
-                    size="md" 
-                    variant="secondary" 
-                    icon={<Download className="h-4 w-4" />} 
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    icon={<Download className="h-4 w-4" />}
                     disabled={running || predictions.length === 0}
                     onClick={handleDownloadCSV}
                   >
                     Download
                   </Button>
-                  <Button 
-                    size="md" 
-                    icon={running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />} 
+                  <Button
+                    size="md"
+                    icon={
+                      running ? (
+                        <Pause className="h-4 w-4" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )
+                    }
                     variant={running ? "danger" : "primary"}
                     onClick={runTesting}
                   >
@@ -426,42 +523,52 @@ export default function ModelTestingPage() {
                   </Button>
                 </div>
               </div>
-              
+
               <div className="grid gap-3 md:grid-cols-4">
-                <CardSummary 
-                  label="Processed" 
-                  value={`${summary.success + summary.failed}/${rows.length}`} 
-                  helper="rows completed" 
-                  tone={testFinished && rows.length > 0 ? 'info' : 'default'}
+                <CardSummary
+                  label="Processed"
+                  value={`${summary.success + summary.failed}/${rows.length}`}
+                  helper="rows completed"
+                  tone={testFinished && rows.length > 0 ? "info" : "default"}
                   icon={<SendHorizontal className="h-4 w-4" />}
                 />
-                <CardSummary 
-                  label="Failed" 
-                  value={String(summary.failed)} 
-                  tone={summary.failed ? 'error' : 'default'} 
-                  helper="backend/API errors" 
+                <CardSummary
+                  label="Failed"
+                  value={String(summary.failed)}
+                  tone={summary.failed ? "error" : "default"}
+                  helper="backend/API errors"
                   icon={<X className="h-4 w-4" />}
                 />
-                <CardSummary 
-                  label="Successful" 
-                  value={String(summary.success)} 
-                  tone={summary.success > 0 ? 'success' : 'default'} 
-                  helper="backend/API successes" 
+                <CardSummary
+                  label="Successful"
+                  value={String(summary.success)}
+                  tone={summary.success > 0 ? "success" : "default"}
+                  helper="backend/API successes"
                   icon={<Check className="h-4 w-4" />}
                 />
                 <CardSummary
                   label="Accuracy"
-                  value={accuracy === null ? '-' : `${accuracy}%`}
-                  tone={accuracy === null ? 'default' : summary.mismatch > 0 ? 'warning' : 'success'}
-                  helper={summary.withExpected ? `${summary.correct}/${summary.withExpected} correct` : 'no labels'}
+                  value={accuracy === null ? "-" : `${accuracy}%`}
+                  tone={
+                    accuracy === null
+                      ? "default"
+                      : summary.mismatch > 0
+                        ? "warning"
+                        : "success"
+                  }
+                  helper={
+                    summary.withExpected
+                      ? `${summary.correct}/${summary.withExpected} correct`
+                      : "no labels"
+                  }
                   icon={<Percent className="h-4 w-4" />}
                 />
               </div>
 
               <div className="mt-6">
-                <TerminalViewer 
-                  title="Testing Console" 
-                  placeholder='Click "Run" to start processing the CSV file...' 
+                <TerminalViewer
+                  title="Testing Console"
+                  placeholder='Click "Run" to start processing the CSV file...'
                   logs={stringLogs}
                 />
               </div>
