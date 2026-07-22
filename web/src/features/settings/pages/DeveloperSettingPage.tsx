@@ -8,7 +8,7 @@ import { ApiModal } from "@/features/settings/components/ApiModal";
 import { useDeveloperSettings } from "@/features/settings/hooks/useDeveloperSettings";
 import { useModelProjects } from "@/features/catalog/hooks/useModelProjects";
 import type { APIKeyRecord } from "@/features/settings/types";
-import { PageContent } from "@/shared/ui/PageContent";
+import { PageBody } from "@/shared/ui/PageBody";
 import { DataTable } from "@/shared/ui/DataTable";
 import { Badge } from "@/shared/ui/Badge";
 import { useTranslation } from "react-i18next";
@@ -140,7 +140,7 @@ export default function DeveloperSettingPage() {
 
   return (
     <div className="flex w-full flex-1 flex-col space-y-6">
-      <PageContent>
+      <PageBody>
         <div className="flex flex-col gap-4 border-b border-border px-6 py-6 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-xl font-bold text-foreground">
@@ -172,7 +172,7 @@ export default function DeveloperSettingPage() {
             emptyMessage={t("apiKey.empty")}
           />
         </div>
-      </PageContent>
+      </PageBody>
 
       {createdApiKey && (
         <ApiModal

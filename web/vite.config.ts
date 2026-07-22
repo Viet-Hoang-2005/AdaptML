@@ -15,6 +15,6 @@ export default defineConfig({
     },
   },
   build: {
-    sourcemap: false, // Tắt source map để tránh bị lộ FE code
+    sourcemap: false,
   }
 })

@@ -3,7 +3,7 @@ import { Download } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader } from '@/shared/ui/PageHeader';
-import { PageContent } from '@/shared/ui/PageContent';
+import { PageBody } from '@/shared/ui/PageBody';
 import { Button } from '@/shared/ui/Button';
 import { getDriftReportDownloadUrl } from '@/features/drift/api/driftApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
@@ -67,7 +67,7 @@ export default function DriftReportPage() {
         )}
       </PageHeader>
       
-      <PageContent className="flex-1 overflow-hidden bg-muted flex items-center justify-center relative p-0 border-t border-border min-h-0">
+      <PageBody className="flex-1 overflow-hidden bg-muted flex items-center justify-center relative p-0 border-t border-border min-h-0">
         {loading ? (
           <div className="flex flex-col items-center justify-center text-muted-foreground">
             <Loader2 className="w-8 h-8 animate-spin mb-2" />
@@ -82,7 +82,7 @@ export default function DriftReportPage() {
         ) : (
           <div className="text-red-500 py-20">Failed to load report.</div>
         )}
-      </PageContent>
+      </PageBody>
     </div>
   );
 }

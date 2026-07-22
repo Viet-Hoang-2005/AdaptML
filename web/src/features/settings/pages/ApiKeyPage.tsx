@@ -11,7 +11,7 @@ import { toast } from "@/shared/ui/toastStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { ModelProject } from "@/features/catalog/types";
 import { PageHeader } from "@/shared/ui/PageHeader";
-import { PageContent } from "@/shared/ui/PageContent";
+import { PageBody } from "@/shared/ui/PageBody";
 import { DataTable } from "@/shared/ui/DataTable";
 import { useTranslation } from "react-i18next";
 
@@ -111,7 +111,7 @@ export default function ApiKeyPage() {
         }}
       />
 
-      <PageContent className="p-6 space-y-6">
+      <PageBody className="p-6 space-y-6">
         <div className="space-y-4">
           <Input
             id="input-api-key-name"
@@ -222,7 +222,7 @@ export default function ApiKeyPage() {
             {keyId ? t("apiKey.save") : t("apiKey.createTitle")}
           </Button>
         </div>
-      </PageContent>
+      </PageBody>
 
       {createdApiKey && (
         <ApiModal

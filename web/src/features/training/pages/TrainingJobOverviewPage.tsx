@@ -2,19 +2,18 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  Info,
   Loader2,
   UploadCloud,
   XCircle,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import {
-  MetadataRow,
-  MilestoneTracker,
-} from "@/features/training/components/TrainingOverviewSections";
+import { MetadataRow } from "@/features/training/components/TrainingOverviewSections";
 import { useTrainingJobDetailContext } from "@/features/training/trainingJobDetailContext";
 import { computeElapsed, formatDuration } from "@/shared/lib/formatDuration";
-import { PageContent } from "@/shared/ui/PageContent";
+import { PageBody } from "@/shared/ui/PageBody";
+import { ProgressLine, type ProgressLineStep } from "@/shared/ui/ProgressLine";
 
 export default function TrainingJobOverviewPage() {
   const { t } = useTranslation("training");
@@ -32,16 +31,14 @@ export default function TrainingJobOverviewPage() {
   else if (isRunning || isCompleted || isFailed || isCancelled)
     submittedState = "completed";
 
-  let runningState: "pending" | "active" | "completed" | "skipped" =
-    "pending";
+  let runningState: "pending" | "active" | "completed" | "skipped" = "pending";
   if (isRunning) runningState = "active";
   else if (isCompleted) runningState = "completed";
   else if (isFailed || isCancelled)
     runningState = hasStarted ? "completed" : "skipped";
 
   let finalLabel = t("detail.milestones.completed");
-  let finalState: "pending" | "completed" | "failed" | "cancelled" =
-    "pending";
+  let finalState: "pending" | "completed" | "failed" | "cancelled" = "pending";
   if (isCompleted) finalState = "completed";
   else if (isFailed) {
     finalLabel = t("detail.milestones.failed");
@@ -57,7 +54,7 @@ export default function TrainingJobOverviewPage() {
     const elapsed = computeElapsed(start, end ?? undefined);
     return elapsed != null ? formatDuration(elapsed) : undefined;
   };
-  const milestones = [
+  const milestones: ProgressLineStep[] = [
     {
       id: "created",
       label: t("detail.milestones.created"),
@@ -118,6 +115,14 @@ export default function TrainingJobOverviewPage() {
 
   return (
     <div className="space-y-6">
+      <PageBody>
+        <div className="p-6 sm:p-8">
+          <div className="w-full overflow-x-auto pb-4">
+            <ProgressLine steps={milestones} />
+          </div>
+        </div>
+      </PageBody>
+
       {job.status === "failed" && (
         <div className="rounded-xl border border-danger/20 bg-danger-subtle p-5">
           <h4 className="mb-2 flex items-center gap-2 text-base font-bold text-danger">
@@ -150,7 +155,14 @@ export default function TrainingJobOverviewPage() {
         </div>
       )}
 
-      <PageContent title="Job Metadata">
+      <PageBody
+        title={
+          <div className="flex items-center gap-2">
+            <Info className="h-5 w-5" />
+            <h3 className="text-md font-semibold">Job Metadata</h3>
+          </div>
+        }
+      >
         <div className="grid grid-cols-1 gap-x-8 gap-y-6 p-6 md:grid-cols-2">
           <MetadataRow label="Internal Job ID" value={String(job.id)} />
           <MetadataRow
@@ -184,36 +196,7 @@ export default function TrainingJobOverviewPage() {
             }
           />
         </div>
-      </PageContent>
-
-      <PageContent title="Status Timeline">
-        <div className="p-6 sm:p-8">
-          <div className="w-full overflow-x-auto pb-4">
-            <MilestoneTracker milestones={milestones} />
-          </div>
-          {job.status === "failed" &&
-            (job.error_message || job.stop_reason) && (
-              <div className="mt-6 rounded-xl border border-danger/20 bg-danger-subtle p-4">
-                <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-danger">
-                  <AlertTriangle className="h-3.5 w-3.5" /> Failure Reason
-                </p>
-                <p className="text-sm font-medium text-danger">
-                  {job.error_message || job.stop_reason}
-                </p>
-              </div>
-            )}
-          {job.status === "cancelled" && job.stop_reason && (
-            <div className="mt-6 rounded-xl border border-warning/20 bg-warning-subtle p-4">
-              <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-warning">
-                <AlertTriangle className="h-3.5 w-3.5" /> Cancel Reason
-              </p>
-              <p className="text-sm font-medium text-warning">
-                {job.stop_reason}
-              </p>
-            </div>
-          )}
-        </div>
-      </PageContent>
+      </PageBody>
     </div>
   );
 }

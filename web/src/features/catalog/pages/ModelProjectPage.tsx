@@ -1,7 +1,7 @@
 import { Copy, ExternalLink, UploadCloud } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Placeholder } from "@/shared/ui/Placeholder";
-import { PageContent } from "@/shared/ui/PageContent";
+import { PageBody } from "@/shared/ui/PageBody";
 import { Button } from "@/shared/ui/Button";
 import { useModelSelection } from "@/features/catalog/hooks/useModelSelection";
 import { toast } from "@/shared/ui/toastStore";
@@ -42,7 +42,7 @@ export default function ModelProjectPage() {
   }
 
   return (
-    <PageContent>
+    <PageBody>
       <div className="border-b border-border p-6">
         <p className="text-xs font-semibold uppercase text-muted-foreground">
           {selectedModel.status}
@@ -112,6 +112,6 @@ export default function ModelProjectPage() {
           </div>
         </div>
       </div>
-    </PageContent>
+    </PageBody>
   );
 }

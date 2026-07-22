@@ -1,9 +1,9 @@
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw, History } from "lucide-react";
 
 import { TrainingEventHistory } from "@/features/training/components/TrainingOverviewSections";
 import { useTrainingJobDetailContext } from "@/features/training/trainingJobDetailContext";
 import { Button } from "@/shared/ui/Button";
-import { PageContent } from "@/shared/ui/PageContent";
+import { PageBody } from "@/shared/ui/PageBody";
 import { TerminalViewer } from "@/shared/ui/TerminalViewer";
 
 export default function TrainingJobLogsPage() {
@@ -59,11 +59,19 @@ export default function TrainingJobLogsPage() {
         }
       />
 
-      <PageContent title="Event History" className="mt-8">
+      <PageBody
+        title={
+          <div className="flex items-center gap-2">
+            <History className="h-5 w-5" />
+            <h3 className="text-md font-semibold">Event History</h3>
+          </div>
+        }
+        className="mt-8"
+      >
         <div className="p-6">
           <TrainingEventHistory events={eventsResponse?.events || []} />
         </div>
-      </PageContent>
+      </PageBody>
     </div>
   );
 }

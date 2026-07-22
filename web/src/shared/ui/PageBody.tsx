@@ -8,7 +8,7 @@ export interface PageContentProps {
   headerClassName?: string;
 }
 
-export function PageContent({
+export function PageBody({
   children,
   className,
   title,
@@ -29,7 +29,7 @@ export function PageContent({
           )}
         >
           {typeof title === "string" ? (
-            <h3 className="text-md font-semibold tracking-wider">{title}</h3>
+            <h3 className="text-md font-semibold">{title}</h3>
           ) : (
             title
           )}

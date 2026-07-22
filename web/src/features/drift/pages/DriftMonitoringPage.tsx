@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 
 import { Placeholder } from "@/shared/ui/Placeholder";
 import { PageHeader } from "@/shared/ui/PageHeader";
-import { PageContent } from "@/shared/ui/PageContent";
+import { PageBody } from "@/shared/ui/PageBody";
 import { StepTitle } from "@/shared/ui/StepTitle";
 import { CardSummary } from "@/shared/ui/Card";
 import { ConfirmModal } from "@/shared/ui/ConfirmModal";
@@ -163,7 +163,7 @@ export default function DriftMonitoringPage() {
     <div className="flex w-full flex-1 flex-col space-y-6">
       <PageHeader title={t("title")} />
 
-      <PageContent className="p-6 space-y-6">
+      <PageBody className="p-6 space-y-6">
         <div className="flex flex-col space-y-4">
           <div className="flex justify-between items-start">
             <StepTitle title={t("configuration")} />
@@ -237,7 +237,7 @@ export default function DriftMonitoringPage() {
             emptyMessage={t("noRuns")}
           />
         </div>
-      </PageContent>
+      </PageBody>
 
       <ConfirmModal
         open={isDeleteModalOpen}

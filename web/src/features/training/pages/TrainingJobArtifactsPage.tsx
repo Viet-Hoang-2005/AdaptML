@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
-import { Clipboard, Download, FileArchive, Rocket } from "lucide-react";
+import { Clipboard, Database, Download, FileArchive, FileCode2, Rocket, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { SourceEditor } from "@/features/catalog/components/SourceEditor";
 import { useTrainingJobDetailContext } from "@/features/training/trainingJobDetailContext";
 import { useRuntimeLogStream } from "@/shared/hooks/useRuntimeLogStream";
 import { Button } from "@/shared/ui/Button";
+import { PageBody } from "@/shared/ui/PageBody";
 import { TerminalViewer } from "@/shared/ui/TerminalViewer";
 
 const BUILD_TERMINAL_STATUSES = ["ready", "failed", "cancelled"] as const;
@@ -78,31 +80,36 @@ export default function TrainingJobArtifactsPage() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-muted/50 px-6 py-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
-            Output Artifacts
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              icon={<Download className="h-4 w-4" />}
-              disabled={!job.output_available}
-              loading={downloadingOutput}
-              onClick={downloadOutput}
-            >
-              Download Model
-            </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              disabled={!job.output_available}
-              onClick={requestDeleteOutputs}
-            >
-              {t("detail.deleteOutput")}
-            </Button>
+      <PageBody
+        title={
+          <div className="flex w-full flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <FileArchive className="h-5 w-5" />
+              <h3 className="text-md font-semibold">Output Artifacts</h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                icon={<Download className="h-4 w-4" />}
+                disabled={!job.output_available}
+                loading={downloadingOutput}
+                onClick={downloadOutput}
+              >
+                Download
+              </Button>
+              <Button
+                size="sm"
+                icon={<Trash2 className="h-4 w-4" />}
+                variant="danger"
+                disabled={!job.output_available}
+                onClick={requestDeleteOutputs}
+              >
+                Delete
+              </Button>
+            </div>
           </div>
-        </div>
+        }
+      >
         <div className="space-y-6 p-6">
           {job.output_available ? (
             <>
@@ -126,37 +133,32 @@ export default function TrainingJobArtifactsPage() {
                 Model artifact is not ready yet.
               </p>
               <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                Artifacts will be available for download and URI inspection
-                once the training completes successfully.
+                Artifacts will be available for download and URI inspection once
+                the training completes successfully.
               </p>
             </div>
           )}
         </div>
-      </div>
+      </PageBody>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-        <div className="border-b border-border bg-muted/50 px-6 py-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
-            Source Files
-          </h3>
-        </div>
-        <div className="space-y-6 p-6">
-          <ArtifactUri
-            heading="Source ZIP URI"
-            label="Source ZIP"
-            value={job.s3_source_uri}
-            onCopy={copyUri}
-          />
-          {job.s3_training_data_uri && (
-            <ArtifactUri
-              heading="Training Data URI"
-              label="Data URI"
-              value={job.s3_training_data_uri}
-              onCopy={copyUri}
-            />
-          )}
-        </div>
-      </div>
+      <SourceEditor
+        modelId={job.project_id}
+        fileType="code_file"
+        title={t("createFlow.source.sourceCode")}
+        icon={<FileCode2 className="h-4 w-4" />}
+        accept=".zip,.py,.json,.yaml,.yml"
+        editorType="code"
+        currentEntryPoint={job.entry_point}
+      />
+      
+      <SourceEditor
+        modelId={job.project_id}
+        fileType="data_file"
+        title={t("createFlow.source.referenceData")}
+        icon={<Database className="h-4 w-4" />}
+        accept=".zip,.csv,.parquet"
+        editorType="csv"
+      />
     </div>
   );
 }
