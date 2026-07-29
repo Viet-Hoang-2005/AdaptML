@@ -42,22 +42,22 @@ export default function SourceTrainingJobPage() {
             options={[
               {
                 value: "sklearn",
-                title: t("createFlow.flavors.sklearn"),
+                title: t("table.flavors.sklearn"),
                 description: t("createFlow.source.flavors.sklearn"),
               },
               {
                 value: "xgboost",
-                title: t("createFlow.flavors.xgboost"),
+                title: t("table.flavors.xgboost"),
                 description: t("createFlow.source.flavors.xgboost"),
               },
               {
                 value: "pytorch",
-                title: t("createFlow.flavors.pytorch"),
+                title: t("table.flavors.pytorch"),
                 description: t("createFlow.source.flavors.pytorch"),
               },
               {
                 value: "tensorflow",
-                title: t("createFlow.flavors.tensorflow"),
+                title: t("table.flavors.tensorflow"),
                 description: t("createFlow.source.flavors.tensorflow"),
               },
             ]}

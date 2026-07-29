@@ -2,6 +2,14 @@ export const registryEn = {
   title: 'Model Evolution', empty: 'Registered model versions will appear here.', summary: 'Summary', metadata: 'Metadata',
   metrics: 'Metrics', insights: 'Insights', drift: 'Drift', deployment: 'Deployment', history: 'History', compare: 'Compare',
   promote: 'Promote', rollback: 'Rollback',
+  selectModelFirst: 'Select a model to view its version lineage.',
+  actions: {
+    cancel: 'Cancel',
+    copy: 'Copy',
+  },
+  statuses: {
+    none: 'None',
+  },
   description: 'Track version lineage, training metrics, promotion history, and deployment readiness through the native Model Registry.',
   refresh: 'Refresh', refreshed: 'Data refreshed.', totalFamilies: 'Total Families', productionActive: 'Production Active',
   registryStatus: 'Registry Status', online: 'Online & Syncing', routingAlias: 'Routing Alias', aliasDescription: 'Families with active aliases',

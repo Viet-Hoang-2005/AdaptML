@@ -23,6 +23,10 @@ export const trainingEn = {
     success: 'Success',
     failed: 'Failed',
   },
+  statuses: {
+    none: 'None',
+    unknown: 'Unknown',
+  },
   table: {
     trainingAt: 'Training at',
     flavor: 'Flavor',
@@ -187,6 +191,8 @@ export const trainingEn = {
       title: 'Source and training data', description: 'Review the latest project workspace, then select the main training script in Source code.',
       flavor: 'Model flavor', entryPoint: 'Main training script', requirements: 'Requirements (optional)',
       requirementsPlaceholder: 'One Python dependency per line', requirementsHelper: 'One dependency per line.',
+      requirementsFile: 'Upload requirements.txt',
+      optional: 'Optional',
       sourceCode: 'Source code', referenceData: 'Reference data',
       flavors: {
         sklearn: 'Pickle or joblib estimators.',

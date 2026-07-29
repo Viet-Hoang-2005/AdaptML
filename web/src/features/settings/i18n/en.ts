@@ -3,6 +3,12 @@ export const settingsEn = {
   changePassword: 'Change Password', deleteAccount: 'Delete Account', avatar: 'Avatar', changeAvatar: 'Change Avatar', removeAvatar: 'Remove Avatar',
   profileInformation: 'Profile Information', fullName: 'Full Name', pronouns: 'Pronouns', company: 'Company', fieldOfWork: 'Field of Work',
   country: 'Country', description: 'Description', deleteTitle: 'Delete Account?', imageSize: 'Avatar image must be 5MB or smaller.',
+  actions: {
+    cancel: 'Cancel',
+  },
+  statuses: {
+    unknown: 'Unknown',
+  },
   avatarDialog: {
     close: 'Close avatar options modal', current: 'Current avatar', set: 'Set your avatar',
     setDescription: 'Choose a new image or select a previous avatar below.', upload: 'Upload image', previous: 'Previous avatars',

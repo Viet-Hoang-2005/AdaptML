@@ -5,6 +5,8 @@ export const deployEn = {
   columns: { index: '#', name: 'Name', description: 'Description', flavor: 'Flavor', access: 'Access', status: 'Status', updated: 'Updated', actions: 'Action' },
   status: { metadata: 'metadata', built: 'built', deployed: 'deployed' },
   actions: {
+    cancel: 'Cancel',
+    save: 'Save',
     downloadModel: 'Download model',
     editModel: 'Edit model',
     deleteModel: 'Delete model',
@@ -19,11 +21,20 @@ export const deployEn = {
     stopEndpoint: 'Stop endpoint',
     cleanup: 'Clean up',
   },
+  statuses: {
+    notAvailable: 'Not available',
+  },
   editModel: {
     title: 'Edit model project',
     name: 'Model name',
     description: 'Description',
     accessMode: 'Access mode',
+    privateTitle: 'Private API',
+    privateDescription: 'Requires a valid JWT or project API key.',
+    publicTitle: 'Public API',
+    publicDescription: 'Allows unauthenticated prediction requests.',
+  },
+  access: {
     privateTitle: 'Private API',
     privateDescription: 'Requires a valid JWT or project API key.',
     publicTitle: 'Public API',

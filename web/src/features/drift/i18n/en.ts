@@ -45,4 +45,8 @@ export const driftEn = {
     runQueued: 'The drift monitoring run was queued.',
     runFailed: 'Unable to start the drift monitoring run.',
   },
+  actions: {
+    cancel: 'Cancel',
+    retry: 'Retry',
+  },
 } as const;

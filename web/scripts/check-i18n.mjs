@@ -3,6 +3,17 @@ import path from "node:path";
 import ts from "typescript";
 
 const root = path.resolve("src");
+const namespaceFiles = new Map([
+  ["common", path.join(root, "shared", "i18n", "en.ts")],
+  ["auth", path.join(root, "features", "auth", "i18n", "en.ts")],
+  ["catalog", path.join(root, "features", "catalog", "i18n", "en.ts")],
+  ["deploy", path.join(root, "features", "deploy", "i18n", "en.ts")],
+  ["training", path.join(root, "features", "training", "i18n", "en.ts")],
+  ["registry", path.join(root, "features", "registry", "i18n", "en.ts")],
+  ["drift", path.join(root, "features", "drift", "i18n", "en.ts")],
+  ["settings", path.join(root, "features", "settings", "i18n", "en.ts")],
+  ["notifications", path.join(root, "features", "notifications", "i18n", "en.ts")],
+]);
 const displayProps = new Set([
   "title",
   "description",
@@ -50,6 +61,59 @@ const visitDirectory = (directory) => {
 visitDirectory(root);
 
 const failures = [];
+const translationKeys = new Map();
+const unwrapExpression = (node) => {
+  let current = node;
+  while (
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isParenthesizedExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+};
+const propertyName = (node) => {
+  if (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isNumericLiteral(node)) {
+    return node.text;
+  }
+  return null;
+};
+const collectResourceKeys = (object, prefix, keys) => {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) continue;
+    const name = propertyName(property.name);
+    if (!name) continue;
+    const key = prefix ? `${prefix}.${name}` : name;
+    keys.add(key);
+    if (ts.isPropertyAssignment(property) && ts.isObjectLiteralExpression(property.initializer)) {
+      collectResourceKeys(property.initializer, key, keys);
+    }
+  }
+};
+for (const [namespace, resourceFile] of namespaceFiles) {
+  const source = fs.readFileSync(resourceFile, "utf8");
+  const sourceFile = ts.createSourceFile(
+    resourceFile,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const keys = new Set();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (declaration.initializer) {
+        const initializer = unwrapExpression(declaration.initializer);
+        if (ts.isObjectLiteralExpression(initializer)) {
+          collectResourceKeys(initializer, "", keys);
+        }
+      }
+    }
+  }
+  translationKeys.set(namespace, keys);
+}
 const hasIgnoreComment = (sourceFile, node) => {
   const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line;
   const lines = sourceFile.text.split(/\r?\n/);
@@ -151,6 +215,35 @@ for (const file of files) {
     true,
     file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
+  const translators = new Map();
+
+  const registerTranslator = (node) => {
+    if (
+      !ts.isVariableDeclaration(node) ||
+      !ts.isObjectBindingPattern(node.name) ||
+      !node.initializer ||
+      !ts.isCallExpression(node.initializer) ||
+      !ts.isIdentifier(node.initializer.expression) ||
+      node.initializer.expression.text !== "useTranslation"
+    ) {
+      return;
+    }
+    const namespaceArgument = node.initializer.arguments[0];
+    const namespace = namespaceArgument && ts.isStringLiteral(namespaceArgument)
+      ? namespaceArgument.text
+      : "common";
+    for (const element of node.name.elements) {
+      const importedName = element.propertyName ? propertyName(element.propertyName) : propertyName(element.name);
+      if (importedName === "t" && ts.isIdentifier(element.name)) {
+        translators.set(element.name.text, namespace);
+      }
+    }
+  };
+  const registerWalk = (node) => {
+    registerTranslator(node);
+    ts.forEachChild(node, registerWalk);
+  };
+  registerWalk(sourceFile);
 
   const walk = (node) => {
     if (ts.isJsxText(node) && !isInsideCodeSample(node)) {
@@ -187,6 +280,28 @@ for (const file of files) {
     }
 
     if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      translators.has(node.expression.text) &&
+      node.arguments[0] &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      const configuredNamespace = translators.get(node.expression.text);
+      const rawKey = node.arguments[0].text;
+      const separator = rawKey.indexOf(":");
+      const namespace = separator >= 0 ? rawKey.slice(0, separator) : configuredNamespace;
+      const key = separator >= 0 ? rawKey.slice(separator + 1) : rawKey;
+      const keys = translationKeys.get(namespace);
+      const pluralKeyExists = keys && [...keys].some((candidate) => candidate.startsWith(`${key}_`));
+      if (!keys || (!keys.has(key) && !pluralKeyExists)) {
+        const location = sourceFile.getLineAndCharacterOfPosition(node.arguments[0].getStart(sourceFile));
+        failures.push(
+          `${path.relative(process.cwd(), sourceFile.fileName)}:${location.line + 1}:${location.character + 1} missing i18n key: ${namespace}:${key}`,
+        );
+      }
+    }
+
+    if (
       file.endsWith(".tsx") &&
       ts.isPropertyAssignment(node) &&
       ((ts.isIdentifier(node.name) && configProps.has(node.name.text)) ||
@@ -202,7 +317,7 @@ for (const file of files) {
 }
 
 if (failures.length > 0) {
-  console.error("Hard-coded user-facing text detected. Use react-i18next or add a scoped `i18n-ignore: reason` comment.");
+  console.error("Frontend i18n validation failed. Use react-i18next, register the namespace/key, or add a scoped `i18n-ignore: reason` comment for technical literals.");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }

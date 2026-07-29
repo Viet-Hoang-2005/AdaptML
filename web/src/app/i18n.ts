@@ -15,7 +15,7 @@ const resources = {
     common: commonEn,
     auth: authEn,
     catalog: catalogEn,
-    buildDeploy: deployEn,
+    deploy: deployEn,
     training: trainingEn,
     registry: registryEn,
     drift: driftEn,
