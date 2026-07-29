@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Switch } from '@/shared/ui/Switch';
+import { Switch } from '@/shared/components/Switch';
 
 export type TrainingStatusFilter = 'pending' | 'success' | 'failed' | 'all';
 

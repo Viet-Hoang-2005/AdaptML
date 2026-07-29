@@ -2,9 +2,9 @@ import { AlertTriangle, RefreshCw, History } from "lucide-react";
 
 import { TrainingEventHistory } from "@/features/training/components/TrainingOverviewSections";
 import { useTrainingJobDetailContext } from "@/features/training/trainingJobDetailContext";
-import { Button } from "@/shared/ui/Button";
-import { PageBody } from "@/shared/ui/PageBody";
-import { TerminalViewer } from "@/shared/ui/TerminalViewer";
+import { Button } from "@/shared/components/Button";
+import { PageBody } from "@/shared/components/PageBody";
+import { TerminalViewer } from "@/shared/components/TerminalViewer";
 
 export default function TrainingJobLogsPage() {
   const {

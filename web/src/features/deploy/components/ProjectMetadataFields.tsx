@@ -1,10 +1,10 @@
-import { Picker } from '@/shared/ui/Picker';
+import { Picker } from '@/shared/components/Picker';
 import { useTranslation } from 'react-i18next';
 import type { ModelProject, ProjectMetadataForm } from '@/features/catalog/types';
-import { FileDropzone } from '@/shared/ui/FileDropzone';
-import { Input } from '@/shared/ui/Input';
-import { StepTitle } from '@/shared/ui/StepTitle';
-import { TextArea } from '@/shared/ui/TextArea';
+import { FileDropzone } from '@/shared/components/FileDropzone';
+import { Input } from '@/shared/components/Input';
+import { StepTitle } from '@/shared/components/StepTitle';
+import { TextArea } from '@/shared/components/TextArea';
 
 interface ProjectMetadataFieldsProps {
   form: ProjectMetadataForm;

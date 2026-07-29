@@ -18,10 +18,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/shared/ui/Button";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
+import { Button } from "@/shared/components/Button";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
 import { BuildLogsPanel } from "./BuildLogsPanel";
-import { toast } from "@/shared/ui/toastStore";
+import { toast } from "@/shared/components/toastStore";
 import type { ModelProject } from "@/features/catalog/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────

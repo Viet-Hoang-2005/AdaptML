@@ -14,7 +14,7 @@ import { useModelSelection } from '@/features/catalog/hooks/useModelSelection';
 import { getProfile } from '@/features/settings/api/profileApi';
 import { settingsQueryKeys } from '@/features/settings/queryKeys';
 import type { UserProfile } from '@/features/settings/types';
-import { Button } from '@/shared/ui/Button';
+import { Button } from '@/shared/components/Button';
 
 const getInitials = (profile: UserProfile | null) => {
   const source = profile?.full_name || profile?.email || 'User';

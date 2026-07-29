@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { LazyCodeEditor } from "@/shared/ui/LazyCodeEditor";
+import { LazyCodeEditor } from "@/shared/components/LazyCodeEditor";
 import { Trash2, RotateCcw, Upload, Save, FileArchive } from "lucide-react";
-import { toast } from "@/shared/ui/toastStore";
+import { toast } from "@/shared/components/toastStore";
 import type { ModelProject } from "@/features/catalog/types";
 
 export interface TextEditorProps {

@@ -10,10 +10,10 @@ import {
 import { Link } from "react-router-dom";
 import { useState, useMemo } from "react";
 import type { ModelProject } from "@/features/catalog/types";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/components/Button";
 import { useModelProjectMutations } from "@/features/catalog/hooks/useModelProjects";
-import { PageTabs } from "@/shared/ui/PageTabs";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
+import { PageTabs } from "@/shared/components/PageTabs";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
 import { useParams, useNavigate, useBlocker } from "react-router-dom";
 import { useModelProjects } from "@/features/catalog/hooks/useModelProjects";
 
@@ -21,7 +21,7 @@ import { useModelProjects } from "@/features/catalog/hooks/useModelProjects";
 import { ModelInformationPage } from "./ModelInformationPage";
 import { ModelDeploymentPage } from "./ModelDeploymentPage";
 import { ModelSourcePage } from "./ModelSourcePage";
-import { ModelStatus } from "@/features/build-deploy/components/ModelStatus";
+import { ModelStatus } from "@/features/deploy/components/ModelStatus";
 
 export default function ModelDetailPage() {
   const { modelId } = useParams();

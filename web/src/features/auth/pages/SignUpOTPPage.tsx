@@ -1,9 +1,9 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Mail, ArrowLeft } from 'lucide-react';
 import { AuthCard } from '@/features/auth/components/AuthCard';
-import { OTPInput } from '@/shared/ui/OTPInput';
-import { Button } from '@/shared/ui/Button';
-import { toast } from '@/shared/ui/toastStore';
+import { OTPInput } from '@/shared/components/OTPInput';
+import { Button } from '@/shared/components/Button';
+import { toast } from '@/shared/components/toastStore';
 import { useCountdown } from '@/features/auth/hooks/useCountdown';
 import { verifyOTP, requestOTP } from '@/features/auth/api/authApi';
 import { getApiErrorMessage } from '@/shared/api/errors';

@@ -11,17 +11,17 @@ import {
 } from "lucide-react";
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useBlocker } from "react-router-dom";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
-import { TerminalViewer } from "@/shared/ui/TerminalViewer";
-import { Button } from "@/shared/ui/Button";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
+import { TerminalViewer } from "@/shared/components/TerminalViewer";
+import { Button } from "@/shared/components/Button";
 import { useModelSelection } from "@/features/catalog/hooks/useModelSelection";
 import { predictWithModelProject } from "@/features/catalog/api/catalogApi";
 import { getApiErrorMessage } from "@/shared/api/errors";
-import { toast } from "@/shared/ui/toastStore";
-import { FileDropzone } from "@/shared/ui/FileDropzone";
-import { CSVEditor } from "@/shared/ui/CSVEditor";
-import { CardSummary } from "@/shared/ui/Card";
-import { PageBody } from "@/shared/ui/PageBody";
+import { toast } from "@/shared/components/toastStore";
+import { FileDropzone } from "@/shared/components/FileDropzone";
+import { CSVEditor } from "@/shared/components/CSVEditor";
+import { CardSummary } from "@/shared/components/Card";
+import { PageBody } from "@/shared/components/PageBody";
 
 const TARGET_COLUMN_NAMES = new Set([
   "label",

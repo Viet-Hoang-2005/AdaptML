@@ -5,8 +5,8 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "@/shared/lib/cn";
-import { toast } from "@/shared/ui/toastStore";
-import { Button } from "@/shared/ui/Button";
+import { toast } from "@/shared/components/toastStore";
+import { Button } from "@/shared/components/Button";
 
 function getAnsiStyle(segment: Anser.AnserJsonEntry): CSSProperties {
   const decorations = new Set(segment.decorations);

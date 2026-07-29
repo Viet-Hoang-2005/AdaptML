@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, GitCompare, X } from "lucide-react";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/components/Button";
 import type {
   RegistryFamily,
   RegistryVersion,
@@ -9,7 +9,7 @@ import type {
 import { compareRegistryVersions } from "@/features/registry/api/registryApi";
 import { getApiErrorMessage } from "@/shared/api/errors";
 import { formatVersion } from "@/shared/lib/formatters";
-import { toast } from "@/shared/ui/toastStore";
+import { toast } from "@/shared/components/toastStore";
 
 interface Props {
   family: RegistryFamily;

@@ -1,18 +1,18 @@
 import { Copy } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMemo } from "react";
-import { Button } from "@/shared/ui/Button";
-import { Input } from "@/shared/ui/Input";
+import { Button } from "@/shared/components/Button";
+import { Input } from "@/shared/components/Input";
 import { ApiModal } from "@/features/settings/components/ApiModal";
 import { useApiKeyForm } from "@/features/settings/hooks/useApiKeyForm";
 import { useDeveloperSettings } from "@/features/settings/hooks/useDeveloperSettings";
 import { useModelProjects } from "@/features/catalog/hooks/useModelProjects";
-import { toast } from "@/shared/ui/toastStore";
+import { toast } from "@/shared/components/toastStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { ModelProject } from "@/features/catalog/types";
-import { PageHeader } from "@/shared/ui/PageHeader";
-import { PageBody } from "@/shared/ui/PageBody";
-import { DataTable } from "@/shared/ui/DataTable";
+import { PageHeader } from "@/shared/components/PageHeader";
+import { PageBody } from "@/shared/components/PageBody";
+import { DataTable } from "@/shared/components/DataTable";
 import { useTranslation } from "react-i18next";
 
 export default function ApiKeyPage() {

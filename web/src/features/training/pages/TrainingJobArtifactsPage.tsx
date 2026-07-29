@@ -6,9 +6,9 @@ import { useTranslation } from "react-i18next";
 import { SourceEditor } from "@/features/catalog/components/SourceEditor";
 import { useTrainingJobDetailContext } from "@/features/training/trainingJobDetailContext";
 import { useRuntimeLogStream } from "@/shared/hooks/useRuntimeLogStream";
-import { Button } from "@/shared/ui/Button";
-import { PageBody } from "@/shared/ui/PageBody";
-import { TerminalViewer } from "@/shared/ui/TerminalViewer";
+import { Button } from "@/shared/components/Button";
+import { PageBody } from "@/shared/components/PageBody";
+import { TerminalViewer } from "@/shared/components/TerminalViewer";
 
 const BUILD_TERMINAL_STATUSES = ["ready", "failed", "cancelled"] as const;
 

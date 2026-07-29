@@ -1,16 +1,16 @@
 import { Edit3, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { updateProjectMetadata } from "@/features/build-deploy/api/buildDeployApi";
-import { ProjectMetadataFields } from "@/features/build-deploy/components/ProjectMetadataFields";
+import { updateProjectMetadata } from "@/features/deploy/api/buildDeployApi";
+import { ProjectMetadataFields } from "@/features/deploy/components/ProjectMetadataFields";
 import { getModelProject } from "@/features/catalog/api/catalogApi";
 import type {
   ModelProject,
   ProjectMetadataForm,
 } from "@/features/catalog/types";
 import { getApiErrorMessage } from "@/shared/api/errors";
-import { Button } from "@/shared/ui/Button";
-import { toast } from "@/shared/ui/toastStore";
+import { Button } from "@/shared/components/Button";
+import { toast } from "@/shared/components/toastStore";
 
 const toForm = (project: ModelProject): ProjectMetadataForm => ({
   name: project.name,

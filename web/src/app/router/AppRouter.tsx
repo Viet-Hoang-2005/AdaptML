@@ -46,22 +46,22 @@ const ModelTestingPage = lazy(
   () => import("@/features/catalog/pages/ModelTestingPage"),
 );
 const ModelManagementPage = lazy(
-  () => import("@/features/build-deploy/pages/ModelManagementPage"),
+  () => import("@/features/deploy/pages/ModelManagementPage"),
 );
 const UploadModelPage = lazy(
-  () => import("@/features/build-deploy/pages/UploadModelPage"),
+  () => import("@/features/deploy/pages/UploadModelPage"),
 );
 const MetadataModelPage = lazy(
-  () => import("@/features/build-deploy/pages/MetadataModelPage"),
+  () => import("@/features/deploy/pages/MetadataModelPage"),
 );
 const BuildModelPage = lazy(
-  () => import("@/features/build-deploy/pages/BuildModelPage"),
+  () => import("@/features/deploy/pages/BuildModelPage"),
 );
 const DeployModelPage = lazy(
-  () => import("@/features/build-deploy/pages/DeployModelPage"),
+  () => import("@/features/deploy/pages/DeployModelPage"),
 );
 const ModelDetailPage = lazy(
-  () => import("@/features/build-deploy/pages/ModelDetailPage"),
+  () => import("@/features/deploy/pages/ModelDetailPage"),
 );
 const TrainingModelPage = lazy(
   () => import("@/features/training/pages/TrainingModelPage"),

@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail } from 'lucide-react';
 import { AuthCard } from '@/features/auth/components/AuthCard';
-import { Button } from '@/shared/ui/Button';
-import { OTPInput } from '@/shared/ui/OTPInput';
+import { Button } from '@/shared/components/Button';
+import { OTPInput } from '@/shared/components/OTPInput';
 import { useCountdown } from '@/features/auth/hooks/useCountdown';
 import { forgotPasswordOTP, verifyForgotPasswordOTP } from '@/features/auth/api/authApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
-import { toast } from '@/shared/ui/toastStore';
+import { toast } from '@/shared/components/toastStore';
 import { useTranslation } from 'react-i18next';
 
 interface LocationState {

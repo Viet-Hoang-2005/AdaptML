@@ -4,7 +4,7 @@ import { getRegistryHistory } from '@/features/registry/api/registryApi';
 import { formatVersion } from '@/shared/lib/formatters';
 import type { RegistryHistory } from '@/features/registry/types';
 import { getApiErrorMessage } from '@/shared/api/errors';
-import { toast } from '@/shared/ui/toastStore';
+import { toast } from '@/shared/components/toastStore';
 import { GitCommit, ArrowUpRight, RotateCcw, Package, CheckCircle, XCircle, Trash2, Activity } from 'lucide-react';
 
 const classNames = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(' ');

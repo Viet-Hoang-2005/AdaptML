@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { getGitHubOAuthConfig } from '@/features/auth/lib/oauth';
-import { toast } from '@/shared/ui/toastStore';
+import { toast } from '@/shared/components/toastStore';
 import { useTranslation } from 'react-i18next';
 
 export default function GitHubCallbackPage() {

@@ -11,17 +11,17 @@ import {
 import type { ColumnDef } from "@tanstack/react-table";
 import { useTranslation } from "react-i18next";
 
-import { Placeholder } from "@/shared/ui/Placeholder";
-import { PageHeader } from "@/shared/ui/PageHeader";
-import { PageBody } from "@/shared/ui/PageBody";
-import { StepTitle } from "@/shared/ui/StepTitle";
-import { CardSummary } from "@/shared/ui/Card";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
+import { Placeholder } from "@/shared/components/Placeholder";
+import { PageHeader } from "@/shared/components/PageHeader";
+import { PageBody } from "@/shared/components/PageBody";
+import { StepTitle } from "@/shared/components/StepTitle";
+import { CardSummary } from "@/shared/components/Card";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
 import { useRuntimeLogStream } from "@/shared/hooks/useRuntimeLogStream";
-import { TerminalViewer } from "@/shared/ui/TerminalViewer";
-import { DataTable } from "@/shared/ui/DataTable";
-import { Badge } from "@/shared/ui/Badge";
-import { Button } from "@/shared/ui/Button";
+import { TerminalViewer } from "@/shared/components/TerminalViewer";
+import { DataTable } from "@/shared/components/DataTable";
+import { Badge } from "@/shared/components/Badge";
+import { Button } from "@/shared/components/Button";
 import {
   useDriftMonitoringJobs,
   useDriftMonitoringResults,

@@ -5,14 +5,14 @@ import { useTranslation } from "react-i18next";
 import { useCreateTrainingJob } from "@/features/training/trainingFlowContext";
 import type { TrainingAcceleratorType } from "@/features/training/types";
 import { useRuntimeLogStream } from "@/shared/hooks/useRuntimeLogStream";
-import { Button } from "@/shared/ui/Button";
-import { Slider } from "@/shared/ui/Slider";
-import { StepTitle } from "@/shared/ui/StepTitle";
+import { Button } from "@/shared/components/Button";
+import { Slider } from "@/shared/components/Slider";
+import { StepTitle } from "@/shared/components/StepTitle";
 import {
   TerminalActionButton,
   TerminalViewer,
-} from "@/shared/ui/TerminalViewer";
-import { Picker } from "@/shared/ui/Picker";
+} from "@/shared/components/TerminalViewer";
+import { Picker } from "@/shared/components/Picker";
 
 const runtimeOptions = [
   { label: "15m", value: 900 },

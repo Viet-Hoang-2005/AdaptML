@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { createAPIKey, updateAPIKey } from '@/features/settings/api/apiKeysApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
 import { settingsQueryKeys } from '@/features/settings/queryKeys';
-import { toast } from '@/shared/ui/toastStore';
+import { toast } from '@/shared/components/toastStore';
 import type { APIKeyRecord, CreatedAPIKeyResponse } from '@/features/settings/types';
 
 export function useApiKeyForm(initialData?: APIKeyRecord | null) {

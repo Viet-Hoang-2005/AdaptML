@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Cropper, { type Area, type Point } from "react-easy-crop";
 import { X } from "lucide-react";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/components/Button";
 import { useTranslation } from "react-i18next";
 
 const createImage = (url: string) =>

@@ -50,10 +50,10 @@ import type {
 } from "@/features/training/trainingJobDetailContext";
 import { getApiErrorMessage } from "@/shared/api/errors";
 import { computeElapsed, formatDuration } from "@/shared/lib/formatDuration";
-import { Button } from "@/shared/ui/Button";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
-import { PageTabs } from "@/shared/ui/PageTabs";
-import { toast } from "@/shared/ui/toastStore";
+import { Button } from "@/shared/components/Button";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
+import { PageTabs } from "@/shared/components/PageTabs";
+import { toast } from "@/shared/components/toastStore";
 
 const ACTIVE_STATUSES: TrainingJobStatus[] = [
   "pending",

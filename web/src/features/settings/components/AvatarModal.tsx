@@ -1,5 +1,5 @@
 import { ImageUp, Trash2, X } from "lucide-react";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/components/Button";
 import type { AvatarRecord } from "@/features/settings/types";
 import { useTranslation } from "react-i18next";
 

@@ -19,12 +19,12 @@ import type { TrainingJob, TrainingJobStatus } from "@/features/training/types";
 import { useModelSelection } from "@/features/catalog/hooks/useModelSelection";
 import { getApiErrorMessage } from "@/shared/api/errors";
 import { formatDuration } from "@/shared/lib/formatDuration";
-import { Badge } from "@/shared/ui/Badge";
-import { Button } from "@/shared/ui/Button";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
-import { DataTable } from "@/shared/ui/DataTable";
-import { PageHeader } from "@/shared/ui/PageHeader";
-import { toast } from "@/shared/ui/toastStore";
+import { Badge } from "@/shared/components/Badge";
+import { Button } from "@/shared/components/Button";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
+import { DataTable } from "@/shared/components/DataTable";
+import { PageHeader } from "@/shared/components/PageHeader";
+import { toast } from "@/shared/components/toastStore";
 
 const ACTIVE_STATUSES: TrainingJobStatus[] = [
   "pending",

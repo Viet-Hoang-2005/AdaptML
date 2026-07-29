@@ -1,12 +1,12 @@
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, LockKeyhole } from 'lucide-react';
 import { AuthCard } from '@/features/auth/components/AuthCard';
-import { Button } from '@/shared/ui/Button';
-import { InputPassword } from '@/shared/ui/Input';
+import { Button } from '@/shared/components/Button';
+import { InputPassword } from '@/shared/components/Input';
 import { useForm } from '@/features/auth/hooks/useForm';
 import { resetForgottenPassword } from '@/features/auth/api/authApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
-import { toast } from '@/shared/ui/toastStore';
+import { toast } from '@/shared/components/toastStore';
 import { useTranslation } from 'react-i18next';
 
 interface LocationState {

@@ -3,11 +3,11 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
-import { BuildSummaryItem } from "@/features/build-deploy/components/BuildSummaryItem";
-import { useUploadModel } from "@/features/build-deploy/uploadModelContext";
+import { BuildSummaryItem } from "@/features/deploy/components/BuildSummaryItem";
+import { useUploadModel } from "@/features/deploy/uploadModelContext";
 import { useRuntimeLogStream } from "@/shared/hooks/useRuntimeLogStream";
-import { Button } from "@/shared/ui/Button";
-import { TerminalViewer } from "@/shared/ui/TerminalViewer";
+import { Button } from "@/shared/components/Button";
+import { TerminalViewer } from "@/shared/components/TerminalViewer";
 
 const DEPLOYMENT_TERMINAL_STATUSES = [
   "healthy",

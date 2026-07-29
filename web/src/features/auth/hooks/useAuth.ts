@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loginBaseAuth, loginGitHub, loginGoogle } from '@/features/auth/api/authApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
-import { toast } from '@/shared/ui/toastStore';
+import { toast } from '@/shared/components/toastStore';
 import type { AuthResponse, LoginCredentials } from '@/features/auth/types';
 
 export const getAccessToken = () => localStorage.getItem('access_token');

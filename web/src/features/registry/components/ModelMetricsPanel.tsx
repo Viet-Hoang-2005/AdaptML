@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { getRegistryMetrics } from "@/features/registry/api/registryApi";
 import type { RegistryMetric } from "@/features/registry/types";
 import { getApiErrorMessage } from "@/shared/api/errors";
-import { toast } from "@/shared/ui/toastStore";
+import { toast } from "@/shared/components/toastStore";
 import { BarChart2 } from "lucide-react";
 
 interface Props {

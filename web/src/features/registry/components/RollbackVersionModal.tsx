@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@/shared/ui/Button";
-import { toast } from "@/shared/ui/toastStore";
+import { Button } from "@/shared/components/Button";
+import { toast } from "@/shared/components/toastStore";
 import { rollbackRegistryFamily } from "@/features/registry/api/registryApi";
 import type {
   RegistryFamily,

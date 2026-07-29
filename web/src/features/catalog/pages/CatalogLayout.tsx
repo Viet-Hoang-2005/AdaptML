@@ -1,6 +1,6 @@
 import { FlaskConical, UploadCloud } from 'lucide-react';
 import { Outlet } from 'react-router-dom';
-import { PageHeader } from '@/shared/ui/PageHeader';
+import { PageHeader } from '@/shared/components/PageHeader';
 import { useTranslation } from 'react-i18next';
 
 export default function HomeLayout() {

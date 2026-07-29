@@ -12,8 +12,8 @@ import { useTranslation } from "react-i18next";
 import { MetadataRow } from "@/features/training/components/TrainingOverviewSections";
 import { useTrainingJobDetailContext } from "@/features/training/trainingJobDetailContext";
 import { computeElapsed, formatDuration } from "@/shared/lib/formatDuration";
-import { PageBody } from "@/shared/ui/PageBody";
-import { ProgressLine, type ProgressLineStep } from "@/shared/ui/ProgressLine";
+import { PageBody } from "@/shared/components/PageBody";
+import { ProgressLine, type ProgressLineStep } from "@/shared/components/ProgressLine";
 
 export default function TrainingJobOverviewPage() {
   const { t } = useTranslation("training");

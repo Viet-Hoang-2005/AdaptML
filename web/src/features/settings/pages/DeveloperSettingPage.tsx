@@ -2,15 +2,15 @@ import { Edit3, KeyRound, RefreshCw, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Button } from "@/shared/ui/Button";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
+import { Button } from "@/shared/components/Button";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
 import { ApiModal } from "@/features/settings/components/ApiModal";
 import { useDeveloperSettings } from "@/features/settings/hooks/useDeveloperSettings";
 import { useModelProjects } from "@/features/catalog/hooks/useModelProjects";
 import type { APIKeyRecord } from "@/features/settings/types";
-import { PageBody } from "@/shared/ui/PageBody";
-import { DataTable } from "@/shared/ui/DataTable";
-import { Badge } from "@/shared/ui/Badge";
+import { PageBody } from "@/shared/components/PageBody";
+import { DataTable } from "@/shared/components/DataTable";
+import { Badge } from "@/shared/components/Badge";
 import { useTranslation } from "react-i18next";
 
 export default function DeveloperSettingPage() {

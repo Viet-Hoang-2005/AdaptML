@@ -1,8 +1,8 @@
 import type { ModelProject } from "@/features/catalog/types";
-import { PackagePreview } from "@/features/build-deploy/components/PackagePreview";
+import { PackagePreview } from "@/features/deploy/components/PackagePreview";
 import { Link } from "react-router-dom";
 import { Rocket } from "lucide-react";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/components/Button";
 
 interface ModelDeploymentPageProps {
   model: ModelProject;

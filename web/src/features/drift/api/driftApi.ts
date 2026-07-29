@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api/client';
 import { controlPlaneURL } from '@/shared/api/config';
 import { pageResults } from '@/shared/api/pagination';
-import { getProjectVersions } from '@/features/build-deploy/api/buildDeployApi';
+import { getProjectVersions } from '@/features/deploy/api/buildDeployApi';
 import type {
   DriftMonitoringJob,
   DriftMonitoringResult,

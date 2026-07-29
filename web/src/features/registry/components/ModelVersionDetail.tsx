@@ -22,8 +22,8 @@ import {
   BarChart3,
 } from "lucide-react";
 import { formatVersion } from "@/shared/lib/formatters";
-import { Button } from "@/shared/ui/Button";
-import { toast } from "@/shared/ui/toastStore";
+import { Button } from "@/shared/components/Button";
+import { toast } from "@/shared/components/toastStore";
 import {
   checkRegistryVersionHealth,
   deployRegistryVersion,

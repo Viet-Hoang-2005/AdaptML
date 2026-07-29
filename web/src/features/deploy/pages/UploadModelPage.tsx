@@ -17,16 +17,16 @@ import {
   listDeployments,
   startProjectBuild,
   updateProjectMetadata,
-} from '@/features/build-deploy/api/buildDeployApi';
-import type { UploadModelContext, UploadStep, UploadTransitionState } from '@/features/build-deploy/uploadModelContext';
+} from '@/features/deploy/api/buildDeployApi';
+import type { UploadModelContext, UploadStep, UploadTransitionState } from '@/features/deploy/uploadModelContext';
 import type { Build, BuildInputForm, Deployment, ProjectMetadataForm } from '@/features/catalog/types';
 import { getModelProject } from '@/features/catalog/api/catalogApi';
 import { catalogQueryKeys } from '@/features/catalog/queryKeys';
 import { getApiErrorMessage } from '@/shared/api/errors';
-import { ConfirmModal } from '@/shared/ui/ConfirmModal';
-import { LineSteps } from '@/shared/ui/LineSteps';
-import { PageHeader } from '@/shared/ui/PageHeader';
-import { toast } from '@/shared/ui/toastStore';
+import { ConfirmModal } from '@/shared/components/ConfirmModal';
+import { LineSteps } from '@/shared/components/LineSteps';
+import { PageHeader } from '@/shared/components/PageHeader';
+import { toast } from '@/shared/components/toastStore';
 
 const managementPath = '/dashboard/management';
 const uploadPath = '/dashboard/management/model/upload';

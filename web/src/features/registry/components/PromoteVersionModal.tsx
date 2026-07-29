@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@/shared/ui/Button";
-import { toast } from "@/shared/ui/toastStore";
+import { Button } from "@/shared/components/Button";
+import { toast } from "@/shared/components/toastStore";
 import { promoteRegistryVersion } from "@/features/registry/api/registryApi";
 import { getApiErrorMessage } from "@/shared/api/errors";
 import type {

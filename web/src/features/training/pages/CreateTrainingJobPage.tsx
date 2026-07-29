@@ -29,10 +29,10 @@ import type {
 } from '@/features/training/trainingFlowContext';
 import type { TrainingJob, TrainingRuntimeCapabilities } from '@/features/training/types';
 import { getApiErrorMessage } from '@/shared/api/errors';
-import { ConfirmModal } from '@/shared/ui/ConfirmModal';
-import { LineSteps } from '@/shared/ui/LineSteps';
-import { PageHeader } from '@/shared/ui/PageHeader';
-import { toast } from '@/shared/ui/toastStore';
+import { ConfirmModal } from '@/shared/components/ConfirmModal';
+import { LineSteps } from '@/shared/components/LineSteps';
+import { PageHeader } from '@/shared/components/PageHeader';
+import { toast } from '@/shared/components/toastStore';
 
 const trainingPath = '/dashboard/model-training';
 const createPath = `${trainingPath}/create`;

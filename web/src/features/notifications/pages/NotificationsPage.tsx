@@ -1,6 +1,6 @@
 import { Bell } from 'lucide-react';
-import { PageHeader } from '@/shared/ui/PageHeader';
-import { Placeholder } from '@/shared/ui/Placeholder';
+import { PageHeader } from '@/shared/components/PageHeader';
+import { Placeholder } from '@/shared/components/Placeholder';
 import { useTranslation } from 'react-i18next';
 
 export default function NotificationsPage() {

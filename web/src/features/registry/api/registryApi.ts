@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api/client';
 import { controlPlaneURL } from '@/shared/api/config';
 import { listModelProjects } from '@/features/catalog/api/catalogApi';
-import { getProjectVersions, listBuilds } from '@/features/build-deploy/api/buildDeployApi';
+import { getProjectVersions, listBuilds } from '@/features/deploy/api/buildDeployApi';
 import type { ModelVersion } from '@/features/catalog/types';
 import type {
   PromoteAliasResponse,

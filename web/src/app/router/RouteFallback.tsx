@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 
-import { Skeleton } from "@/shared/ui/Skeleton";
+import { Skeleton } from "@/shared/components/Skeleton";
 
 export function RouteFallback() {
   const { t } = useTranslation("common");

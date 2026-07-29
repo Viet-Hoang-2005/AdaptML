@@ -2,12 +2,12 @@ import React, { useMemo, useState } from "react";
 import Papa from "papaparse";
 import { useParams, useNavigate } from "react-router-dom";
 import { Database } from "lucide-react";
-import { Slider } from "@/shared/ui/Slider";
-import { PageHeader } from "@/shared/ui/PageHeader";
-import { Button } from "@/shared/ui/Button";
-import { CSVEditor } from "@/shared/ui/CSVEditor";
+import { Slider } from "@/shared/components/Slider";
+import { PageHeader } from "@/shared/components/PageHeader";
+import { Button } from "@/shared/components/Button";
+import { CSVEditor } from "@/shared/components/CSVEditor";
 import { SourceEditor } from "@/features/catalog/components/SourceEditor";
-import { StepTitle } from "@/shared/ui/StepTitle";
+import { StepTitle } from "@/shared/components/StepTitle";
 import {
   useCreateDriftMonitoringJob,
   useDriftMonitoringJobs,
@@ -15,7 +15,7 @@ import {
   useUpdateDriftMonitoringJob,
 } from "@/features/drift/hooks/useDriftMonitoring";
 import { getApiErrorMessage } from "@/shared/api/errors";
-import { toast } from "@/shared/ui/toastStore";
+import { toast } from "@/shared/components/toastStore";
 
 const THRESHOLD_MARKS = [
   { value: 500, label: "500" },

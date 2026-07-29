@@ -1,10 +1,10 @@
 import { Copy, ExternalLink, UploadCloud } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Placeholder } from "@/shared/ui/Placeholder";
-import { PageBody } from "@/shared/ui/PageBody";
-import { Button } from "@/shared/ui/Button";
+import { Placeholder } from "@/shared/components/Placeholder";
+import { PageBody } from "@/shared/components/PageBody";
+import { Button } from "@/shared/components/Button";
 import { useModelSelection } from "@/features/catalog/hooks/useModelSelection";
-import { toast } from "@/shared/ui/toastStore";
+import { toast } from "@/shared/components/toastStore";
 import { useTranslation } from "react-i18next";
 
 export default function ModelProjectPage() {

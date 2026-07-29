@@ -8,7 +8,7 @@ import {
 } from '@/features/catalog/api/catalogApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
 import { catalogQueryKeys } from '@/features/catalog/queryKeys';
-import { toast } from '@/shared/ui/toastStore';
+import { toast } from '@/shared/components/toastStore';
 import type { ModelProjectFormValues } from '@/features/catalog/types';
 
 export function useModelProjects() {

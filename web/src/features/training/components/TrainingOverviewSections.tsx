@@ -1,5 +1,5 @@
 import type { TrainingJobEvent } from "@/features/training/types";
-import { Badge } from "@/shared/ui/Badge";
+import { Badge } from "@/shared/components/Badge";
 import { useTranslation } from "react-i18next";
 
 export function MetadataRow({

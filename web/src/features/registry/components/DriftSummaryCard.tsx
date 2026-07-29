@@ -1,7 +1,7 @@
 import { Activity, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/shared/ui/Button";
-import { Badge } from "@/shared/ui/Badge";
+import { Button } from "@/shared/components/Button";
+import { Badge } from "@/shared/components/Badge";
 import type { DriftSummary } from "@/features/registry/types";
 
 interface DriftSummaryCardProps {

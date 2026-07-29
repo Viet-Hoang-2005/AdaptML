@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@/app/styles/globals.css'
 import App from '@/app/App'
-import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
+import { ErrorBoundary } from '@/shared/components/ErrorBoundary'
 import { AppProviders } from '@/app/providers/AppProviders'
 import { initializeTheme } from '@/app/theme/theme'
 

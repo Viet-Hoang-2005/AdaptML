@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { Button } from '@/shared/ui/Button';
-import { Input } from '@/shared/ui/Input';
-import { TextArea } from '@/shared/ui/TextArea';
-import { Picker } from '@/shared/ui/Picker';
+import { Button } from '@/shared/components/Button';
+import { Input } from '@/shared/components/Input';
+import { TextArea } from '@/shared/components/TextArea';
+import { Picker } from '@/shared/components/Picker';
 import type { ModelProject, ModelProjectFormValues } from '@/features/catalog/types';
 import { useModelProjectMutations } from '@/features/catalog/hooks/useModelProjects';
 

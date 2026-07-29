@@ -1,9 +1,9 @@
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { ProjectMetadataFields } from "@/features/build-deploy/components/ProjectMetadataFields";
-import { useUploadModel } from "@/features/build-deploy/uploadModelContext";
-import { Button } from "@/shared/ui/Button";
+import { ProjectMetadataFields } from "@/features/deploy/components/ProjectMetadataFields";
+import { useUploadModel } from "@/features/deploy/uploadModelContext";
+import { Button } from "@/shared/components/Button";
 
 export default function MetadataModelPage() {
   const { t } = useTranslation("buildDeploy");

@@ -13,7 +13,7 @@ import {
 } from '@/features/settings/api/profileApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
 import { settingsQueryKeys } from '@/features/settings/queryKeys';
-import { toast } from '@/shared/ui/toastStore';
+import { toast } from '@/shared/components/toastStore';
 import type { PasswordModalStep, ProfileFormValues, UpdateProfileRequest, UserProfile } from '@/features/settings/types';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 

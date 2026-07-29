@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { authEn } from '@/features/auth/i18n/en';
-import { buildDeployEn } from '@/features/build-deploy/i18n/en';
+import { buildDeployEn } from '@/features/deploy/i18n/en';
 import { catalogEn } from '@/features/catalog/i18n/en';
 import { driftEn } from '@/features/drift/i18n/en';
 import { notificationsEn } from '@/features/notifications/i18n/en';

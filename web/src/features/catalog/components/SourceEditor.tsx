@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/app/theme/useTheme";
-import { LazyCodeEditor } from "@/shared/ui/LazyCodeEditor";
+import { LazyCodeEditor } from "@/shared/components/LazyCodeEditor";
 import {
   Save,
   FolderOpen,
@@ -18,10 +18,10 @@ import {
   FolderPlus,
   Trash2,
 } from "lucide-react";
-import { CSVEditor } from "@/shared/ui/CSVEditor";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
-import { Button } from "@/shared/ui/Button";
-import { toast } from "@/shared/ui/toastStore";
+import { CSVEditor } from "@/shared/components/CSVEditor";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
+import { Button } from "@/shared/components/Button";
+import { toast } from "@/shared/components/toastStore";
 import {
   listSourceCodeFiles,
   uploadSourceCodeFile,

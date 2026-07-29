@@ -8,11 +8,11 @@ import {
 } from "@/features/catalog/components/SourceEditor";
 import { useCreateTrainingJob } from "@/features/training/trainingFlowContext";
 import type { ModelFlavor } from "@/features/catalog/types";
-import { Button } from "@/shared/ui/Button";
-import { FileDropzone } from "@/shared/ui/FileDropzone";
-import { Picker } from "@/shared/ui/Picker";
-import { StepTitle } from "@/shared/ui/StepTitle";
-import { TextArea } from "@/shared/ui/TextArea";
+import { Button } from "@/shared/components/Button";
+import { FileDropzone } from "@/shared/components/FileDropzone";
+import { Picker } from "@/shared/components/Picker";
+import { StepTitle } from "@/shared/components/StepTitle";
+import { TextArea } from "@/shared/components/TextArea";
 
 export default function SourceTrainingJobPage() {
   const { t } = useTranslation("training");

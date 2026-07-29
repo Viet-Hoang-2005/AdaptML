@@ -20,14 +20,14 @@ import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { AvatarCropModal } from "@/features/settings/components/AvatarCropModal";
 import { AvatarModal } from "@/features/settings/components/AvatarModal";
-import { Button } from "@/shared/ui/Button";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
-import { Input, InputPassword } from "@/shared/ui/Input";
-import { OTPInput } from "@/shared/ui/OTPInput";
+import { Button } from "@/shared/components/Button";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
+import { Input, InputPassword } from "@/shared/components/Input";
+import { OTPInput } from "@/shared/components/OTPInput";
 import { useProfileSettings } from "@/features/settings/hooks/useProfileSettings";
-import { toast } from "@/shared/ui/toastStore";
+import { toast } from "@/shared/components/toastStore";
 import type { UserProfile } from "@/features/settings/types";
-import BaseModal from "@/shared/ui/BaseModal";
+import BaseModal from "@/shared/components/BaseModal";
 
 const formatDate = (value?: string) => {
   if (!value) return "Unknown";

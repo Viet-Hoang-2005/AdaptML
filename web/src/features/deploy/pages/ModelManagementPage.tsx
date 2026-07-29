@@ -2,19 +2,19 @@ import { useState } from "react";
 import { Bot, Edit3, Trash2, Search, Plus, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Button } from "@/shared/ui/Button";
-import { Input } from "@/shared/ui/Input";
-import { ConfirmModal } from "@/shared/ui/ConfirmModal";
-import { DataTable } from "@/shared/ui/DataTable";
-import { Badge } from "@/shared/ui/Badge";
-import { Placeholder } from "@/shared/ui/Placeholder";
+import { Button } from "@/shared/components/Button";
+import { Input } from "@/shared/components/Input";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
+import { DataTable } from "@/shared/components/DataTable";
+import { Badge } from "@/shared/components/Badge";
+import { Placeholder } from "@/shared/components/Placeholder";
 import {
   useModelProjects,
   useModelProjectMutations,
 } from "@/features/catalog/hooks/useModelProjects";
 import type { ModelProject } from "@/features/catalog/types";
-import EditModelModal from "@/features/build-deploy/components/EditModelModal";
-import { PageHeader } from "@/shared/ui/PageHeader";
+import EditModelModal from "@/features/deploy/components/EditModelModal";
+import { PageHeader } from "@/shared/components/PageHeader";
 import { useTranslation } from "react-i18next";
 
 const lifecycleBadgeVariant = {

@@ -1,5 +1,5 @@
 import { Clipboard, X } from "lucide-react";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/components/Button";
 import { useTranslation } from "react-i18next";
 
 interface ApiModalProps {

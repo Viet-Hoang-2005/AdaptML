@@ -2,14 +2,14 @@ import { ArrowLeft, ArrowRight, Play, Square } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
-import { BuildInputFields } from "@/features/build-deploy/components/BuildInputFields";
-import { useUploadModel } from "@/features/build-deploy/uploadModelContext";
+import { BuildInputFields } from "@/features/deploy/components/BuildInputFields";
+import { useUploadModel } from "@/features/deploy/uploadModelContext";
 import { useRuntimeLogStream } from "@/shared/hooks/useRuntimeLogStream";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/components/Button";
 import {
   TerminalActionButton,
   TerminalViewer,
-} from "@/shared/ui/TerminalViewer";
+} from "@/shared/components/TerminalViewer";
 
 const BUILD_TERMINAL_STATUSES = ["ready", "failed", "cancelled"] as const;
 
@@ -70,7 +70,7 @@ export default function BuildModelPage() {
                   onClick={async () => {
                     if (!build) return;
                     const { cancelBuildById } =
-                      await import("@/features/build-deploy/api/buildDeployApi");
+                      await import("@/features/deploy/api/buildDeployApi");
                     await cancelBuildById(build.id);
                     await refreshBuild();
                   }}

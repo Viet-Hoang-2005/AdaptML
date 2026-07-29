@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { buildDeployQueryKeys } from '@/features/build-deploy/queryKeys';
-import { TerminalViewer } from '@/shared/ui/TerminalViewer';
+import { buildDeployQueryKeys } from '@/features/deploy/queryKeys';
+import { TerminalViewer } from '@/shared/components/TerminalViewer';
 
 export function BuildLogsPanel({ modelId }: { modelId: string }) {
   const { t } = useTranslation('buildDeploy');

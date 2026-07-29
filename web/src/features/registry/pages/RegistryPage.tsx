@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Component } from "lucide-react";
-import { PageHeader } from "@/shared/ui/PageHeader";
+import { PageHeader } from "@/shared/components/PageHeader";
 import {
   getRegistryFamilies,
   getRegistryVersion,
@@ -12,7 +12,7 @@ import type {
   RegistryVersion,
 } from "@/features/registry/types";
 import { getApiErrorMessage } from "@/shared/api/errors";
-import { toast } from "@/shared/ui/toastStore";
+import { toast } from "@/shared/components/toastStore";
 import { useTranslation } from "react-i18next";
 
 import { VersionLineage } from "@/features/registry/components/VersionLineage";
