@@ -1,31 +1,41 @@
-import { Navigate } from 'react-router-dom';
-import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { clearAuthTokens, getAccessToken, getRefreshToken } from '@/features/auth/hooks/useAuth';
-import { refreshSession } from '@/features/auth/api/authApi';
+import { Navigate } from "react-router-dom";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import {
+  clearAuthTokens,
+  getAccessToken,
+  getRefreshToken,
+} from "@/features/auth/hooks/useAuth";
+import { refreshSession } from "@/features/auth/api/authApi";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>(() =>
-    getAccessToken() ? 'authenticated' : getRefreshToken() ? 'checking' : 'unauthenticated',
+  const [status, setStatus] = useState<
+    "checking" | "authenticated" | "unauthenticated"
+  >(() =>
+    getAccessToken()
+      ? "authenticated"
+      : getRefreshToken()
+        ? "checking"
+        : "unauthenticated",
   );
 
   useEffect(() => {
-    if (status !== 'checking') {
+    if (status !== "checking") {
       return;
     }
 
     let isMounted = true;
 
-      refreshSession()
+    refreshSession()
       .then(() => {
         if (isMounted) {
-          setStatus('authenticated');
+          setStatus("authenticated");
         }
       })
       .catch(() => {
         if (isMounted) {
           clearAuthTokens();
-          setStatus('unauthenticated');
+          setStatus("unauthenticated");
         }
       });
 
@@ -34,11 +44,11 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     };
   }, [status]);
 
-  if (status === 'checking') {
+  if (status === "checking") {
     return null;
   }
 
-  if (status === 'unauthenticated') {
+  if (status === "unauthenticated") {
     return <Navigate to="/login" replace />;
   }
 

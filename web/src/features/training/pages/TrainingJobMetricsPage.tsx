@@ -86,7 +86,7 @@ export default function TrainingJobMetricsPage() {
       <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
         <div className="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4">
           <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground">
-            <Activity className="h-4 w-4 text-blue-500" />
+            <Activity className="h-4 w-4 text-info" />
             {t("detail.metricsPage.title")}
           </p>
           <div className="flex items-center gap-3">
@@ -126,7 +126,7 @@ export default function TrainingJobMetricsPage() {
             }
             warning={highCpu}
             progress={latest?.cpu_percent}
-            progressColor={highCpu ? "bg-amber-500" : "bg-emerald-500"}
+            progressColor={highCpu ? "bg-warning" : "bg-success"}
           />
           <MetricCell
             icon={<HardDrive className="h-3.5 w-3.5" />}
@@ -135,7 +135,7 @@ export default function TrainingJobMetricsPage() {
             detail={memoryDetail}
             warning={highRam}
             progress={latest?.memory_percent}
-            progressColor={highRam ? "bg-red-500" : "bg-blue-500"}
+            progressColor={highRam ? "bg-danger" : "bg-info"}
           />
           <MetricCell
             icon={<Rocket className="h-3.5 w-3.5" />}
@@ -144,7 +144,7 @@ export default function TrainingJobMetricsPage() {
             detail={gpuDetail}
             muted={!latest?.gpu_available}
             progress={latest?.gpu_percent}
-            progressColor="bg-purple-500"
+            progressColor="bg-chart-3"
           />
         </div>
       </div>
@@ -174,14 +174,14 @@ function MetricCell({
   return (
     <div
       className={`flex min-w-0 flex-col justify-between rounded-xl border bg-muted px-5 py-4 ${
-        warning ? "border-amber-300 ring-1 ring-amber-100" : "border-border"
+        warning ? "border-warning-border ring-1 ring-warning-border" : "border-border"
       } ${muted ? "border-dashed opacity-50 grayscale" : ""}`}
     >
       <div>
         <div className="flex items-start justify-between">
           <p
             className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${
-              warning ? "text-amber-600" : "text-muted-foreground"
+              warning ? "text-warning" : "text-muted-foreground"
             }`}
           >
             {icon}
@@ -190,7 +190,7 @@ function MetricCell({
           <p
             className={`truncate text-2xl font-black tracking-tight ${
               warning
-                ? "text-amber-700"
+                ? "text-warning"
                 : muted
                   ? "text-muted-foreground"
                   : "text-foreground"
@@ -215,7 +215,7 @@ function MetricCell({
       </div>
       <p
         className={`mt-3 truncate text-[11px] font-bold ${
-          warning ? "text-amber-600/80" : "text-muted-foreground"
+          warning ? "text-warning" : "text-muted-foreground"
         }`}
         title={detail}
       >

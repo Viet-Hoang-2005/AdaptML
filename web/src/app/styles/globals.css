@@ -58,7 +58,7 @@
   }
 
   ::selection {
-    background: color-mix(in srgb, var(--primary) 25%, transparent);
+    background: var(--selection);
   }
 }
 
@@ -71,7 +71,7 @@
 }
 
 .custom-scrollbar {
-  scrollbar-color: #475569 transparent;
+  scrollbar-color: var(--scrollbar) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -85,7 +85,11 @@
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: #475569;
+  background: var(--scrollbar);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -183,10 +183,7 @@ const router = createBrowserRouter(
             path="jobs/:jobId"
             element={<Navigate to="details/overview" replace />}
           />
-          <Route
-            path="jobs/:jobId/details"
-            element={<TrainingJobDetailPage />}
-          >
+          <Route path="jobs/:jobId/details" element={<TrainingJobDetailPage />}>
             <Route index element={<Navigate to="overview" replace />} />
             <Route path="overview" element={<TrainingJobOverviewPage />} />
             <Route path="logs" element={<TrainingJobLogsPage />} />

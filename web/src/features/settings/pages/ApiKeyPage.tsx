@@ -152,48 +152,48 @@ export default function ApiKeyPage() {
             <span className="text-sm font-medium text-foreground">
               {t("apiKey.python")}
             </span>
-            <div className="relative rounded-xl border border-border bg-gray-950 overflow-hidden">
-              <pre className="p-4 text-xs font-mono text-[#d4d4d4] overflow-x-auto custom-scrollbar">
-                <span className="text-[#c586c0]">import</span>{" "}
-                <span className="text-[#4ec9b0]">requests</span>
+            <div className="relative overflow-hidden rounded-xl border border-terminal-border bg-terminal">
+              <pre className="custom-scrollbar overflow-x-auto p-4 font-mono text-xs text-terminal-foreground">
+                <span className="text-syntax-keyword">import</span>{" "}
+                <span className="text-syntax-type">requests</span>
                 {"\n\n"}
-                <span className="text-[#4fc1ff]">API_URL</span> ={" "}
-                <span className="text-[#ce9178]">"your_api_endpoint_url"</span>
+                <span className="text-syntax-property">API_URL</span> ={" "}
+                <span className="text-syntax-string">"your_api_endpoint_url"</span>
                 {"\n"}
-                <span className="text-[#4fc1ff]">API_KEY</span> ={" "}
-                <span className="text-[#ce9178]">"your_api_key_here"</span>
+                <span className="text-syntax-property">API_KEY</span> ={" "}
+                <span className="text-syntax-string">"your_api_key_here"</span>
                 {"\n\n"}
-                <span className="text-[#9cdcfe]">headers</span> = {"{\n"}
+                <span className="text-syntax-variable">headers</span> = {"{\n"}
                 {"    "}
-                <span className="text-[#ce9178]">"X-API-Key"</span>:{" "}
-                <span className="text-[#4fc1ff]">API_KEY</span>,{"\n"}
+                <span className="text-syntax-string">"X-API-Key"</span>:{" "}
+                <span className="text-syntax-property">API_KEY</span>,{"\n"}
                 {"    "}
-                <span className="text-[#ce9178]">"Content-Type"</span>:{" "}
-                <span className="text-[#ce9178]">"application/json"</span>
+                <span className="text-syntax-string">"Content-Type"</span>:{" "}
+                <span className="text-syntax-string">"application/json"</span>
                 {"\n"}
                 {"}\n\n"}
-                <span className="text-[#9cdcfe]">payload</span> = {"{\n"}
+                <span className="text-syntax-variable">payload</span> = {"{\n"}
                 {"    "}
-                <span className="text-[#ce9178]">"features"</span>: {"{\n"}
+                <span className="text-syntax-string">"features"</span>: {"{\n"}
                 {"        "}
-                <span className="text-[#ce9178]">"Src Port"</span>:{" "}
-                <span className="text-[#b5cea8]">443</span>,{"\n"}
+                <span className="text-syntax-string">"Src Port"</span>:{" "}
+                <span className="text-syntax-number">443</span>,{"\n"}
                 {"        "}
-                <span className="text-[#6a9955]"># Add other features...</span>
+                <span className="text-syntax-comment"># Add other features...</span>
                 {"\n"}
                 {"    }\n"}
                 {"}\n\n"}
-                <span className="text-[#9cdcfe]">response</span> ={" "}
-                <span className="text-[#9cdcfe]">requests</span>.
-                <span className="text-[#dcdcaa]">post</span>(
-                <span className="text-[#4fc1ff]">API_URL</span>,{" "}
-                <span className="text-[#9cdcfe]">json</span>=
-                <span className="text-[#9cdcfe]">payload</span>,{" "}
-                <span className="text-[#9cdcfe]">headers</span>=
-                <span className="text-[#9cdcfe]">headers</span>){"\n"}
-                <span className="text-[#dcdcaa]">print</span>(
-                <span className="text-[#9cdcfe]">response</span>.
-                <span className="text-[#dcdcaa]">json</span>())
+                <span className="text-syntax-variable">response</span> ={" "}
+                <span className="text-syntax-variable">requests</span>.
+                <span className="text-syntax-function">post</span>(
+                <span className="text-syntax-property">API_URL</span>,{" "}
+                <span className="text-syntax-variable">json</span>=
+                <span className="text-syntax-variable">payload</span>,{" "}
+                <span className="text-syntax-variable">headers</span>=
+                <span className="text-syntax-variable">headers</span>){"\n"}
+                <span className="text-syntax-function">print</span>(
+                <span className="text-syntax-variable">response</span>.
+                <span className="text-syntax-function">json</span>())
               </pre>
               <button
                 onClick={() => {
@@ -202,7 +202,7 @@ export default function ApiKeyPage() {
                   );
                   toast.success(t("apiKey.codeCopied"));
                 }}
-                className="absolute right-3 top-3 rounded-md bg-gray-800 p-2 text-muted-foreground shadow-sm ring-1 ring-gray-700 hover:text-white hover:bg-gray-700 transition-colors"
+                className="absolute right-3 top-3 rounded-md bg-terminal-header p-2 text-terminal-muted shadow-sm ring-1 ring-terminal-border transition-colors hover:bg-terminal-border hover:text-terminal-foreground active:bg-terminal-muted"
                 title={t("apiKey.copyCode")}
               >
                 <Copy className="h-4 w-4" />

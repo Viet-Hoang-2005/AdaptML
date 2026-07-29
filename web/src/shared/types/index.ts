@@ -1,5 +1,12 @@
 export type ResourceId = string;
 
+export type SemanticTone =
+  | 'neutral'
+  | 'info'
+  | 'success'
+  | 'warning'
+  | 'danger';
+
 export interface MessageResponse {
   message: string;
 }

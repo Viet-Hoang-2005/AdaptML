@@ -70,13 +70,13 @@ export function TerminalViewer({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-xl border border-border bg-gray-900 shadow-lg",
+        "overflow-hidden rounded-xl border border-terminal-border bg-terminal shadow-lg",
         className,
       )}
     >
-      <div className="flex min-h-13 items-center border-b border-border bg-gray-800/80 px-4 py-3">
-        <Terminal className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
-        <span className="truncate font-mono text-sm text-slate-300">
+      <div className="flex min-h-13 items-center border-b border-terminal-border bg-terminal-header px-4 py-3">
+        <Terminal className="mr-2 h-4 w-4 shrink-0 text-terminal-muted" />
+        <span className="truncate font-mono text-sm text-terminal-foreground">
           {title ?? t("terminal.title")}
         </span>
         <div className="ml-auto flex items-center gap-2">
@@ -88,6 +88,7 @@ export function TerminalViewer({
             size="sm"
             title={t("terminal.copyTitle")}
             icon={<Clipboard className="h-3.5 w-3.5" />}
+            className="border-terminal-border bg-terminal-header text-terminal-foreground hover:border-terminal-muted hover:bg-terminal-border active:bg-terminal-muted"
           >
             {t("terminal.copy")}
           </Button>
@@ -96,7 +97,7 @@ export function TerminalViewer({
       <div
         ref={terminalRef}
         className={cn(
-          "custom-scrollbar h-72 w-full overflow-y-auto bg-gray-900 p-4 font-mono text-sm text-slate-200 antialiased",
+          "custom-scrollbar h-72 w-full overflow-y-auto bg-terminal p-4 font-mono text-sm text-terminal-foreground antialiased",
           bodyClassName,
         )}
         style={{ scrollBehavior: "smooth" }}
@@ -111,7 +112,7 @@ export function TerminalViewer({
             </div>
           ))
         ) : placeholder ? (
-          <div className="break-all whitespace-pre-wrap text-slate-400 italic">
+          <div className="break-all whitespace-pre-wrap text-terminal-muted italic">
             {placeholder}
           </div>
         ) : null}

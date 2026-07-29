@@ -40,23 +40,23 @@ function formatDelta(value: number | null): string {
 }
 
 function winnerClass(winner: string) {
-  if (winner === "right") return "text-blue-700 bg-blue-50 border-blue-200";
+  if (winner === "right") return "border-info-border bg-info-subtle text-info";
   if (winner === "left")
-    return "text-emerald-700 bg-emerald-50 border-emerald-200";
-  if (winner === "tie") return "text-foreground bg-muted border-border";
-  return "text-muted-foreground bg-muted border-border";
+    return "border-success-border bg-success-subtle text-success";
+  if (winner === "tie") return "border-border bg-surface-muted text-foreground";
+  return "border-border bg-surface-muted text-foreground-subtle";
 }
 
 function DeployabilityPill({ status }: { status?: string }) {
   const { t } = useTranslation("registry");
   const cls =
     status === "deployable"
-      ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+      ? "border-success-border bg-success-subtle text-success"
       : status === "track_only"
-        ? "bg-amber-100 text-amber-800 border-amber-200"
+        ? "border-warning-border bg-warning-subtle text-warning"
         : status === "invalid"
-          ? "bg-red-100 text-red-800 border-red-200"
-          : "bg-muted text-foreground border-border";
+          ? "border-danger-border bg-danger-subtle text-danger"
+          : "border-border bg-surface-muted text-foreground";
   return (
     <span
       className={classNames(
@@ -97,7 +97,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
 
   if (versions.length < 2) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm">
         <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden text-center p-8">
           <div className="mx-auto bg-muted rounded-full w-16 h-16 flex items-center justify-center mb-4">
             <GitCompare className="h-8 w-8 text-muted-foreground" />
@@ -121,11 +121,11 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm">
       <div className="bg-surface rounded-2xl shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex justify-between items-center p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-50 text-blue-600 p-2 rounded-xl">
+            <div className="rounded-xl bg-info-subtle p-2 text-info">
               <GitCompare className="h-5 w-5" />
             </div>
             <div>
@@ -150,7 +150,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
         <div className="flex-1 overflow-y-auto p-6 bg-muted/50">
           <div className="grid md:grid-cols-[1fr_1fr_auto] gap-4 mb-6 rounded-xl border border-border bg-surface p-4 shadow-sm">
             <select
-              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-ring"
               value={leftId}
               onChange={(event) => setLeftId(event.target.value)}
             >
@@ -166,7 +166,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
               ))}
             </select>
             <select
-              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-ring"
               value={rightId}
               onChange={(event) => setRightId(event.target.value)}
             >
@@ -218,7 +218,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                     {comparison.recommendation.warnings.map((warning) => (
                       <div
                         key={warning}
-                        className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                        className="flex items-start gap-2 rounded-xl border border-warning-border bg-warning-subtle p-3 text-sm text-warning"
                       >
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                         {warning}
@@ -249,7 +249,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                       <DeployabilityPill
                         status={version.deployability_status}
                       />
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold uppercase text-blue-700">
+                      <span className="rounded-full border border-info-border bg-info-subtle px-2 py-0.5 text-xs font-bold uppercase text-info">
                         {version.tracking_status || t("comparison.notSynced")}
                       </span>
                     </div>
@@ -337,7 +337,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                           comparison.params_diff.map((param) => (
                             <tr
                               key={param.name}
-                              className={param.changed ? "bg-amber-50/40" : ""}
+                              className={param.changed ? "bg-warning-subtle" : ""}
                             >
                               <td className="px-4 py-2 font-semibold text-foreground">
                                 {param.name}
@@ -408,17 +408,17 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                   {t("comparison.artifactsDiff")}
                 </h3>
                 <div className="mt-4 grid md:grid-cols-4 gap-3 text-sm">
-                  <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
+                  <div className="rounded-xl border border-success-border bg-success-subtle p-3 text-success">
                     <strong>{comparison.artifact_diff.added.length}</strong>
                     <br />
                     {t("comparison.added")}
                   </div>
-                  <div className="rounded-xl bg-red-50 border border-red-100 p-3">
+                  <div className="rounded-xl border border-danger-border bg-danger-subtle p-3 text-danger">
                     <strong>{comparison.artifact_diff.removed.length}</strong>
                     <br />
                     {t("comparison.removed")}
                   </div>
-                  <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
+                  <div className="rounded-xl border border-warning-border bg-warning-subtle p-3 text-warning">
                     <strong>{comparison.artifact_diff.changed.length}</strong>
                     <br />
                     {t("comparison.changed")}
@@ -434,7 +434,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                     <tbody className="divide-y divide-border">
                       {comparison.artifact_diff.added.map((item) => (
                         <tr key={`added-${item.path}`}>
-                          <td className="px-3 py-2 font-bold text-emerald-700">
+                          <td className="px-3 py-2 font-bold text-success">
                             {t("comparison.added")}
                           </td>
                           <td className="px-3 py-2 font-mono">{item.path}</td>
@@ -443,7 +443,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                       ))}
                       {comparison.artifact_diff.removed.map((item) => (
                         <tr key={`removed-${item.path}`}>
-                          <td className="px-3 py-2 font-bold text-red-700">
+                          <td className="px-3 py-2 font-bold text-danger">
                             {t("comparison.removed")}
                           </td>
                           <td className="px-3 py-2 font-mono">{item.path}</td>
@@ -452,7 +452,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                       ))}
                       {comparison.artifact_diff.changed.map((item) => (
                         <tr key={`changed-${item.path}`}>
-                          <td className="px-3 py-2 font-bold text-amber-700">
+                          <td className="px-3 py-2 font-bold text-warning">
                             {t("comparison.changed")}
                           </td>
                           <td className="px-3 py-2 font-mono">{item.path}</td>

@@ -306,7 +306,7 @@ export default function TrainingModelPage() {
                 aria-label={t("training:table.delete")}
                 title={t("training:table.delete")}
                 icon={<Trash2 className="h-4 w-4" />}
-                className="text-danger hover:text-red-300"
+                className="text-danger hover:text-danger-hover active:text-danger-active"
                 disabled={deleting}
                 onClick={() => setJobToDelete(job)}
               />

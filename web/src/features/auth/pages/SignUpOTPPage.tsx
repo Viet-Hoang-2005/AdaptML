@@ -106,7 +106,7 @@ export default function SignUpOTPPage() {
           ) : (
             <button
               onClick={handleResend}
-              className="cursor-pointer font-semibold text-white hover:opacity-60"
+              className="cursor-pointer font-semibold text-foreground hover:text-primary-hover"
             >
               {t('otp.resend')}
             </button>

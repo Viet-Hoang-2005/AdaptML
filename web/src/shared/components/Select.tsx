@@ -32,16 +32,18 @@ export function Select({
         <button
           type="button"
           className={cn(
-            "flex h-14 w-full items-center justify-between gap-3 rounded-2xl border bg-surface px-4 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/15",
-            open ? "border-primary" : "border-input hover:border-primary",
-            !selectedOption ? "text-muted-foreground" : "text-foreground",
+            "flex h-14 w-full items-center justify-between gap-3 rounded-2xl border bg-surface px-4 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
+            open
+              ? "border-ring"
+              : "border-input hover:border-input-hover",
+            !selectedOption ? "text-foreground-subtle" : "text-foreground",
             className,
           )}
         >
           <span className="truncate">
             {selectedOption?.label || placeholder}
           </span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <ChevronDown className="h-4 w-4 shrink-0 text-foreground-subtle" />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -59,7 +61,7 @@ export function Select({
                   onChange(option.value);
                   setOpen(false);
                 }}
-                className="flex min-h-10 w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:bg-muted"
+                className="flex min-h-10 w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:bg-surface-hover active:bg-surface-active"
               >
                 <span className="block truncate text-sm font-medium text-foreground">
                   {option.label}

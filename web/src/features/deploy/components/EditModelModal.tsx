@@ -65,7 +65,7 @@ export default function EditModelModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
       <div 
         className="w-full max-w-xl bg-surface rounded-2xl shadow-xl flex flex-col max-h-[85vh] overflow-hidden"
         role="dialog"

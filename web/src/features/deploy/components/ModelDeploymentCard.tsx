@@ -275,7 +275,7 @@ export function ModelDeploymentCard({
                 <Globe className="h-4 w-4" />
               </div>
               <code
-                className="flex-1 truncate px-3 py-2 text-xs font-mono text-foreground bg-transparent selection:bg-blue-100"
+                className="flex-1 truncate bg-transparent px-3 py-2 font-mono text-xs text-foreground"
                 title={model.endpoint_url}
               >
                 {model.endpoint_url}
@@ -286,7 +286,7 @@ export function ModelDeploymentCard({
                 title={t("deploymentCard.copyUrl")}
               >
                 {copied ? (
-                  <Check className="h-4 w-4 text-emerald-500" />
+                  <Check className="h-4 w-4 text-success" />
                 ) : (
                   <Copy className="h-4 w-4" />
                 )}
@@ -457,7 +457,7 @@ export function ModelDeploymentCard({
                 icon={<FileArchive className="h-4 w-4" />}
                 loading={isCleaningUp}
                 onClick={() => setShowCleanupModal(true)}
-                className="border border-border text-muted-foreground hover:text-amber-700 hover:border-amber-200 hover:bg-amber-50"
+                className="border border-warning-border text-warning hover:border-warning hover:bg-warning-subtle active:bg-warning active:text-warning-foreground"
               >
                 {t("actions.cleanup")}
               </Button>
@@ -519,21 +519,21 @@ function TrackerStep({ label, state }: { label: string; state: string }) {
   else if (isNeutral) icon = <PauseCircle className="h-4 w-4" />;
 
   let colorClass = "text-muted-foreground";
-  if (isCompleted) colorClass = "text-emerald-500";
-  else if (isActive) colorClass = "text-blue-500";
-  else if (isFailed) colorClass = "text-red-500";
+  if (isCompleted) colorClass = "text-success";
+  else if (isActive) colorClass = "text-info";
+  else if (isFailed) colorClass = "text-danger";
   else if (isNeutral) colorClass = "text-muted-foreground";
 
   let textClass = "text-muted-foreground font-medium";
   if (isCompleted) textClass = "text-foreground font-bold";
-  else if (isActive) textClass = "text-blue-700 font-bold";
-  else if (isFailed) textClass = "text-red-700 font-bold";
+  else if (isActive) textClass = "text-info font-bold";
+  else if (isFailed) textClass = "text-danger font-bold";
   else if (isNeutral) textClass = "text-muted-foreground font-bold";
 
   return (
     <div className="flex flex-col items-center gap-2 w-20 shrink-0">
       <div
-        className={`flex h-6 w-6 items-center justify-center rounded-full bg-surface ring-4 ring-white ${colorClass}`}
+        className={`flex h-6 w-6 items-center justify-center rounded-full bg-surface ring-4 ring-background ${colorClass}`}
       >
         {icon}
       </div>
@@ -550,7 +550,7 @@ function TrackerLine({ state }: { state: "completed" | "pending" }) {
   return (
     <div className="flex-1 shrink-0 px-2 -mt-6">
       <div
-        className={`h-0.5 w-full rounded-full ${state === "completed" ? "bg-emerald-400" : "bg-muted"}`}
+        className={`h-0.5 w-full rounded-full ${state === "completed" ? "bg-success" : "bg-muted"}`}
       />
     </div>
   );

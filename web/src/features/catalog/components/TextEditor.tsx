@@ -92,7 +92,7 @@ export function TextEditor({
           requirements.txt
           {isDirty && (
             <span
-              className="ml-1 inline-block h-2 w-2 rounded-full bg-yellow-400"
+              className="ml-1 inline-block h-2 w-2 rounded-full bg-warning"
               title={t("requirementsEditor.unsaved")}
             />
           )}
@@ -149,7 +149,7 @@ export function TextEditor({
             onClick={() => fileInputRef.current?.click()}
             className="w-full h-full flex flex-col items-center justify-center border-0 bg-surface hover:bg-muted transition-colors group cursor-pointer"
           >
-            <Upload className="w-10 h-10 mb-3 text-muted-foreground group-hover:text-blue-400 transition-colors" />
+            <Upload className="w-10 h-10 mb-3 text-muted-foreground group-hover:text-info transition-colors" />
             <p className="text-muted-foreground font-medium group-hover:text-primary transition-colors">
               {t("requirementsEditor.uploadPrompt")}
             </p>

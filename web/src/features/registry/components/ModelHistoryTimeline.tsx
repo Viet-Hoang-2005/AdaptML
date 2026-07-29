@@ -128,7 +128,7 @@ export function ModelHistoryTimeline({ familyId }: Props) {
           <div key={event.id || idx} className="relative pl-8">
             <span 
               className={classNames(
-                "absolute -left-4 top-1 flex h-8 w-8 items-center justify-center rounded-full border ring-4 ring-white shadow-sm",
+                "absolute -left-4 top-1 flex h-8 w-8 items-center justify-center rounded-full border ring-4 ring-surface shadow-sm",
                 iconBg
               )}
             >

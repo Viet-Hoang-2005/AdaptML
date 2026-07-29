@@ -170,9 +170,9 @@ export default function CreateDriftMonitoringPage() {
               value={triggerThreshold}
               onChange={(val) => setSelectedTriggerThreshold(val)}
               getColor={(index) => {
-                if (index >= 5) return "bg-red-500";
-                if (index >= 3) return "bg-yellow-500";
-                return "bg-green-500";
+                if (index >= 5) return "bg-danger";
+                if (index >= 3) return "bg-warning";
+                return "bg-success";
               }}
             />
           </div>

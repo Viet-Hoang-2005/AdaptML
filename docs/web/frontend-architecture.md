@@ -126,3 +126,17 @@ check. The checker rejects visible JSX literals, display props, toast literals,
 and UI configuration labels. A technical literal that cannot be inferred by the
 checker may be exempted only with a nearby `i18n-ignore: <reason>` comment.
 Feature-wide or file-wide exemptions are not allowed.
+
+## Color tokens
+
+`src/app/styles/tokens.css` is the only source of frontend color values. It
+defines primitive colors, independent light/dark semantic tokens, and
+component palettes for charts, terminals, syntax highlighting, and auth
+decoration. Application code consumes semantic Tailwind utilities and maps
+domain statuses to `SemanticTone`; it does not use Tailwind palette utilities
+or `dark:` color overrides.
+
+`pnpm lint` also runs `scripts/check-colors.mjs`. The checker rejects direct
+palette utilities, raw hexadecimal/functional colors outside the token file,
+and `dark:` color utilities. A genuinely fixed technical exception requires a
+nearby `color-ignore: <reason>` comment.

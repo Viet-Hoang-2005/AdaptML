@@ -59,19 +59,19 @@ export function CardSummary({
 }) {
   const iconColor =
     tone === "success"
-      ? "text-success"
-      : tone === "error"
-        ? "text-danger"
-        : tone === "warning"
-          ? "text-warning"
-          : tone === "info"
-            ? "text-primary"
-            : "text-muted-foreground";
+          ? "text-success"
+          : tone === "error"
+            ? "text-danger"
+            : tone === "warning"
+              ? "text-warning"
+              : tone === "info"
+                ? "text-info"
+                : "text-foreground-subtle";
 
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
           {label}
         </p>
         <div className={iconColor}>{icon}</div>
@@ -84,7 +84,7 @@ export function CardSummary({
       </p>
       {helper && (
         <p
-          className="mt-1 text-xs text-muted-foreground truncate"
+          className="mt-1 text-xs text-foreground-subtle truncate"
           title={helper}
         >
           {helper}

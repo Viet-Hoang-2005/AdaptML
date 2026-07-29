@@ -464,7 +464,7 @@ export function ModelVersionDetail({
                     {formatVersion(version.version)}
                   </span>
                   {isProd && (
-                    <span className="bg-emerald-500 text-white text-xs px-2.5 py-0.5 rounded uppercase tracking-wider font-bold shadow-sm">
+                    <span className="rounded bg-success px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-success-foreground shadow-sm">
                       {t("versionDetail.productionActiveLabel")}
                     </span>
                   )}
@@ -562,7 +562,7 @@ export function ModelVersionDetail({
               <div className="flex flex-col gap-4 bg-surface border border-border rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
                   <span className="inline-flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-blue-500" />
+                    <ShieldCheck className="h-4 w-4 text-info" />
                     {t("versionDetail.tracking.title")}
                   </span>
                   <span
@@ -661,7 +661,7 @@ export function ModelVersionDetail({
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-border pb-4">
                 <div>
                   <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-                    <Rocket className="h-4 w-4 text-blue-500" />
+                    <Rocket className="h-4 w-4 text-info" />
                     {t("versionDetail.deploymentActions")}
                   </h4>
                   <p className="mt-2 text-sm text-muted-foreground max-w-3xl">
@@ -803,7 +803,7 @@ export function ModelVersionDetail({
                     <textarea
                       value={smokePayload}
                       onChange={(event) => setSmokePayload(event.target.value)}
-                      className="min-h-40 w-full rounded-xl border border-border bg-[#111827] p-3 font-mono text-xs text-emerald-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className="min-h-40 w-full rounded-xl border border-terminal-border bg-terminal p-3 font-mono text-xs text-terminal-foreground outline-none focus:border-terminal-info focus:ring-2 focus:ring-ring"
                       spellCheck={false}
                     />
                     <div className="min-h-40 rounded-xl border border-border bg-surface p-3">
@@ -811,7 +811,7 @@ export function ModelVersionDetail({
                         {t("versionDetail.response")}
                       </p>
                       {smokeResult !== null ? (
-                        <pre className="max-h-72 overflow-auto rounded-xl border border-gray-800 bg-[#111827] p-3 text-xs text-gray-100">
+                        <pre className="max-h-72 overflow-auto rounded-xl border border-terminal-border bg-terminal p-3 text-xs text-terminal-foreground">
                           {JSON.stringify(
                             withoutTechnicalDetail(smokeResult),
                             null,
@@ -832,7 +832,7 @@ export function ModelVersionDetail({
             <div className="grid xl:grid-cols-3 gap-6">
               <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-2">
-                  <Gauge className="h-4 w-4 text-emerald-500" />
+                  <Gauge className="h-4 w-4 text-success" />
                   {t("versionDetail.metrics")}
                 </h4>
                 {metricEntries.length > 0 ? (
@@ -863,7 +863,7 @@ export function ModelVersionDetail({
 
               <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-2">
-                  <SlidersHorizontal className="h-4 w-4 text-purple-500" />
+                  <SlidersHorizontal className="h-4 w-4 text-chart-3" />
                   {t("versionDetail.params")}
                 </h4>
                 {paramEntries.length > 0 ? (
@@ -902,7 +902,7 @@ export function ModelVersionDetail({
                       </p>
                       <a
                         href={`/dashboard/model-training/${version.source_training_job_id}`}
-                        className="font-semibold text-blue-600 hover:text-blue-800"
+                        className="font-semibold text-info hover:text-info-hover"
                       >
                         #{version.source_training_job_id}{" "}
                         {version.source_training_job_name || ""}
@@ -998,10 +998,10 @@ export function ModelVersionDetail({
             <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
               <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
                 <span className="inline-flex items-center gap-2">
-                  <Terminal className="h-4 w-4 text-indigo-500" />
+                  <Terminal className="h-4 w-4 text-info" />
                   {t("versionDetail.routingAliases")}
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border bg-indigo-50 text-indigo-700 border-indigo-200">
+                <span className="rounded-full border border-info-border bg-info-subtle px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-info">
                   {t("versionDetail.apiProxy")}
                 </span>
               </h4>
@@ -1021,7 +1021,7 @@ export function ModelVersionDetail({
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
+                              <span className="rounded-full bg-info-subtle px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-info">
                                 {aliasName}
                               </span>
                               <span className="rounded-full bg-success-subtle px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-success">
@@ -1107,13 +1107,13 @@ export function ModelVersionDetail({
                         className="shrink-0 flex items-center gap-1.5 px-3 py-2 border border-border"
                       >
                         {copied ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          <Check className="h-3.5 w-3.5 text-success" />
                         ) : (
                           <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                         )}
                         <span
                           className={
-                            copied ? "text-emerald-700" : "text-foreground"
+                            copied ? "text-success" : "text-foreground"
                           }
                         >
                           {copied
@@ -1183,7 +1183,7 @@ export function ModelVersionDetail({
                       )}
                       <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
                         {t("versionDetail.nativeRegistryDescription")}{" "}
-                        <span className="font-medium text-amber-600">
+                        <span className="font-medium text-warning">
                           {t("versionDetail.mlflowOptional")}
                         </span>
                       </p>
@@ -1227,7 +1227,7 @@ export function ModelVersionDetail({
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
               <h3 className="text-2xl font-extrabold text-foreground flex items-center gap-3">
-                <BarChart3 className="h-6 w-6 text-blue-500" />
+                <BarChart3 className="h-6 w-6 text-chart-1" />
                 {t("versionDetail.insightsTitle")}
               </h3>
               <p className="text-sm text-muted-foreground max-w-3xl">
@@ -1337,7 +1337,7 @@ export function ModelVersionDetail({
                             <div
                               className={classNames(
                                 "h-6 rounded-md shadow-sm",
-                                negative ? "bg-rose-500" : "bg-blue-600",
+                                negative ? "bg-danger" : "bg-chart-1",
                               )}
                               style={{ width: `${width}%` }}
                             />
@@ -1420,7 +1420,7 @@ export function ModelVersionDetail({
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
               <h3 className="text-2xl font-extrabold text-foreground flex items-center gap-3">
-                <Gauge className="h-6 w-6 text-emerald-500" />
+                <Gauge className="h-6 w-6 text-success" />
                 {t("versionDetail.metrics")}
               </h3>
               <p className="text-sm text-muted-foreground max-w-3xl">
@@ -1482,7 +1482,7 @@ export function ModelVersionDetail({
                               <div
                                 className={classNames(
                                   "h-5 rounded-md shadow-sm",
-                                  negative ? "bg-rose-500" : "bg-emerald-500",
+                                  negative ? "bg-danger" : "bg-success",
                                 )}
                                 style={{ width: `${width}%` }}
                               />

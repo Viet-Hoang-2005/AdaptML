@@ -188,8 +188,8 @@ export default function ProfileSettingPage() {
                 ) : (
                   initials
                 )}
-                <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
-                  <Camera className="h-7 w-7 text-white" />
+                <span className="absolute inset-0 flex items-center justify-center bg-overlay opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
+                  <Camera className="h-7 w-7 text-foreground-inverse" />
                 </span>
               </button>
               <h2 className="mt-5 max-w-full truncate text-xl font-bold text-foreground">

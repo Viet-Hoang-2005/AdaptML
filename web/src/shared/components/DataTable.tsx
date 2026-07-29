@@ -60,7 +60,7 @@ export function DataTable<T>({
     >
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="border-b border-border bg-surface text-xs font-semibold text-foreground">
+          <thead className="border-b border-border bg-surface-muted text-xs font-semibold text-foreground">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -111,7 +111,7 @@ export function DataTable<T>({
               ))
             ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="transition-colors hover:bg-muted">
+                <tr key={row.id} className="transition-colors hover:bg-surface-hover">
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
@@ -129,7 +129,7 @@ export function DataTable<T>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-4 py-12 text-center text-muted-foreground"
+                  className="px-4 py-12 text-center text-foreground-subtle"
                 >
                   {resolvedEmptyMessage}
                 </td>
@@ -139,7 +139,7 @@ export function DataTable<T>({
         </table>
       </div>
       {!loading && table.getPageCount() > 1 && (
-        <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-border bg-surface-muted px-4 py-3 text-xs text-foreground-subtle">
           <span>
             {t("pagination.page", {
               current: table.getState().pagination.pageIndex + 1,

@@ -16,13 +16,27 @@ Feature code must use semantic utilities such as `bg-surface`, `text-foreground`
 
 | Intent | Light | Dark |
 | --- | --- | --- |
-| Primary | `#000000` | `#60A5FA` |
-| Primary hover | `#374151` | `#93C5FD` |
-| Brand accent | `#06B6D4` | `#22D3EE` |
+| Primary | `#111827` | `#60A5FA` |
+| Primary hover | `#1F2937` | `#93C5FD` |
+| Primary active | `#030712` | `#3B82F6` |
+| Brand accent | `#0891B2` | `#22D3EE` |
 | Background | `#F9FAFB` | `#020617` |
 | Surface | `#FFFFFF` | `#0F172A` |
+| Surface hover | `#F3F4F6` | `#1E293B` |
+| Surface active | `#E5E7EB` | `#334155` |
 | Foreground | `#111827` | `#F8FAFC` |
 | Border | `#D1D5DB` | `#334155` |
+| Focus ring | `#2563EB` | `#60A5FA` |
+
+Status colors expose `default`, `hover`, `active`, `foreground`, `subtle`, and
+`border` tokens. API status values must be mapped to the shared
+`SemanticTone` union (`neutral`, `info`, `success`, `warning`, or `danger`);
+components must not select palette values themselves.
+
+Charts use the stable `chart-1` through `chart-6` order: blue, cyan, violet,
+green, amber, and rose. Do not change series order between themes. Technical
+consoles use the fixed `terminal-*` and `syntax-*` component tokens in both
+themes so runtime output remains legible and predictable.
 
 ## Typography and components
 
@@ -58,6 +72,22 @@ Notification and Setting form the secondary group. The header keeps the original
 - Layouts must work at 200% zoom and meet WCAG AA contrast in light and dark themes.
 - Global styles honor `prefers-reduced-motion`.
 - `ThemeProvider` supports `light`, `dark`, and `system`, persists the preference, and tracks operating-system changes.
+
+## Color authoring rules
+
+- Add raw values only to `src/app/styles/tokens.css`.
+- Define separate light and dark semantic values; never use `dark:` color
+  utilities to invert a component.
+- Feature and shared UI use semantic utilities such as `bg-surface-hover`,
+  `text-foreground-subtle`, `border-border-strong`, `bg-success-subtle`,
+  `text-info`, `stroke-chart-1`, and `bg-terminal`.
+- Form controls keep their surface color and use the blue `input-hover` border;
+  focus remains distinct through the stronger `ring` treatment.
+- Avoid direct Tailwind palettes, hexadecimal colors, and `rgb()`/`hsl()` in
+  application code.
+- Approved technical exceptions require a nearby
+  `color-ignore: <specific reason>` comment; broad exemptions are forbidden.
+- `pnpm lint` runs `scripts/check-colors.mjs` to enforce these rules.
 
 ## Localization
 

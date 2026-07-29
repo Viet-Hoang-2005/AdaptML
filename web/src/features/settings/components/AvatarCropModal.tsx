@@ -97,7 +97,7 @@ export function AvatarCropModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4">
       <div className="w-full max-w-xl rounded-xl border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-xl font-bold text-foreground">
@@ -113,7 +113,7 @@ export function AvatarCropModal({
           </button>
         </div>
         <div className="space-y-5 px-5 py-5">
-          <div className="relative h-72 overflow-hidden bg-gray-900">
+          <div className="relative h-72 overflow-hidden bg-terminal">
             <Cropper
               image={imageSrc}
               crop={crop}

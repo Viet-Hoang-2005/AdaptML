@@ -154,7 +154,7 @@ export default function ModelManagementPage() {
               variant="ghost"
               aria-label={t("actions.deleteModel")}
               title={t("actions.deleteModel")}
-              className="text-danger hover:text-red-300"
+              className="text-danger hover:text-danger-hover active:text-danger-active"
               icon={<Trash2 className="h-4 w-4" />}
               onClick={() => setModelToDelete(record)}
             />

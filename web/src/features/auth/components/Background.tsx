@@ -1,6 +1,13 @@
 import { useMemo, type CSSProperties } from 'react';
 
-const colors = ['#f9a0cf', '#ffb46a', '#a58ef9', '#ffe180', '#85b4d8', '#7dd3fc'];
+const colors = [
+  'var(--auth-bubble-1)',
+  'var(--auth-bubble-2)',
+  'var(--auth-bubble-3)',
+  'var(--auth-bubble-4)',
+  'var(--auth-bubble-5)',
+  'var(--auth-bubble-6)',
+];
 
 type ParticleConfig = {
   style: CSSProperties;

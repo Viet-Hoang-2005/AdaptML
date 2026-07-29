@@ -13,9 +13,9 @@ interface ToastItem {
 
 let nextId = 0;
 const visuals = {
-  success: { icon: CheckCircle2, className: "text-success bg-success/10" },
-  error: { icon: XCircle, className: "text-danger bg-danger/10" },
-  warning: { icon: AlertCircle, className: "text-warning bg-warning/10" },
+  success: { icon: CheckCircle2, className: "border-success-border bg-success-subtle text-success" },
+  error: { icon: XCircle, className: "border-danger-border bg-danger-subtle text-danger" },
+  warning: { icon: AlertCircle, className: "border-warning-border bg-warning-subtle text-warning" },
 } as const;
 
 export function ToastContainer() {
@@ -48,7 +48,7 @@ export function ToastContainer() {
             className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-xl border border-border bg-surface p-4 text-foreground shadow-(--shadow-overlay) data-[state=open]:animate-slide-in"
           >
             <span
-              className={`flex h-8 w-8 items-center justify-center rounded-xl ${visual.className}`}
+              className={`flex h-8 w-8 items-center justify-center rounded-xl border ${visual.className}`}
             >
               <Icon className="h-4 w-4" />
             </span>
@@ -56,7 +56,7 @@ export function ToastContainer() {
               {item.message}
             </ToastPrimitive.Description>
             <ToastPrimitive.Close
-              className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-foreground-subtle hover:bg-surface-hover hover:text-foreground active:bg-surface-active"
               aria-label={t("accessibility.dismissNotification")}
             >
               <X className="h-4 w-4" />

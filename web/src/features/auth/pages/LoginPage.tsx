@@ -2,8 +2,8 @@ import { useGoogleLogin } from "@react-oauth/google";
 import { Mail, LockKeyhole } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useTheme } from "@/app/theme/useTheme";
 import { AuthCard } from "@/features/auth/components/AuthCard";
+import { OAuthButton } from "@/features/auth/components/OAuthButton";
 import { Button } from "@/shared/components/Button";
 import { Divider } from "@/features/auth/components/Divider";
 import { Input, InputPassword } from "@/shared/components/Input";
@@ -11,44 +11,28 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 import { startGitHubOAuth } from "@/features/auth/lib/oauth";
 import { toast } from "@/shared/components/toastStore";
 import { useForm } from "@/features/auth/hooks/useForm";
-import GitHubIcon from "@/assets/icons/GitHub.png";
-import GitHubDarkIcon from "@/assets/icons/GitHub-Dark.png";
-import GoogleIcon from "@/assets/icons/Google.png";
 import MLdriftLogo from "@/assets/icons/MLdrift.png";
 
-function GoogleLoginButton({
-  onSuccess,
-}: {
-  onSuccess: (accessToken: string) => void;
-}) {
+export default function LoginPage() {
   const { t } = useTranslation("auth");
+  const { login, loginWithGoogle, loading } = useAuth();
+  const { values, updateField } = useForm({ email: "", password: "" });
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
   const openGoogleLogin = useGoogleLogin({
     scope: "openid email profile",
     onSuccess: (tokenResponse) => {
-      onSuccess(tokenResponse.access_token);
+      void loginWithGoogle(tokenResponse.access_token);
     },
     onError: () => toast.error(t("login.googleFailed")),
   });
 
-  return (
-    <button
-      id="btn-google-login"
-      onClick={() => openGoogleLogin()}
-      className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border px-4 py-3
-                  text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary hover:opacity-70"
-    >
-      <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
-      {t("login.google")}
-    </button>
-  );
-}
-
-export default function LoginPage() {
-  const { t } = useTranslation("auth");
-  const { resolvedTheme } = useTheme();
-  const { login, loginWithGoogle, loading } = useAuth();
-  const { values, updateField } = useForm({ email: "", password: "" });
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+  const handleGoogleLogin = () => {
+    if (!googleClientId) {
+      toast.error(t("login.googleMissing"));
+      return;
+    }
+    openGoogleLogin();
+  };
 
   const handleGitHubLogin = () => {
     try {
@@ -74,34 +58,18 @@ export default function LoginPage() {
       </p>
 
       <div className="flex gap-3 mb-6">
-        {googleClientId ? (
-          <GoogleLoginButton
-            onSuccess={(accessToken) => void loginWithGoogle(accessToken)}
-          />
-        ) : (
-          <button
-            id="btn-google-login"
-            onClick={() => toast.error(t("login.googleMissing"))}
-            className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border px-4 py-3
-                        text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary hover:opacity-70"
-          >
-            <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
-            {t("login.google")}
-          </button>
-        )}
-        <button
+        <OAuthButton
+          provider="google"
+          label={t("login.google")}
+          id="btn-google-login"
+          onClick={handleGoogleLogin}
+        />
+        <OAuthButton
+          provider="github"
+          label={t("login.github")}
           id="btn-github-login"
           onClick={handleGitHubLogin}
-          className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border px-4 py-3
-                      text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary hover:opacity-70"
-        >
-          <img
-            src={resolvedTheme === "dark" ? GitHubDarkIcon : GitHubIcon}
-            alt="GitHub"
-            className="w-5 h-5"
-          />
-          {t("login.github")}
-        </button>
+        />
       </div>
 
       <div className="mb-6">
@@ -141,7 +109,7 @@ export default function LoginPage() {
         <div className="flex justify-end">
           <Link
             to="/forgot-password"
-            className="text-xs font-semibold text-foreground underline hover:opacity-60"
+            className="text-xs font-semibold text-foreground underline hover:text-primary-hover"
           >
             {t("login.forgotPassword")}
           </Link>
@@ -163,7 +131,7 @@ export default function LoginPage() {
         {t("login.noAccount")}{" "}
         <Link
           to="/signup"
-          className="font-semibold text-white underline hover:opacity-60"
+          className="font-semibold text-foreground underline hover:text-primary-hover"
         >
           {t("login.signUp")}
         </Link>

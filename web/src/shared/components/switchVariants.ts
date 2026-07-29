@@ -11,7 +11,7 @@ export const switchVariants = cva(
       },
       selected: {
         true: 'bg-primary-subtle border-primary text-foreground z-10',
-        false: 'bg-surface border-border text-muted-foreground hover:bg-muted hover:text-foreground',
+        false: 'bg-surface border-border text-foreground-muted hover:bg-surface-hover hover:text-foreground active:bg-surface-active',
       }
     },
     defaultVariants: {

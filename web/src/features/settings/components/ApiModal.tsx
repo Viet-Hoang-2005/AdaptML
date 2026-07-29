@@ -19,7 +19,7 @@ export function ApiModal({
 }: ApiModalProps) {
   const { t } = useTranslation("settings");
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4">
       <div className="w-full max-w-xl rounded-xl border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-lg font-bold text-foreground">{title}</h2>
@@ -33,7 +33,7 @@ export function ApiModal({
           </button>
         </div>
         <div className="px-5 py-5">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="rounded-xl border border-warning-border bg-warning-subtle px-4 py-3 text-sm text-warning">
             {description}
           </div>
           <div className="mt-4 rounded-xl border border-border bg-muted p-3">

@@ -56,11 +56,11 @@ export function PromoteVersionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm p-4">
       <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="bg-emerald-100 text-emerald-600 p-2.5 rounded-full">
+            <div className="rounded-full bg-success-subtle p-2.5 text-success">
               <ArrowUpCircle className="h-6 w-6" />
             </div>
             <h3 className="text-xl font-bold text-foreground">
@@ -68,8 +68,8 @@ export function PromoteVersionModal({
             </h3>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 text-blue-800 shadow-sm">
-            <AlertCircle className="h-5 w-5 shrink-0 mt-0.5 text-blue-600" />
+          <div className="flex gap-3 rounded-xl border border-info-border bg-info-subtle p-4 text-info shadow-sm">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-info" />
             <p className="text-sm">
               {t("promoteDialog.description")}
             </p>
@@ -85,7 +85,7 @@ export function PromoteVersionModal({
                 onChange={(event) =>
                   setAlias(event.target.value as RoutingAliasName)
                 }
-                className="rounded-xl border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                className="rounded-xl border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-success focus:ring-2 focus:ring-success-border"
                 disabled={loading}
               >
                 <option value="production">{t("promoteDialog.production")}</option>
@@ -97,7 +97,7 @@ export function PromoteVersionModal({
               <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">
                 {t("promoteDialog.targetVersion")}
               </span>
-              <span className="font-bold font-mono text-emerald-700 bg-emerald-100 px-2 rounded">
+              <span className="rounded bg-success-subtle px-2 font-mono font-bold text-success">
                 {formatVersion(version.version)}
               </span>
             </div>
@@ -126,15 +126,16 @@ export function PromoteVersionModal({
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             {t("actions.cancel", { ns: "common" })}
           </Button>
-          <button
+          <Button
             onClick={() => void handlePromote()}
             disabled={loading}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50"
+            variant="success"
+            size="md"
           >
             {loading
               ? t("promoteDialog.submitting")
               : t("promoteDialog.submit", { alias })}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -43,11 +43,11 @@ export function RollbackVersionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm p-4">
       <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="bg-amber-100 text-amber-600 p-2.5 rounded-full">
+            <div className="rounded-full bg-warning-subtle p-2.5 text-warning">
               <RotateCcw className="h-6 w-6" />
             </div>
             <h3 className="text-xl font-bold text-foreground">
@@ -55,8 +55,8 @@ export function RollbackVersionModal({
             </h3>
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-amber-800 shadow-sm">
-            <AlertCircle className="h-5 w-5 shrink-0 mt-0.5 text-amber-600" />
+          <div className="flex gap-3 rounded-xl border border-warning-border bg-warning-subtle p-4 text-warning shadow-sm">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
             <p className="text-sm">
               {t("rollbackDialog.description")}
             </p>
@@ -67,7 +67,7 @@ export function RollbackVersionModal({
               <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">
                 {t("rollbackDialog.targetVersion")}
               </span>
-              <span className="font-bold font-mono text-amber-700 bg-amber-100 px-2 rounded">
+              <span className="rounded bg-warning-subtle px-2 font-mono font-bold text-warning">
                 {formatVersion(version.version)}
               </span>
             </div>
@@ -96,15 +96,16 @@ export function RollbackVersionModal({
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             {t("actions.cancel", { ns: "common" })}
           </Button>
-          <button
+          <Button
             onClick={() => void handleRollback()}
             disabled={loading}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50"
+            variant="warning"
+            size="md"
           >
             {loading
               ? t("rollbackDialog.submitting")
               : t("rollbackDialog.submit")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

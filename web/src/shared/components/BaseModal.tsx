@@ -16,14 +16,14 @@ export default function BaseModal({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/40 animate-fade-in" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-overlay animate-fade-in" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[8px] border border-border bg-surface shadow-(--shadow-overlay) animate-fade-in">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <Dialog.Title className="text-lg font-semibold text-foreground">
               {title}
             </Dialog.Title>
             <Dialog.Close
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-foreground-subtle hover:bg-surface-hover hover:text-foreground active:bg-surface-active"
               aria-label={t("accessibility.closeModal")}
             >
               <X className="h-4 w-4" />

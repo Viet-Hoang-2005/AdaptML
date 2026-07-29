@@ -5,11 +5,12 @@ import { cn } from '@/shared/lib/cn';
 const badgeVariants = cva('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold', {
   variants: {
     variant: {
-      neutral: 'border-border bg-muted text-muted-foreground',
-      primary: 'border-primary/20 bg-primary/10 text-primary',
-      success: 'border-success/20 bg-success/10 text-success',
-      warning: 'border-warning/20 bg-warning/10 text-warning',
-      danger: 'border-danger/20 bg-danger/10 text-danger',
+      neutral: 'border-border bg-surface-muted text-foreground-muted',
+      info: 'border-info-border bg-info-subtle text-info',
+      primary: 'border-info-border bg-info-subtle text-info',
+      success: 'border-success-border bg-success-subtle text-success',
+      warning: 'border-warning-border bg-warning-subtle text-warning',
+      danger: 'border-danger-border bg-danger-subtle text-danger',
     },
   },
   defaultVariants: { variant: 'neutral' },

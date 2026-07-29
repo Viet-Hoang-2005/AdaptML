@@ -3,8 +3,8 @@ import { Mail, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useTheme } from "@/app/theme/useTheme";
 import { AuthCard } from "@/features/auth/components/AuthCard";
+import { OAuthButton } from "@/features/auth/components/OAuthButton";
 import { Button } from "@/shared/components/Button";
 import { Divider } from "@/features/auth/components/Divider";
 import { Input } from "@/shared/components/Input";
@@ -13,45 +13,29 @@ import { requestOTP } from "@/features/auth/api/authApi";
 import { getApiErrorMessage } from "@/shared/api/errors";
 import { startGitHubOAuth } from "@/features/auth/lib/oauth";
 import { toast } from "@/shared/components/toastStore";
-import GitHubIcon from "@/assets/icons/GitHub.png";
-import GitHubDarkIcon from "@/assets/icons/GitHub-Dark.png";
-import GoogleIcon from "@/assets/icons/Google.png";
-
-function GoogleSignUpButton({
-  onSuccess,
-}: {
-  onSuccess: (accessToken: string) => void;
-}) {
-  const { t } = useTranslation("auth");
-  const openGoogleLogin = useGoogleLogin({
-    scope: "openid email profile",
-    onSuccess: (tokenResponse) => {
-      onSuccess(tokenResponse.access_token);
-    },
-    onError: () => toast.error(t("signup.googleFailed")),
-  });
-
-  return (
-    <button
-      id="btn-google-signup"
-      onClick={() => openGoogleLogin()}
-      className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border px-4 py-3
-                  text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary hover:opacity-70"
-    >
-      <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
-      {t("login.google")}
-    </button>
-  );
-}
 
 export default function SignUpPage() {
   const navigate = useNavigate();
   const { t } = useTranslation("auth");
-  const { resolvedTheme } = useTheme();
   const { loginWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+  const openGoogleLogin = useGoogleLogin({
+    scope: "openid email profile",
+    onSuccess: (tokenResponse) => {
+      void loginWithGoogle(tokenResponse.access_token);
+    },
+    onError: () => toast.error(t("signup.googleFailed")),
+  });
+
+  const handleGoogleSignUp = () => {
+    if (!googleClientId) {
+      toast.error(t("login.googleMissing"));
+      return;
+    }
+    openGoogleLogin();
+  };
 
   const handleRequestOTP = async () => {
     if (!email) {
@@ -95,34 +79,18 @@ export default function SignUpPage() {
       </p>
 
       <div className="flex gap-3 mb-6">
-        {googleClientId ? (
-          <GoogleSignUpButton
-            onSuccess={(accessToken) => void loginWithGoogle(accessToken)}
-          />
-        ) : (
-          <button
-            id="btn-google-signup"
-            onClick={() => toast.error(t("login.googleMissing"))}
-            className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border px-4 py-3
-                        text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary hover:opacity-70"
-          >
-            <img src={GoogleIcon} alt="Google" className="w-5 h-5" />
-            {t("login.google")}
-          </button>
-        )}
-        <button
+        <OAuthButton
+          provider="google"
+          label={t("login.google")}
+          id="btn-google-signup"
+          onClick={handleGoogleSignUp}
+        />
+        <OAuthButton
+          provider="github"
+          label={t("login.github")}
           id="btn-github-signup"
           onClick={handleGitHubSignUp}
-          className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border px-4 py-3
-                      text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary hover:opacity-70"
-        >
-          <img
-            src={resolvedTheme === "dark" ? GitHubDarkIcon : GitHubIcon}
-            alt="GitHub"
-            className="w-5 h-5"
-          />
-          {t("login.github")}
-        </button>
+        />
       </div>
 
       <div className="mb-6">
@@ -159,7 +127,7 @@ export default function SignUpPage() {
         {t("signup.hasAccount")}{" "}
         <Link
           to="/login"
-          className="font-semibold text-white underline hover:opacity-60"
+          className="font-semibold text-foreground underline hover:text-primary-hover"
         >
           {t("signup.signIn")}
         </Link>

@@ -53,7 +53,7 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onCloseMobile
 
   return (
     <>
-      {mobileOpen && <button type="button" className="fixed inset-0 z-30 bg-slate-950/40 md:hidden" onClick={onCloseMobile} aria-label={t('actions.closeNavigation')} />}
+      {mobileOpen && <button type="button" className="fixed inset-0 z-30 bg-overlay md:hidden" onClick={onCloseMobile} aria-label={t('actions.closeNavigation')} />}
       <aside className={cn(
         'fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-border bg-surface transition-[transform,width] duration-200 md:static md:z-20 md:w-17 md:translate-x-0 xl:w-56',
         mobileOpen ? 'translate-x-0' : '-translate-x-full',

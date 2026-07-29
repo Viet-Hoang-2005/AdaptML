@@ -85,20 +85,20 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
           {t("metricsPanel.exampleDescription")}
         </p>
 
-        <div className="text-left bg-[#1e1e1e] rounded-xl overflow-hidden w-full shadow-sm border border-gray-800 mb-4">
-          <div className="bg-[#2d2d2d] px-3 py-1.5 border-b border-gray-800 flex items-center justify-between">
+        <div className="mb-4 w-full overflow-hidden rounded-xl border border-terminal-border bg-terminal text-left shadow-sm">
+          <div className="flex items-center justify-between border-b border-terminal-border bg-terminal-header px-3 py-1.5">
             <div className="flex items-center gap-3">
               <div className="flex gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-500"></div>
+                <div className="h-2.5 w-2.5 rounded-full bg-terminal-muted"></div>
+                <div className="h-2.5 w-2.5 rounded-full bg-terminal-muted"></div>
+                <div className="h-2.5 w-2.5 rounded-full bg-terminal-muted"></div>
               </div>
               <span className="text-xs font-mono text-muted-foreground">
                 train.py - metric output contract
               </span>
             </div>
             <button
-              className="text-xs text-muted-foreground hover:text-white transition-colors"
+              className="text-xs text-terminal-muted transition-colors hover:text-terminal-foreground"
               onClick={() => {
                 navigator.clipboard.writeText(
                   'import json\n\n# METRIC_JSON stdout works without extra dependencies.\nprint("METRIC_JSON:", json.dumps({\n    "step": 1,\n    "accuracy": 0.95,\n    "loss": 0.12,\n    "f1": 0.93\n}))',
@@ -110,7 +110,7 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
             </button>
           </div>
           <div className="p-4">
-            <pre className="text-xs font-mono text-emerald-400 overflow-x-auto leading-relaxed">
+            <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-terminal-success">
               <code>{`import json
 
 # METRIC_JSON stdout works without extra dependencies.
@@ -204,7 +204,7 @@ print("METRIC_JSON:", json.dumps({
               <div className="w-full bg-muted rounded-xl p-4 border border-border flex flex-col gap-2">
                 <svg
                   viewBox={`0 0 ${width} ${height}`}
-                  className="w-full h-32 overflow-visible stroke-blue-500 fill-none"
+                  className="h-32 w-full fill-none stroke-chart-1 overflow-visible"
                   preserveAspectRatio="none"
                 >
                   <defs>
@@ -215,8 +215,8 @@ print("METRIC_JSON:", json.dumps({
                       x2="0"
                       y2="1"
                     >
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2" />
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                      <stop offset="0%" stopColor="var(--chart-1)" stopOpacity="0.2" />
+                      <stop offset="100%" stopColor="var(--chart-1)" stopOpacity="0" />
                     </linearGradient>
                   </defs>
                   {/* Fill Area */}
@@ -243,7 +243,7 @@ print("METRIC_JSON:", json.dumps({
                         cx={x}
                         cy={y}
                         r="3"
-                        className="fill-white stroke-blue-600 stroke-2"
+                        className="fill-surface stroke-chart-1 stroke-2"
                       />
                     );
                   })}

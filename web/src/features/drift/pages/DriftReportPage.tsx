@@ -82,7 +82,7 @@ export default function DriftReportPage() {
             className="absolute inset-0 w-full h-full border-0"
           />
         ) : (
-          <div className="text-red-500 py-20">{t('reportPage.loadFailed')}</div>
+          <div className="py-20 text-danger">{t('reportPage.loadFailed')}</div>
         )}
       </PageBody>
     </div>

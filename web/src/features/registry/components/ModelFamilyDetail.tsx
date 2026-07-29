@@ -48,7 +48,7 @@ export function ModelFamilyDetail({
             {prodVersion ? (
               <>
                 <span className="inline-flex items-center gap-1 text-success bg-success-subtle px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">
-                  <Star className="h-3 w-3 fill-emerald-500 text-emerald-500" />{" "}
+                  <Star className="h-3 w-3 fill-success text-success" />{" "}
                   {t("familyDetail.productionVersion", {
                     version: formatVersion(prodVersion.version),
                   })}
@@ -155,7 +155,7 @@ export function ModelFamilyDetail({
                   className="p-6 text-center text-sm text-muted-foreground"
                 >
                   <div className="flex justify-center mb-2">
-                    <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-info border-t-transparent"></div>
                   </div>
                   {t("familyDetail.loadingVersions")}
                 </td>
@@ -193,7 +193,7 @@ export function ModelFamilyDetail({
                         {formatVersion(v.version)}
                       </span>
                       {isProd && (
-                        <Star className="h-4 w-4 text-amber-400 fill-amber-400 ml-1" />
+                        <Star className="ml-1 h-4 w-4 fill-warning text-warning" />
                       )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-muted-foreground">
