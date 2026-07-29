@@ -3,7 +3,7 @@ export const routes = {
   dashboard: '/dashboard',
   overview: '/dashboard/home/models',
   modelTesting: '/dashboard/home/model-testing',
-  buildDeploy: '/dashboard/management',
+  deploy: '/dashboard/management',
   uploadModel: '/dashboard/management/model/upload/metadata',
   training: '/dashboard/model-training',
   registry: '/dashboard/model-evolution',

@@ -61,7 +61,7 @@ function TrackerLine({ state }: { state: "completed" | "pending" }) {
 }
 
 export function ModelStatus({ model }: { model: ModelProject }) {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   const endpointStatus = model.endpoint_status || "not_deployed";
   const isBuildingState = model.build_status === "building";
   const isDeployingState = endpointStatus === "deploying";

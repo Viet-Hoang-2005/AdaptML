@@ -14,7 +14,7 @@ import {
 const BUILD_TERMINAL_STATUSES = ["ready", "failed", "cancelled"] as const;
 
 export default function BuildModelPage() {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   const { t: tc } = useTranslation("common");
   const {
     buildForm,
@@ -70,7 +70,7 @@ export default function BuildModelPage() {
                   onClick={async () => {
                     if (!build) return;
                     const { cancelBuildById } =
-                      await import("@/features/deploy/api/buildDeployApi");
+                      await import("@/features/deploy/api/deployApi");
                     await cancelBuildById(build.id);
                     await refreshBuild();
                   }}

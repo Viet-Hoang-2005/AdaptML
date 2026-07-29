@@ -17,7 +17,7 @@ export default function EditModelModal({
   visible: boolean;
   onClose: () => void;
 }) {
-  const { t } = useTranslation('buildDeploy');
+  const { t } = useTranslation('deploy');
   const { updateModelProject, updating } = useModelProjectMutations();
   const [form, setForm] = useState<ModelProjectFormValues>({
     name: model?.name || '',

@@ -1,4 +1,4 @@
-export const buildDeployEn = {
+export const deployEn = {
   title: 'Management', search: 'Search model by name...', upload: 'Upload model', noModels: 'No models found',
   loading: 'Loading models...', noDescription: 'No description provided.',
   noModelsDescription: 'Upload your first MLflow model package to create a prediction endpoint.', noMatch: 'No models matching "{{query}}"',

@@ -13,7 +13,7 @@ interface ProjectMetadataFieldsProps {
 }
 
 export function ProjectMetadataFields({ form, project, setField }: ProjectMetadataFieldsProps) {
-  const { t } = useTranslation('buildDeploy');
+  const { t } = useTranslation('deploy');
   return (
     <div className="flex flex-col gap-8">
       <section className="space-y-5">

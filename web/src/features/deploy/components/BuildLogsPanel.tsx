@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { buildDeployQueryKeys } from '@/features/deploy/queryKeys';
+import { deployQueryKeys } from '@/features/deploy/queryKeys';
 import { TerminalViewer } from '@/shared/components/TerminalViewer';
 
 export function BuildLogsPanel({ modelId }: { modelId: string }) {
-  const { t } = useTranslation('buildDeploy');
+  const { t } = useTranslation('deploy');
 
   const { data } = useQuery<{ logs: string[]; updated_at: string }>({
-    queryKey: buildDeployQueryKeys.logs(modelId),
+    queryKey: deployQueryKeys.logs(modelId),
     enabled: false, // populated via WS
   });
 

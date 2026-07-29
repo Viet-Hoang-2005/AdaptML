@@ -36,7 +36,7 @@ function isActiveModel(model: ModelProject) {
 }
 
 function LiveBadge() {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary ring-1 ring-inset ring-primary/20"
@@ -89,7 +89,7 @@ export function ModelDeploymentCard({
   onBuild,
   isBuilding,
 }: ModelDeploymentCardProps) {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
   const [showStopModal, setShowStopModal] = useState(false);

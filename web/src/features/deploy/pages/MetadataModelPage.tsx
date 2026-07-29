@@ -6,7 +6,7 @@ import { useUploadModel } from "@/features/deploy/uploadModelContext";
 import { Button } from "@/shared/components/Button";
 
 export default function MetadataModelPage() {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   const {
     project,
     metadataForm,

@@ -17,7 +17,7 @@ import {
   listDeployments,
   startProjectBuild,
   updateProjectMetadata,
-} from '@/features/deploy/api/buildDeployApi';
+} from '@/features/deploy/api/deployApi';
 import type { UploadModelContext, UploadStep, UploadTransitionState } from '@/features/deploy/uploadModelContext';
 import type { Build, BuildInputForm, Deployment, ProjectMetadataForm } from '@/features/catalog/types';
 import { getModelProject } from '@/features/catalog/api/catalogApi';
@@ -75,7 +75,7 @@ const hasBuildInput = (form: BuildInputForm) => Boolean(
 );
 
 export default function UploadModelPage() {
-  const { t } = useTranslation('buildDeploy');
+  const { t } = useTranslation('deploy');
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

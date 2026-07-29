@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { authEn } from '@/features/auth/i18n/en';
-import { buildDeployEn } from '@/features/deploy/i18n/en';
+import { deployEn } from '@/features/deploy/i18n/en';
 import { catalogEn } from '@/features/catalog/i18n/en';
 import { driftEn } from '@/features/drift/i18n/en';
 import { notificationsEn } from '@/features/notifications/i18n/en';
@@ -15,7 +15,7 @@ const resources = {
     common: commonEn,
     auth: authEn,
     catalog: catalogEn,
-    buildDeploy: buildDeployEn,
+    buildDeploy: deployEn,
     training: trainingEn,
     registry: registryEn,
     drift: driftEn,

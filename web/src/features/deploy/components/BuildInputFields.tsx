@@ -59,7 +59,7 @@ const packageExamples: Record<ModelFlavor, string[]> = {
 };
 
 export function BuildInputFields({ form, setField }: BuildInputFieldsProps) {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   const flavorOptions: Array<{
     value: ModelFlavor;
     title: string;

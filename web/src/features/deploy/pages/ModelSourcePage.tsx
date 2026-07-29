@@ -14,7 +14,7 @@ export function ModelSourcePage({
   setSourceCodeDirty,
   setReferenceDataDirty,
 }: ModelSourcePageProps) {
-  const { t } = useTranslation('buildDeploy');
+  const { t } = useTranslation('deploy');
   return (
     <div className="flex-1 w-full h-full min-h-150 flex flex-col gap-6">
       <SourceEditor 

@@ -20,7 +20,7 @@ const workspaceItems = [
 ] as const;
 
 const utilityItems = [
-  { key: 'management', to: routes.buildDeploy, icon: Bot, match: routes.buildDeploy },
+  { key: 'management', to: routes.deploy, icon: Bot, match: routes.deploy },
   { key: 'notification', to: routes.notifications, icon: Bell, match: routes.notifications },
   { key: 'setting', to: routes.profile, icon: Settings, match: '/dashboard/settings' },
 ] as const;

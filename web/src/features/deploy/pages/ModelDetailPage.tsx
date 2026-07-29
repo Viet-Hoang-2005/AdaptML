@@ -25,7 +25,7 @@ import { ModelSourcePage } from "./ModelSourcePage";
 import { ModelStatus } from "@/features/deploy/components/ModelStatus";
 
 export default function ModelDetailPage() {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   const { modelId } = useParams();
   const { data } = useModelProjects();
   const model = useMemo(
@@ -45,7 +45,7 @@ export default function ModelDetailPage() {
 }
 
 export function ModelDetailPageContent({ model }: { model: ModelProject }) {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   const { tab } = useParams();
   const navigate = useNavigate();
 

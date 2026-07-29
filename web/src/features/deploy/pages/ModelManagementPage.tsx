@@ -24,7 +24,7 @@ const lifecycleBadgeVariant = {
 } as const;
 
 export default function ModelManagementPage() {
-  const { t, i18n } = useTranslation("buildDeploy");
+  const { t, i18n } = useTranslation("deploy");
   const navigate = useNavigate();
   const { data, isLoading } = useModelProjects();
   const { deleteModelProject } = useModelProjectMutations();

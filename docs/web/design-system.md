@@ -61,4 +61,4 @@ Notification and Setting form the secondary group. The header keeps the original
 
 ## Localization
 
-English resources are owned by `common`, `auth`, `catalog`, `buildDeploy`, `training`, `registry`, `drift`, `settings`, and `notifications` namespaces. User-visible copy, validation, toast, dialog, tooltip, and accessibility labels belong in those resources. Raw backend error detail remains unchanged. No language selector is exposed until a second locale is available.
+English resources are owned by `common`, `auth`, `catalog`, `deploy`, `training`, `registry`, `drift`, `settings`, and `notifications` namespaces. User-visible copy, validation, toast, dialog, tooltip, and accessibility labels belong in those resources. Raw backend error detail remains unchanged. No language selector is exposed until a second locale is available.

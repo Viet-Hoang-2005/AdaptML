@@ -2,7 +2,7 @@ import { Edit3, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { updateProjectMetadata } from "@/features/deploy/api/buildDeployApi";
+import { updateProjectMetadata } from "@/features/deploy/api/deployApi";
 import { ProjectMetadataFields } from "@/features/deploy/components/ProjectMetadataFields";
 import { getModelProject } from "@/features/catalog/api/catalogApi";
 import type {
@@ -22,7 +22,7 @@ const toForm = (project: ModelProject): ProjectMetadataForm => ({
 });
 
 export function ModelInformationPage({ modelId }: { modelId: string }) {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   const [project, setProject] = useState<ModelProject | null>(null);
   const [form, setForm] = useState<ProjectMetadataForm | null>(null);
   const [editing, setEditing] = useState(false);

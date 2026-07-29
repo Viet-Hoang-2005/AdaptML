@@ -17,7 +17,7 @@ const DEPLOYMENT_TERMINAL_STATUSES = [
 ] as const;
 
 export default function DeployModelPage() {
-  const { t } = useTranslation("buildDeploy");
+  const { t } = useTranslation("deploy");
   const navigate = useNavigate();
   const {
     project,
