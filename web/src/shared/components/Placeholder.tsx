@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useModelSelection } from "@/features/catalog/hooks/useModelSelection";
+import { useTranslation } from "react-i18next";
 
 export interface PlaceholderProps {
   title: string;
@@ -16,6 +17,7 @@ export function Placeholder({
   action,
   showModelName = true,
 }: PlaceholderProps) {
+  const { t } = useTranslation("common");
   const { selectedModel } = useModelSelection();
 
   return (
@@ -26,7 +28,7 @@ export function Placeholder({
         </div>
         {showModelName && (
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {selectedModel ? selectedModel.name : "No model selected"}
+            {selectedModel ? selectedModel.name : t("modelSelector.empty")}
           </p>
         )}
         <h1 className="mb-3 text-2xl font-bold text-foreground">{title}</h1>

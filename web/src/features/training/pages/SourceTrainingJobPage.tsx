@@ -42,23 +42,23 @@ export default function SourceTrainingJobPage() {
             options={[
               {
                 value: "sklearn",
-                title: "Scikit-learn",
-                description: "Pickle or joblib estimators.",
+                title: t("createFlow.flavors.sklearn"),
+                description: t("createFlow.source.flavors.sklearn"),
               },
               {
                 value: "xgboost",
-                title: "XGBoost",
-                description: "Booster or XGBModel artifacts.",
+                title: t("createFlow.flavors.xgboost"),
+                description: t("createFlow.source.flavors.xgboost"),
               },
               {
                 value: "pytorch",
-                title: "PyTorch",
-                description: "PyTorch or MLflow artifacts.",
+                title: t("createFlow.flavors.pytorch"),
+                description: t("createFlow.source.flavors.pytorch"),
               },
               {
                 value: "tensorflow",
-                title: "TensorFlow",
-                description: "Keras, SavedModel, or MLflow artifacts.",
+                title: t("createFlow.flavors.tensorflow"),
+                description: t("createFlow.source.flavors.tensorflow"),
               },
             ]}
           />

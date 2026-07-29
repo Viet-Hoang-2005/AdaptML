@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { Input } from '@/shared/components/Input';
@@ -16,6 +17,7 @@ export default function EditModelModal({
   visible: boolean;
   onClose: () => void;
 }) {
+  const { t } = useTranslation('buildDeploy');
   const { updateModelProject, updating } = useModelProjectMutations();
   const [form, setForm] = useState<ModelProjectFormValues>({
     name: model?.name || '',
@@ -70,7 +72,7 @@ export default function EditModelModal({
         aria-modal="true"
       >
         <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
-          <h2 className="text-xl font-bold text-foreground">Edit Model API</h2>
+          <h2 className="text-xl font-bold text-foreground">{t('editModel.title')}</h2>
           <button 
             onClick={handleCancel}
             className="text-muted-foreground hover:text-muted-foreground transition-colors p-1"
@@ -83,25 +85,25 @@ export default function EditModelModal({
           <div className="flex flex-col h-full w-full">
             <div className="flex-1 space-y-5">
               <Input
-                label="Model Name"
+                label={t('editModel.name')}
                 value={form.name}
                 onChange={(e) => setField('name', e.target.value)}
               />
               <TextArea
                 id="edit-desc"
-                label="Description"
+                label={t('editModel.description')}
                 value={form.description}
                 onChange={(v) => setField('description', v)}
                 placeholder=""
               />
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Access Mode</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">{t('editModel.accessMode')}</label>
                 <Picker
                   value={form.access_mode}
                   onChange={(v) => setField('access_mode', v as ModelProjectFormValues['access_mode'])}
                   options={[
-                    { value: 'private', title: 'Private API', description: 'Requires JWT or API key.' },
-                    { value: 'public', title: 'Public API', description: 'Allows public prediction requests.' },
+                    { value: 'private', title: t('editModel.privateTitle'), description: t('editModel.privateDescription') },
+                    { value: 'public', title: t('editModel.publicTitle'), description: t('editModel.publicDescription') },
                   ]}
                 />
               </div>
@@ -113,7 +115,7 @@ export default function EditModelModal({
                 size="md"
                 onClick={handleCancel}
               >
-                Cancel
+                {t('actions.cancel', { ns: 'common' })}
               </Button>
               <Button
                 size="md"
@@ -121,7 +123,7 @@ export default function EditModelModal({
                 disabled={!isDirty}
                 onClick={handleSave}
               >
-                Save
+                {t('actions.save', { ns: 'common' })}
               </Button>
             </div>
           </div>

@@ -17,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/shared/components/Button";
 import { ConfirmModal } from "@/shared/components/ConfirmModal";
@@ -35,13 +36,14 @@ function isActiveModel(model: ModelProject) {
 }
 
 function LiveBadge() {
+  const { t } = useTranslation("buildDeploy");
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary ring-1 ring-inset ring-primary/20"
-      title="Monitored via Prometheus Observability Engine"
+      title={t("deploymentCard.monitored")}
     >
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-      Prometheus Sync
+      {t("deploymentCard.sync")}
     </span>
   );
 }
@@ -87,6 +89,7 @@ export function ModelDeploymentCard({
   onBuild,
   isBuilding,
 }: ModelDeploymentCardProps) {
+  const { t } = useTranslation("buildDeploy");
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
   const [showStopModal, setShowStopModal] = useState(false);
@@ -108,19 +111,19 @@ export function ModelDeploymentCard({
     if (!model.endpoint_url) return;
     await navigator.clipboard.writeText(model.endpoint_url);
     setCopied(true);
-    toast.success("Endpoint URL copied");
+    toast.success(t("deploymentCard.endpointCopied"));
     setTimeout(() => setCopied(false), 2000);
   };
 
   // Top Accent Logic
   let accentClass = "border-t-gray-200";
   let badgeClass = "bg-muted text-foreground border-border";
-  let statusText = "Not Deployed";
+  let statusText = t("deploymentCard.statuses.notDeployed");
 
   if (isHealthy) {
     accentClass = "border-t-emerald-500";
     badgeClass = "bg-success-subtle text-success border-success/20";
-    statusText = "Healthy";
+    statusText = t("deploymentCard.statuses.healthy");
   } else if (
     endpointStatus === "unhealthy" ||
     endpointStatus === "deploy_failed" ||
@@ -128,20 +131,25 @@ export function ModelDeploymentCard({
   ) {
     accentClass = "border-t-red-500";
     badgeClass = "bg-danger-subtle text-danger border-danger/20";
-    statusText = model.build_status === "error" ? "Build Failed" : "Unhealthy";
+    statusText =
+      model.build_status === "error"
+        ? t("deploymentCard.statuses.buildFailed")
+        : t("deploymentCard.statuses.unhealthy");
   } else if (isDeployingState || isBuildingState) {
     accentClass = "border-t-blue-500";
     badgeClass =
       "bg-primary-subtle text-primary border-primary/20 animate-pulse";
-    statusText = isBuildingState ? "Building..." : "Deploying...";
+    statusText = isBuildingState
+      ? t("deploymentCard.statuses.building")
+      : t("deploymentCard.statuses.deploying");
   } else if (isStopped) {
     accentClass = "border-t-gray-400";
     badgeClass = "bg-muted text-muted-foreground border-border";
-    statusText = "Stopped";
+    statusText = t("deploymentCard.statuses.stopped");
   } else if (readyToDeploy) {
     accentClass = "border-t-blue-300";
     badgeClass = "bg-primary-subtle text-primary border-primary/20";
-    statusText = "Build Ready";
+    statusText = t("deploymentCard.statuses.buildReady");
   }
 
   // Lifecycle Tracker State
@@ -202,8 +210,10 @@ export function ModelDeploymentCard({
             </div>
             <p className="mt-1 text-xs text-muted-foreground font-medium">
               {model.source_type === "training_job"
-                ? `Registered from training job #${model.source_training_job ?? "-"}`
-                : "Manually uploaded model package"}
+                ? t("deploymentCard.registeredFromTraining", {
+                    jobId: model.source_training_job ?? "-",
+                  })
+                : t("deploymentCard.manualUpload")}
             </p>
           </div>
         </div>
@@ -223,7 +233,7 @@ export function ModelDeploymentCard({
 
       {/* ── Lifecycle Tracker ── */}
       <div className="mt-8 flex items-center w-full max-w-2xl overflow-x-auto pb-2 scrollbar-none">
-        <TrackerStep label="Registered" state={stage0} />
+        <TrackerStep label={t("lifecycle.registered")} state={stage0} />
         <TrackerLine
           state={
             stage1 === "completed" || stage1 === "active"
@@ -231,7 +241,7 @@ export function ModelDeploymentCard({
               : "pending"
           }
         />
-        <TrackerStep label="Build Ready" state={stage1} />
+        <TrackerStep label={t("lifecycle.buildReady")} state={stage1} />
         <TrackerLine
           state={
             stage2 === "completed" ||
@@ -241,7 +251,7 @@ export function ModelDeploymentCard({
               : "pending"
           }
         />
-        <TrackerStep label="Deployed" state={stage2} />
+        <TrackerStep label={t("lifecycle.deployed")} state={stage2} />
         <TrackerLine
           state={
             stage3 === "completed" || stage3 === "active" || stage3 === "failed"
@@ -249,7 +259,7 @@ export function ModelDeploymentCard({
               : "pending"
           }
         />
-        <TrackerStep label="Healthy" state={stage3} />
+        <TrackerStep label={t("lifecycle.healthy")} state={stage3} />
       </div>
 
       {/* ── Metadata & Endpoint ── */}
@@ -257,7 +267,7 @@ export function ModelDeploymentCard({
         {/* Endpoint URL Block */}
         <div className="lg:col-span-7 flex flex-col justify-end">
           <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            Endpoint URL
+            {t("deploymentCard.endpointUrl")}
           </label>
           {model.endpoint_url ? (
             <div className="group flex items-center overflow-hidden rounded-xl border border-border bg-muted shadow-sm transition-colors hover:border-border">
@@ -273,7 +283,7 @@ export function ModelDeploymentCard({
               <button
                 onClick={copyEndpoint}
                 className="flex items-center justify-center px-3 py-2 text-muted-foreground hover:bg-surface hover:text-foreground border-l border-transparent hover:border-border transition-all focus:outline-none"
-                title="Copy URL"
+                title={t("deploymentCard.copyUrl")}
               >
                 {copied ? (
                   <Check className="h-4 w-4 text-emerald-500" />
@@ -285,7 +295,7 @@ export function ModelDeploymentCard({
           ) : (
             <div className="flex h-9 items-center rounded-xl border border-border border-dashed bg-muted/50 px-3 py-2">
               <p className="text-xs font-mono text-muted-foreground">
-                Endpoint not yet deployed
+                {t("deploymentCard.endpointMissing")}
               </p>
             </div>
           )}
@@ -295,23 +305,23 @@ export function ModelDeploymentCard({
         <div className="lg:col-span-5 grid grid-cols-2 gap-4">
           <div className="flex flex-col justify-end">
             <span className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Container
+              {t("deploymentCard.container")}
             </span>
             <span
               className="truncate text-xs font-mono text-foreground bg-muted rounded px-2 py-1 border border-border w-fit max-w-full"
               title={model.endpoint_container_name || ""}
             >
-              {model.endpoint_container_name || "N/A"}
+              {model.endpoint_container_name || t("statuses.notAvailable", { ns: "common" })}
             </span>
           </div>
           <div className="flex flex-col justify-end">
             <span className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Last Checked
+              {t("deploymentCard.lastChecked")}
             </span>
             <span className="truncate text-xs text-foreground bg-muted rounded px-2 py-1 border border-border w-fit max-w-full">
               {model.endpoint_last_checked_at
                 ? new Date(model.endpoint_last_checked_at).toLocaleString()
-                : "N/A"}
+                : t("statuses.notAvailable", { ns: "common" })}
             </span>
           </div>
         </div>
@@ -322,7 +332,7 @@ export function ModelDeploymentCard({
         <div className="mt-6 rounded-xl border border-danger/20 bg-danger-subtle p-4">
           <p className="text-sm font-bold text-danger flex items-center gap-2">
             <XCircle className="h-4 w-4" />
-            Deployment Error
+            {t("deploymentCard.deploymentError")}
           </p>
           <p className="mt-1 text-sm text-danger font-medium">
             {model.build_error || model.endpoint_error}
@@ -350,7 +360,7 @@ export function ModelDeploymentCard({
               disabled={isBuildingState}
               onClick={() => onBuild(model)}
             >
-              Build Package
+              {t("actions.buildPackage")}
             </Button>
           ) : endpointStatus === "not_deployed" && onDeploy ? (
             <Button
@@ -361,7 +371,7 @@ export function ModelDeploymentCard({
               disabled={isDeployingState}
               onClick={() => onDeploy(model)}
             >
-              Deploy Endpoint
+              {t("actions.deployEndpoint")}
             </Button>
           ) : onRedeploy && readyToDeploy ? (
             <Button
@@ -372,7 +382,7 @@ export function ModelDeploymentCard({
               disabled={!canRedeploy}
               onClick={() => onRedeploy(model)}
             >
-              Redeploy
+              {t("actions.redeploy")}
             </Button>
           ) : null}
 
@@ -385,7 +395,7 @@ export function ModelDeploymentCard({
               loading={isCheckingHealth}
               onClick={() => onCheckHealth(model)}
             >
-              Check Health
+              {t("actions.checkHealth")}
             </Button>
           )}
 
@@ -396,7 +406,7 @@ export function ModelDeploymentCard({
               icon={<TerminalSquare className="h-4 w-4" />}
               onClick={() => onOpenLogs(model)}
             >
-              Logs
+              {t("actions.logs")}
             </Button>
           )}
 
@@ -408,7 +418,7 @@ export function ModelDeploymentCard({
               onClick={() => onTestPrediction(model)}
               disabled={!isHealthy}
             >
-              Test Prediction
+              {t("actions.testPrediction")}
             </Button>
           )}
 
@@ -419,7 +429,7 @@ export function ModelDeploymentCard({
               icon={<Settings className="h-4 w-4" />}
               onClick={() => onOpenApiManagement(model)}
             >
-              Manage
+              {t("actions.manage")}
             </Button>
           )}
         </div>
@@ -436,7 +446,7 @@ export function ModelDeploymentCard({
                 disabled={!canStop}
                 onClick={() => setShowStopModal(true)}
               >
-                Stop Endpoint
+                {t("actions.stopEndpoint")}
               </Button>
             )}
 
@@ -449,7 +459,7 @@ export function ModelDeploymentCard({
                 onClick={() => setShowCleanupModal(true)}
                 className="border border-border text-muted-foreground hover:text-amber-700 hover:border-amber-200 hover:bg-amber-50"
               >
-                Cleanup
+                {t("actions.cleanup")}
               </Button>
             )}
           </div>
@@ -460,10 +470,10 @@ export function ModelDeploymentCard({
       {onStop && (
         <ConfirmModal
           open={showStopModal}
-          title="Stop endpoint?"
-          description="This will stop the running endpoint container. The model package and registry record will remain available, and you can deploy it again later."
-          confirmText="Stop endpoint"
-          cancelText="Cancel"
+          title={t("deploymentCard.stopTitle")}
+          description={t("deploymentCard.stopDescription")}
+          confirmText={t("deploymentCard.stopConfirm")}
+          cancelText={t("actions.cancel", { ns: "common" })}
           tone="danger"
           loading={isStopping}
           onConfirm={() => {
@@ -477,10 +487,10 @@ export function ModelDeploymentCard({
       {onCleanup && (
         <ConfirmModal
           open={showCleanupModal}
-          title="Cleanup resources?"
-          description="This will remove local Docker containers and images associated with this endpoint. Your S3 model artifacts and registry records will be preserved."
-          confirmText="Cleanup resources"
-          cancelText="Cancel"
+          title={t("deploymentCard.cleanupTitle")}
+          description={t("deploymentCard.cleanupDescription")}
+          confirmText={t("deploymentCard.cleanupConfirm")}
+          cancelText={t("actions.cancel", { ns: "common" })}
           tone="default"
           loading={isCleaningUp}
           onConfirm={() => {

@@ -1,4 +1,5 @@
 import type { ElementType } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/shared/lib/cn";
 
 export type ProgressLineState =
@@ -33,10 +34,12 @@ export interface ProgressLineProps {
 }
 
 export function ProgressLine({ steps, className }: ProgressLineProps) {
+  const { t } = useTranslation("common");
+
   return (
     <ol
       className={cn("flex min-w-150 w-full items-start justify-between", className)}
-      aria-label="Progress"
+      aria-label={t("steps.progressLabel")}
     >
       {steps.map((step, index) => {
         const Icon = step.icon;

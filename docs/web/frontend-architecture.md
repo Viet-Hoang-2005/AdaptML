@@ -99,3 +99,30 @@ Monaco is loaded through `LazyCodeEditor`; feature code must not import `@monaco
 5. Keep the page limited to route input and composition.
 6. Add English copy to the domain i18n namespace.
 7. Run `pnpm lint` and `pnpm build`, then execute the relevant manual journey.
+
+## Internationalization
+
+All user-facing copy is served through `react-i18next`. English is currently the
+only resource language, but feature resources must remain ready for additional
+languages.
+
+- Put reusable actions, status labels, accessibility copy, and shared component
+  text in `src/shared/i18n/en.ts` under the `common` namespace.
+- Put domain copy in `src/features/<feature>/i18n/en.ts` and use semantic keys
+  such as `detail.metadata.internalJobId` or `messages.deleteFailed`. Do not use
+  an English sentence as its own key.
+- Use interpolation and pluralization for runtime values instead of assembling
+  translated sentences in JSX: `t("testing.rowsProcessed", { count })`.
+- Translate status enums at render time. Keep API wire values, routes, UUIDs,
+  filenames, package names, source snippets, runtime logs, and brand names
+  unchanged.
+- Pass frontend fallback errors through `getApiErrorMessage`. A detailed backend
+  message remains authoritative and must not be replaced or translated.
+- To add a language, mirror every namespace resource, register it in
+  `src/app/i18n.ts`, and keep English as `fallbackLng`.
+
+`pnpm lint` runs `scripts/check-i18n.mjs` after ESLint and the architecture
+check. The checker rejects visible JSX literals, display props, toast literals,
+and UI configuration labels. A technical literal that cannot be inferred by the
+checker may be exempted only with a nearby `i18n-ignore: <reason>` comment.
+Feature-wide or file-wide exemptions are not allowed.

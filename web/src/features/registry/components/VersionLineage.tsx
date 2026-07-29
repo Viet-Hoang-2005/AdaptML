@@ -1,6 +1,7 @@
 import { Star } from "lucide-react";
 import type { RegistryVersion } from "@/features/registry/types";
 import { formatVersion } from "@/shared/lib/formatters";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   versions: RegistryVersion[];
@@ -13,10 +14,11 @@ export function VersionLineage({
   selectedVersionId,
   onSelectVersion,
 }: Props) {
+  const { t } = useTranslation("registry");
   if (versions.length === 0) {
     return (
       <div className="p-8 text-center text-muted-foreground text-sm">
-        No versions available
+        {t("lineage.empty")}
       </div>
     );
   }
@@ -72,7 +74,7 @@ export function VersionLineage({
                   </span>
                   {isProd && (
                     <span className="text-[10px] uppercase font-bold text-success bg-success-subtle px-1.5 rounded">
-                      PROD
+                      {t("lineage.production")}
                     </span>
                   )}
                 </div>

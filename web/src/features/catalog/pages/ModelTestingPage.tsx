@@ -10,6 +10,7 @@ import {
   Percent,
 } from "lucide-react";
 import { useRef, useState, useMemo, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useBlocker } from "react-router-dom";
 import { ConfirmModal } from "@/shared/components/ConfirmModal";
 import { TerminalViewer } from "@/shared/components/TerminalViewer";
@@ -115,7 +116,10 @@ const formatPrediction = (value: unknown) => {
   return String(value);
 };
 
-const extractPredictionError = (error: unknown) => {
+const extractPredictionError = (
+  error: unknown,
+  copy: { fallback: string; hint: (value: string) => string; received: (value: string) => string },
+) => {
   const response = (
     error as { response?: { status?: number; data?: PredictionErrorPayload } }
   )?.response;
@@ -125,20 +129,21 @@ const extractPredictionError = (error: unknown) => {
   const message =
     payload?.message ||
     payload?.error ||
-    getApiErrorMessage(error, "Prediction failed.");
-  const hint = payload?.hint ? `Hint: ${payload.hint}` : "";
+    getApiErrorMessage(error, copy.fallback);
+  const hint = payload?.hint ? copy.hint(payload.hint) : "";
   const received = payload?.received_features?.length
-    ? `Received features: ${payload.received_features.join(", ")}`
+    ? copy.received(payload.received_features.join(", "))
     : "";
 
   return {
     status: response?.status,
-    title: payload?.error || getApiErrorMessage(error, "Prediction failed."),
+    title: payload?.error || getApiErrorMessage(error, copy.fallback),
     detail: [message, received, hint].filter(Boolean).join("\n"),
   };
 };
 
 export default function ModelTestingPage() {
+  const { t } = useTranslation("catalog");
   const { selectedModel } = useModelSelection();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [csvText, setCsvText] = useState("");
@@ -208,12 +213,12 @@ export default function ModelTestingPage() {
     setTestFinished(false);
     setCurrentRowIndex(0);
     setLogs([
-      makeLog("info", `Loaded ${file.name}: ${parsedRows.length} row(s).`),
+      makeLog("info", t("testingPage.loaded", { fileName: file.name, count: parsedRows.length })),
       makeLog(
         parsedTargetColumns.length > 0 ? "warning" : "info",
         parsedTargetColumns.length > 0
-          ? `Target columns will be excluded from features: ${parsedTargetColumns.join(", ")}.`
-          : "No label/target columns detected in the uploaded CSV.",
+          ? t("testingPage.targetsExcluded", { columns: parsedTargetColumns.join(", ") })
+          : t("testingPage.noTargetColumns"),
       ),
     ]);
   };
@@ -230,22 +235,22 @@ export default function ModelTestingPage() {
 
   const runTesting = async () => {
     if (!selectedModel) {
-      toast.warning("Please upload or select a model first.");
+      toast.warning(t("testingPage.modelRequired"));
       return;
     }
     if (!rows.length) {
-      toast.warning("Please upload a CSV file first.");
+      toast.warning(t("testingPage.csvRequired"));
       return;
     }
     if (!selectedModel.endpoint_url) {
-      toast.error("Selected model does not have a prediction endpoint.");
+      toast.error(t("testingPage.endpointRequired"));
       return;
     }
 
     if (running) {
       isRunningRef.current = false;
       setRunning(false);
-      pushLog(makeLog("info", "Testing paused by user."));
+      pushLog(makeLog("info", t("testingPage.paused")));
       return;
     }
 
@@ -272,10 +277,13 @@ export default function ModelTestingPage() {
       setLogs([
         makeLog(
           "info",
-          `Selected model: ${selectedModel.name}@${selectedModel.version || "v1"}.`,
+          t("testingPage.selectedModel", {
+            name: selectedModel.name,
+            version: selectedModel.version || "v1",
+          }),
         ),
-        makeLog("info", `Endpoint: ${selectedModel.endpoint_url}.`),
-        makeLog("info", `Running prediction test for ${rows.length} row(s).`),
+        makeLog("info", t("testingPage.endpointLog", { endpoint: selectedModel.endpoint_url })),
+        makeLog("info", t("testingPage.running", { count: rows.length })),
       ]);
 
       currentSummary = {
@@ -291,7 +299,7 @@ export default function ModelTestingPage() {
       pushLog(
         makeLog(
           "info",
-          `Resuming prediction from row ${currentRowIndex + 1}...`,
+          t("testingPage.resuming", { row: currentRowIndex + 1 }),
         ),
       );
       currentSummary = { ...summary };
@@ -319,7 +327,7 @@ export default function ModelTestingPage() {
         const confidence =
           response.confidence == null
             ? ""
-            : ` | confidence=${response.confidence}%`;
+            : ` | ${t("testingPage.confidence", { confidence: response.confidence })}`;
         const isCorrect =
           expectedLabel !== undefined &&
           prediction.toLowerCase() === expectedLabel.toLowerCase();
@@ -335,22 +343,40 @@ export default function ModelTestingPage() {
         pushLog(
           makeLog(
             expectedLabel === undefined || isCorrect ? "success" : "warning",
-            `Row ${rowNumber}: Predicted=${prediction}${expectedLabel !== undefined ? ` | Expected=${expectedLabel}` : ""}${confidence} |`,
+            t("testingPage.rowResult", {
+              row: rowNumber,
+              prediction,
+              expected:
+                expectedLabel !== undefined
+                  ? t("testingPage.expected", { expected: expectedLabel })
+                  : "",
+              confidence,
+            }),
             expectedLabel !== undefined
               ? isCorrect
-                ? "Result: correct."
-                : "Result: mismatch."
+                ? t("testingPage.resultCorrect")
+                : t("testingPage.resultMismatch")
               : undefined,
           ),
         );
       } catch (error) {
-        const parsedError = extractPredictionError(error);
+        const parsedError = extractPredictionError(error, {
+          fallback: t("testingPage.predictionFailed"),
+          hint: (value) => t("testingPage.hint", { hint: value }),
+          received: (value) => t("testingPage.receivedFeatures", { features: value }),
+        });
         currentSummary.failed += 1;
         currentPredictions.push("ERROR");
         pushLog(
           makeLog(
             "error",
-            `Row ${rowNumber}: request failed${parsedError.status ? ` with HTTP ${parsedError.status}` : ""} - ${parsedError.title}.`,
+            t("testingPage.requestFailed", {
+              row: rowNumber,
+              status: parsedError.status
+                ? t("testingPage.httpStatus", { status: parsedError.status })
+                : "",
+              error: parsedError.title,
+            }),
             parsedError.detail,
           ),
         );
@@ -365,9 +391,17 @@ export default function ModelTestingPage() {
       pushLog(
         makeLog(
           currentSummary.failed > 0 ? "warning" : "success",
-          `Finished: ${currentSummary.success}/${currentSummary.total} succeeded, ${currentSummary.failed} failed.`,
+          t("testingPage.finished", {
+            success: currentSummary.success,
+            total: currentSummary.total,
+            failed: currentSummary.failed,
+          }),
           currentSummary.withExpected > 0
-            ? `Expected-label comparison: ${currentSummary.correct}/${currentSummary.withExpected} correct, ${currentSummary.mismatch} mismatch.`
+            ? t("testingPage.comparison", {
+                correct: currentSummary.correct,
+                total: currentSummary.withExpected,
+                mismatch: currentSummary.mismatch,
+              })
             : undefined,
         ),
       );
@@ -412,10 +446,10 @@ export default function ModelTestingPage() {
     <>
       <ConfirmModal
         open={blocker.state === "blocked"}
-        title="Leave Testing Page?"
-        description="You have uploaded a CSV file for testing. If you leave this page, your test data and current progress will be lost. Are you sure you want to leave?"
+        title={t("testingPage.leaveTitle")}
+        description={t("testingPage.leaveDescription")}
         tone="danger"
-        confirmText="Leave"
+        confirmText={t("testingPage.leaveConfirm")}
         onConfirm={() => {
           blocker.proceed?.();
         }}
@@ -426,10 +460,11 @@ export default function ModelTestingPage() {
       <PageBody className="p-6 h-full">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
           <div>
-            <h2 className="text-xl font-bold text-foreground">Data Testing</h2>
+            <h2 className="text-xl font-bold text-foreground">{t("testingPage.title")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Upload a CSV file to test it with{" "}
-              {selectedModel ? selectedModel.name : "the selected model"}.
+              {t("testingPage.description", {
+                model: selectedModel?.name ?? t("testingPage.selectedModelFallback"),
+              })}
             </p>
           </div>
           <div className="flex gap-3">
@@ -441,7 +476,7 @@ export default function ModelTestingPage() {
                   icon={<Trash2 className="h-4 w-4" />}
                   onClick={handleRemoveFile}
                 >
-                  Remove
+                  {t("testingPage.remove")}
                 </Button>
                 <Button
                   size="md"
@@ -449,7 +484,7 @@ export default function ModelTestingPage() {
                   icon={<FileSpreadsheet className="h-4 w-4" />}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  Upload CSV
+                  {t("testingPage.uploadCsv")}
                 </Button>
                 <input
                   type="file"
@@ -470,8 +505,8 @@ export default function ModelTestingPage() {
           <div className="flex-1 flex flex-col [&>label]:flex-1">
             <FileDropzone
               accept=".csv,text/csv"
-              title="Click or drag to upload test data"
-              subtitle="CSV files only"
+              title={t("testingPage.dropzoneTitle")}
+              subtitle={t("testingPage.dropzoneSubtitle")}
               onChange={(file) => void handleFileChange(file || undefined)}
             />
           </div>
@@ -479,7 +514,7 @@ export default function ModelTestingPage() {
           <div className="flex flex-col space-y-6">
             <div>
               <p className="mb-4 text-sm font-semibold text-foreground">
-                {fileName} · {rows.length} rows loaded
+                {t("testingPage.rowsLoaded", { fileName, count: rows.length })}
               </p>
               <div className="overflow-hidden rounded-xl border border-border h-125">
                 <CSVEditor initialCsvText={csvText} readOnly={true} />
@@ -490,11 +525,12 @@ export default function ModelTestingPage() {
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-foreground">
-                    Run Test
+                    {t("testingPage.runTitle")}
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Send the CSV file and receive the prediction results from{" "}
-                    {selectedModel ? selectedModel.name : "the selected model"}.
+                    {t("testingPage.runDescription", {
+                      model: selectedModel?.name ?? t("testingPage.selectedModelFallback"),
+                    })}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -505,7 +541,7 @@ export default function ModelTestingPage() {
                     disabled={running || predictions.length === 0}
                     onClick={handleDownloadCSV}
                   >
-                    Download
+                    {t("testingPage.download")}
                   </Button>
                   <Button
                     size="md"
@@ -519,35 +555,35 @@ export default function ModelTestingPage() {
                     variant={running ? "danger" : "primary"}
                     onClick={runTesting}
                   >
-                    {running ? "Pause" : "Run"}
+                    {running ? t("testingPage.pause") : t("testingPage.run")}
                   </Button>
                 </div>
               </div>
 
               <div className="grid gap-3 md:grid-cols-4">
                 <CardSummary
-                  label="Processed"
+                  label={t("testingPage.processed")}
                   value={`${summary.success + summary.failed}/${rows.length}`}
-                  helper="rows completed"
+                  helper={t("testingPage.processedHelper")}
                   tone={testFinished && rows.length > 0 ? "info" : "default"}
                   icon={<SendHorizontal className="h-4 w-4" />}
                 />
                 <CardSummary
-                  label="Failed"
+                  label={t("testingPage.failed")}
                   value={String(summary.failed)}
                   tone={summary.failed ? "error" : "default"}
-                  helper="backend/API errors"
+                  helper={t("testingPage.failedHelper")}
                   icon={<X className="h-4 w-4" />}
                 />
                 <CardSummary
-                  label="Successful"
+                  label={t("testingPage.successful")}
                   value={String(summary.success)}
                   tone={summary.success > 0 ? "success" : "default"}
-                  helper="backend/API successes"
+                  helper={t("testingPage.successfulHelper")}
                   icon={<Check className="h-4 w-4" />}
                 />
                 <CardSummary
-                  label="Accuracy"
+                  label={t("testingPage.accuracy")}
                   value={accuracy === null ? "-" : `${accuracy}%`}
                   tone={
                     accuracy === null
@@ -558,8 +594,11 @@ export default function ModelTestingPage() {
                   }
                   helper={
                     summary.withExpected
-                      ? `${summary.correct}/${summary.withExpected} correct`
-                      : "no labels"
+                      ? t("testingPage.correctHelper", {
+                          correct: summary.correct,
+                          total: summary.withExpected,
+                        })
+                      : t("testingPage.noLabels")
                   }
                   icon={<Percent className="h-4 w-4" />}
                 />
@@ -567,8 +606,8 @@ export default function ModelTestingPage() {
 
               <div className="mt-6">
                 <TerminalViewer
-                  title="Testing Console"
-                  placeholder='Click "Run" to start processing the CSV file...'
+                  title={t("testingPage.consoleTitle")}
+                  placeholder={t("testingPage.consolePlaceholder")}
                   logs={stringLogs}
                 />
               </div>

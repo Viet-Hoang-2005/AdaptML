@@ -16,6 +16,7 @@ import {
 } from "@/features/drift/hooks/useDriftMonitoring";
 import { getApiErrorMessage } from "@/shared/api/errors";
 import { toast } from "@/shared/components/toastStore";
+import { useTranslation } from "react-i18next";
 
 const THRESHOLD_MARKS = [
   { value: 500, label: "500" },
@@ -43,6 +44,7 @@ const DataPlaceholder = ({
 export default function CreateDriftMonitoringPage() {
   const { modelId } = useParams<{ modelId: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation("drift");
 
   const [selectedReferencePath, setSelectedReferencePath] = useState<
     string | null
@@ -98,7 +100,7 @@ export default function CreateDriftMonitoringPage() {
 
   const handleSubmit = async () => {
     if (!referencePath) {
-      toast.error("Please select a reference data file to set as main.");
+      toast.error(t("createPage.referenceRequired"));
       return;
     }
     try {
@@ -114,12 +116,12 @@ export default function CreateDriftMonitoringPage() {
       }
       toast.success(
         existingMonitor
-          ? "Drift monitoring configuration updated."
-          : "Drift monitoring configuration created.",
+          ? t("createPage.updated")
+          : t("createPage.created"),
       );
       navigate(`/dashboard/drift-monitoring/${modelId}`);
     } catch (err) {
-      const msg = getApiErrorMessage(err, "Failed to create config");
+      const msg = getApiErrorMessage(err, t("createPage.saveFailed"));
       toast.error(msg);
     }
   };
@@ -130,37 +132,37 @@ export default function CreateDriftMonitoringPage() {
     <div className="flex w-full flex-1 flex-col space-y-6">
       <PageHeader
         title={
-          existingMonitor ? "Edit Drift Monitoring" : "Create Drift Monitoring"
+          existingMonitor ? t("createPage.editTitle") : t("createPage.createTitle")
         }
         backLink={{
-          label: "Back to Dashboard",
+          label: t("createPage.back"),
           to: `/dashboard/drift-monitoring/${modelId}`,
         }}
       />
       <section className="flex flex-col flex-1 rounded-xl border border-border bg-surface p-6 space-y-6">
         <div className="space-y-4">
           <StepTitle
-            title="Select Reference Data"
-            description="Select or upload a baseline CSV file to act as the reference dataset for detecting drift."
+            title={t("createPage.referenceTitle")}
+            description={t("createPage.referenceDescription")}
           />
           <SourceEditor
             modelId={modelId!}
             fileType="data_file"
-            title="Reference Data"
+            title={t("createPage.referenceData")}
             icon={<Database className="w-4 h-4" />}
             accept=".csv"
             editorType="csv"
             currentEntryPoint={referencePath}
             onSetEntryPoint={setSelectedReferencePath}
             entryPointExtension=".csv"
-            setAsMainLabel="Set as Reference"
+            setAsMainLabel={t("createPage.setReference")}
           />
         </div>
 
         <div className="space-y-4 border-t border-border pt-6">
           <StepTitle
-            title="Set Trigger Threshold"
-            description="Configure how many new production predictions must be logged before a drift check is triggered."
+            title={t("createPage.thresholdTitle")}
+            description={t("createPage.thresholdDescription")}
           />
           <div className="px-8 pb-4">
             <Slider
@@ -178,31 +180,31 @@ export default function CreateDriftMonitoringPage() {
 
         <div className="space-y-4 border-t border-border pt-6">
           <StepTitle
-            title="Production Data Preview"
-            description="Preview the latest 100 records from your production database that will be used in future drift reports."
+            title={t("createPage.previewTitle")}
+            description={t("createPage.previewDescription")}
           />
           <div className="h-100 rounded-xl border border-border overflow-hidden relative bg-muted">
             {isLoadingProductionData ? (
               <div className="flex h-full items-center justify-center text-muted-foreground">
-                Loading production data...
+                {t("createPage.loadingProduction")}
               </div>
             ) : isProductionDataError ? (
               <DataPlaceholder
-                title="Unable to load production data."
+                title={t("createPage.productionLoadFailed")}
                 action={
                   <Button
                     variant="secondary"
                     size="md"
                     onClick={() => void refetchProductionData()}
                   >
-                    Retry
+                    {t("actions.retry", { ns: "common" })}
                   </Button>
                 }
               />
             ) : productionCsv ? (
               <CSVEditor initialCsvText={productionCsv} readOnly={true} />
             ) : (
-              <DataPlaceholder title="No production data available yet." />
+              <DataPlaceholder title={t("createPage.productionEmpty")} />
             )}
           </div>
         </div>
@@ -215,7 +217,7 @@ export default function CreateDriftMonitoringPage() {
             onClick={() => navigate(`/dashboard/drift-monitoring/${modelId}`)}
             disabled={isSaving}
           >
-            Cancel
+            {t("actions.cancel", { ns: "common" })}
           </Button>
           <Button
             variant="primary"
@@ -224,7 +226,11 @@ export default function CreateDriftMonitoringPage() {
             onClick={handleSubmit}
             disabled={isSaving || isLoadingMonitors || !referencePath}
           >
-            {isSaving ? "Saving..." : existingMonitor ? "Update" : "Create"}
+            {isSaving
+              ? t("createPage.saving")
+              : existingMonitor
+                ? t("createPage.update")
+                : t("createPage.create")}
           </Button>
         </div>
       </section>

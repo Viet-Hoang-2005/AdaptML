@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   createModelProject,
@@ -21,6 +22,7 @@ export function useModelProjects() {
 export function useModelProjectMutations() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { t } = useTranslation('catalog');
 
   const invalidateModels = () => queryClient.invalidateQueries({ queryKey: catalogQueryKeys.projects() });
 
@@ -28,10 +30,10 @@ export function useModelProjectMutations() {
     mutationFn: createModelProject,
     onSuccess: async () => {
       await invalidateModels();
-      toast.success('Model API uploaded successfully.');
+      toast.success(t('messages.createSuccess'));
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to upload model API.'));
+      toast.error(getApiErrorMessage(error, t('messages.createFailed')));
     },
   });
 
@@ -40,10 +42,10 @@ export function useModelProjectMutations() {
       updateModelProject(modelId, payload),
     onSuccess: async () => {
       await invalidateModels();
-      toast.success('Model API updated successfully.');
+      toast.success(t('messages.updateSuccess'));
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to update model API.'));
+      toast.error(getApiErrorMessage(error, t('messages.updateFailed')));
     },
   });
 
@@ -51,11 +53,11 @@ export function useModelProjectMutations() {
     mutationFn: (modelId: string) => deleteModelProject(modelId, true),
     onSuccess: async () => {
       await invalidateModels();
-      toast.success('Model project deletion started.');
+      toast.success(t('messages.deleteStarted'));
       navigate('/dashboard/management');
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to delete model project.'));
+      toast.error(getApiErrorMessage(error, t('messages.deleteFailed')));
     },
   });
 

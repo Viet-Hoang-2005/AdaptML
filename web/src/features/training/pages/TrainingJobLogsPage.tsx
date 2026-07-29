@@ -1,4 +1,5 @@
 import { AlertTriangle, RefreshCw, History } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { TrainingEventHistory } from "@/features/training/components/TrainingOverviewSections";
 import { useTrainingJobDetailContext } from "@/features/training/trainingJobDetailContext";
@@ -7,6 +8,7 @@ import { PageBody } from "@/shared/components/PageBody";
 import { TerminalViewer } from "@/shared/components/TerminalViewer";
 
 export default function TrainingJobLogsPage() {
+  const { t } = useTranslation("training");
   const {
     job,
     activeStatuses,
@@ -23,13 +25,13 @@ export default function TrainingJobLogsPage() {
         <div className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger-subtle p-4 text-sm font-medium text-danger">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
           <div>
-            <p className="mb-1 font-bold text-danger">Stop Reason</p>
+            <p className="mb-1 font-bold text-danger">{t("detail.logsPage.stopReason")}</p>
             <p>{job.stop_reason}</p>
           </div>
         </div>
       )}
       <TerminalViewer
-        title="Training output"
+        title={t("detail.logsPage.title")}
         bodyClassName="min-h-100 max-h-150"
         actions={
           <Button
@@ -47,15 +49,15 @@ export default function TrainingJobLogsPage() {
               />
             }
           >
-            Refresh
+            {t("detail.logsPage.refresh")}
           </Button>
         }
         logs={
           logsResponse?.text
             ? logsResponse.text.split("\n")
             : activeStatuses.includes(job.status)
-              ? ["Logs will appear after the training container starts..."]
-              : ["No logs available for this job."]
+              ? [t("detail.logsPage.waiting")]
+              : [t("detail.logsPage.empty")]
         }
       />
 
@@ -63,7 +65,7 @@ export default function TrainingJobLogsPage() {
         title={
           <div className="flex items-center gap-2">
             <History className="h-5 w-5" />
-            <h3 className="text-md font-semibold">Event History</h3>
+            <h3 className="text-md font-semibold">{t("detail.logsPage.events")}</h3>
           </div>
         }
         className="mt-8"

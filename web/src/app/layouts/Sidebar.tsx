@@ -13,16 +13,16 @@ interface DashboardSidebarProps {
 }
 
 const workspaceItems = [
-  { key: 'home', label: 'Home', to: routes.overview, icon: Home, match: '/dashboard/home' },
-  { key: 'driftMonitoring', label: 'Drift Monitoring', to: routes.monitoring, icon: LineChart, match: routes.monitoring },
-  { key: 'modelTraining', label: 'Model Training', to: routes.training, icon: BrainCircuit, match: routes.training },
-  { key: 'modelEvolution', label: 'Model Evolution', to: routes.registry, icon: GitBranch, match: routes.registry },
+  { key: 'home', to: routes.overview, icon: Home, match: '/dashboard/home' },
+  { key: 'driftMonitoring', to: routes.monitoring, icon: LineChart, match: routes.monitoring },
+  { key: 'modelTraining', to: routes.training, icon: BrainCircuit, match: routes.training },
+  { key: 'modelEvolution', to: routes.registry, icon: GitBranch, match: routes.registry },
 ] as const;
 
 const utilityItems = [
-  { key: 'management', label: 'Management', to: routes.buildDeploy, icon: Bot, match: routes.buildDeploy },
-  { key: 'notification', label: 'Notification', to: routes.notifications, icon: Bell, match: routes.notifications },
-  { key: 'setting', label: 'Setting', to: routes.profile, icon: Settings, match: '/dashboard/settings' },
+  { key: 'management', to: routes.buildDeploy, icon: Bot, match: routes.buildDeploy },
+  { key: 'notification', to: routes.notifications, icon: Bell, match: routes.notifications },
+  { key: 'setting', to: routes.profile, icon: Settings, match: '/dashboard/settings' },
 ] as const;
 
 export default function Sidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: DashboardSidebarProps) {
@@ -44,9 +44,9 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onCloseMobile
   const renderItem = (item: (typeof workspaceItems)[number] | (typeof utilityItems)[number]) => {
     const Icon = item.icon;
     return (
-      <NavLink key={item.key} to={item.to} onClick={onCloseMobile} className={itemClass(item.match)} title={collapsed ? item.label : undefined}>
+      <NavLink key={item.key} to={item.to} onClick={onCloseMobile} className={itemClass(item.match)} title={collapsed ? t(`navigation.${item.key}`) : undefined}>
         <Icon className="h-5 w-5 shrink-0" />
-        <span className={labelClass}>{t(`navigation.${item.key}`, item.label)}</span>
+        <span className={labelClass}>{t(`navigation.${item.key}`)}</span>
       </NavLink>
     );
   };

@@ -75,7 +75,7 @@ export default function ModelManagementPage() {
       accessorKey: "flavor",
       header: t("columns.flavor"),
       cell: ({ row }) => (
-        <Badge variant={"primary"}>{row.original.flavor || "none"}</Badge>
+        <Badge variant={"primary"}>{row.original.flavor || t("status.metadata")}</Badge>
       ),
     },
     {
@@ -125,8 +125,8 @@ export default function ModelManagementPage() {
             <Button
               size="icon"
               variant="ghost"
-              aria-label="Download model"
-              title="Download model"
+              aria-label={t("actions.downloadModel")}
+              title={t("actions.downloadModel")}
               icon={<Download className="h-4 w-4" />}
               onClick={() => {
                 if (record.model_uri)
@@ -141,8 +141,8 @@ export default function ModelManagementPage() {
             <Button
               size="icon"
               variant="ghost"
-              aria-label="Edit model"
-              title="Edit model"
+              aria-label={t("actions.editModel")}
+              title={t("actions.editModel")}
               icon={<Edit3 className="h-4 w-4" />}
               onClick={() => {
                 setSelectedModel(record);
@@ -152,8 +152,8 @@ export default function ModelManagementPage() {
             <Button
               size="icon"
               variant="ghost"
-              aria-label="Delete model"
-              title="Delete model"
+              aria-label={t("actions.deleteModel")}
+              title={t("actions.deleteModel")}
               className="text-danger hover:text-red-300"
               icon={<Trash2 className="h-4 w-4" />}
               onClick={() => setModelToDelete(record)}

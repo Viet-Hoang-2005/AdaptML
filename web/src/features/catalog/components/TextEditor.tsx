@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { LazyCodeEditor } from "@/shared/components/LazyCodeEditor";
 import { Trash2, RotateCcw, Upload, Save, FileArchive } from "lucide-react";
 import { toast } from "@/shared/components/toastStore";
@@ -18,6 +19,7 @@ export function TextEditor({
   onContentChange,
   onSaveSuccess,
 }: TextEditorProps) {
+  const { t } = useTranslation("catalog");
   const [content, setContent] = useState<string>("");
   const [originalContent, setOriginalContent] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -51,11 +53,11 @@ export function TextEditor({
         const text = await file.text();
         setContent(text);
       } catch {
-        toast.error("Failed to read file");
+        toast.error(t("requirementsEditor.readFailed"));
       }
       e.target.value = "";
     },
-    [],
+    [t],
   );
 
   const handleDelete = useCallback(() => {
@@ -71,13 +73,13 @@ export function TextEditor({
     try {
       setOriginalContent(content);
       onSaveSuccess?.();
-      toast.success("requirements.txt attached to this training job.");
+      toast.success(t("requirementsEditor.attached"));
     } catch {
-      toast.error("Failed to accept requirements.txt");
+      toast.error(t("requirementsEditor.attachFailed"));
     } finally {
       setSaving(false);
     }
-  }, [content, onSaveSuccess]);
+  }, [content, onSaveSuccess, t]);
 
   const isEmpty = content.trim() === "";
 
@@ -91,7 +93,7 @@ export function TextEditor({
           {isDirty && (
             <span
               className="ml-1 inline-block h-2 w-2 rounded-full bg-yellow-400"
-              title="Unsaved changes"
+              title={t("requirementsEditor.unsaved")}
             />
           )}
         </div>
@@ -106,7 +108,7 @@ export function TextEditor({
           <button
             className="p-2 rounded-full hover:bg-muted transition-colors"
             onClick={handleDelete}
-            title="Clear content"
+            title={t("requirementsEditor.clear")}
           >
             <Trash2 className="w-4 h-4 text-danger" />
           </button>
@@ -114,14 +116,14 @@ export function TextEditor({
             className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-40"
             onClick={handleReset}
             disabled={!isDirty}
-            title="Reset to last saved"
+            title={t("requirementsEditor.reset")}
           >
             <RotateCcw className="w-4 h-4" />
           </button>
           <button
             className="p-2 rounded-full hover:bg-muted transition-colors"
             onClick={() => fileInputRef.current?.click()}
-            title="Upload .txt file"
+            title={t("requirementsEditor.upload")}
           >
             <Upload className="w-4 h-4" />
           </button>
@@ -129,7 +131,7 @@ export function TextEditor({
             className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-40"
             onClick={handleSave}
             disabled={saving || !isDirty}
-            title="Use for this training job"
+            title={t("requirementsEditor.useForTraining")}
           >
             {saving ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
@@ -149,12 +151,14 @@ export function TextEditor({
           >
             <Upload className="w-10 h-10 mb-3 text-muted-foreground group-hover:text-blue-400 transition-colors" />
             <p className="text-muted-foreground font-medium group-hover:text-primary transition-colors">
-              Click to upload requirements.txt
+              {t("requirementsEditor.uploadPrompt")}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              Or start typing in the editor after clicking a file
+              {t("requirementsEditor.typingHint")}
             </p>
-            <p className="text-xs text-muted-foreground mt-3">Accepted: .txt</p>
+            <p className="text-xs text-muted-foreground mt-3">
+              {t("requirementsEditor.accepted")}
+            </p>
           </button>
         ) : (
           <LazyCodeEditor

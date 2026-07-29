@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { ModelProject } from "@/features/catalog/types";
 import { Button } from "@/shared/components/Button";
 import { useModelProjectMutations } from "@/features/catalog/hooks/useModelProjects";
@@ -24,6 +25,7 @@ import { ModelSourcePage } from "./ModelSourcePage";
 import { ModelStatus } from "@/features/deploy/components/ModelStatus";
 
 export default function ModelDetailPage() {
+  const { t } = useTranslation("buildDeploy");
   const { modelId } = useParams();
   const { data } = useModelProjects();
   const model = useMemo(
@@ -34,7 +36,7 @@ export default function ModelDetailPage() {
   if (!model) {
     return (
       <div className="p-8 text-center text-muted-foreground">
-        Model not found or loading...
+        {t("detail.notFound")}
       </div>
     );
   }
@@ -43,6 +45,7 @@ export default function ModelDetailPage() {
 }
 
 export function ModelDetailPageContent({ model }: { model: ModelProject }) {
+  const { t } = useTranslation("buildDeploy");
   const { tab } = useParams();
   const navigate = useNavigate();
 
@@ -87,10 +90,10 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
     <>
       <ConfirmModal
         open={blocker.state === "blocked"}
-        title="Discard Unsaved Changes?"
-        description="You have unsaved changes in your source code or reference data. If you leave this page, your changes will be lost. Are you sure you want to leave?"
+        title={t("detail.discardTitle")}
+        description={t("detail.discardDescription")}
         tone="danger"
-        confirmText="Leave and Discard"
+        confirmText={t("detail.discardConfirm")}
         onConfirm={() => blocker.proceed?.()}
         onCancel={() => blocker.reset?.()}
       />
@@ -102,33 +105,33 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
               className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to API Management
+              {t("detail.back")}
             </Link>
-            <h1 className="text-xl font-bold text-foreground">Model Details</h1>
+            <h1 className="text-xl font-bold text-foreground">{t("detail.title")}</h1>
           </div>
 
           <PageTabs
             tabs={[
               {
-                label: "Information",
+                label: t("detail.tabs.information"),
                 icon: Bot,
                 isActive: activeTab === "1",
                 onClick: () => handleTabChange("information"),
               },
               {
-                label: "Deployment",
+                label: t("detail.tabs.deployment"),
                 icon: Rocket,
                 isActive: activeTab === "2",
                 onClick: () => handleTabChange("deployment"),
               },
               {
-                label: "Source",
+                label: t("detail.tabs.source"),
                 icon: Database,
                 isActive: activeTab === "3",
                 onClick: () => handleTabChange("source"),
               },
               {
-                label: "Status",
+                label: t("detail.tabs.status"),
                 icon: Activity,
                 isActive: activeTab === "4",
                 onClick: () => handleTabChange("status"),
@@ -165,7 +168,7 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
               loading={deleting}
               onClick={() => setShowDeleteConfirm(true)}
             >
-              Delete model
+              {t("actions.deleteModel")}
             </Button>
             <Button
               className="w-full justify-center"
@@ -177,7 +180,7 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
                 }
               }}
             >
-              Download model
+              {t("actions.downloadModel")}
             </Button>
           </div>
         </div>
@@ -185,17 +188,10 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
 
       <ConfirmModal
         open={showDeleteConfirm}
-        title="Delete Model"
-        description={
-          <p>
-            Are you sure you want to permanently delete the model{" "}
-            <strong>{model.name}</strong>? This action will completely remove
-            all source code, datasets, compiled artifacts from S3, and database
-            records. This action cannot be undone.
-          </p>
-        }
-        confirmText="Delete Model"
-        cancelText="Cancel"
+        title={t("detail.deleteTitle")}
+        description={t("detail.deleteDescription", { name: model.name })}
+        confirmText={t("actions.deleteModel")}
+        cancelText={t("actions.cancel", { ns: "common" })}
         tone="danger"
         loading={deleting}
         onConfirm={async () => {

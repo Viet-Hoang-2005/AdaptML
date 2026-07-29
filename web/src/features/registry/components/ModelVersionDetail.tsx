@@ -30,6 +30,7 @@ import {
   smokeTestRegistryVersion,
 } from "@/features/registry/api/registryApi";
 import { getApiErrorMessage } from "@/shared/api/errors";
+import { useTranslation } from "react-i18next";
 
 import { ModelMetricsPanel } from "./ModelMetricsPanel";
 import { ModelHistoryTimeline } from "./ModelHistoryTimeline";
@@ -135,37 +136,37 @@ function trackingBadge(status?: string) {
   }
 }
 
-function trackingLabel(status?: string) {
+function trackingLabelKey(status?: string) {
   switch (status) {
     case "completed":
-      return "MLflow Logged";
+      return "versionDetail.tracking.logged" as const;
     case "skipped":
-      return "Native Registry Ingested";
+      return "versionDetail.tracking.nativeIngested" as const;
     case "failed":
-      return "MLflow Logging Failed";
+      return "versionDetail.tracking.loggingFailed" as const;
     case "ingesting":
-      return "Ingesting";
+      return "versionDetail.tracking.ingesting" as const;
     default:
-      return "Not Synced";
+      return "versionDetail.tracking.notSynced" as const;
   }
 }
 
-function trackingDescription(status?: string) {
+function trackingDescriptionKey(status?: string) {
   switch (status) {
     case "completed":
-      return "Training metadata was ingested into Model Evolution and logged to internal MLflow.";
+      return "versionDetail.tracking.loggedDescription" as const;
     case "skipped":
-      return "Training metadata was ingested into the Native Registry. MLflow logging is disabled for this environment.";
+      return "versionDetail.tracking.nativeDescription" as const;
     case "failed":
-      return "Training metadata was retained in Model Evolution, but MLflow logging failed. Register, build, and deploy can still continue when the artifact is deployable.";
+      return "versionDetail.tracking.failedDescription" as const;
     case "ingesting":
-      return "Training metadata is being extracted from the completed training artifact.";
+      return "versionDetail.tracking.ingestingDescription" as const;
     default:
-      return "Training metadata has not been ingested for this version yet.";
+      return "versionDetail.tracking.notSyncedDescription" as const;
   }
 }
 
-function endpointFriendlyHint(reasonCode?: string): string {
+function endpointFriendlyHint(reasonCode: string | undefined, fallback: string): string {
   if (!reasonCode) return "";
   if (
     [
@@ -175,7 +176,7 @@ function endpointFriendlyHint(reasonCode?: string): string {
       "LOCAL_RUNTIME_NOT_STARTED",
     ].includes(reasonCode)
   ) {
-    return "The endpoint record exists, but the local model-server container is not running or not reachable.";
+    return fallback;
   }
   return "";
 }
@@ -186,15 +187,19 @@ function endpointActionMessage(result: {
   endpoint_error?: string;
   error?: string;
   success?: boolean;
+}, messages: {
+  notReachable: string;
+  failed: string;
+  completed: string;
 }): string {
   return (
     result.message ||
-    endpointFriendlyHint(result.reason_code) ||
+    endpointFriendlyHint(result.reason_code, messages.notReachable) ||
     result.endpoint_error ||
     result.error ||
     (result.success === false
-      ? "Endpoint action failed."
-      : "Endpoint action completed.")
+      ? messages.failed
+      : messages.completed)
   );
 }
 
@@ -214,6 +219,7 @@ export function ModelVersionDetail({
   allVersions,
   onActionSuccess,
 }: Props) {
+  const { t } = useTranslation("registry");
   const [activeTab, setActiveTab] = useState<
     "details" | "insights" | "metrics" | "history"
   >("details");
@@ -298,7 +304,7 @@ export function ModelVersionDetail({
   const copyEndpoint = async () => {
     if (!version.endpoint_url) return;
     await navigator.clipboard.writeText(version.endpoint_url);
-    toast.success("Endpoint URL copied to clipboard.");
+    toast.success(t("versionDetail.endpointCopied"));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -322,9 +328,9 @@ export function ModelVersionDetail({
       if (action === "deploy") {
         await deployRegistryVersion(version.id);
         setActionResult(
-          "Deploy request accepted. Endpoint health will update after startup.",
+          t("versionDetail.deployAccepted"),
         );
-        toast.success("Deploy started.");
+        toast.success(t("versionDetail.deployStarted"));
       } else {
         const result = await checkRegistryVersionHealth(version.id);
         const health = result.health as
@@ -336,13 +342,20 @@ export function ModelVersionDetail({
           | undefined;
         const message =
           result.endpoint_status === "healthy"
-            ? "Endpoint is healthy."
-            : endpointActionMessage({
-                message: result.message || health?.message,
-                reason_code: result.reason_code || health?.reason_code,
-                endpoint_error: result.endpoint_error,
-                success: false,
-              });
+            ? t("versionDetail.endpointHealthy")
+            : endpointActionMessage(
+                {
+                  message: result.message || health?.message,
+                  reason_code: result.reason_code || health?.reason_code,
+                  endpoint_error: result.endpoint_error,
+                  success: false,
+                },
+                {
+                  notReachable: t("versionDetail.endpointNotReachable"),
+                  failed: t("versionDetail.endpointActionFailed"),
+                  completed: t("versionDetail.endpointActionCompleted"),
+                },
+              );
         setActionResult(message);
         setTechnicalDetail(
           String(result.technical_detail || health?.technical_detail || ""),
@@ -353,7 +366,10 @@ export function ModelVersionDetail({
       }
       handleSuccess();
     } catch (error) {
-      const message = getApiErrorMessage(error, `Failed to ${action} version.`);
+      const message = getApiErrorMessage(
+        error,
+        t("versionDetail.actionFailed", { action }),
+      );
       setActionResult(message);
       toast.error(message);
     } finally {
@@ -376,27 +392,31 @@ export function ModelVersionDetail({
         !parsed.features ||
         typeof parsed.features !== "object"
       ) {
-        throw new Error("Smoke test payload must include a features object.");
+        throw new Error(t("versionDetail.smokeFeaturesRequired"));
       }
       const result = await smokeTestRegistryVersion(version.id, {
         features: parsed.features,
       });
       setSmokeResult(result);
       if (result.success === false) {
-        const message = endpointActionMessage(result);
+        const message = endpointActionMessage(result, {
+          notReachable: t("versionDetail.endpointNotReachable"),
+          failed: t("versionDetail.endpointActionFailed"),
+          completed: t("versionDetail.endpointActionCompleted"),
+        });
         setActionResult(message);
         setTechnicalDetail(result.technical_detail || "");
         toast.warning(message);
       } else {
-        toast.success("Smoke test completed.");
+        toast.success(t("versionDetail.smokeTestCompleted"));
       }
     } catch (error) {
       const message =
         error instanceof SyntaxError
-          ? "Smoke test JSON is invalid."
+          ? t("versionDetail.smokeJsonInvalid")
           : getApiErrorMessage(
               error,
-              error instanceof Error ? error.message : "Smoke test failed.",
+              error instanceof Error ? error.message : t("versionDetail.smokeFailed"),
             );
       setActionResult(message);
       toast.error(message);
@@ -419,7 +439,14 @@ export function ModelVersionDetail({
                 : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
             }`}
           >
-            {tab}
+            {t(
+              {
+                details: "summary",
+                insights: "insights",
+                metrics: "metrics",
+                history: "history",
+              }[tab],
+            )}
           </button>
         ))}
         <div className="flex-1"></div>
@@ -438,7 +465,7 @@ export function ModelVersionDetail({
                   </span>
                   {isProd && (
                     <span className="bg-emerald-500 text-white text-xs px-2.5 py-0.5 rounded uppercase tracking-wider font-bold shadow-sm">
-                      PRODUCTION ACTIVE
+                      {t("versionDetail.productionActiveLabel")}
                     </span>
                   )}
                   {!isProd && (
@@ -448,7 +475,8 @@ export function ModelVersionDetail({
                   )}
                 </h3>
                 <p className="text-sm text-muted-foreground mt-2 font-medium">
-                  Source: {version.source_type.replace("_", " ")}{" "}
+                  {t("versionDetail.sourceLabel")}{" "}
+                  {version.source_type.replace("_", " ")}{" "}
                   {version.source_training_job_id
                     ? `· Job ID: ${version.source_training_job_id}`
                     : ""}
@@ -463,7 +491,7 @@ export function ModelVersionDetail({
                   icon={<GitCompare className="h-4 w-4" />}
                   onClick={() => setIsCompareModalOpen(true)}
                 >
-                  Compare
+                  {t("versionDetail.compare")}
                 </Button>
 
                 {version.endpoint_url && (
@@ -475,7 +503,7 @@ export function ModelVersionDetail({
                       window.open(`/dashboard/home/model-testing`, "_blank")
                     }
                   >
-                    Test Predictions
+                    {t("versionDetail.testPredictions")}
                   </Button>
                 )}
 
@@ -487,16 +515,16 @@ export function ModelVersionDetail({
                   onClick={() => setIsRollbackModalOpen(true)}
                   title={
                     isProd
-                      ? "Cannot rollback the active production version"
-                      : "Rollback to this version"
+                      ? t("versionDetail.rollbackActiveTitle")
+                      : t("versionDetail.rollbackTitle")
                   }
                 >
-                  Rollback
+                  {t("versionDetail.rollback")}
                 </Button>
 
                 {isProd ? (
                   <div className="flex items-center px-4 py-2 text-sm font-bold text-success bg-success-subtle border border-success/20 rounded-xl">
-                    Registry production active
+                    {t("versionDetail.productionActive")}
                   </div>
                 ) : (
                   <Button
@@ -507,11 +535,11 @@ export function ModelVersionDetail({
                     onClick={() => setIsPromoteModalOpen(true)}
                     title={
                       !canPromote
-                        ? "Deploy this version before promoting it to an alias."
-                        : "Promote to a stable routing alias"
+                        ? t("versionDetail.promoteRequiresDeploy")
+                        : t("versionDetail.promoteTitle")
                     }
                   >
-                    Promote Alias
+                    {t("versionDetail.promoteAlias")}
                   </Button>
                 )}
               </div>
@@ -521,12 +549,11 @@ export function ModelVersionDetail({
             {isProd && (
               <div className="bg-success-subtle border border-success/20 rounded-xl p-4 flex flex-col gap-1 text-success">
                 <div className="text-sm">
-                  <strong>Registry production marker is active.</strong> Stable
-                  alias routing is available through the production alias
-                  endpoint when configured.
+                  <strong>{t("versionDetail.productionMarkerActive")}</strong>{" "}
+                  {t("versionDetail.stableRoutingNote")}
                 </div>
                 <div className="text-xs text-success/80">
-                  Version-specific endpoints remain unchanged.
+                  {t("versionDetail.versionEndpointNote")}
                 </div>
               </div>
             )}
@@ -536,7 +563,7 @@ export function ModelVersionDetail({
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
                   <span className="inline-flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-blue-500" />
-                    Tracking Status
+                    {t("versionDetail.tracking.title")}
                   </span>
                   <span
                     className={classNames(
@@ -544,35 +571,31 @@ export function ModelVersionDetail({
                       trackingBadge(version.tracking_status),
                     )}
                   >
-                    {trackingLabel(version.tracking_status)}
+                    {t(trackingLabelKey(version.tracking_status))}
                   </span>
                 </h4>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  {trackingDescription(version.tracking_status)}
+                  {t(trackingDescriptionKey(version.tracking_status))}
                 </p>
                 {version.tracking_status === "completed" && (
                   <div className="rounded-xl border border-success/20 bg-success-subtle p-3 text-sm text-success">
-                    Completed: metadata is available in Model Evolution and
-                    internal MLflow.
+                    {t("versionDetail.tracking.completedNotice")}
                   </div>
                 )}
                 {version.tracking_status === "skipped" && (
                   <div className="rounded-xl border border-primary/20 bg-primary-subtle p-3 text-sm text-primary">
-                    MLflow Disabled: Native Registry summaries are still
-                    available for metrics, params, insights, compare, and deploy
-                    review.
+                    {t("versionDetail.tracking.disabledNotice")}
                   </div>
                 )}
                 {version.tracking_status === "failed" && (
                   <div className="rounded-xl border border-warning/20 bg-warning-subtle p-3 text-sm text-warning">
-                    Native Registry Ingested: MLflow logging failed, but
-                    captured metadata was retained.
+                    {t("versionDetail.tracking.retainedNotice")}
                   </div>
                 )}
                 {version.tracking_ingested_at && (
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                      Ingested At
+                      {t("versionDetail.tracking.ingestedAt")}
                     </p>
                     <p className="text-sm text-foreground font-medium">
                       {new Date(version.tracking_ingested_at).toLocaleString()}
@@ -587,7 +610,7 @@ export function ModelVersionDetail({
                 {version.mlflow_run_id && (
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                      Internal Lineage Run
+                      {t("versionDetail.tracking.internalRun")}
                     </p>
                     <code className="text-xs font-mono text-foreground bg-muted border border-border px-2 py-1 rounded break-all block select-all">
                       {version.mlflow_run_id}
@@ -598,24 +621,25 @@ export function ModelVersionDetail({
 
               <div className="flex flex-col gap-4 bg-surface border border-border rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
-                  Deployability
+                  {t("versionDetail.deployability")}
                   <span
                     className={classNames(
                       "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border",
                       deployabilityBadge(version.deployability_status),
                     )}
                   >
-                    {version.deployability_status || "unknown"}
+                    {version.deployability_status ||
+                      t("versionDetail.unknown")}
                   </span>
                 </h4>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   {version.deployability_reason ||
-                    "Deployability has not been computed for this version yet."}
+                    t("versionDetail.deployabilityUnknown")}
                 </p>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="rounded-xl bg-muted border border-border p-3">
                     <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                      Artifacts
+                      {t("versionDetail.artifacts")}
                     </p>
                     <p className="text-xl font-bold text-foreground">
                       {artifactEntries.length}
@@ -623,7 +647,7 @@ export function ModelVersionDetail({
                   </div>
                   <div className="rounded-xl bg-muted border border-border p-3">
                     <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                      Metrics
+                      {t("versionDetail.metrics")}
                     </p>
                     <p className="text-xl font-bold text-foreground">
                       {metricEntries.length}
@@ -638,12 +662,10 @@ export function ModelVersionDetail({
                 <div>
                   <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
                     <Rocket className="h-4 w-4 text-blue-500" />
-                    Deployment Actions
+                    {t("versionDetail.deploymentActions")}
                   </h4>
                   <p className="mt-2 text-sm text-muted-foreground max-w-3xl">
-                    Deployment is available only for versions with a supported
-                    serving artifact. Track-only versions can still be reviewed
-                    and compared.
+                    {t("versionDetail.deploymentActionsDescription")}
                   </p>
                 </div>
                 <span
@@ -652,7 +674,7 @@ export function ModelVersionDetail({
                     deployabilityBadge(version.deployability_status),
                   )}
                 >
-                  {version.deployability_status || "unknown"}
+                  {version.deployability_status || t("versionDetail.unknown")}
                 </span>
               </div>
 
@@ -667,10 +689,12 @@ export function ModelVersionDetail({
                     title={
                       !version.can_deploy
                         ? version.deploy_disabled_reason
-                        : "Deploy endpoint"
+                        : t("versionDetail.deployEndpoint")
                     }
                   >
-                    {actionLoading === "deploy" ? "Deploying..." : "Deploy"}
+                    {actionLoading === "deploy"
+                      ? t("versionDetail.deploying")
+                      : t("versionDetail.deploy")}
                   </Button>
                   <Button
                     size="md"
@@ -680,13 +704,13 @@ export function ModelVersionDetail({
                     onClick={() => void runAction("health")}
                     title={
                       !version.endpoint_url
-                        ? "Deploy this version before checking health."
-                        : "Check endpoint health"
+                        ? t("versionDetail.deployBeforeHealth")
+                        : t("versionDetail.checkHealth")
                     }
                   >
                     {actionLoading === "health"
-                      ? "Checking..."
-                      : "Check Health"}
+                      ? t("versionDetail.checking")
+                      : t("versionDetail.checkHealthAction")}
                   </Button>
                   <Button
                     size="md"
@@ -696,13 +720,13 @@ export function ModelVersionDetail({
                     onClick={() => void runSmokeTest()}
                     title={
                       !version.endpoint_url
-                        ? "Deploy this version before smoke testing."
-                        : "Run smoke test"
+                        ? t("versionDetail.deployBeforeSmoke")
+                        : t("versionDetail.runSmoke")
                     }
                   >
                     {actionLoading === "smoke"
-                      ? "Running..."
-                      : "Run Smoke Test"}
+                      ? t("versionDetail.running")
+                      : t("versionDetail.runSmoke")}
                   </Button>
                 </div>
 
@@ -710,14 +734,14 @@ export function ModelVersionDetail({
                   <div className="rounded-xl border border-warning/20 bg-warning-subtle p-3 text-sm text-warning">
                     {version.deploy_disabled_reason ||
                       version.deployability_reason ||
-                      "This version cannot be deployed."}
+                      t("versionDetail.cannotDeploy")}
                   </div>
                 )}
 
                 <div className="grid gap-3 text-sm md:grid-cols-3">
                   <div className="rounded-xl bg-muted border border-border p-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                      Build Status
+                      {t("versionDetail.buildStatus")}
                     </p>
                     <p className="font-semibold text-foreground">
                       {version.build_status || "-"}
@@ -725,7 +749,7 @@ export function ModelVersionDetail({
                   </div>
                   <div className="rounded-xl bg-muted border border-border p-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                      Endpoint Status
+                      {t("versionDetail.endpointStatus")}
                     </p>
                     <p className="font-semibold text-foreground">
                       {version.endpoint_status ||
@@ -735,10 +759,11 @@ export function ModelVersionDetail({
                   </div>
                   <div className="rounded-xl bg-muted border border-border p-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                      Deployability
+                      {t("versionDetail.deployability")}
                     </p>
                     <p className="font-semibold text-foreground">
-                      {version.deployability_status || "unknown"}
+                      {version.deployability_status ||
+                        t("versionDetail.unknown")}
                     </p>
                   </div>
                 </div>
@@ -755,7 +780,7 @@ export function ModelVersionDetail({
                     {technicalDetail && (
                       <details className="mt-3 rounded border border-border bg-surface p-2 text-xs text-muted-foreground">
                         <summary className="cursor-pointer font-semibold text-muted-foreground">
-                          Technical detail
+                          {t("versionDetail.technicalDetail")}
                         </summary>
                         <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono">
                           {technicalDetail}
@@ -768,10 +793,10 @@ export function ModelVersionDetail({
                 <div className="rounded-xl border border-border bg-muted/60 p-4">
                   <div className="mb-3">
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      Smoke Test
+                      {t("versionDetail.smokeTest")}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Uses the existing predict schema.
+                      {t("versionDetail.smokeSchemaHint")}
                     </p>
                   </div>
                   <div className="grid gap-4 2xl:grid-cols-2">
@@ -783,7 +808,7 @@ export function ModelVersionDetail({
                     />
                     <div className="min-h-40 rounded-xl border border-border bg-surface p-3">
                       <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                        Response
+                        {t("versionDetail.response")}
                       </p>
                       {smokeResult !== null ? (
                         <pre className="max-h-72 overflow-auto rounded-xl border border-gray-800 bg-[#111827] p-3 text-xs text-gray-100">
@@ -795,7 +820,7 @@ export function ModelVersionDetail({
                         </pre>
                       ) : (
                         <div className="flex min-h-28 items-center justify-center rounded-xl border border-dashed border-border bg-muted text-sm text-muted-foreground">
-                          Run a smoke test to see the endpoint response.
+                          {t("versionDetail.smokePrompt")}
                         </div>
                       )}
                     </div>
@@ -808,7 +833,7 @@ export function ModelVersionDetail({
               <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-2">
                   <Gauge className="h-4 w-4 text-emerald-500" />
-                  Metrics
+                  {t("versionDetail.metrics")}
                 </h4>
                 {metricEntries.length > 0 ? (
                   <div className="grid gap-2">
@@ -831,8 +856,7 @@ export function ModelVersionDetail({
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    No metrics captured. Training scripts can write
-                    SM_OUTPUT_DIR/metrics.json or print METRIC_JSON lines.
+                    {t("versionDetail.noMetrics")}
                   </p>
                 )}
               </div>
@@ -840,7 +864,7 @@ export function ModelVersionDetail({
               <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-2">
                   <SlidersHorizontal className="h-4 w-4 text-purple-500" />
-                  Params
+                  {t("versionDetail.params")}
                 </h4>
                 {paramEntries.length > 0 ? (
                   <div className="grid gap-2">
@@ -860,8 +884,7 @@ export function ModelVersionDetail({
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    No params captured. Training scripts can write
-                    SM_OUTPUT_DIR/params.json.
+                    {t("versionDetail.noParams")}
                   </p>
                 )}
               </div>
@@ -869,13 +892,13 @@ export function ModelVersionDetail({
               <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-2">
                   <FileText className="h-4 w-4 text-muted-foreground" />
-                  Source Training Job
+                  {t("versionDetail.sourceTrainingJob")}
                 </h4>
                 {version.source_training_job_id ? (
                   <div className="grid gap-3 text-sm">
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                        Job
+                        {t("versionDetail.job")}
                       </p>
                       <a
                         href={`/dashboard/model-training/${version.source_training_job_id}`}
@@ -888,7 +911,7 @@ export function ModelVersionDetail({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                          Status
+                          {t("versionDetail.status")}
                         </p>
                         <p className="font-medium text-foreground">
                           {version.source_training_job_status || "-"}
@@ -896,7 +919,7 @@ export function ModelVersionDetail({
                       </div>
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                          Backend
+                          {t("versionDetail.backend")}
                         </p>
                         <p className="font-medium text-foreground">
                           {version.source_training_job_backend || "-"}
@@ -906,7 +929,7 @@ export function ModelVersionDetail({
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    This version was not registered from a training job.
+                    {t("versionDetail.notTrainingSource")}
                   </p>
                 )}
               </div>
@@ -914,7 +937,7 @@ export function ModelVersionDetail({
 
             <div className="flex flex-col gap-3 bg-surface border border-border rounded-xl p-5 shadow-sm">
               <h4 className="text-sm font-bold text-foreground uppercase tracking-wider border-b border-border pb-2">
-                Artifacts / Weights
+                {t("versionDetail.artifactWeights")}
               </h4>
               {artifactEntries.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -922,16 +945,16 @@ export function ModelVersionDetail({
                     <thead className="bg-muted text-xs uppercase text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold">
-                          Path
+                          {t("versionDetail.path")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold">
-                          Kind
+                          {t("versionDetail.kind")}
                         </th>
                         <th className="px-3 py-2 text-right font-semibold">
-                          Size
+                          {t("versionDetail.size")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold">
-                          SHA256
+                          {t("versionDetail.sha256")}
                         </th>
                       </tr>
                     </thead>
@@ -943,7 +966,7 @@ export function ModelVersionDetail({
                           </td>
                           <td className="px-3 py-2">
                             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-foreground">
-                              {item.kind || "other"}
+                              {item.kind || t("versionDetail.otherArtifact")}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground">
@@ -961,7 +984,7 @@ export function ModelVersionDetail({
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No artifact manifest available yet.
+                  {t("versionDetail.noArtifactManifest")}
                 </p>
               )}
             </div>
@@ -976,10 +999,10 @@ export function ModelVersionDetail({
               <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
                 <span className="inline-flex items-center gap-2">
                   <Terminal className="h-4 w-4 text-indigo-500" />
-                  Routing Aliases
+                  {t("versionDetail.routingAliases")}
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border bg-indigo-50 text-indigo-700 border-indigo-200">
-                  API Proxy
+                  {t("versionDetail.apiProxy")}
                 </span>
               </h4>
               {routingAliases.length > 0 ? (
@@ -1002,15 +1025,15 @@ export function ModelVersionDetail({
                                 {aliasName}
                               </span>
                               <span className="rounded-full bg-success-subtle px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-success">
-                                {alias.status || "active"}
+                                {alias.status || t("versionDetail.active")}
                               </span>
                             </div>
                             <code className="mt-3 block break-all rounded border border-border bg-surface px-3 py-2 text-xs font-mono text-foreground">
-                              {endpointUrl || "Alias endpoint unavailable"}
+                              {endpointUrl || t("versionDetail.aliasUnavailable")}
                             </code>
                             {promotedAt && (
                               <p className="mt-2 text-xs text-muted-foreground">
-                                Promoted at{" "}
+                                {t("versionDetail.promotedAt")}{" "}
                                 {new Date(promotedAt).toLocaleString()}
                               </p>
                             )}
@@ -1023,11 +1046,11 @@ export function ModelVersionDetail({
                               onClick={() =>
                                 void copyText(
                                   endpointUrl,
-                                  "Alias endpoint copied.",
+                                  t("versionDetail.aliasCopied"),
                                 )
                               }
                             >
-                              Copy
+                              {t("versionDetail.copy")}
                             </Button>
                           )}
                         </div>
@@ -1037,9 +1060,7 @@ export function ModelVersionDetail({
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No alias points to this version yet. Promote this version to
-                  production, latest, or champion to create a stable alias
-                  endpoint.
+                  {t("versionDetail.noAlias")}
                 </p>
               )}
             </div>
@@ -1048,34 +1069,35 @@ export function ModelVersionDetail({
               {/* D. Deployment Info */}
               <div className="flex flex-col gap-4 bg-surface border border-border rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center justify-between border-b border-border pb-2">
-                  Deployment Info
+                  {t("versionDetail.deploymentInfo")}
                   {version.endpoint_url ? (
                     <span className="text-[10px] bg-primary-subtle text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                      Ready
+                      {t("versionDetail.ready")}
                     </span>
                   ) : (
                     <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                      No Endpoint
+                      {t("versionDetail.noEndpoint")}
                     </span>
                   )}
                 </h4>
 
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                    Image Name
+                    {t("versionDetail.imageName")}
                   </p>
                   <p className="text-sm font-mono text-foreground break-all">
-                    {version.image_name || "N/A"}
+                    {version.image_name || t("versionDetail.notAvailable")}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-2 mb-1">
-                    <Terminal className="h-3 w-3" /> Endpoint URL
+                    <Terminal className="h-3 w-3" />{" "}
+                    {t("versionDetail.endpointUrl")}
                   </p>
                   <div className="flex items-center gap-2">
                     <code className="text-xs font-mono text-foreground bg-muted border border-border px-3 py-2 rounded flex-1 truncate select-all">
-                      {version.endpoint_url || "N/A"}
+                      {version.endpoint_url || t("versionDetail.notAvailable")}
                     </code>
                     {version.endpoint_url && (
                       <Button
@@ -1094,7 +1116,9 @@ export function ModelVersionDetail({
                             copied ? "text-emerald-700" : "text-foreground"
                           }
                         >
-                          {copied ? "Copied" : "Copy"}
+                          {copied
+                            ? t("versionDetail.copied")
+                            : t("versionDetail.copy")}
                         </span>
                       </Button>
                     )}
@@ -1105,15 +1129,15 @@ export function ModelVersionDetail({
               {/* E. Artifact Info */}
               <div className="flex flex-col gap-4 bg-surface border border-border rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-foreground uppercase tracking-wider border-b border-border pb-2">
-                  Artifact Info
+                  {t("versionDetail.artifactInfo")}
                 </h4>
 
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                    Artifact URI
+                    {t("versionDetail.artifactUri")}
                   </p>
                   <p className="text-sm font-mono text-foreground break-all">
-                    {version.artifact_uri || "N/A"}
+                    {version.artifact_uri || t("versionDetail.notAvailable")}
                   </p>
                 </div>
 
@@ -1121,7 +1145,7 @@ export function ModelVersionDetail({
                 <div className="border-t border-border pt-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      MLflow Run
+                      {t("versionDetail.mlflowRun")}
                     </p>
                     {version.mlflow_run_url ? (
                       <a
@@ -1129,10 +1153,10 @@ export function ModelVersionDetail({
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-hover bg-primary-subtle border border-primary/20 px-3 py-1 rounded-full transition-colors"
-                        title="Open in MLflow (internal/admin tool)"
+                        title={t("versionDetail.openMlflow")}
                       >
                         <ExternalLink className="h-3 w-3" />
-                        Open in MLflow
+                        {t("versionDetail.openMlflowAction")}
                       </a>
                     ) : null}
                   </div>
@@ -1141,7 +1165,7 @@ export function ModelVersionDetail({
                     <div className="flex flex-col gap-2">
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase mb-0.5">
-                          Run ID
+                          {t("versionDetail.runId")}
                         </p>
                         <code className="text-xs font-mono text-foreground bg-muted border border-border px-2 py-1 rounded break-all block select-all">
                           {version.mlflow_run_id}
@@ -1150,7 +1174,7 @@ export function ModelVersionDetail({
                       {version.mlflow_model_uri && (
                         <div>
                           <p className="text-xs font-semibold text-muted-foreground uppercase mb-0.5">
-                            Model URI
+                            {t("versionDetail.modelUri")}
                           </p>
                           <code className="text-xs font-mono text-foreground bg-muted border border-border px-2 py-1 rounded break-all block">
                             {version.mlflow_model_uri}
@@ -1158,24 +1182,19 @@ export function ModelVersionDetail({
                         </div>
                       )}
                       <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
-                        Model Evolution displays metrics, params, insights, and
-                        deployability from the Native Registry. MLflow lineage
-                        is optional internal metadata for audit and artifact
-                        deep dives.{" "}
+                        {t("versionDetail.nativeRegistryDescription")}{" "}
                         <span className="font-medium text-amber-600">
-                          Opening MLflow is not required for normal review or
-                          deployment.
+                          {t("versionDetail.mlflowOptional")}
                         </span>
                       </p>
                     </div>
                   ) : (
                     <div className="bg-muted border border-dashed border-border rounded-xl p-3 flex flex-col gap-1">
                       <p className="text-xs font-semibold text-muted-foreground">
-                        No MLflow run linked
+                        {t("versionDetail.noMlflowRun")}
                       </p>
                       <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        Model Evolution still uses Native Registry summaries
-                        from the ingested training artifact.
+                        {t("versionDetail.nativeRegistryFallback")}
                       </p>
                     </div>
                   )}
@@ -1184,7 +1203,7 @@ export function ModelVersionDetail({
                 <div className="grid grid-cols-2 gap-4 mt-2">
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                      Created
+                      {t("versionDetail.created")}
                     </p>
                     <p className="text-sm text-foreground font-medium">
                       {new Date(version.created_at).toLocaleString()}
@@ -1192,7 +1211,7 @@ export function ModelVersionDetail({
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                      Updated
+                      {t("versionDetail.updated")}
                     </p>
                     <p className="text-sm text-foreground font-medium">
                       {new Date(version.updated_at).toLocaleString()}
@@ -1209,12 +1228,10 @@ export function ModelVersionDetail({
             <div className="flex flex-col gap-2">
               <h3 className="text-2xl font-extrabold text-foreground flex items-center gap-3">
                 <BarChart3 className="h-6 w-6 text-blue-500" />
-                Model Insights
+                {t("versionDetail.insightsTitle")}
               </h3>
               <p className="text-sm text-muted-foreground max-w-3xl">
-                Feature importance, coefficients, and lightweight model
-                summaries are captured from optional training artifacts and
-                visualized inside Model Evolution.
+                {t("versionDetail.insightsDescription")}
               </p>
             </div>
 
@@ -1222,11 +1239,10 @@ export function ModelVersionDetail({
               <div className="rounded-xl border border-dashed border-border bg-muted p-8 text-center">
                 <BarChart3 className="mx-auto h-10 w-10 text-muted-foreground" />
                 <h4 className="mt-3 text-base font-bold text-foreground">
-                  No model insights were logged for this version.
+                  {t("versionDetail.noInsights")}
                 </h4>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Log feature importance or coefficient data as
-                  model_insights.json to visualize it here.
+                  {t("versionDetail.insightsHint")}
                 </p>
               </div>
             ) : (
@@ -1234,7 +1250,7 @@ export function ModelVersionDetail({
                 <div className="grid gap-3 md:grid-cols-4">
                   <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Kind
+                      {t("versionDetail.kind")}
                     </p>
                     <p className="mt-1 text-sm font-bold capitalize text-foreground">
                       {insightKind.replace("_", " ")}
@@ -1242,7 +1258,7 @@ export function ModelVersionDetail({
                   </div>
                   <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Items
+                      {t("versionDetail.items")}
                     </p>
                     <p className="mt-1 text-sm font-bold text-foreground">
                       {insightItemCount}
@@ -1250,7 +1266,7 @@ export function ModelVersionDetail({
                   </div>
                   <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Top Feature
+                      {t("versionDetail.topFeature")}
                     </p>
                     <p
                       className="mt-1 truncate text-sm font-bold text-foreground"
@@ -1261,10 +1277,11 @@ export function ModelVersionDetail({
                   </div>
                   <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Source
+                      {t("versionDetail.source")}
                     </p>
                     <p className="mt-1 truncate text-sm font-bold text-foreground">
-                      {modelInsights.source || "training_artifact"}
+                      {modelInsights.source ||
+                        t("versionDetail.trainingArtifact")}
                     </p>
                   </div>
                 </div>
@@ -1274,13 +1291,15 @@ export function ModelVersionDetail({
                     <div>
                       <h4 className="text-sm font-bold uppercase tracking-wider text-foreground">
                         {insightKind === "coefficients"
-                          ? "Top Coefficients"
-                          : "Top Feature Importance"}
+                          ? t("versionDetail.topCoefficients")
+                          : t("versionDetail.topFeatureImportance")}
                       </h4>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Showing top {topInsightItems.length} of{" "}
-                        {modelInsights.feature_count || insightItems.length}{" "}
-                        captured items.
+                        {t("versionDetail.showingItems", {
+                          shown: topInsightItems.length,
+                          total:
+                            modelInsights.feature_count || insightItems.length,
+                        })}
                       </p>
                     </div>
                     <span className="rounded-full border border-primary/20 bg-primary-subtle px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
@@ -1334,30 +1353,30 @@ export function ModelVersionDetail({
 
                 <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
                   <h4 className="border-b border-border pb-3 text-sm font-bold uppercase tracking-wider text-foreground">
-                    Insight Table
+                    {t("versionDetail.insightTable")}
                   </h4>
                   <div className="mt-4 max-h-[560px] overflow-auto">
                     <table className="min-w-full divide-y divide-border text-sm">
                       <thead className="sticky top-0 z-10 bg-muted text-xs uppercase text-muted-foreground">
                         <tr>
                           <th className="px-3 py-2 text-right font-semibold">
-                            Rank
+                            {t("versionDetail.rank")}
                           </th>
                           <th className="px-3 py-2 text-left font-semibold">
-                            Feature
+                            {t("versionDetail.feature")}
                           </th>
                           {insightKind === "coefficients" && (
                             <th className="px-3 py-2 text-left font-semibold">
-                              Class
+                              {t("versionDetail.class")}
                             </th>
                           )}
                           <th className="px-3 py-2 text-right font-semibold">
                             {insightKind === "coefficients"
-                              ? "Coefficient"
-                              : "Importance"}
+                              ? t("versionDetail.coefficient")
+                              : t("versionDetail.importance")}
                           </th>
                           <th className="px-3 py-2 text-right font-semibold">
-                            Absolute
+                            {t("versionDetail.absolute")}
                           </th>
                         </tr>
                       </thead>
@@ -1402,12 +1421,10 @@ export function ModelVersionDetail({
             <div className="flex flex-col gap-2">
               <h3 className="text-2xl font-extrabold text-foreground flex items-center gap-3">
                 <Gauge className="h-6 w-6 text-emerald-500" />
-                Metrics
+                {t("versionDetail.metrics")}
               </h3>
               <p className="text-sm text-muted-foreground max-w-3xl">
-                Captured metrics from the training artifact summary. Metric
-                history appears below when structured time-series records are
-                available.
+                {t("versionDetail.metricsDescription")}
               </p>
             </div>
 
@@ -1440,7 +1457,7 @@ export function ModelVersionDetail({
                 {numericMetricEntries.length > 0 && (
                   <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
                     <h4 className="border-b border-border pb-3 text-sm font-bold uppercase tracking-wider text-foreground">
-                      Metric Overview
+                      {t("versionDetail.metricOverview")}
                     </h4>
                     <div className="mt-5 flex flex-col gap-3">
                       {numericMetricEntries.map((entry) => {
@@ -1482,17 +1499,17 @@ export function ModelVersionDetail({
 
                 <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
                   <h4 className="border-b border-border pb-3 text-sm font-bold uppercase tracking-wider text-foreground">
-                    Metric Table
+                    {t("versionDetail.metricTable")}
                   </h4>
                   <div className="mt-4 overflow-auto">
                     <table className="min-w-full divide-y divide-border text-sm">
                       <thead className="bg-muted text-xs uppercase text-muted-foreground">
                         <tr>
                           <th className="px-3 py-2 text-left font-semibold">
-                            Metric
+                            {t("versionDetail.metric")}
                           </th>
                           <th className="px-3 py-2 text-right font-semibold">
-                            Value
+                            {t("versionDetail.value")}
                           </th>
                         </tr>
                       </thead>
@@ -1521,7 +1538,7 @@ export function ModelVersionDetail({
                 {objectMetricEntries.length > 0 && (
                   <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
                     <h4 className="border-b border-border pb-3 text-sm font-bold uppercase tracking-wider text-foreground">
-                      Metric Metadata
+                      {t("versionDetail.metricMetadata")}
                     </h4>
                     <div className="mt-4 grid gap-4 lg:grid-cols-2">
                       {objectMetricEntries.map(([name, value]) => (
@@ -1571,11 +1588,10 @@ export function ModelVersionDetail({
               <div className="rounded-xl border border-dashed border-border bg-muted p-8 text-center">
                 <Gauge className="mx-auto h-10 w-10 text-muted-foreground" />
                 <h4 className="mt-3 text-base font-bold text-foreground">
-                  No metrics captured for this version.
+                  {t("versionDetail.noVersionMetrics")}
                 </h4>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Training scripts can write SM_OUTPUT_DIR/metrics.json or print
-                  METRIC_JSON lines.
+                  {t("versionDetail.metricsHint")}
                 </p>
               </div>
             )}
@@ -1583,10 +1599,10 @@ export function ModelVersionDetail({
             <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
               <div className="mb-4">
                 <h4 className="text-sm font-bold uppercase tracking-wider text-foreground">
-                  Metric History
+                  {t("versionDetail.metricHistory")}
                 </h4>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Optional structured metric records across training steps.
+                  {t("versionDetail.metricHistoryDescription")}
                 </p>
               </div>
               <ModelMetricsPanel familyId={family.id} versionId={version.id} />

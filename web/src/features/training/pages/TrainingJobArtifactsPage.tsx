@@ -85,7 +85,7 @@ export default function TrainingJobArtifactsPage() {
           <div className="flex w-full flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <FileArchive className="h-5 w-5" />
-              <h3 className="text-md font-semibold">Output Artifacts</h3>
+              <h3 className="text-md font-semibold">{t("detail.artifactPage.title")}</h3>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -95,7 +95,7 @@ export default function TrainingJobArtifactsPage() {
                 loading={downloadingOutput}
                 onClick={downloadOutput}
               >
-                Download
+                {t("detail.artifactPage.download")}
               </Button>
               <Button
                 size="sm"
@@ -104,7 +104,7 @@ export default function TrainingJobArtifactsPage() {
                 disabled={!job.output_available}
                 onClick={requestDeleteOutputs}
               >
-                Delete
+                {t("detail.artifactPage.delete")}
               </Button>
             </div>
           </div>
@@ -114,14 +114,14 @@ export default function TrainingJobArtifactsPage() {
           {job.output_available ? (
             <>
               <ArtifactUri
-                heading="Model Artifact URI"
-                label="Model URI"
+                heading={t("detail.artifactPage.modelHeading")}
+                label={t("detail.artifactPage.modelLabel")}
                 value={job.model_artifact_uri}
                 onCopy={copyUri}
               />
               <ArtifactUri
-                heading="Output S3 URI"
-                label="Output URI"
+                heading={t("detail.artifactPage.outputHeading")}
+                label={t("detail.artifactPage.outputLabel")}
                 value={job.output_s3_uri}
                 onCopy={copyUri}
               />
@@ -130,11 +130,10 @@ export default function TrainingJobArtifactsPage() {
             <div className="py-10 text-center">
               <FileArchive className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
               <p className="text-base font-bold text-muted-foreground">
-                Model artifact is not ready yet.
+                {t("detail.artifactPage.notReady")}
               </p>
               <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                Artifacts will be available for download and URI inspection once
-                the training completes successfully.
+                {t("detail.artifactPage.notReadyDescription")}
               </p>
             </div>
           )}
@@ -212,6 +211,7 @@ function ArtifactUri({
   value: string;
   onCopy: (value: string) => void;
 }) {
+  const { t } = useTranslation("training");
   return (
     <div className="space-y-2">
       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -234,7 +234,7 @@ function ArtifactUri({
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-surface text-muted-foreground shadow-sm transition-all hover:bg-muted hover:text-foreground disabled:opacity-40"
           disabled={!value}
           onClick={() => onCopy(value)}
-          aria-label={`Copy ${label}`}
+          aria-label={t("detail.artifactPage.copy", { label })}
         >
           <Clipboard className="h-4 w-4" />
         </button>

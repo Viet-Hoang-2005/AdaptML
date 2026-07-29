@@ -16,6 +16,7 @@ import { settingsQueryKeys } from '@/features/settings/queryKeys';
 import { toast } from '@/shared/components/toastStore';
 import type { PasswordModalStep, ProfileFormValues, UpdateProfileRequest, UserProfile } from '@/features/settings/types';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 export const emptyProfileForm: ProfileFormValues = {
   fullName: '',
@@ -37,6 +38,7 @@ const profileToForm = (profile: UserProfile): ProfileFormValues => ({
 
 export function useProfileSettings() {
   const { logout } = useAuth();
+  const { t } = useTranslation('settings');
   const queryClient = useQueryClient();
   const [draftFormValues, setDraftFormValues] = useState<ProfileFormValues>(emptyProfileForm);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -68,9 +70,9 @@ export function useProfileSettings() {
 
   useEffect(() => {
     if (profileQuery.isError) {
-      toast.error(getApiErrorMessage(profileQuery.error, 'Unable to load profile.'));
+      toast.error(getApiErrorMessage(profileQuery.error, t('profilePage.loadFailed')));
     }
-  }, [profileQuery.error, profileQuery.isError]);
+  }, [profileQuery.error, profileQuery.isError, t]);
 
   const updateProfileMutation = useMutation({
     mutationFn: updateProfile,
@@ -91,10 +93,10 @@ export function useProfileSettings() {
         queryClient.setQueryData<UserProfile>(settingsQueryKeys.profile(), updatedProfile);
       }
       setEditingProfile(false);
-      toast.success('Profile updated successfully.');
+      toast.success(t('profilePage.updateSuccess'));
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to update profile.'));
+      toast.error(getApiErrorMessage(error, t('profilePage.updateFailed')));
     },
   });
 
@@ -105,10 +107,10 @@ export function useProfileSettings() {
         queryClient.invalidateQueries({ queryKey: settingsQueryKeys.profile() }),
         queryClient.invalidateQueries({ queryKey: settingsQueryKeys.avatars() }),
       ]);
-      toast.success(variables.remove_avatar ? 'Avatar removed successfully.' : 'Avatar updated successfully.');
+      toast.success(variables.remove_avatar ? t('profilePage.avatarRemoved') : t('profilePage.avatarUpdated'));
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to update avatar.'));
+      toast.error(getApiErrorMessage(error, t('profilePage.avatarUpdateFailed')));
     },
   });
 
@@ -119,10 +121,10 @@ export function useProfileSettings() {
         queryClient.invalidateQueries({ queryKey: settingsQueryKeys.profile() }),
         queryClient.invalidateQueries({ queryKey: settingsQueryKeys.avatars() }),
       ]);
-      toast.success('Avatar selected successfully.');
+      toast.success(t('profilePage.avatarSelected'));
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to select avatar.'));
+      toast.error(getApiErrorMessage(error, t('profilePage.avatarSelectFailed')));
     },
   });
 
@@ -180,9 +182,9 @@ export function useProfileSettings() {
     setPasswordActionLoading(true);
     try {
       await requestPasswordChangeOTP();
-      toast.success('OTP has been sent to your email.');
+      toast.success(t('profilePage.otpSent'));
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Unable to send password change OTP.'));
+      toast.error(getApiErrorMessage(error, t('profilePage.otpSendFailed')));
     } finally {
       setPasswordActionLoading(false);
     }
@@ -190,7 +192,7 @@ export function useProfileSettings() {
 
   const handleVerifyPasswordOTP = async () => {
     if (otpCode.trim().length !== 6) {
-      toast.warning('Please enter a valid 6-digit OTP.');
+      toast.warning(t('profilePage.otpInvalidFormat'));
       return;
     }
 
@@ -199,9 +201,9 @@ export function useProfileSettings() {
       const response = await verifyPasswordChangeOTP(otpCode.trim());
       setPasswordChangeToken(response.password_change_token);
       setPasswordModalStep('password');
-      toast.success('OTP verified successfully.');
+      toast.success(t('profilePage.otpVerified'));
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Invalid or expired OTP.'));
+      toast.error(getApiErrorMessage(error, t('profilePage.otpInvalid')));
     } finally {
       setPasswordActionLoading(false);
     }
@@ -209,22 +211,22 @@ export function useProfileSettings() {
 
   const handleCompletePasswordChange = async () => {
     if (newPassword.length < 8) {
-      toast.warning('Password must be at least 8 characters.');
+      toast.warning(t('profilePage.passwordTooShort'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      toast.warning('Passwords do not match.');
+      toast.warning(t('profilePage.passwordMismatch'));
       return;
     }
 
     setPasswordActionLoading(true);
     try {
       await completePasswordChange(passwordChangeToken, newPassword);
-      toast.success('Password changed successfully.');
+      toast.success(t('profilePage.passwordChanged'));
       setPasswordModalStep('closed');
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Unable to change password.'));
+      toast.error(getApiErrorMessage(error, t('profilePage.passwordChangeFailed')));
     } finally {
       setPasswordActionLoading(false);
     }
@@ -234,11 +236,11 @@ export function useProfileSettings() {
     setDeleteLoading(true);
     try {
       await deleteAccount();
-      toast.success('Account deleted successfully.');
+      toast.success(t('profilePage.accountDeleted'));
       queryClient.clear();
       logout();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Unable to delete account.'));
+      toast.error(getApiErrorMessage(error, t('profilePage.accountDeleteFailed')));
     } finally {
       setDeleteLoading(false);
     }

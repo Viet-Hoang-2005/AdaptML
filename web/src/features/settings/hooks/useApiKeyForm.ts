@@ -6,10 +6,12 @@ import { getApiErrorMessage } from '@/shared/api/errors';
 import { settingsQueryKeys } from '@/features/settings/queryKeys';
 import { toast } from '@/shared/components/toastStore';
 import type { APIKeyRecord, CreatedAPIKeyResponse } from '@/features/settings/types';
+import { useTranslation } from 'react-i18next';
 
 export function useApiKeyForm(initialData?: APIKeyRecord | null) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { t } = useTranslation('settings');
   const [apiKeyName, setApiKeyName] = useState(initialData?.name || '');
   const [apiKeyDescription, setApiKeyDescription] = useState(initialData?.description || '');
   const [apiKeyScope, setApiKeyScope] = useState(initialData?.scope || 'all');
@@ -37,11 +39,11 @@ export function useApiKeyForm(initialData?: APIKeyRecord | null) {
     onSuccess: async (response) => {
       setCreatedApiKey(response);
       await refreshAPIKeys();
-      toast.success('API key created successfully.');
+      toast.success(t('apiKey.createSuccess'));
       // Navigation is handled by the component after the user copies the key
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to create API key.'));
+      toast.error(getApiErrorMessage(error, t('apiKey.createFailed')));
     },
   });
 
@@ -49,23 +51,23 @@ export function useApiKeyForm(initialData?: APIKeyRecord | null) {
     mutationFn: ({ id, name, description, scope, allowed_models }: { id: string; name: string; description: string, scope: string, allowed_models: string[] }) =>
       updateAPIKey(id, { name, description, scope, allowed_models }),
     onSuccess: async () => {
-      toast.success('API key updated successfully.');
+      toast.success(t('apiKey.updateSuccess'));
       await refreshAPIKeys();
       navigate('/dashboard/settings/developer');
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to update API key.'));
+      toast.error(getApiErrorMessage(error, t('apiKey.updateFailed')));
     },
   });
 
   const handleSaveAPIKey = () => {
     if (!apiKeyName.trim()) {
-      toast.warning('Please enter an API key name.');
+      toast.warning(t('apiKey.nameRequired'));
       return;
     }
 
     if (apiKeyModels.length === 0) {
-      toast.warning('Please select at least 1 model for this API key.');
+      toast.warning(t('apiKey.modelRequired'));
       return;
     }
 

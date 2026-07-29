@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { loginBaseAuth, loginGitHub, loginGoogle } from '@/features/auth/api/authApi';
 import { getApiErrorMessage } from '@/shared/api/errors';
@@ -25,21 +26,22 @@ export const clearAuthTokens = () => {
 
 export function useAuth() {
   const navigate = useNavigate();
+  const { t } = useTranslation('auth');
   const [loading, setLoading] = useState(false);
 
   const handleOAuthSuccess = useCallback(
-    (response: AuthResponse, successMessage = 'OAuth login successful!') => {
+    (response: AuthResponse, successMessage = t('login.oauthSuccess')) => {
       saveTokens(response.access, response.refresh, response.tenant_id);
       toast.success(successMessage);
       navigate('/dashboard');
     },
-    [navigate],
+    [navigate, t],
   );
 
   const login = useCallback(
     async (credentials: LoginCredentials) => {
       if (!credentials.email || !credentials.password) {
-        toast.warning('Please enter your email and password.');
+        toast.warning(t('login.credentialsRequired'));
         return;
       }
 
@@ -47,15 +49,15 @@ export function useAuth() {
       try {
         const response = await loginBaseAuth(credentials);
         saveTokens(response.access, response.refresh, response.tenant_id);
-        toast.success('Login successful!');
+        toast.success(t('login.success'));
         navigate('/dashboard');
       } catch (error) {
-        toast.error(getApiErrorMessage(error, 'Invalid email or password.'));
+        toast.error(getApiErrorMessage(error, t('login.invalidCredentials')));
       } finally {
         setLoading(false);
       }
     },
-    [navigate],
+    [navigate, t],
   );
 
   const loginWithGoogle = useCallback(
@@ -63,14 +65,14 @@ export function useAuth() {
       setLoading(true);
       try {
         const response = await loginGoogle(googleToken);
-        handleOAuthSuccess(response, 'Google login successful!');
+        handleOAuthSuccess(response, t('login.googleSuccess'));
       } catch (error) {
-        toast.error(getApiErrorMessage(error, 'Google login failed. Please try again.'));
+        toast.error(getApiErrorMessage(error, t('login.googleFailed')));
       } finally {
         setLoading(false);
       }
     },
-    [handleOAuthSuccess],
+    [handleOAuthSuccess, t],
   );
 
   const loginWithGitHubCode = useCallback(
@@ -78,15 +80,15 @@ export function useAuth() {
       setLoading(true);
       try {
         const response = await loginGitHub(code, redirectUri);
-        handleOAuthSuccess(response, 'GitHub login successful!');
+        handleOAuthSuccess(response, t('login.githubSuccess'));
       } catch (error) {
-        toast.error(getApiErrorMessage(error, 'GitHub login failed. Please try again.'));
+        toast.error(getApiErrorMessage(error, t('login.githubFailed')));
         navigate('/login');
       } finally {
         setLoading(false);
       }
     },
-    [handleOAuthSuccess, navigate],
+    [handleOAuthSuccess, navigate, t],
   );
 
   const saveAuthTokens = useCallback(
@@ -99,9 +101,9 @@ export function useAuth() {
 
   const logout = useCallback(() => {
     clearAuthTokens();
-    toast.success('Logged out successfully.');
+    toast.success(t('login.logoutSuccess'));
     navigate('/login');
-  }, [navigate]);
+  }, [navigate, t]);
 
   return {
     login,

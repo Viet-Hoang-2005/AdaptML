@@ -6,6 +6,7 @@ import type { RegistryHistory } from '@/features/registry/types';
 import { getApiErrorMessage } from '@/shared/api/errors';
 import { toast } from '@/shared/components/toastStore';
 import { GitCommit, ArrowUpRight, RotateCcw, Package, CheckCircle, XCircle, Trash2, Activity } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const classNames = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(' ');
 
@@ -16,6 +17,7 @@ interface Props {
 export function ModelHistoryTimeline({ familyId }: Props) {
   const [history, setHistory] = useState<RegistryHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation('registry');
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -23,11 +25,11 @@ export function ModelHistoryTimeline({ familyId }: Props) {
       const data = await getRegistryHistory(familyId);
       setHistory(data);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to fetch model history.'));
+      toast.error(getApiErrorMessage(error, t('historyTimeline.loadFailed')));
     } finally {
       setLoading(false);
     }
-  }, [familyId]);
+  }, [familyId, t]);
 
   useEffect(() => {
     void fetchHistory();
@@ -47,9 +49,9 @@ export function ModelHistoryTimeline({ familyId }: Props) {
         <div className="rounded-full bg-surface border border-border p-4 mb-4 shadow-sm">
           <GitCommit className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-bold text-foreground">No registry events yet</h3>
+        <h3 className="text-lg font-bold text-foreground">{t('historyTimeline.emptyTitle')}</h3>
         <p className="mt-2 text-sm text-muted-foreground max-w-md">
-          Events will appear here when versions are registered, deployed, promoted, or rolled back.
+          {t('historyTimeline.emptyDescription')}
         </p>
       </div>
     );
@@ -92,32 +94,25 @@ export function ModelHistoryTimeline({ familyId }: Props) {
         }
 
         let actionText = event.action.replace('_', ' ');
-        if (event.action === 'registered') actionText = 'Registered version';
-        else if (event.action === 'built') actionText = 'Build completed';
-        else if (event.action === 'deployed') actionText = 'Endpoint deployed';
-        else if (event.action === 'promoted') actionText = 'Promoted to production';
-        else if (event.action === 'rolled_back') actionText = `Rolled back to ${formatVersion(event.version)}`;
-        else if (event.action === 'stopped') actionText = 'Endpoint stopped';
+        if (event.action === 'registered') actionText = t('historyTimeline.registered');
+        else if (event.action === 'built') actionText = t('historyTimeline.built');
+        else if (event.action === 'deployed') actionText = t('historyTimeline.deployed');
+        else if (event.action === 'promoted') actionText = t('historyTimeline.promoted');
+        else if (event.action === 'rolled_back') actionText = t('historyTimeline.rolledBack', { version: formatVersion(event.version) });
+        else if (event.action === 'stopped') actionText = t('historyTimeline.stopped');
         
-        if (isFailed) actionText = 'Operation failed';
+        if (isFailed) actionText = t('historyTimeline.failed');
 
         const renderTransition = () => {
           if (!event.from_stage && !event.to_stage) return null;
 
           if (event.action === 'promoted' || event.action === 'rolled_back') {
-            const from = !event.from_stage || event.from_stage === 'none' ? 'No production' : formatVersion(event.from_stage);
+            const from = !event.from_stage || event.from_stage === 'none' ? t('historyTimeline.noProduction') : formatVersion(event.from_stage);
             const to = event.to_stage && event.to_stage !== 'production' ? formatVersion(event.to_stage) : formatVersion(event.version);
             
-            if (from === 'No production') {
-              return (
-                <span className="text-xs text-muted-foreground font-medium">
-                  Previous: <span className="font-semibold text-muted-foreground">No production</span> &rarr; Current: <span className="font-mono font-semibold text-foreground">{to}</span>
-                </span>
-              );
-            }
             return (
               <span className="text-xs text-muted-foreground font-medium">
-                <span className="font-mono font-semibold text-muted-foreground">{from}</span> &rarr; <span className="font-mono font-semibold text-foreground">{to}</span>
+                {t('historyTimeline.previousCurrent', { previous: from, current: to })}
               </span>
             );
           }
@@ -150,14 +145,14 @@ export function ModelHistoryTimeline({ familyId }: Props) {
               </div>
               
               {event.action === 'promoted' || event.action === 'rolled_back' ? (
-                <p className="text-sm text-muted-foreground">Registry production marker updated.</p>
+                <p className="text-sm text-muted-foreground">{t('historyTimeline.productionMarkerUpdated')}</p>
               ) : (
                 <p className="text-sm text-muted-foreground">{event.message}</p>
               )}
               
               {event.actor && (
                 <p className="text-xs font-medium text-muted-foreground">
-                  By: {event.actor}
+                  {t('historyTimeline.by', { actor: event.actor })}
                 </p>
               )}
             </div>

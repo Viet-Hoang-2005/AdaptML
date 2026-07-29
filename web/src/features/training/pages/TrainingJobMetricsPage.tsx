@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Activity, Cpu, HardDrive, RefreshCw, Rocket } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { useTrainingJobDetailContext } from "@/features/training/trainingJobDetailContext";
 
@@ -10,6 +11,7 @@ const formatMegabytes = (megabytes: number) =>
     : `${Math.round(megabytes)} MB`;
 
 export default function TrainingJobMetricsPage() {
+  const { t } = useTranslation("training");
   const {
     job,
     activeStatuses,
@@ -24,11 +26,10 @@ export default function TrainingJobMetricsPage() {
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted px-4 py-16 text-center shadow-sm">
         <Activity className="mb-4 h-10 w-10 text-muted-foreground" />
         <p className="text-base font-bold text-foreground">
-          Metrics are starting up
+          {t("detail.metricsPage.starting")}
         </p>
         <p className="mt-2 max-w-md text-sm text-muted-foreground">
-          Runtime metrics will appear here automatically once the runner emits
-          them.
+          {t("detail.metricsPage.startingDescription")}
         </p>
       </div>
     );
@@ -39,10 +40,10 @@ export default function TrainingJobMetricsPage() {
       <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-surface px-4 py-16 text-center shadow-sm">
         <Activity className="mb-4 h-10 w-10 text-muted-foreground" />
         <p className="text-base font-bold text-foreground">
-          No metrics available
+          {t("detail.metricsPage.empty")}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          This job did not emit any runtime metrics.
+          {t("detail.metricsPage.emptyDescription")}
         </p>
       </div>
     );
@@ -56,7 +57,7 @@ export default function TrainingJobMetricsPage() {
     latest?.memory_percent != null
       ? formatMetricPercent(latest.memory_percent)
       : latest?.memory_used_mb != null
-        ? `${formatMegabytes(latest.memory_used_mb)} used`
+        ? t("detail.metricsPage.memoryUsed", { memory: formatMegabytes(latest.memory_used_mb) })
         : "-";
   const memoryDetail =
     latest?.memory_used_mb != null && latest?.memory_limit_mb != null
@@ -64,12 +65,12 @@ export default function TrainingJobMetricsPage() {
           latest.memory_limit_mb,
         )}`
       : latest?.memory_used_mb != null
-        ? `${formatMegabytes(latest.memory_used_mb)} used`
-        : metrics.message || "Waiting for runner metrics";
+        ? t("detail.metricsPage.memoryUsed", { memory: formatMegabytes(latest.memory_used_mb) })
+        : metrics.message || t("detail.metricsPage.waitingRunner");
   const gpuValue =
     latest?.gpu_available && latest.gpu_percent != null
       ? formatMetricPercent(latest.gpu_percent)
-      : "N/A";
+      : t("detail.metricsPage.gpuUnavailable");
   const gpuDetail =
     latest?.gpu_available &&
     latest.gpu_memory_used_mb != null &&
@@ -77,7 +78,7 @@ export default function TrainingJobMetricsPage() {
       ? `${formatMegabytes(latest.gpu_memory_used_mb)} / ${formatMegabytes(
           latest.gpu_memory_total_mb,
         )}`
-      : "No GPU detected by runner";
+      : t("detail.metricsPage.noGpu");
   const refreshing = loadingMetrics || refreshingSection === "metrics";
 
   return (
@@ -86,13 +87,15 @@ export default function TrainingJobMetricsPage() {
         <div className="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4">
           <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground">
             <Activity className="h-4 w-4 text-blue-500" />
-            Runtime metrics
+            {t("detail.metricsPage.title")}
           </p>
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-muted-foreground">
               {latest?.timestamp
-                ? `Sampled ${new Date(latest.timestamp).toLocaleTimeString()}`
-                : "Pending metrics..."}
+                ? t("detail.metricsPage.sampled", {
+                    time: new Date(latest.timestamp).toLocaleTimeString(),
+                  })
+                : t("detail.metricsPage.pending")}
             </span>
             <button
               type="button"
@@ -103,14 +106,14 @@ export default function TrainingJobMetricsPage() {
               <RefreshCw
                 className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`}
               />
-              Refresh
+              {t("detail.metricsPage.refresh")}
             </button>
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <MetricCell
             icon={<Cpu className="h-3.5 w-3.5" />}
-            label="CPU"
+            label={t("detail.metricsPage.cpu")}
             value={
               latest?.cpu_percent == null
                 ? "-"
@@ -118,8 +121,8 @@ export default function TrainingJobMetricsPage() {
             }
             detail={
               latest?.cpu_limit_cores
-                ? `${latest.cpu_limit_cores} vCPU limit`
-                : "Container CPU usage"
+                ? t("detail.metricsPage.cpuLimit", { count: latest.cpu_limit_cores })
+                : t("detail.metricsPage.cpuUsage")
             }
             warning={highCpu}
             progress={latest?.cpu_percent}
@@ -127,7 +130,7 @@ export default function TrainingJobMetricsPage() {
           />
           <MetricCell
             icon={<HardDrive className="h-3.5 w-3.5" />}
-            label="RAM"
+            label={t("detail.metricsPage.ram")}
             value={memoryValue}
             detail={memoryDetail}
             warning={highRam}
@@ -136,7 +139,7 @@ export default function TrainingJobMetricsPage() {
           />
           <MetricCell
             icon={<Rocket className="h-3.5 w-3.5" />}
-            label="GPU"
+            label={t("detail.metricsPage.gpu")}
             value={gpuValue}
             detail={gpuDetail}
             muted={!latest?.gpu_available}

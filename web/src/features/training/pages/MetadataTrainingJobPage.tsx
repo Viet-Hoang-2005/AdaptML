@@ -84,13 +84,13 @@ export default function MetadataTrainingJobPage() {
             options={[
               {
                 value: "private",
-                title: "Private API",
-                description: "Requires JWT or API key.",
+                title: t("createFlow.metadata.privateTitle"),
+                description: t("createFlow.metadata.privateDescription"),
               },
               {
                 value: "public",
-                title: "Public API",
-                description: "Allows public prediction requests.",
+                title: t("createFlow.metadata.publicTitle"),
+                description: t("createFlow.metadata.publicDescription"),
               },
             ]}
           />

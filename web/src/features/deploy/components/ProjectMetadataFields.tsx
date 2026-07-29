@@ -36,8 +36,8 @@ export function ProjectMetadataFields({ form, project, setField }: ProjectMetada
           value={form.access_mode}
           onChange={(value) => setField('access_mode', value as ProjectMetadataForm['access_mode'])}
           options={[
-            { value: 'private', title: 'Private API', description: 'Requires JWT or API key.' },
-            { value: 'public', title: 'Public API', description: 'Allows public prediction requests.' },
+            { value: 'private', title: t('access.privateTitle'), description: t('access.privateDescription') },
+            { value: 'public', title: t('access.publicTitle'), description: t('access.publicDescription') },
           ]}
         />
       </section>

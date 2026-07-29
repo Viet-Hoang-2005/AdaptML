@@ -127,10 +127,10 @@ export default function TrainingJobOverviewPage() {
         <div className="rounded-xl border border-danger/20 bg-danger-subtle p-5">
           <h4 className="mb-2 flex items-center gap-2 text-base font-bold text-danger">
             <AlertTriangle className="h-5 w-5" />
-            Training Failed
+            {t("detail.overview.failedTitle")}
           </h4>
           <p className="mb-3 text-sm font-medium text-danger">
-            {job.stop_reason || "The training job exited unexpectedly."}
+            {job.stop_reason || t("detail.overview.failedFallback")}
           </p>
           {job.error_message && (
             <div className="overflow-x-auto rounded-xl border border-danger/20 bg-surface p-4">
@@ -146,11 +146,10 @@ export default function TrainingJobOverviewPage() {
         <div className="rounded-xl border border-warning/20 bg-warning-subtle p-5">
           <h4 className="mb-2 flex items-center gap-2 text-base font-bold text-warning">
             <AlertTriangle className="h-5 w-5" />
-            Training Cancelled
+            {t("detail.overview.cancelledTitle")}
           </h4>
           <p className="text-sm font-medium text-warning">
-            {job.stop_reason ||
-              "This training job was cancelled before completion."}
+            {job.stop_reason || t("detail.overview.cancelledFallback")}
           </p>
         </div>
       )}
@@ -159,36 +158,36 @@ export default function TrainingJobOverviewPage() {
         title={
           <div className="flex items-center gap-2">
             <Info className="h-5 w-5" />
-            <h3 className="text-md font-semibold">Job Metadata</h3>
+            <h3 className="text-md font-semibold">{t("detail.overview.metadataTitle")}</h3>
           </div>
         }
       >
         <div className="grid grid-cols-1 gap-x-8 gap-y-6 p-6 md:grid-cols-2">
-          <MetadataRow label="Internal Job ID" value={String(job.id)} />
+          <MetadataRow label={t("detail.overview.internalJobId")} value={String(job.id)} />
           <MetadataRow
-            label="External Job ID"
+            label={t("detail.overview.externalJobId")}
             value={job.external_job_id || job.sagemaker_job_name || "-"}
           />
-          <MetadataRow label="Model Name" value={job.name} />
-          <MetadataRow label="Model Version" value={job.model_version} />
-          <MetadataRow label="Backend" value={job.backend || "Unknown"} />
-          <MetadataRow label="Status" value={statusLabels[job.status]} />
+          <MetadataRow label={t("detail.overview.modelName")} value={job.name} />
+          <MetadataRow label={t("detail.overview.modelVersion")} value={job.model_version} />
+          <MetadataRow label={t("detail.overview.backend")} value={job.backend || t("statuses.unknown", { ns: "common" })} />
+          <MetadataRow label={t("detail.overview.status")} value={statusLabels[job.status]} />
           <MetadataRow
-            label="Created At"
+            label={t("detail.overview.createdAt")}
             value={new Date(job.created_at).toLocaleString()}
           />
           <MetadataRow
-            label="Updated At"
+            label={t("detail.overview.updatedAt")}
             value={new Date(job.updated_at).toLocaleString()}
           />
           <MetadataRow
-            label="Started At"
+            label={t("detail.overview.startedAt")}
             value={
               job.started_at ? new Date(job.started_at).toLocaleString() : "-"
             }
           />
           <MetadataRow
-            label="Completed At"
+            label={t("detail.overview.completedAt")}
             value={
               job.completed_at
                 ? new Date(job.completed_at).toLocaleString()

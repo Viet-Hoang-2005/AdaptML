@@ -474,7 +474,7 @@ export default function TrainingJobDetailPage() {
               {t(`table.modelStatuses.${job.model_status ?? "none"}`)}
             </span>
           </SummaryCell>
-          <SummaryCell label="Updated At">
+          <SummaryCell label={t("detail.overview.updatedAt")}>
             <p className="text-xl font-bold text-foreground">
               {new Date(job.updated_at).toLocaleString()}
             </p>

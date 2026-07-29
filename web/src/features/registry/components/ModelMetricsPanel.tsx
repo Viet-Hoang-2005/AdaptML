@@ -5,6 +5,7 @@ import type { RegistryMetric } from "@/features/registry/types";
 import { getApiErrorMessage } from "@/shared/api/errors";
 import { toast } from "@/shared/components/toastStore";
 import { BarChart2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   familyId: string;
@@ -14,6 +15,7 @@ interface Props {
 export function ModelMetricsPanel({ familyId, versionId }: Props) {
   const [metrics, setMetrics] = useState<Record<string, RegistryMetric[]>>({});
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation("registry");
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -21,11 +23,11 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
       const data = await getRegistryMetrics(familyId, versionId);
       setMetrics(data);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Failed to fetch model metrics."));
+      toast.error(getApiErrorMessage(error, t("metricsPanel.loadFailed")));
     } finally {
       setLoading(false);
     }
-  }, [familyId, versionId]);
+  }, [familyId, versionId, t]);
 
   useEffect(() => {
     void fetchMetrics();
@@ -77,12 +79,10 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
           <BarChart2 className="h-8 w-8 text-muted-foreground" />
         </div>
         <h3 className="text-lg font-bold text-foreground mb-2">
-          No Metric History Found
+          {t("metricsPanel.emptyTitle")}
         </h3>
         <p className="text-sm text-muted-foreground max-w-lg mb-6">
-          Summary metrics are shown above when training artifacts include
-          metrics.json. This panel is reserved for structured metric records
-          across training steps.
+          {t("metricsPanel.exampleDescription")}
         </p>
 
         <div className="text-left bg-[#1e1e1e] rounded-xl overflow-hidden w-full shadow-sm border border-gray-800 mb-4">
@@ -103,10 +103,10 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
                 navigator.clipboard.writeText(
                   'import json\n\n# METRIC_JSON stdout works without extra dependencies.\nprint("METRIC_JSON:", json.dumps({\n    "step": 1,\n    "accuracy": 0.95,\n    "loss": 0.12,\n    "f1": 0.93\n}))',
                 );
-                toast.success("Snippet copied to clipboard");
+                toast.success(t("metricsPanel.copied"));
               }}
             >
-              Copy
+              {t("actions.copy", { ns: "common" })}
             </button>
           </div>
           <div className="p-4">
@@ -125,8 +125,7 @@ print("METRIC_JSON:", json.dumps({
         </div>
 
         <p className="text-xs font-medium text-muted-foreground">
-          Metrics appear here after the training job completes and registry data
-          is synced.
+          {t("metricsPanel.syncHint")}
         </p>
       </div>
     );
@@ -156,11 +155,11 @@ print("METRIC_JSON:", json.dumps({
                     : m.latest.value.toFixed(4)}
                 </span>
                 <span className="text-xs text-muted-foreground mb-1">
-                  Step {m.latest.step}
+                  {t("metricsPanel.step")} {m.latest.step}
                 </span>
               </div>
               <p className="text-[10px] text-muted-foreground uppercase mt-2">
-                Source: {m.latest.source}
+                {t("metricsPanel.source", { source: m.latest.source })}
               </p>
             </div>
           );
@@ -192,10 +191,13 @@ print("METRIC_JSON:", json.dumps({
             >
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-sm font-bold text-foreground capitalize">
-                  {m.name.replace(/_/g, " ")} Progression
+                  {t("metricsPanel.progression", { name: m.name.replace(/_/g, " ") })}
                 </h4>
                 <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
-                  Min: {m.min.toFixed(2)} | Max: {m.max.toFixed(2)}
+                  {t("metricsPanel.range", {
+                    min: m.min.toFixed(2),
+                    max: m.max.toFixed(2),
+                  })}
                 </span>
               </div>
 
@@ -247,22 +249,22 @@ print("METRIC_JSON:", json.dumps({
                   })}
                 </svg>
                 <div className="flex justify-between text-xs text-muted-foreground font-mono px-1">
-                  <span>Step {m.chartPoints[0].step}</span>
-                  <span>Step {m.latest.step}</span>
+                  <span>{t("metricsPanel.step")} {m.chartPoints[0].step}</span>
+                  <span>{t("metricsPanel.step")} {m.latest.step}</span>
                 </div>
               </div>
 
               {/* Trend Table */}
               <div className="mt-6">
                 <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                  Recent Trend (Last 5)
+                  {t("metricsPanel.recentTrend")}
                 </h5>
                 <div className="border border-border rounded-xl overflow-hidden">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-muted text-muted-foreground text-xs uppercase font-semibold">
                       <tr>
-                        <th className="px-3 py-2">Step</th>
-                        <th className="px-3 py-2 text-right">Value</th>
+                        <th className="px-3 py-2">{t("metricsPanel.step")}</th>
+                        <th className="px-3 py-2 text-right">{t("metricsPanel.value")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">

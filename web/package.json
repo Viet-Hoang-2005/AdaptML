@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint . && node scripts/check-architecture.mjs",
+    "lint": "eslint . && node scripts/check-architecture.mjs && node scripts/check-i18n.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

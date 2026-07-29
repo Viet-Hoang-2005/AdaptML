@@ -10,6 +10,7 @@ import { compareRegistryVersions } from "@/features/registry/api/registryApi";
 import { getApiErrorMessage } from "@/shared/api/errors";
 import { formatVersion } from "@/shared/lib/formatters";
 import { toast } from "@/shared/components/toastStore";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   family: RegistryFamily;
@@ -47,6 +48,7 @@ function winnerClass(winner: string) {
 }
 
 function DeployabilityPill({ status }: { status?: string }) {
+  const { t } = useTranslation("registry");
   const cls =
     status === "deployable"
       ? "bg-emerald-100 text-emerald-800 border-emerald-200"
@@ -62,12 +64,13 @@ function DeployabilityPill({ status }: { status?: string }) {
         cls,
       )}
     >
-      {status || "unknown"}
+      {status || t("comparison.unknown")}
     </span>
   );
 }
 
 export function VersionComparisonModal({ family, versions, onClose }: Props) {
+  const { t } = useTranslation("registry");
   const [leftId, setLeftId] = useState<string>(versions[0]?.id ?? "");
   const [rightId, setRightId] = useState<string>(
     versions[1]?.id || versions[0]?.id || "",
@@ -78,7 +81,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
 
   const runCompare = async () => {
     if (!leftId || !rightId || leftId === rightId) {
-      toast.error("Choose two different versions to compare.");
+      toast.error(t("comparison.chooseDifferent"));
       return;
     }
     setLoading(true);
@@ -86,7 +89,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
       const data = await compareRegistryVersions(family.id, leftId, rightId);
       setComparison(data);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Failed to compare versions."));
+      toast.error(getApiErrorMessage(error, t("comparison.loadFailed")));
     } finally {
       setLoading(false);
     }
@@ -100,17 +103,17 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
             <GitCompare className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-xl font-bold text-foreground mb-2">
-            Not Enough Versions
+            {t("comparison.insufficientTitle")}
           </h3>
           <p className="text-sm text-muted-foreground mb-6">
-            Add another version to compare model evolution.
+            {t("comparison.insufficientDescription")}
           </p>
           <Button
             variant="primary"
             onClick={onClose}
             className="w-full justify-center"
           >
-            Close
+            {t("comparison.close")}
           </Button>
         </div>
       </div>
@@ -127,10 +130,12 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
             </div>
             <div>
               <h2 className="text-xl font-bold text-foreground">
-                Compare Versions
+                {t("comparison.title")}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Family: {family.display_name || family.name}
+                {t("comparison.family", {
+                  name: family.display_name || family.name,
+                })}
               </p>
             </div>
           </div>
@@ -151,8 +156,12 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
             >
               {versions.map((version) => (
                 <option key={version.id} value={version.id}>
-                  Left: {formatVersion(version.version)}{" "}
-                  {version.stage === "production" ? "(Production)" : ""}
+                  {t("comparison.leftOption", {
+                    version: formatVersion(version.version),
+                  })}{" "}
+                  {version.stage === "production"
+                    ? t("comparison.productionSuffix")
+                    : ""}
                 </option>
               ))}
             </select>
@@ -163,8 +172,12 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
             >
               {versions.map((version) => (
                 <option key={version.id} value={version.id}>
-                  Right: {formatVersion(version.version)}{" "}
-                  {version.stage === "production" ? "(Production)" : ""}
+                  {t("comparison.rightOption", {
+                    version: formatVersion(version.version),
+                  })}{" "}
+                  {version.stage === "production"
+                    ? t("comparison.productionSuffix")
+                    : ""}
                 </option>
               ))}
             </select>
@@ -173,14 +186,12 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
               onClick={() => void runCompare()}
               disabled={loading}
             >
-              {loading ? "Comparing..." : "Compare"}
+              {loading ? t("comparison.comparing") : t("comparison.compare")}
             </Button>
           </div>
 
           <p className="mb-6 text-sm text-muted-foreground">
-            Compare uses captured training summaries and artifact manifests from
-            Model Evolution. MLflow is used only as internal tracking when
-            available.
+            {t("comparison.description")}
           </p>
 
           {comparison ? (
@@ -189,15 +200,17 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-bold text-foreground">
-                      Recommendation
+                      {t("comparison.recommendation")}
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {comparison.recommendation.reason}
                     </p>
                   </div>
                   <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-bold uppercase text-foreground">
-                    Winner: {comparison.recommendation.winner} ·{" "}
-                    {comparison.recommendation.confidence}
+                    {t("comparison.winnerSummary", {
+                      winner: comparison.recommendation.winner,
+                      confidence: comparison.recommendation.confidence,
+                    })}
                   </span>
                 </div>
                 {comparison.recommendation.warnings.length > 0 && (
@@ -222,7 +235,9 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                     className="rounded-xl border border-border bg-surface p-5 shadow-sm"
                   >
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      {index === 0 ? "Left" : "Right"}
+                      {index === 0
+                        ? t("comparison.left")
+                        : t("comparison.right")}
                     </p>
                     <h3 className="mt-1 text-xl font-bold text-foreground">
                       {formatVersion(version.version)}
@@ -235,7 +250,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                         status={version.deployability_status}
                       />
                       <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold uppercase text-blue-700">
-                        {version.tracking_status || "not synced"}
+                        {version.tracking_status || t("comparison.notSynced")}
                       </span>
                     </div>
                   </div>
@@ -245,18 +260,18 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
               <section className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
                 <div className="border-b border-border px-5 py-3">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
-                    Metrics Diff
+                    {t("comparison.metricsDiff")}
                   </h3>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-muted text-xs uppercase text-muted-foreground">
                       <tr>
-                        <th className="px-4 py-2 text-left">Metric</th>
-                        <th className="px-4 py-2 text-right">Left</th>
-                        <th className="px-4 py-2 text-right">Right</th>
-                        <th className="px-4 py-2 text-right">Delta</th>
-                        <th className="px-4 py-2 text-left">Winner</th>
+                        <th className="px-4 py-2 text-left">{t("comparison.metric")}</th>
+                        <th className="px-4 py-2 text-right">{t("comparison.left")}</th>
+                        <th className="px-4 py-2 text-right">{t("comparison.right")}</th>
+                        <th className="px-4 py-2 text-right">{t("comparison.delta")}</th>
+                        <th className="px-4 py-2 text-left">{t("comparison.winner")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -266,7 +281,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                             colSpan={5}
                             className="px-4 py-6 text-center text-muted-foreground"
                           >
-                            No metrics captured for these versions.
+                            {t("comparison.noMetrics")}
                           </td>
                         </tr>
                       ) : (
@@ -306,7 +321,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                 <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
                   <div className="border-b border-border px-5 py-3">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
-                      Params Diff
+                      {t("comparison.paramsDiff")}
                     </h3>
                   </div>
                   <div className="max-h-72 overflow-auto">
@@ -315,7 +330,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                         {comparison.params_diff.length === 0 ? (
                           <tr>
                             <td className="px-4 py-6 text-center text-muted-foreground">
-                              No params captured.
+                              {t("comparison.noParams")}
                             </td>
                           </tr>
                         ) : (
@@ -343,12 +358,12 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
 
                 <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
-                    Deployability / Deployment
+                    {t("comparison.deployability")}
                   </h3>
                   <div className="mt-4 grid gap-3 text-sm">
                     <div className="flex items-center justify-between gap-3">
                       <span className="font-medium text-muted-foreground">
-                        Left
+                        {t("comparison.left")}
                       </span>
                       <DeployabilityPill
                         status={comparison.deployability_diff.left.status}
@@ -359,7 +374,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                     </p>
                     <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
                       <span className="font-medium text-muted-foreground">
-                        Right
+                        {t("comparison.right")}
                       </span>
                       <DeployabilityPill
                         status={comparison.deployability_diff.right.status}
@@ -369,28 +384,20 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                       {comparison.deployability_diff.right.reason || "-"}
                     </p>
                     <div className="border-t border-border pt-3 text-xs text-muted-foreground">
-                      <p>
-                        Left stage:{" "}
-                        <strong>{comparison.deployment_diff.left_stage}</strong>{" "}
-                        · deployed:{" "}
-                        <strong>
-                          {comparison.deployment_diff.left_deployed
-                            ? "yes"
-                            : "no"}
-                        </strong>
-                      </p>
-                      <p>
-                        Right stage:{" "}
-                        <strong>
-                          {comparison.deployment_diff.right_stage}
-                        </strong>{" "}
-                        · deployed:{" "}
-                        <strong>
-                          {comparison.deployment_diff.right_deployed
-                            ? "yes"
-                            : "no"}
-                        </strong>
-                      </p>
+                      <p>{t("comparison.stageDeployment", {
+                        side: t("comparison.left"),
+                        stage: comparison.deployment_diff.left_stage,
+                        deployed: comparison.deployment_diff.left_deployed
+                          ? t("comparison.yes")
+                          : t("comparison.no"),
+                      })}</p>
+                      <p>{t("comparison.stageDeployment", {
+                        side: t("comparison.right"),
+                        stage: comparison.deployment_diff.right_stage,
+                        deployed: comparison.deployment_diff.right_deployed
+                          ? t("comparison.yes")
+                          : t("comparison.no"),
+                      })}</p>
                     </div>
                   </div>
                 </div>
@@ -398,28 +405,28 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
 
               <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
-                  Artifacts / Weights Diff
+                  {t("comparison.artifactsDiff")}
                 </h3>
                 <div className="mt-4 grid md:grid-cols-4 gap-3 text-sm">
                   <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
                     <strong>{comparison.artifact_diff.added.length}</strong>
                     <br />
-                    Added
+                    {t("comparison.added")}
                   </div>
                   <div className="rounded-xl bg-red-50 border border-red-100 p-3">
                     <strong>{comparison.artifact_diff.removed.length}</strong>
                     <br />
-                    Removed
+                    {t("comparison.removed")}
                   </div>
                   <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
                     <strong>{comparison.artifact_diff.changed.length}</strong>
                     <br />
-                    Changed
+                    {t("comparison.changed")}
                   </div>
                   <div className="rounded-xl bg-muted border border-border p-3">
                     <strong>{comparison.artifact_diff.unchanged_count}</strong>
                     <br />
-                    Unchanged
+                    {t("comparison.unchanged")}
                   </div>
                 </div>
                 <div className="mt-4 max-h-64 overflow-auto rounded-xl border border-border">
@@ -428,7 +435,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                       {comparison.artifact_diff.added.map((item) => (
                         <tr key={`added-${item.path}`}>
                           <td className="px-3 py-2 font-bold text-emerald-700">
-                            Added
+                            {t("comparison.added")}
                           </td>
                           <td className="px-3 py-2 font-mono">{item.path}</td>
                           <td className="px-3 py-2">{item.kind}</td>
@@ -437,7 +444,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                       {comparison.artifact_diff.removed.map((item) => (
                         <tr key={`removed-${item.path}`}>
                           <td className="px-3 py-2 font-bold text-red-700">
-                            Removed
+                            {t("comparison.removed")}
                           </td>
                           <td className="px-3 py-2 font-mono">{item.path}</td>
                           <td className="px-3 py-2">{item.kind}</td>
@@ -446,7 +453,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                       {comparison.artifact_diff.changed.map((item) => (
                         <tr key={`changed-${item.path}`}>
                           <td className="px-3 py-2 font-bold text-amber-700">
-                            Changed
+                            {t("comparison.changed")}
                           </td>
                           <td className="px-3 py-2 font-mono">{item.path}</td>
                           <td className="px-3 py-2">
@@ -462,14 +469,14 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-surface p-10 text-center text-muted-foreground">
-              Choose two versions and run compare.
+              {t("comparison.choosePrompt")}
             </div>
           )}
         </div>
 
         <div className="p-4 border-t border-border bg-muted flex justify-end">
           <Button variant="secondary" onClick={onClose}>
-            Close
+            {t("comparison.close")}
           </Button>
         </div>
       </div>

@@ -29,8 +29,8 @@ import { toast } from "@/shared/components/toastStore";
 import type { UserProfile } from "@/features/settings/types";
 import BaseModal from "@/shared/components/BaseModal";
 
-const formatDate = (value?: string) => {
-  if (!value) return "Unknown";
+const formatDate = (value: string | undefined, fallback: string) => {
+  if (!value) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString(undefined, {
@@ -40,8 +40,8 @@ const formatDate = (value?: string) => {
   });
 };
 
-const getInitials = (profile: UserProfile | null) => {
-  const source = profile?.full_name || profile?.email || "User";
+const getInitials = (profile: UserProfile | null, fallback: string) => {
+  const source = profile?.full_name || profile?.email || fallback;
   return source
     .split(/\s|@/)
     .filter(Boolean)
@@ -99,7 +99,10 @@ export default function ProfileSettingPage() {
   const [selectingAvatarId, setSelectingAvatarId] = useState<string | null>(
     null,
   );
-  const initials = useMemo(() => getInitials(profile), [profile]);
+  const initials = useMemo(
+    () => getInitials(profile, t("profilePage.userFallback")),
+    [profile, t],
+  );
   const avatarPreview = profile?.avatar || "";
 
   useEffect(() => {
@@ -120,7 +123,7 @@ export default function ProfileSettingPage() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      toast.warning("Please select an image file.");
+      toast.warning(t("profilePage.selectImage"));
       return;
     }
 
@@ -173,8 +176,8 @@ export default function ProfileSettingPage() {
                 onClick={openAvatarModal}
                 disabled={loading || avatarSaving}
                 className="group relative flex h-36 w-36 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-4xl font-bold text-primary-foreground outline-none ring-offset-2 transition focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
-                aria-label="Update avatar"
-                title="Update avatar"
+                aria-label={t("profilePage.updateAvatar")}
+                title={t("profilePage.updateAvatar")}
               >
                 {avatarPreview ? (
                   <img
@@ -190,10 +193,10 @@ export default function ProfileSettingPage() {
                 </span>
               </button>
               <h2 className="mt-5 max-w-full truncate text-xl font-bold text-foreground">
-                {profile?.full_name || "AI Engineer"}
+                {profile?.full_name || t("profilePage.roleFallback")}
               </h2>
               <p className="mt-1 max-w-full truncate text-sm text-muted-foreground">
-                {profile?.email || "Loading profile..."}
+                {profile?.email || t("profilePage.loading")}
               </p>
             </div>
             <input
@@ -212,23 +215,26 @@ export default function ProfileSettingPage() {
               <div className="space-y-3">
                 <ReadOnlyRow
                   icon={<Mail className="h-4 w-4" />}
-                  label="Email"
-                  value={profile?.email || "Unknown"}
+                  label={t("profilePage.email")}
+                  value={profile?.email || t("statuses.unknown", { ns: "common" })}
                 />
                 <ReadOnlyRow
                   icon={<Fingerprint className="h-4 w-4" />}
-                  label="Tenant ID"
-                  value={profile?.tenant_id || "Unknown"}
+                  label={t("profilePage.tenantId")}
+                  value={profile?.tenant_id || t("statuses.unknown", { ns: "common" })}
                 />
                 <ReadOnlyRow
                   icon={<ShieldCheck className="h-4 w-4" />}
-                  label="Provider"
-                  value={profile?.auth_provider || "Unknown"}
+                  label={t("profilePage.provider")}
+                  value={profile?.auth_provider || t("statuses.unknown", { ns: "common" })}
                 />
                 <ReadOnlyRow
                   icon={<CalendarDays className="h-4 w-4" />}
-                  label="Joined"
-                  value={formatDate(profile?.date_joined)}
+                  label={t("profilePage.joined")}
+                  value={formatDate(
+                    profile?.date_joined,
+                    t("statuses.unknown", { ns: "common" }),
+                  )}
                 />
               </div>
             </div>
@@ -248,7 +254,7 @@ export default function ProfileSettingPage() {
                     size="md"
                     onClick={handleCancelEdit}
                   >
-                    Cancel
+                    {t("apiKey.cancel")}
                   </Button>
                   <Button
                     id="btn-save-profile"
@@ -257,7 +263,7 @@ export default function ProfileSettingPage() {
                     disabled={loading || !profileChanged}
                     onClick={handleSave}
                   >
-                    Save
+                    {t("apiKey.save")}
                   </Button>
                 </div>
               ) : (
@@ -279,7 +285,7 @@ export default function ProfileSettingPage() {
                 id="profile-full-name"
                 label={t("fullName")}
                 icon={<UserRound className="h-4 w-4 text-muted-foreground" />}
-                placeholder="Enter your full name"
+                placeholder={t("profilePage.fullNamePlaceholder")}
                 value={formValues.fullName}
                 disabled={loading}
                 readOnly={!editingProfile}
@@ -306,11 +312,11 @@ export default function ProfileSettingPage() {
                       }
                       className="h-14 w-full appearance-none rounded-2xl border border-border bg-surface pl-10 pr-10 text-sm font-normal text-foreground outline-none transition-colors duration-200 hover:border-primary focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                     >
-                      <option value="">Don't specify</option>
-                      <option value="he/him">he/him</option>
-                      <option value="she/her">she/her</option>
-                      <option value="they/them">they/them</option>
-                      <option value="other">other</option>
+                      <option value="">{t("profilePage.pronounUnspecified")}</option>
+                      <option value="he/him">{t("profilePage.pronounHe")}</option>
+                      <option value="she/her">{t("profilePage.pronounShe")}</option>
+                      <option value="they/them">{t("profilePage.pronounThey")}</option>
+                      <option value="other">{t("profilePage.pronounOther")}</option>
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   </div>
@@ -320,7 +326,7 @@ export default function ProfileSettingPage() {
                   id="profile-pronouns"
                   label={t("pronouns")}
                   icon={<Tags className="h-4 w-4 text-muted-foreground" />}
-                  value={formValues.pronouns || "Don't specify"}
+                  value={formValues.pronouns || t("profilePage.pronounUnspecified")}
                   disabled={loading}
                   readOnly
                   tabIndex={-1}
@@ -334,7 +340,7 @@ export default function ProfileSettingPage() {
                 id="profile-company"
                 label={t("company")}
                 icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
-                placeholder="e.g. UIT"
+                placeholder={t("profilePage.companyPlaceholder")}
                 value={formValues.company}
                 disabled={loading}
                 readOnly={!editingProfile}
@@ -350,7 +356,7 @@ export default function ProfileSettingPage() {
                 icon={
                   <BriefcaseBusiness className="h-4 w-4 text-muted-foreground" />
                 }
-                placeholder="e.g. Machine Learning"
+                placeholder={t("profilePage.fieldPlaceholder")}
                 value={formValues.fieldOfWork}
                 disabled={loading}
                 readOnly={!editingProfile}
@@ -366,7 +372,7 @@ export default function ProfileSettingPage() {
               id="profile-country"
               label={t("country")}
               icon={<Globe2 className="h-4 w-4 text-muted-foreground" />}
-              placeholder="e.g. Vietnam"
+              placeholder={t("profilePage.countryPlaceholder")}
               value={formValues.country}
               disabled={loading}
               readOnly={!editingProfile}
@@ -392,7 +398,7 @@ export default function ProfileSettingPage() {
                       ? "hover:border-primary focus:border-primary"
                       : "cursor-default hover:border-border focus:border-border"
                   }`}
-                  placeholder="Tell us more about yourself"
+                  placeholder={t("profilePage.descriptionPlaceholder")}
                   value={formValues.description}
                   disabled={loading}
                   readOnly={!editingProfile}
@@ -430,17 +436,11 @@ export default function ProfileSettingPage() {
 
       <ConfirmModal
         open={passwordSendConfirmOpen}
-        title="Send password change OTP?"
-        description={
-          <>
-            We will send a 6-digit OTP to{" "}
-            <span className="font-semibold text-foreground">
-              {profile?.email}
-            </span>{" "}
-            to verify this password change.
-          </>
-        }
-        confirmText="Send OTP"
+        title={t("profilePage.passwordConfirmTitle")}
+        description={t("profilePage.passwordConfirmDescription", {
+          email: profile?.email,
+        })}
+        confirmText={t("profilePage.passwordConfirmAction")}
         loading={passwordActionLoading}
         onCancel={() => setPasswordSendConfirmOpen(false)}
         onConfirm={openPasswordOTPModal}
@@ -448,15 +448,11 @@ export default function ProfileSettingPage() {
 
       {passwordModalStep === "otp" && (
         <BaseModal
-          title="Verify OTP"
+          title={t("profilePage.verifyOtpTitle")}
           onClose={() => setPasswordModalStep("closed")}
         >
           <p className="mb-4 text-sm text-muted-foreground">
-            Enter the 6-digit OTP sent to{" "}
-            <span className="font-semibold text-foreground">
-              {profile?.email}
-            </span>
-            .
+            {t("profilePage.otpDescription", { email: profile?.email })}
           </p>
           <OTPInput
             onComplete={(otp) => {
@@ -469,13 +465,13 @@ export default function ProfileSettingPage() {
               variant="secondary"
               onClick={() => setPasswordModalStep("closed")}
             >
-              Cancel
+              {t("actions.cancel", { ns: "common" })}
             </Button>
             <Button
               loading={passwordActionLoading}
               onClick={handleVerifyPasswordOTP}
             >
-              Verify OTP
+              {t("profilePage.verifyOtpAction")}
             </Button>
           </div>
         </BaseModal>
@@ -483,21 +479,21 @@ export default function ProfileSettingPage() {
 
       {passwordModalStep === "password" && (
         <BaseModal
-          title="Set New Password"
+          title={t("profilePage.setPasswordTitle")}
           onClose={() => setPasswordModalStep("closed")}
         >
           <div className="space-y-4">
             <InputPassword
               id="input-change-new-password"
-              label="New Password"
-              placeholder="At least 8 characters"
+              label={t("profilePage.newPassword")}
+              placeholder={t("profilePage.newPasswordPlaceholder")}
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
             />
             <InputPassword
               id="input-change-confirm-password"
-              label="Confirm Password"
-              placeholder="Re-enter your new password"
+              label={t("profilePage.confirmPassword")}
+              placeholder={t("profilePage.confirmPasswordPlaceholder")}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               onKeyDown={(event) =>
@@ -510,7 +506,7 @@ export default function ProfileSettingPage() {
               variant="secondary"
               onClick={() => setPasswordModalStep("closed")}
             >
-              Cancel
+              {t("apiKey.cancel")}
             </Button>
             <Button
               loading={passwordActionLoading}
@@ -527,17 +523,14 @@ export default function ProfileSettingPage() {
         title={t("deleteTitle")}
         tone="danger"
         description={
-          <>
-            This will temporarily disable your account and pause related API
-            model access. You will be signed out after deletion.
-            <br />
-            <br />
-            Are you sure you want to delete the account{" "}
-            <span className="font-semibold text-foreground">
-              {profile?.email}
-            </span>
-            ?
-          </>
+          <div className="space-y-3">
+            <p>{t("profilePage.deleteDescription")}</p>
+            <p className="font-semibold text-foreground">
+              {t("profilePage.deleteConfirmation", {
+                email: profile?.email || t("profilePage.userFallback"),
+              })}
+            </p>
+          </div>
         }
         confirmText={t("deleteAccount")}
         loading={deleteLoading}
@@ -563,7 +556,7 @@ export default function ProfileSettingPage() {
         onClose={closeCropModal}
         onConfirm={confirmAvatarCrop}
         onError={() =>
-          toast.error("Unable to crop avatar. Please try another image.")
+          toast.error(t("profilePage.cropFailed"))
         }
       />
     </div>

@@ -1,5 +1,6 @@
 import { Edit3, Save } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { updateProjectMetadata } from "@/features/deploy/api/buildDeployApi";
 import { ProjectMetadataFields } from "@/features/deploy/components/ProjectMetadataFields";
@@ -21,6 +22,7 @@ const toForm = (project: ModelProject): ProjectMetadataForm => ({
 });
 
 export function ModelInformationPage({ modelId }: { modelId: string }) {
+  const { t } = useTranslation("buildDeploy");
   const [project, setProject] = useState<ModelProject | null>(null);
   const [form, setForm] = useState<ProjectMetadataForm | null>(null);
   const [editing, setEditing] = useState(false);
@@ -40,7 +42,7 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
 
   if (!project || !form)
     return (
-      <p className="text-sm text-muted-foreground">Loading model metadata…</p>
+      <p className="text-sm text-muted-foreground">{t("information.loading")}</p>
     );
 
   const setField = <K extends keyof ProjectMetadataForm>(
@@ -52,7 +54,7 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
 
   const save = async () => {
     if (!form.name.trim()) {
-      toast.warning("Model Name is required.");
+      toast.warning(t("information.nameRequired"));
       return;
     }
     setSaving(true);
@@ -61,11 +63,9 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
       setProject(result);
       setForm(toForm(result));
       setEditing(false);
-      toast.success(
-        "Model metadata saved. The current image and registry version are unchanged.",
-      );
+      toast.success(t("information.saved"));
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Unable to save model metadata."));
+      toast.error(getApiErrorMessage(error, t("information.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -75,8 +75,7 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Project metadata is latest-only. Updating it does not rebuild the
-          current image.
+          {t("information.description")}
         </p>
         {editing ? (
           <div className="flex gap-2">
@@ -88,7 +87,7 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
                 setEditing(false);
               }}
             >
-              Cancel
+              {t("actions.cancel", { ns: "common" })}
             </Button>
             <Button
               size="md"
@@ -96,7 +95,7 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
               loading={saving}
               onClick={() => void save()}
             >
-              Save
+              {t("actions.save", { ns: "common" })}
             </Button>
           </div>
         ) : (
@@ -106,7 +105,7 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
             icon={<Edit3 className="h-4 w-4" />}
             onClick={() => setEditing(true)}
           >
-            Edit
+            {t("actions.edit")}
           </Button>
         )}
       </div>
@@ -118,12 +117,12 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
         />
       ) : (
         <div className="grid gap-5 md:grid-cols-2">
-          <Info label="Model Name" value={project.name} />
-          <Info label="Access mode" value={project.access_mode} />
-          <Info label="Description" value={project.description || "-"} />
-          <Info label="Source code" value={project.source_code?.name || "-"} />
+          <Info label={t("information.modelName")} value={project.name} />
+          <Info label={t("information.accessMode")} value={project.access_mode} />
+          <Info label={t("information.descriptionLabel")} value={project.description || "-"} />
+          <Info label={t("information.sourceCode")} value={project.source_code?.name || "-"} />
           <Info
-            label="Reference data"
+            label={t("information.referenceData")}
             value={project.reference_data?.name || "-"}
           />
         </div>

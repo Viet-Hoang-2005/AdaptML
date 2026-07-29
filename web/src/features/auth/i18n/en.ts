@@ -5,6 +5,14 @@ export const authEn = {
     passwordPlaceholder: 'Enter your password', forgotPassword: 'Forgot password?', submit: 'Sign in',
     noAccount: "Don't have an account?", signUp: 'Sign up', googleFailed: 'Google login failed. Please try again.',
     googleMissing: 'VITE_GOOGLE_CLIENT_ID is not configured.', githubMissing: 'GitHub OAuth is not configured.',
+    credentialsRequired: 'Enter both your email address and password.',
+    success: 'Signed in successfully.',
+    invalidCredentials: 'The email address or password is incorrect.',
+    oauthSuccess: 'Signed in successfully.',
+    googleSuccess: 'Signed in with Google.',
+    githubSuccess: 'Signed in with GitHub.',
+    githubFailed: 'GitHub login failed. Please try again.',
+    logoutSuccess: 'Signed out successfully.',
   },
   signup: {
     title: 'Create an account', description: 'Sign up for your account', divider: 'or sign up with email', submit: 'Sign up',
@@ -34,6 +42,8 @@ export const authEn = {
     imageOnly: 'Please select an image file.', imageSize: 'Avatar image must be 5MB or smaller.',
     success: 'Account created successfully!', failed: 'Registration failed. Please try again.', cropFailed: 'Unable to crop avatar. Please try another image.',
     fullNameRequired: 'Full name is required.', passwordRequired: 'Password is required.', passwordLength: 'Password must be at least 8 characters.', mismatch: 'Passwords do not match.',
+    setAvatar: 'Set profile picture',
+    avatarPreview: 'Profile picture preview',
   },
   github: {
     missingCode: 'GitHub did not return an authorization code.', invalidState: 'GitHub OAuth state is invalid. Please try again.',

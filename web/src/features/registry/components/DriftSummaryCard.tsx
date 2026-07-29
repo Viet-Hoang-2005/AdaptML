@@ -3,28 +3,39 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/shared/components/Button";
 import { Badge } from "@/shared/components/Badge";
 import type { DriftSummary } from "@/features/registry/types";
+import { useTranslation } from "react-i18next";
 
 interface DriftSummaryCardProps {
   driftSummary?: DriftSummary;
   modelProjectId?: string;
 }
 
-const statusPresentation = (status?: string) => {
+const statusPresentation = (
+  status: string | undefined,
+  t: (key: string) => string,
+) => {
   if (status === "drift_detected")
-    return { label: "Drift detected", variant: "danger" as const };
+    return { label: t("driftSummary.status.detected"), variant: "danger" as const };
   if (status === "healthy")
-    return { label: "No drift detected", variant: "success" as const };
+    return { label: t("driftSummary.status.healthy"), variant: "success" as const };
   if (status === "report_unavailable")
-    return { label: "Report unavailable", variant: "warning" as const };
+    return {
+      label: t("driftSummary.status.reportUnavailable"),
+      variant: "warning" as const,
+    };
   if (status === "unknown")
-    return { label: "Unknown", variant: "neutral" as const };
-  return { label: "Not configured", variant: "neutral" as const };
+    return { label: t("driftSummary.status.unknown"), variant: "neutral" as const };
+  return {
+    label: t("driftSummary.status.notConfigured"),
+    variant: "neutral" as const,
+  };
 };
 
 export function DriftSummaryCard({
   driftSummary,
   modelProjectId,
 }: DriftSummaryCardProps) {
+  const { t } = useTranslation("registry");
   const navigate = useNavigate();
   const fallbackUrl = modelProjectId
     ? `/dashboard/drift-monitoring/${modelProjectId}`
@@ -36,7 +47,7 @@ export function DriftSummaryCard({
   const lastCheckedAt =
     driftSummary?.last_checked_at || driftSummary?.lastCheckedAt;
   const status = driftSummary?.status || "not_configured";
-  const presentation = statusPresentation(status);
+  const presentation = statusPresentation(status, t);
 
   return (
     <section
@@ -49,7 +60,7 @@ export function DriftSummaryCard({
           className="inline-flex items-center gap-2 text-sm font-semibold text-foreground"
         >
           <Activity className="h-4 w-4 text-brand-accent" />
-          Drift summary
+          {t("driftSummary.title")}
         </h3>
         <Badge variant={presentation.variant}>{presentation.label}</Badge>
       </header>
@@ -57,7 +68,7 @@ export function DriftSummaryCard({
       {!driftSummary || status === "not_configured" ? (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted-foreground">
-            No drift report is available for this version yet.
+            {t("driftSummary.empty")}
           </p>
           <Button
             variant="outline"
@@ -65,7 +76,7 @@ export function DriftSummaryCard({
             icon={<ExternalLink className="h-4 w-4" />}
             onClick={() => navigate(reportPageUrl)}
           >
-            Open monitoring
+            {t("driftSummary.openMonitoring")}
           </Button>
         </div>
       ) : (
@@ -73,7 +84,7 @@ export function DriftSummaryCard({
           {driftPercent !== null && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Latest drift
+                {t("driftSummary.latestDrift")}
               </p>
               <p
                 className={
@@ -87,8 +98,10 @@ export function DriftSummaryCard({
               {driftSummary.drifted_features_count !== null &&
               driftSummary.total_features ? (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {driftSummary.drifted_features_count} /{" "}
-                  {driftSummary.total_features} features drifted
+                  {t("driftSummary.featuresDrifted", {
+                    drifted: driftSummary.drifted_features_count,
+                    total: driftSummary.total_features,
+                  })}
                 </p>
               ) : null}
             </div>
@@ -96,7 +109,7 @@ export function DriftSummaryCard({
           {lastCheckedAt && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Last checked
+                {t("driftSummary.lastChecked")}
               </p>
               <p className="mt-1 text-sm font-medium text-foreground">
                 {new Date(lastCheckedAt).toLocaleString()}
@@ -116,7 +129,7 @@ export function DriftSummaryCard({
               icon={<ExternalLink className="h-4 w-4" />}
               onClick={() => navigate(reportPageUrl)}
             >
-              View drift report
+              {t("driftSummary.viewReport")}
             </Button>
           )}
         </div>

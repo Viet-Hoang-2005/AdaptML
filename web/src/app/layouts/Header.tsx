@@ -16,8 +16,8 @@ import { settingsQueryKeys } from '@/features/settings/queryKeys';
 import type { UserProfile } from '@/features/settings/types';
 import { Button } from '@/shared/components/Button';
 
-const getInitials = (profile: UserProfile | null) => {
-  const source = profile?.full_name || profile?.email || 'User';
+const getInitials = (profile: UserProfile | null, fallback: string) => {
+  const source = profile?.full_name || profile?.email || fallback;
   return source.split(/\s|@/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
 };
 
@@ -37,7 +37,10 @@ export default function Header({ onOpenNavigation }: { onOpenNavigation: () => v
   const [search, setSearch] = useState('');
 
   const { data: profile = null } = useQuery({ queryKey: settingsQueryKeys.profile(), queryFn: getProfile });
-  const initials = useMemo(() => getInitials(profile), [profile]);
+  const initials = useMemo(
+    () => getInitials(profile, t("profile.initialsFallback")),
+    [profile, t],
+  );
   const visibleModels = useMemo(() => {
     const term = search.trim().toLowerCase();
     return term ? models.filter((model) => model.name.toLowerCase().includes(term)) : models;

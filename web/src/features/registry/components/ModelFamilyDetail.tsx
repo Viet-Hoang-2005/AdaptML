@@ -11,6 +11,7 @@ import {
   GitCommit,
 } from "lucide-react";
 import { formatVersion } from "@/shared/lib/formatters";
+import { useTranslation } from "react-i18next";
 
 const classNames = (...classes: (string | undefined | null | false)[]) =>
   classes.filter(Boolean).join(" ");
@@ -30,6 +31,7 @@ export function ModelFamilyDetail({
   selectedVersionId,
   onSelectVersion,
 }: Props) {
+  const { t } = useTranslation("registry");
   const prodVersion = family.current_production_version;
   const isEndpointReady = prodVersion && !!prodVersion.endpoint_url;
 
@@ -47,24 +49,27 @@ export function ModelFamilyDetail({
               <>
                 <span className="inline-flex items-center gap-1 text-success bg-success-subtle px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">
                   <Star className="h-3 w-3 fill-emerald-500 text-emerald-500" />{" "}
-                  Prod {formatVersion(prodVersion.version)}
+                  {t("familyDetail.productionVersion", {
+                    version: formatVersion(prodVersion.version),
+                  })}
                 </span>
                 {isEndpointReady ? (
                   <span className="inline-flex items-center gap-1 text-success border border-success/20 bg-success-subtle px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider">
-                    <Activity className="h-3 w-3" /> Endpoint Ready
+                    <Activity className="h-3 w-3" />{" "}
+                    {t("familyDetail.endpointReady")}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-muted-foreground border border-border bg-muted px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider">
-                    No Endpoint
+                    {t("familyDetail.noEndpoint")}
                   </span>
                 )}
                 <span className="inline-flex items-center text-muted-foreground border border-border bg-surface px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider">
-                  Registry Marker Only
+                  {t("familyDetail.registryMarkerOnly")}
                 </span>
               </>
             ) : (
               <span className="inline-flex items-center gap-1 text-muted-foreground bg-muted px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">
-                No Production Version
+                {t("familyDetail.noProductionVersion")}
               </span>
             )}
           </div>
@@ -74,7 +79,9 @@ export function ModelFamilyDetail({
           {prodVersion && (
             <p className="text-sm text-foreground flex items-center gap-1.5 mb-1">
               <GitCommit className="h-4 w-4 text-muted-foreground" />
-              Registered from {prodVersion.source_type.replace("_", " ")}
+              {t("familyDetail.registeredFrom", {
+                source: prodVersion.source_type.replace("_", " "),
+              })}
               {prodVersion.source_training_job_id
                 ? ` #${prodVersion.source_training_job_id}`
                 : ""}
@@ -83,20 +90,21 @@ export function ModelFamilyDetail({
 
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground font-medium">
             <span>
-              {versions.length} {versions.length === 1 ? "version" : "versions"}
+              {t("familyDetail.versionCount", { count: versions.length })}
             </span>
             <span>&middot;</span>
             <span>
-              Updated{" "}
-              {new Date(family.updated_at).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
+              {t("familyDetail.updated", {
+                date: new Date(family.updated_at).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                }),
               })}
             </span>
             <span>&middot;</span>
             <span className="text-muted-foreground">
-              Routing alias not enabled
+              {t("familyDetail.routingAliasDisabled")}
             </span>
           </div>
         </div>
@@ -111,31 +119,31 @@ export function ModelFamilyDetail({
                 scope="col"
                 className="py-3 pl-5 pr-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
               >
-                Version
+                {t("familyDetail.version")}
               </th>
               <th
                 scope="col"
                 className="px-3 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
               >
-                Stage
+                {t("familyDetail.stage")}
               </th>
               <th
                 scope="col"
                 className="px-3 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
               >
-                Source
+                {t("familyDetail.source")}
               </th>
               <th
                 scope="col"
                 className="px-3 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
               >
-                Updated
+                {t("familyDetail.updatedColumn")}
               </th>
               <th
                 scope="col"
                 className="px-3 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
               >
-                Endpoint
+                {t("familyDetail.endpoint")}
               </th>
             </tr>
           </thead>
@@ -149,7 +157,7 @@ export function ModelFamilyDetail({
                   <div className="flex justify-center mb-2">
                     <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                   </div>
-                  Loading versions...
+                  {t("familyDetail.loadingVersions")}
                 </td>
               </tr>
             ) : versions.length === 0 ? (
@@ -158,7 +166,7 @@ export function ModelFamilyDetail({
                   colSpan={5}
                   className="p-6 text-center text-sm text-muted-foreground"
                 >
-                  No versions found in this family.
+                  {t("familyDetail.noVersions")}
                 </td>
               </tr>
             ) : (
@@ -224,7 +232,8 @@ export function ModelFamilyDetail({
                     <td className="whitespace-nowrap px-3 py-3 text-sm text-muted-foreground">
                       {v.endpoint_url ? (
                         <span className="inline-flex items-center gap-1 text-success text-xs font-medium">
-                          <Activity className="h-3 w-3" /> Ready
+                          <Activity className="h-3 w-3" />{" "}
+                          {t("familyDetail.ready")}
                         </span>
                       ) : (
                         <span className="text-xs text-muted-foreground font-medium">

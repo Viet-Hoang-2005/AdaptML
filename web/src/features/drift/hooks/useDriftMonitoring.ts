@@ -13,6 +13,7 @@ import {
   uploadReferenceData,
 } from '@/features/drift/api/driftApi';
 import { driftQueryKeys } from '@/features/drift/queryKeys';
+import { useTranslation } from 'react-i18next';
 
 export type { DriftMonitoringJob, DriftMonitoringResult } from '@/features/drift/types';
 
@@ -64,13 +65,14 @@ export function useUpdateDriftMonitoringJob() {
 
 export function useRunDriftMonitoringJob() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation('drift');
   return useMutation({
     mutationFn: async (payload: { id: string; project_id: string }) => runDriftMonitoringJob(payload.id),
     onSuccess: (_, variables) => {
-      toast.success('Drift monitoring run queued');
+      toast.success(t('messages.runQueued'));
       void queryClient.invalidateQueries({ queryKey: driftQueryKeys.results(variables.id) });
     },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Failed to run drift monitoring')),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, t('messages.runFailed'))),
   });
 }
 

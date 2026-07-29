@@ -9,9 +9,11 @@ import { getApiErrorMessage } from '@/shared/api/errors';
 import { settingsQueryKeys } from '@/features/settings/queryKeys';
 import { toast } from '@/shared/components/toastStore';
 import type { APIKeyRecord, CreatedAPIKeyResponse } from '@/features/settings/types';
+import { useTranslation } from 'react-i18next';
 
 export function useDeveloperSettings() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation('settings');
   const [createdApiKey, setCreatedApiKey] = useState<CreatedAPIKeyResponse | null>(null);
 
   const apiKeysQuery = useQuery({
@@ -21,9 +23,9 @@ export function useDeveloperSettings() {
 
   useEffect(() => {
     if (apiKeysQuery.isError) {
-      toast.error(getApiErrorMessage(apiKeysQuery.error, 'Unable to load API keys.'));
+      toast.error(getApiErrorMessage(apiKeysQuery.error, t('apiKey.loadFailed')));
     }
-  }, [apiKeysQuery.error, apiKeysQuery.isError]);
+  }, [apiKeysQuery.error, apiKeysQuery.isError, t]);
 
   const refreshAPIKeys = async () => {
     await queryClient.invalidateQueries({ queryKey: settingsQueryKeys.apiKeys() });
@@ -33,11 +35,11 @@ export function useDeveloperSettings() {
   const deleteAPIKeyMutation = useMutation({
     mutationFn: deleteAPIKey,
     onSuccess: async () => {
-      toast.success('API key deleted successfully.');
+      toast.success(t('apiKey.deleteSuccess'));
       await refreshAPIKeys();
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to delete API key.'));
+      toast.error(getApiErrorMessage(error, t('apiKey.deleteFailed')));
     },
   });
 
@@ -48,7 +50,7 @@ export function useDeveloperSettings() {
       await refreshAPIKeys();
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Unable to regenerate API key.'));
+      toast.error(getApiErrorMessage(error, t('apiKey.regenerateFailed')));
     },
   });
 
@@ -65,9 +67,9 @@ export function useDeveloperSettings() {
     if (!createdApiKey?.api_key) return;
     try {
       await navigator.clipboard.writeText(createdApiKey.api_key);
-      toast.success('API key copied to clipboard.');
+      toast.success(t('apiKey.copied'));
     } catch {
-      toast.warning('Unable to copy API key automatically.');
+      toast.warning(t('apiKey.copyFailed'));
     }
   };
 

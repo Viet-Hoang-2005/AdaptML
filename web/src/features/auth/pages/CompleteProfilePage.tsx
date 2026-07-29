@@ -149,14 +149,14 @@ export default function CompleteProfilePage() {
           <button
             type="button"
             onClick={openAvatarModal}
-            aria-label="Set avatar"
-            title="Set avatar"
+            aria-label={t('profile.setAvatar')}
+            title={t('profile.setAvatar')}
             className="flex w-full items-center justify-between gap-4 rounded-2xl border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary focus:border-primary focus:outline-none"
           >
             <div className="flex items-center gap-3">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">
                 {avatarPreview ? (
-                  <img src={avatarPreview} alt="Avatar preview" className="h-full w-full object-cover" />
+                  <img src={avatarPreview} alt={t('profile.avatarPreview')} className="h-full w-full object-cover" />
                 ) : (
                   <Camera className="h-5 w-5" />
                 )}
