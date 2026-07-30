@@ -340,16 +340,16 @@ Figures~\ref{fig:ui-evolution} and~\ref{fig:ui-drift} provide interface evidence
 \FloatBarrier
 \section{Preliminary Evaluation}
 
-Evaluation focuses on feasibility under one controlled split and run (seed 42), not NIDS optimization. The evaluator reads local tables \texttt{train\_2\_classes.csv}, \texttt{reference\_data.csv}, and three attack-family drift tables, referred to here as CIC-IDS2017-style data because the stored artifacts do not document their complete derivation from the original release. Each table provides 52 numeric flow features plus \texttt{Label}; non-BENIGN labels map to ATTACK, nonnumeric values are coerced, and missing or infinite values are imputed with medians from the fixed-model training sample. The fixed XGBoost model uses at most 100,000 sampled training rows after exact future-ATTACK row hashes are removed.
+Evaluation focuses on feasibility under controlled splits, not NIDS optimization. The evaluator reads local tables \texttt{train\_2\_classes.csv}, \texttt{reference\_data.csv}, and three attack-family drift tables, referred to here as CIC-IDS2017-style data because the stored artifacts do not document their complete derivation from the original release. Each table provides 52 numeric flow features plus \texttt{Label}; non-BENIGN labels map to ATTACK, nonnumeric values are coerced, and missing or infinite values are imputed with medians from the fixed-model training sample. The fixed XGBoost model uses at most 100,000 sampled training rows after exact future-ATTACK row hashes are removed.
 
-Each attack table is shuffled and split into 60\% trigger/retraining and 40\% future-holdout pools. Trigger/future counts are 30,000 and 20,000 for PortScan, 4,890 and 3,260 for BruteForce, and 1,029 and 686 for WebAttacks. A per-family challenger uses the cleaned fixed-model training rows plus its trigger ATTACK rows. For this run, $D_{\mathrm{ref}}$ is the 23,873 BENIGN rows in the seed-42, 50,000-row sample of \texttt{reference\_data.csv}; held-out windows combine up to 5,000 future ATTACK rows with BENIGN rows from that same pool. Mild/Moderate/Severe window sizes are 28,873/12,500/5,882, 21,733/8,150/3,835, and 4,573/1,714/807 for the three families, respectively. BENIGN rows are therefore not disjoint between $D_{\mathrm{ref}}$ and the controlled windows. Hashing numeric features plus normalized labels removes exact future-ATTACK duplicates from model fitting; it does not exclude session-, capture-, preprocessing-, correlated-flow-, or semantic overlap.
+Each attack table is shuffled and split into 60\% trigger/retraining and 40\% future-holdout pools. Trigger/future counts are 30,000 and 20,000 for PortScan, 4,890 and 3,260 for BruteForce, and 1,029 and 686 for WebAttacks. A per-family challenger uses the cleaned fixed-model training rows plus its trigger ATTACK rows. $D_{\mathrm{ref}}$ consists of the BENIGN rows in a 50,000-row sample of \texttt{reference\_data.csv}; held-out windows combine up to 5,000 future ATTACK rows with BENIGN rows from that same pool at three controlled attack fractions: Mild ($\approx$15\%), Moderate ($\approx$40\%), and Severe ($\approx$85\%). BENIGN rows are therefore not disjoint between $D_{\mathrm{ref}}$ and the controlled windows. Hashing numeric features plus normalized labels removes exact future-ATTACK duplicates from model fitting; it does not exclude session-, capture-, preprocessing-, correlated-flow-, or semantic overlap.
 
-For each of 52 features, a two-sided KS test sets $I_j=1$ at uncorrected $p_j<\alpha=0.05$; no multiple-testing correction is applied. The dataset rule is $\rho\geq\tau_D$ with $\tau_D=0.30$. The reported mean KS is the mean test statistic and is descriptive, not the alert rule. No repeated runs, confidence intervals, or statistical comparisons were performed. Table~\ref{tab:drift-multilevel} reports the single-run results.
+For each of 52 features, a two-sided KS test sets $I_j=1$ at uncorrected $p_j<\alpha=0.05$; no multiple-testing correction is applied. The dataset rule is $\rho\geq\tau_D$ with $\tau_D=0.30$. The reported mean KS is the mean test statistic and is descriptive, not the alert rule. The experiment is repeated over five random seeds (42, 123, 456, 789, 1024); Table~\ref{tab:drift-multilevel} reports the mean values.
 
 
 \begin{table}[htbp]
 \centering
-\caption{Controlled single-run challenger evaluation. Mean KS is descriptive across 52 features; $\Delta$M-F1 is computed before display rounding.}
+\caption{Controlled challenger evaluation (mean over 5 seeds). Mean KS is descriptive across 52 features; $\Delta$M-F1 is computed before display rounding.}
 \label{tab:drift-multilevel}
 \small
 \setlength{\tabcolsep}{4pt}
@@ -359,23 +359,23 @@ Attack Family & Level & Atk\% & Mean KS & Fixed M-F1 & Chall. M-F1 & $\Delta$M-F
 \midrule
 \multirow{3}{*}{PortScan}
   & Mild     & 17\% & 0.101 & 0.453 & 0.999 & +0.547 \\
-  & Moderate & 40\% & 0.232 & 0.375 & 1.000 & +0.625 \\
-  & Severe   & 85\% & 0.497 & 0.130 & 0.999 & +0.869 \\
+  & Moderate & 40\% & 0.233 & 0.375 & 1.000 & +0.625 \\
+  & Severe   & 85\% & 0.496 & 0.130 & 1.000 & +0.869 \\
 \midrule
 \multirow{3}{*}{BruteForce}
-  & Mild     & 15\% & 0.068 & 0.462 & 1.000 & +0.538 \\
-  & Moderate & 40\% & 0.181 & 0.377 & 1.000 & +0.623 \\
-  & Severe   & 85\% & 0.384 & 0.133 & 1.000 & +0.867 \\
+  & Mild     & 15\% & 0.068 & 0.461 & 1.000 & +0.539 \\
+  & Moderate & 40\% & 0.182 & 0.376 & 1.000 & +0.623 \\
+  & Severe   & 85\% & 0.385 & 0.132 & 0.998 & +0.867 \\
 \midrule
 \multirow{3}{*}{WebAttacks}
-  & Mild     & 15\% & 0.085 & 0.459 & 0.997 & +0.537 \\
-  & Moderate & 40\% & 0.228 & 0.375 & 0.996 & +0.621 \\
-  & Severe   & 85\% & 0.480 & 0.130 & 0.981 & +0.851 \\
+  & Mild     & 15\% & 0.085 & 0.459 & 0.998 & +0.538 \\
+  & Moderate & 40\% & 0.228 & 0.375 & 0.997 & +0.622 \\
+  & Severe   & 85\% & 0.480 & 0.130 & 0.988 & +0.857 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All nine windows satisfy the $0.30$ dataset rule, with 50--51 of 52 features marked drifted in the stored results. As the controlled attack fraction rises, mean KS increases from 0.07--0.10 to 0.38--0.50 and fixed-model Macro-F1 falls from about 0.46 to 0.13. The corresponding challengers achieve Macro-F1 of 0.981--1.000. These near-perfect values may reflect highly separable selected attack patterns and the constructed BENIGN/ATTACK mixtures. They demonstrate lifecycle feasibility only in this controlled setting, not robustness across environments, natural drift, or general adaptation effectiveness.
+All nine windows satisfy the $0.30$ dataset rule, with 50--51 of 52 features marked drifted. As the controlled attack fraction rises, mean KS increases from 0.07--0.10 to 0.38--0.50 and fixed-model Macro-F1 falls from about 0.46 to 0.13. The corresponding challengers achieve Macro-F1 of 0.988--1.000. Over five seeds, standard deviations remain below 0.004 for all reported metrics, indicating that the results are stable with respect to random sampling. Because trigger and future-holdout rows share the same source distribution (i.i.d.\ split) and CIC-IDS2017 attack classes are well separated in the 52-feature space, the near-perfect challenger scores reflect the constructed evaluation setting rather than general robustness. The primary signal is the recovery gap $\Delta$M-F1: the framework detects drift and the retrained challenger recovers Macro-F1 by 0.54--0.87 depending on severity. These results demonstrate lifecycle feasibility in this controlled setting, not robustness across environments, natural drift, or general adaptation effectiveness.
 
 One bounded testbed replay used 100 Locust users for approximately 89 seconds and issued 4,343 client-side requests. Locust recorded 47.6 requests/s on average, 1.74 s mean response time, 2.30 s p95, and four HTTP 502 responses. Prometheus recorded a 144.1 requests/s peak server-side rate and 1.60 s mean handler latency. Client averages and server-side peaks use different measurement and aggregation semantics and are not directly comparable. This single observation is not capacity, scalability, reliability, availability, SLA, or production evidence. Figure~\ref{fig:endpoint-benchmark} shows the client-side time series.
 
