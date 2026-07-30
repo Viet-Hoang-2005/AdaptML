@@ -98,7 +98,7 @@ export function AvatarCropModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4">
-      <div className="w-full max-w-xl rounded-xl border border-border bg-surface shadow-xl">
+      <div className="w-full max-w-xl rounded-surface border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-xl font-bold text-foreground">
             {t("avatarDialog.crop")}
@@ -106,7 +106,7 @@ export function AvatarCropModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-surface text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={t("avatarDialog.closeCrop")}
           >
             <X className="h-6 w-6" />

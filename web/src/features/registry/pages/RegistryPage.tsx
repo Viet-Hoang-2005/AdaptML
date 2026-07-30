@@ -201,7 +201,7 @@ export default function ModelEvolutionPage() {
               />
             ) : null
           ) : (
-            <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-border rounded-2xl bg-muted/50">
+            <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-border rounded-surface bg-muted/50">
               <div className="rounded-full bg-surface border border-border p-5 mb-5 shadow-sm">
                 <Component className="h-10 w-10 text-muted-foreground" />
               </div>

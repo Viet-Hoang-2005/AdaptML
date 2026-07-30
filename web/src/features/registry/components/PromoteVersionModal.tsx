@@ -57,7 +57,7 @@ export function PromoteVersionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm p-4">
-      <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div className="bg-surface rounded-overlay shadow-xl w-full max-w-md overflow-hidden">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="rounded-full bg-success-subtle p-2.5 text-success">
@@ -68,14 +68,14 @@ export function PromoteVersionModal({
             </h3>
           </div>
 
-          <div className="flex gap-3 rounded-xl border border-info-border bg-info-subtle p-4 text-info shadow-sm">
+          <div className="flex gap-3 rounded-surface border border-info-border bg-info-subtle p-4 text-info shadow-sm">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-info" />
             <p className="text-sm">
               {t("promoteDialog.description")}
             </p>
           </div>
 
-          <div className="mt-6 flex flex-col gap-3 text-sm bg-muted p-4 rounded-xl border border-border">
+          <div className="mt-6 flex flex-col gap-3 text-sm bg-muted p-4 rounded-surface border border-border">
             <label className="flex flex-col gap-2 pb-2 border-b border-border">
               <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">
                 {t("promoteDialog.alias")}
@@ -85,7 +85,7 @@ export function PromoteVersionModal({
                 onChange={(event) =>
                   setAlias(event.target.value as RoutingAliasName)
                 }
-                className="rounded-xl border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-success focus:ring-2 focus:ring-success-border"
+                className="rounded-control border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-success focus:ring-2 focus:ring-success-border"
                 disabled={loading}
               >
                 <option value="production">{t("promoteDialog.production")}</option>
@@ -97,7 +97,7 @@ export function PromoteVersionModal({
               <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">
                 {t("promoteDialog.targetVersion")}
               </span>
-              <span className="rounded bg-success-subtle px-2 font-mono font-bold text-success">
+              <span className="rounded-compact bg-success-subtle px-2 font-mono font-bold text-success">
                 {formatVersion(version.version)}
               </span>
             </div>

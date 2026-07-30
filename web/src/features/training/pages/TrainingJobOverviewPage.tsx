@@ -124,7 +124,7 @@ export default function TrainingJobOverviewPage() {
       </PageBody>
 
       {job.status === "failed" && (
-        <div className="rounded-xl border border-danger/20 bg-danger-subtle p-5">
+        <div className="rounded-surface border border-danger/20 bg-danger-subtle p-5">
           <h4 className="mb-2 flex items-center gap-2 text-base font-bold text-danger">
             <AlertTriangle className="h-5 w-5" />
             {t("detail.overview.failedTitle")}
@@ -133,7 +133,7 @@ export default function TrainingJobOverviewPage() {
             {job.stop_reason || t("detail.overview.failedFallback")}
           </p>
           {job.error_message && (
-            <div className="overflow-x-auto rounded-xl border border-danger/20 bg-surface p-4">
+            <div className="overflow-x-auto rounded-surface border border-danger/20 bg-surface p-4">
               <code className="wrap-break-words whitespace-pre-wrap font-mono text-xs text-danger">
                 {job.error_message}
               </code>
@@ -143,7 +143,7 @@ export default function TrainingJobOverviewPage() {
       )}
 
       {job.status === "cancelled" && (
-        <div className="rounded-xl border border-warning/20 bg-warning-subtle p-5">
+        <div className="rounded-surface border border-warning/20 bg-warning-subtle p-5">
           <h4 className="mb-2 flex items-center gap-2 text-base font-bold text-warning">
             <AlertTriangle className="h-5 w-5" />
             {t("detail.overview.cancelledTitle")}

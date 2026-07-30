@@ -54,7 +54,7 @@ export default function BuildModelPage() {
 
   return (
     <>
-      <div className="rounded-xl border border-border bg-surface p-6 lg:p-8">
+      <div className="rounded-surface border border-border bg-surface p-6 lg:p-8">
         <BuildInputFields form={buildForm} setField={setBuildField} />
         <div className="mt-8 border-t border-border pt-8">
           <TerminalViewer

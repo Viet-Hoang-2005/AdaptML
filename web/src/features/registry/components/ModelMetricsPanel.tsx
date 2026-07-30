@@ -74,7 +74,7 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
 
   if (metricEntries.length === 0) {
     return (
-      <div className="text-center py-12 flex flex-col items-center border border-dashed border-border rounded-2xl bg-muted/50 px-6 max-w-3xl mx-auto">
+      <div className="text-center py-12 flex flex-col items-center border border-dashed border-border rounded-surface bg-muted/50 px-6 max-w-3xl mx-auto">
         <div className="rounded-full bg-surface border border-border p-4 mb-4 shadow-sm">
           <BarChart2 className="h-8 w-8 text-muted-foreground" />
         </div>
@@ -85,7 +85,7 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
           {t("metricsPanel.exampleDescription")}
         </p>
 
-        <div className="mb-4 w-full overflow-hidden rounded-xl border border-terminal-border bg-terminal text-left shadow-sm">
+        <div className="mb-4 w-full overflow-hidden rounded-surface border border-terminal-border bg-terminal text-left shadow-sm">
           <div className="flex items-center justify-between border-b border-terminal-border bg-terminal-header px-3 py-1.5">
             <div className="flex items-center gap-3">
               <div className="flex gap-1.5">
@@ -140,7 +140,7 @@ print("METRIC_JSON:", json.dumps({
           return (
             <div
               key={`card-${m.name}`}
-              className="bg-muted border border-border rounded-xl p-4"
+              className="bg-muted border border-border rounded-surface p-4"
             >
               <p
                 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 truncate"
@@ -187,13 +187,13 @@ print("METRIC_JSON:", json.dumps({
           return (
             <div
               key={`chart-${m.name}`}
-              className="border border-border bg-surface shadow-sm rounded-2xl p-5"
+              className="border border-border bg-surface shadow-sm rounded-surface p-5"
             >
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-sm font-bold text-foreground capitalize">
                   {t("metricsPanel.progression", { name: m.name.replace(/_/g, " ") })}
                 </h4>
-                <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
+                <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded-compact">
                   {t("metricsPanel.range", {
                     min: m.min.toFixed(2),
                     max: m.max.toFixed(2),
@@ -201,7 +201,7 @@ print("METRIC_JSON:", json.dumps({
                 </span>
               </div>
 
-              <div className="w-full bg-muted rounded-xl p-4 border border-border flex flex-col gap-2">
+              <div className="w-full bg-muted rounded-surface p-4 border border-border flex flex-col gap-2">
                 <svg
                   viewBox={`0 0 ${width} ${height}`}
                   className="h-32 w-full fill-none stroke-chart-1 overflow-visible"
@@ -259,7 +259,7 @@ print("METRIC_JSON:", json.dumps({
                 <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                   {t("metricsPanel.recentTrend")}
                 </h5>
-                <div className="border border-border rounded-xl overflow-hidden">
+                <div className="border border-border rounded-surface overflow-hidden">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-muted text-muted-foreground text-xs uppercase font-semibold">
                       <tr>

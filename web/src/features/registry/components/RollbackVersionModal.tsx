@@ -44,7 +44,7 @@ export function RollbackVersionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm p-4">
-      <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div className="bg-surface rounded-overlay shadow-xl w-full max-w-md overflow-hidden">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="rounded-full bg-warning-subtle p-2.5 text-warning">
@@ -55,19 +55,19 @@ export function RollbackVersionModal({
             </h3>
           </div>
 
-          <div className="flex gap-3 rounded-xl border border-warning-border bg-warning-subtle p-4 text-warning shadow-sm">
+          <div className="flex gap-3 rounded-surface border border-warning-border bg-warning-subtle p-4 text-warning shadow-sm">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
             <p className="text-sm">
               {t("rollbackDialog.description")}
             </p>
           </div>
 
-          <div className="mt-6 flex flex-col gap-3 text-sm bg-muted p-4 rounded-xl border border-border">
+          <div className="mt-6 flex flex-col gap-3 text-sm bg-muted p-4 rounded-surface border border-border">
             <div className="flex justify-between py-1 border-b border-border">
               <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">
                 {t("rollbackDialog.targetVersion")}
               </span>
-              <span className="rounded bg-warning-subtle px-2 font-mono font-bold text-warning">
+              <span className="rounded-compact bg-warning-subtle px-2 font-mono font-bold text-warning">
                 {formatVersion(version.version)}
               </span>
             </div>

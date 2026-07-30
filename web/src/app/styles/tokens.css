@@ -180,9 +180,11 @@
   --control-height-sm: 2rem;
   --control-height-md: 2.5rem;
   --control-height-lg: 3rem;
-  --component-radius-sm: 0.5rem;
-  --component-radius-md: 0.75rem;
-  --component-radius-lg: 1rem;
+  --component-radius-compact: 0.25rem;
+  --component-radius-surface: 0.5rem;
+  --component-radius-control: 0.75rem;
+  --component-radius-overlay: 1rem;
+  --component-radius-full: 9999px;
   --shadow-card: 0 0 rgb(0 0 0 / 0%);
   --shadow-overlay: 0 20px 50px rgb(15 23 42 / 18%);
   --duration-fast: 150ms;
@@ -350,7 +352,9 @@
   --color-syntax-comment: var(--syntax-comment);
   --color-syntax-function: var(--syntax-function);
 
-  --radius-sm: var(--component-radius-sm);
-  --radius-md: var(--component-radius-md);
-  --radius-lg: var(--component-radius-lg);
+  --radius-compact: var(--component-radius-compact);
+  --radius-surface: var(--component-radius-surface);
+  --radius-control: var(--component-radius-control);
+  --radius-overlay: var(--component-radius-overlay);
+  --radius-full: var(--component-radius-full);
 }

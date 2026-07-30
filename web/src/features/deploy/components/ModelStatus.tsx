@@ -125,9 +125,9 @@ export function ModelStatus({ model }: { model: ModelProject }) {
       </div>
 
       {/* ── Deprecation Notice for Realtime Pod Logs ── */}
-      <div className="rounded-xl border border-warning/20 bg-warning-subtle p-6">
+      <div className="rounded-surface border border-warning/20 bg-warning-subtle p-6">
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-warning/10 text-warning">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-surface bg-warning/10 text-warning">
             <Activity className="h-6 w-6" />
           </div>
           <div className="flex-1 space-y-2">

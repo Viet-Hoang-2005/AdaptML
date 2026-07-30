@@ -99,7 +99,7 @@ export function PackagePreview({
 
   return (
     <div
-      className={`rounded-xl border border-terminal-border bg-terminal p-4 font-mono text-xs text-terminal-foreground ${compact ? "max-h-60 overflow-auto custom-scrollbar" : ""}`}
+      className={`rounded-surface border border-terminal-border bg-terminal p-4 font-mono text-xs text-terminal-foreground ${compact ? "max-h-60 overflow-auto custom-scrollbar" : ""}`}
     >
       {lines.map((line, idx) => {
         // Extract the connector/prefix part vs the actual file name

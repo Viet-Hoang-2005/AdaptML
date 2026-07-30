@@ -56,7 +56,7 @@ export function DataTable<T>({
 
   return (
     <div
-      className={`overflow-hidden rounded-xl border border-border bg-surface ${className}`}
+      className={`overflow-hidden rounded-surface border border-border bg-surface ${className}`}
     >
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-sm">
@@ -72,7 +72,7 @@ export function DataTable<T>({
                     {header.isPlaceholder ? null : header.column.getCanSort() ? (
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1.5 rounded-md text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="inline-flex items-center gap-1.5 rounded-compact text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         {flexRender(

@@ -151,7 +151,7 @@ export default function CompleteProfilePage() {
             onClick={openAvatarModal}
             aria-label={t('profile.setAvatar')}
             title={t('profile.setAvatar')}
-            className="flex w-full items-center justify-between gap-4 rounded-2xl border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary focus:border-primary focus:outline-none"
+            className="flex w-full items-center justify-between gap-4 rounded-control border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary focus:border-primary focus:outline-none"
           >
             <div className="flex items-center gap-3">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">

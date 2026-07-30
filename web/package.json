@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint . && node scripts/check-architecture.mjs && node scripts/check-i18n.mjs && node scripts/check-colors.mjs",
+    "lint": "eslint . && node scripts/check-architecture.mjs && node scripts/check-i18n.mjs && node scripts/check-colors.mjs && node scripts/check-radii.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

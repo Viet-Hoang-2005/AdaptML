@@ -23,7 +23,7 @@ export function LineSteps({
   const { t } = useTranslation("common");
   return (
     <>
-      <div className="hidden sm:block rounded-xl border border-border bg-surface px-8 pb-10 pt-6">
+      <div className="hidden sm:block rounded-surface border border-border bg-surface px-8 pb-10 pt-6">
         <div className="relative flex items-center justify-between">
           {/* Background line */}
           <div className="absolute left-0 top-5 h-0.5 w-full bg-muted" />
@@ -79,7 +79,7 @@ export function LineSteps({
         </div>
       </div>
 
-      <div className="sm:hidden overflow-x-auto rounded-xl border border-border bg-surface p-3">
+      <div className="sm:hidden overflow-x-auto rounded-surface border border-border bg-surface p-3">
         <span className="sr-only">
           {t("steps.progress", { current: currentStep, total: steps.length })}
         </span>
@@ -94,7 +94,7 @@ export function LineSteps({
                 disabled={isTransitioning || !onStepChange}
                 aria-current={active ? "step" : undefined}
                 onClick={() => onStepChange?.(item.id)}
-                className={`inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-surface text-muted-foreground"} disabled:opacity-60`}
+                className={`inline-flex min-h-10 items-center gap-2 rounded-control border px-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-surface text-muted-foreground"} disabled:opacity-60`}
               >
                 <Icon className="h-4 w-4" />
                 {item.label}

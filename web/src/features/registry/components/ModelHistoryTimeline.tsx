@@ -45,7 +45,7 @@ export function ModelHistoryTimeline({ familyId }: Props) {
 
   if (history.length === 0) {
     return (
-      <div className="text-center py-16 flex flex-col items-center border border-dashed border-border rounded-2xl bg-muted/50 px-4">
+      <div className="text-center py-16 flex flex-col items-center border border-dashed border-border rounded-surface bg-muted/50 px-4">
         <div className="rounded-full bg-surface border border-border p-4 mb-4 shadow-sm">
           <GitCommit className="h-8 w-8 text-muted-foreground" />
         </div>
@@ -137,7 +137,7 @@ export function ModelHistoryTimeline({ familyId }: Props) {
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-bold text-foreground">{actionText}</span>
-                <span className="text-xs font-mono font-semibold bg-muted border border-border px-2 py-0.5 rounded text-foreground">{formatVersion(event.version)}</span>
+                <span className="text-xs font-mono font-semibold bg-muted border border-border px-2 py-0.5 rounded-compact text-foreground">{formatVersion(event.version)}</span>
                 {renderTransition()}
                 <span className="text-xs font-medium text-muted-foreground ml-auto">
                   {new Date(event.created_at).toLocaleString()}

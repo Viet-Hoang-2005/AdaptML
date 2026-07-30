@@ -32,7 +32,7 @@ export function Select({
         <button
           type="button"
           className={cn(
-            "flex h-14 w-full items-center justify-between gap-3 rounded-2xl border bg-surface px-4 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
+            "flex h-14 w-full items-center justify-between gap-3 rounded-control border bg-surface px-4 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
             open
               ? "border-ring"
               : "border-input hover:border-input-hover",
@@ -50,7 +50,7 @@ export function Select({
         <Popover.Content
           align="start"
           sideOffset={8}
-          className="z-50 w-(--radix-popover-trigger-width) rounded-xl border border-border bg-surface p-1 shadow-(--shadow-overlay) animate-fade-in"
+          className="z-50 w-(--radix-popover-trigger-width) rounded-surface border border-border bg-surface p-1 shadow-(--shadow-overlay) animate-fade-in"
         >
           <div className="max-h-72 overflow-y-auto">
             {options.map((option) => (
@@ -61,7 +61,7 @@ export function Select({
                   onChange(option.value);
                   setOpen(false);
                 }}
-                className="flex min-h-10 w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:bg-surface-hover active:bg-surface-active"
+                className="flex min-h-10 w-full items-center justify-between gap-3 rounded-compact px-3 py-2 text-left hover:bg-surface-hover active:bg-surface-active"
               >
                 <span className="block truncate text-sm font-medium text-foreground">
                   {option.label}

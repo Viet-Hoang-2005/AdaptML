@@ -84,7 +84,7 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  border-radius: 999px;
+  border-radius: var(--component-radius-full);
   background: var(--scrollbar);
 }
 

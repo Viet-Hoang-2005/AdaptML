@@ -450,14 +450,14 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
 
     if (loading) {
       return (
-        <div className="flex h-125 border border-border rounded-xl bg-surface mb-6 items-center justify-center shadow-sm">
+        <div className="flex h-125 border border-border rounded-surface bg-surface mb-6 items-center justify-center shadow-sm">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
         </div>
       );
     }
 
     return (
-      <div className="flex flex-col h-125 border border-border rounded-xl overflow-hidden bg-surface shadow-sm">
+      <div className="flex flex-col h-125 border border-border rounded-surface overflow-hidden bg-surface shadow-sm">
         <div className="flex border-b border-border bg-muted">
           <div className="flex-1 flex items-center justify-between p-3">
             <div className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -474,7 +474,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
               {onSetEntryPoint &&
                 selectedPath?.endsWith(entryPointExtension) && (
                   <button
-                    className={`px-3 py-2 text-xs rounded-xl font-medium mr-2 flex items-center gap-1 transition-colors ${
+                    className={`px-3 py-2 text-xs rounded-control font-medium mr-2 flex items-center gap-1 transition-colors ${
                       currentEntryPoint === selectedPath
                         ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover"
                         : "bg-primary-subtle text-primary hover:bg-primary/15 border border-primary/20"
@@ -511,7 +511,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
                 {files.length === 0 ? (
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex-1 w-full flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl hover:bg-muted hover:border-primary transition-colors group cursor-pointer"
+                    className="flex-1 w-full flex flex-col items-center justify-center border-2 border-dashed border-border rounded-surface hover:bg-muted hover:border-primary transition-colors group cursor-pointer"
                   >
                     <Upload className="w-12 h-12 mb-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     <p className="text-muted-foreground font-medium text-lg group-hover:text-primary transition-colors">
@@ -559,21 +559,21 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
                 <button
                   onClick={startCreateFile}
                   title={t("sourceEditor.newFile")}
-                  className="p-1 hover:bg-muted rounded text-foreground"
+                  className="rounded-surface p-1 text-foreground hover:bg-muted"
                 >
                   <FilePlus className="w-4 h-4" />
                 </button>
                 <button
                   onClick={startCreateFolder}
                   title={t("sourceEditor.newFolder")}
-                  className="p-1 hover:bg-muted rounded text-foreground"
+                  className="rounded-surface p-1 text-foreground hover:bg-muted"
                 >
                   <FolderPlus className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   title={t("sourceEditor.uploadFiles")}
-                  className="p-1 hover:bg-muted rounded text-foreground"
+                  className="rounded-surface p-1 text-foreground hover:bg-muted"
                 >
                   <Upload className="w-4 h-4" />
                 </button>
@@ -581,7 +581,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
                   onClick={handleDelete}
                   title={t("sourceEditor.deleteSelected")}
                   disabled={!selectedPath}
-                  className="p-1 hover:bg-muted rounded disabled:opacity-30 text-danger hover:text-danger/80"
+                  className="rounded-surface p-1 text-danger hover:bg-muted hover:text-danger/80 disabled:opacity-30"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

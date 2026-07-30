@@ -23,7 +23,7 @@ export default function TrainingJobMetricsPage() {
 
   if (!metrics?.metrics_available && activeStatuses.includes(job.status)) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted px-4 py-16 text-center shadow-sm">
+      <div className="flex flex-col items-center justify-center rounded-surface border border-dashed border-border bg-muted px-4 py-16 text-center shadow-sm">
         <Activity className="mb-4 h-10 w-10 text-muted-foreground" />
         <p className="text-base font-bold text-foreground">
           {t("detail.metricsPage.starting")}
@@ -37,7 +37,7 @@ export default function TrainingJobMetricsPage() {
 
   if (!metrics?.metrics_available) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-surface px-4 py-16 text-center shadow-sm">
+      <div className="flex flex-col items-center justify-center rounded-surface border border-border bg-surface px-4 py-16 text-center shadow-sm">
         <Activity className="mb-4 h-10 w-10 text-muted-foreground" />
         <p className="text-base font-bold text-foreground">
           {t("detail.metricsPage.empty")}
@@ -83,7 +83,7 @@ export default function TrainingJobMetricsPage() {
 
   return (
     <div className="animate-in space-y-4 fade-in duration-300">
-      <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+      <div className="rounded-surface border border-border bg-surface p-6 shadow-sm">
         <div className="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4">
           <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground">
             <Activity className="h-4 w-4 text-info" />
@@ -101,7 +101,7 @@ export default function TrainingJobMetricsPage() {
               type="button"
               onClick={() => void refreshMetrics()}
               disabled={refreshing}
-              className="flex h-7 items-center gap-1.5 rounded border border-border bg-muted px-2.5 text-[11px] font-bold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              className="flex h-7 items-center gap-1.5 rounded-compact border border-border bg-muted px-2.5 text-[11px] font-bold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
               <RefreshCw
                 className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`}
@@ -173,7 +173,7 @@ function MetricCell({
 }) {
   return (
     <div
-      className={`flex min-w-0 flex-col justify-between rounded-xl border bg-muted px-5 py-4 ${
+      className={`flex min-w-0 flex-col justify-between rounded-surface border bg-muted px-5 py-4 ${
         warning ? "border-warning-border ring-1 ring-warning-border" : "border-border"
       } ${muted ? "border-dashed opacity-50 grayscale" : ""}`}
     >

@@ -51,7 +51,7 @@ export function DriftSummaryCard({
 
   return (
     <section
-      className="rounded-xl border border-border bg-surface p-5 shadow-(--shadow-card)"
+      className="rounded-surface border border-border bg-surface p-5 shadow-(--shadow-card)"
       aria-labelledby="drift-summary-title"
     >
       <header className="flex items-center justify-between gap-3 border-b border-border pb-3">

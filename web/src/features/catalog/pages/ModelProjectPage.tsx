@@ -20,7 +20,7 @@ export default function ModelProjectPage() {
 
   if (loading)
     return (
-      <section className="flex-1 rounded-xl border border-border bg-surface p-8" />
+      <section className="flex-1 rounded-surface border border-border bg-surface p-8" />
     );
 
   if (!selectedModel) {
@@ -56,7 +56,7 @@ export default function ModelProjectPage() {
       </div>
 
       <div className="grid gap-4 p-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-border bg-muted p-4">
+        <div className="rounded-surface border border-border bg-muted p-4">
           <p className="text-xs font-semibold uppercase text-muted-foreground">
             {t("access")}
           </p>
@@ -64,7 +64,7 @@ export default function ModelProjectPage() {
             {selectedModel.access_mode}
           </p>
         </div>
-        <div className="rounded-xl border border-border bg-muted p-4">
+        <div className="rounded-surface border border-border bg-muted p-4">
           <p className="text-xs font-semibold uppercase text-muted-foreground">
             {t("flavor")}
           </p>
@@ -72,7 +72,7 @@ export default function ModelProjectPage() {
             {selectedModel.flavor || "-"}
           </p>
         </div>
-        <div className="rounded-xl border border-border bg-muted p-4">
+        <div className="rounded-surface border border-border bg-muted p-4">
           <p className="text-xs font-semibold uppercase text-muted-foreground">
             {t("updated")}
           </p>
@@ -86,7 +86,7 @@ export default function ModelProjectPage() {
         <p className="mb-2 text-sm font-semibold text-foreground">
           {t("endpoint")}
         </p>
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted p-3 md:flex-row md:items-center">
+        <div className="flex flex-col gap-3 rounded-surface border border-border bg-muted p-3 md:flex-row md:items-center">
           <code className="min-w-0 flex-1 overflow-x-auto text-sm text-foreground">
             {selectedModel.endpoint_url}
           </code>

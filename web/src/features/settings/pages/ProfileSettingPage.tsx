@@ -169,7 +169,7 @@ export default function ProfileSettingPage() {
     <div className="w-full space-y-6">
       <section className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         <aside className="flex flex-col">
-          <div className="flex-1 rounded-xl border border-border bg-surface">
+          <div className="flex-1 rounded-surface border border-border bg-surface">
             <div className="flex flex-col items-center text-center p-6">
               <button
                 type="button"
@@ -241,7 +241,7 @@ export default function ProfileSettingPage() {
           </div>
         </aside>
 
-        <div className="rounded-xl border border-border bg-surface p-6">
+        <div className="rounded-surface border border-border bg-surface p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-base font-bold text-foreground">
@@ -310,7 +310,7 @@ export default function ProfileSettingPage() {
                       onChange={(event) =>
                         updateProfileField("pronouns", event.target.value)
                       }
-                      className="h-14 w-full appearance-none rounded-2xl border border-border bg-surface pl-10 pr-10 text-sm font-normal text-foreground outline-none transition-colors duration-200 hover:border-primary focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
+                      className="h-14 w-full appearance-none rounded-control border border-border bg-surface pl-10 pr-10 text-sm font-normal text-foreground outline-none transition-colors duration-200 hover:border-primary focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                     >
                       <option value="">{t("profilePage.pronounUnspecified")}</option>
                       <option value="he/him">{t("profilePage.pronounHe")}</option>
@@ -393,7 +393,7 @@ export default function ProfileSettingPage() {
                 <FileText className="pointer-events-none absolute left-3 top-4 h-4 w-4 text-muted-foreground" />
                 <textarea
                   id="profile-description"
-                  className={`text-sm text-foreground placeholder:text-muted-foreground font-normal placeholder:font-normal min-h-24 w-full resize-y rounded-2xl border border-border bg-surface py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-muted disabled:text-muted-foreground ${
+                  className={`text-sm text-foreground placeholder:text-muted-foreground font-normal placeholder:font-normal min-h-24 w-full resize-y rounded-control border border-border bg-surface py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-muted disabled:text-muted-foreground ${
                     editingProfile
                       ? "hover:border-primary focus:border-primary"
                       : "cursor-default hover:border-border focus:border-border"
@@ -573,7 +573,7 @@ function ReadOnlyRow({
   value: string;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-md bg-muted px-3 py-3">
+    <div className="flex items-start gap-3 rounded-compact bg-muted px-3 py-3">
       <span className="mt-0.5 text-muted-foreground">{icon}</span>
       <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

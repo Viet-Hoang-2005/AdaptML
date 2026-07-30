@@ -31,7 +31,7 @@ export default function TrainingJobArtifactsPage() {
 
   return (
     <div className="animate-in space-y-6 fade-in duration-300">
-      <div className="rounded-xl border border-primary/20 bg-primary-subtle p-5">
+      <div className="rounded-surface border border-primary/20 bg-primary-subtle p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-bold text-primary">
@@ -217,7 +217,7 @@ function ArtifactUri({
       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
         {heading}
       </p>
-      <div className="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-muted px-4 py-2 shadow-sm">
+      <div className="flex w-full min-w-0 items-center justify-between gap-3 rounded-surface border border-border bg-muted px-4 py-2 shadow-sm">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             {label}
@@ -231,7 +231,7 @@ function ArtifactUri({
         </div>
         <button
           type="button"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-surface text-muted-foreground shadow-sm transition-all hover:bg-muted hover:text-foreground disabled:opacity-40"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-surface border border-border bg-surface text-muted-foreground shadow-sm transition-all hover:bg-muted hover:text-foreground disabled:opacity-40"
           disabled={!value}
           onClick={() => onCopy(value)}
           aria-label={t("detail.artifactPage.copy", { label })}

@@ -61,7 +61,7 @@ export function CSVEditor({ initialCsvText, onChange, readOnly = false }: CSVEdi
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="p-1 rounded hover:bg-muted disabled:opacity-50"
+              className="rounded-surface p-1 hover:bg-muted disabled:opacity-50"
               aria-label={t('csv.previous')}
             >
               <ArrowLeft className="w-4 h-4" />
@@ -69,7 +69,7 @@ export function CSVEditor({ initialCsvText, onChange, readOnly = false }: CSVEdi
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="p-1 rounded hover:bg-muted disabled:opacity-50"
+              className="rounded-surface p-1 hover:bg-muted disabled:opacity-50"
               aria-label={t('csv.next')}
             >
               <ArrowRight className="w-4 h-4" />

@@ -1,7 +1,7 @@
 import React from "react";
 import { cn } from "@/shared/lib/cn";
 
-export interface PageContentProps {
+export interface PageBodyProps {
   children: React.ReactNode;
   className?: string;
   title?: React.ReactNode;
@@ -13,11 +13,11 @@ export function PageBody({
   className,
   title,
   headerClassName,
-}: PageContentProps) {
+}: PageBodyProps) {
   return (
     <section
       className={cn(
-        "flex flex-1 flex-col rounded-xl border border-border bg-surface text-foreground shadow-sm overflow-hidden",
+        "flex flex-1 flex-col rounded-surface border border-border bg-surface text-foreground shadow-sm overflow-hidden",
         className,
       )}
     >

@@ -27,8 +27,15 @@
 - Keep technical consoles and syntax palettes intentionally dark and readable.
 - Keep chart series ordered through `chart-1` to `chart-6`; use
   `terminal-*`/`syntax-*` component tokens for technical output.
+- Use the shared semantic radius roles: `compact` (4 px) for menu/tree items,
+  `surface` (8 px) for cards, tables, terminals, dropzones, dropdown shells and
+  icon buttons, `control` (12 px) for form controls and buttons, `overlay`
+  (16 px) for dialogs/drawers/Auth cards, and `full` for pills and circles.
+  Do not use Tailwind size-based or arbitrary radius utilities.
 - `pnpm lint` runs `scripts/check-colors.mjs`. A genuine technical exception
   needs a narrow `color-ignore: reason` comment.
+- `pnpm lint` also runs `scripts/check-radii.mjs`. A genuine graphical
+  exception needs a narrow `radius-ignore: reason` comment.
 
 Before introducing a new primitive, inspect `shared/components` and extend the
 existing API where appropriate. When adding a color, define its primitive and

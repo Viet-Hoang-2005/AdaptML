@@ -11,7 +11,7 @@ export function RouteFallback() {
       role="status"
       aria-label={t("statuses.loadingPage")}
     >
-      <div className="hidden w-18 shrink-0 rounded-xl bg-surface md:block xl:w-64" />
+      <div className="hidden w-18 shrink-0 rounded-surface bg-surface md:block xl:w-64" />
       <div className="flex-1 space-y-5 px-0 md:px-6">
         <Skeleton className="h-14 w-full" />
         <Skeleton className="h-32 w-full" />

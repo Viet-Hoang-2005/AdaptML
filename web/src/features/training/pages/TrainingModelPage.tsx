@@ -323,7 +323,7 @@ export default function TrainingModelPage() {
       <PageHeader title={t("title")} />
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-border bg-surface p-5 shadow-sm md:col-span-2">
+        <div className="rounded-surface border border-border bg-surface p-5 shadow-sm md:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -370,7 +370,7 @@ export default function TrainingModelPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+        <div className="rounded-surface border border-border bg-surface p-5 shadow-sm">
           <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t("totalJobs")}
           </p>
@@ -430,7 +430,7 @@ export default function TrainingModelPage() {
       </div>
 
       {isError ? (
-        <div className="rounded-xl border border-danger/20 bg-danger-subtle p-5">
+        <div className="rounded-surface border border-danger/20 bg-danger-subtle p-5">
           <p className="text-sm text-danger">
             {getApiErrorMessage(jobsError, t("checkApi"))}
           </p>

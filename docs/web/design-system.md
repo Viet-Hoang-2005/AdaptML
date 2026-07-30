@@ -10,7 +10,7 @@ Tokens live in `src/app/styles/tokens.css` and follow three layers:
 
 1. Primitive tokens define raw palette values.
 2. Semantic tokens describe intent: background, surface, foreground, muted, primary, success, warning, danger, border, input, and focus ring.
-3. Component tokens define control heights, radii, shadows, auth glass, and motion duration.
+3. Component tokens define control heights, semantic radii, shadows, auth glass, and motion duration.
 
 Feature code must use semantic utilities such as `bg-surface`, `text-foreground`, and `border-border`. Fixed dark palettes are reserved for terminals, code samples, syntax highlighting, crop canvases, and modal overlays.
 
@@ -42,11 +42,31 @@ themes so runtime output remains legible and predictable.
 
 - Inter is self-hosted with `@fontsource/inter`.
 - Spacing follows a 4 px grid; interaction transitions use 150–200 ms.
-- Buttons use 32/40/48 px heights and 12/16 px radii.
-- Form inputs default to 56 px height and 16 px radius.
-- Page surfaces use an 8 px radius, a visible neutral border, and no decorative card shadow.
+- Buttons use 32/40/48 px heights and the 12 px `control` radius.
+- Form inputs default to 56 px height and the 12 px `control` radius.
+- Page surfaces use the 8 px `surface` radius, a visible neutral border, and no decorative card shadow.
 - The auth card uses the original translucent white glass in light mode and a near-opaque semantic surface in dark mode.
 - Shared interactions use Tailwind, Radix primitives, CVA, and TanStack Table. Ant Design is forbidden.
+
+## Radius roles
+
+Geometry is theme-independent and uses semantic component tokens instead of
+Tailwind size names:
+
+| Role | Size | Usage |
+| --- | ---: | --- |
+| `compact` | 4 px | Menu items, tree rows, code labels, and small inline controls |
+| `surface` | 8 px | Cards, tables, terminals, dropdown shells, dropzones, and icon buttons |
+| `control` | 12 px | Buttons, inputs, selects, textareas, switches, tabs, and pickers |
+| `overlay` | 16 px | Modals, dialogs, drawers, and the Auth card |
+| `full` | Pill/circle | Avatars, badges, status dots, progress tracks, and spinners |
+
+Use only `rounded-compact`, `rounded-surface`, `rounded-control`,
+`rounded-overlay`, `rounded-full`, `rounded-none`, and the corresponding
+directional semantic variants. Do not override the radius of a shared primitive
+from feature code. A genuine graphical exception requires a nearby
+`radius-ignore: <specific reason>` comment. `pnpm lint` runs
+`scripts/check-radii.mjs` to enforce this contract.
 
 ## Application shell
 

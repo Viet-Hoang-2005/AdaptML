@@ -84,7 +84,7 @@ export function TextEditor({
   const isEmpty = content.trim() === "";
 
   return (
-    <div className="flex flex-col h-96 border border-border rounded-xl overflow-hidden bg-surface shadow-sm">
+    <div className="flex flex-col h-96 border border-border rounded-surface overflow-hidden bg-surface shadow-sm">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-2">
         <div className="text-sm font-semibold text-foreground flex items-center gap-2">

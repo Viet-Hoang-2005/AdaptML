@@ -19,7 +19,7 @@ export function MetadataRow({
       <span
         className={
           monospace
-            ? "w-fit rounded-xl border border-border bg-muted px-2 py-1 font-mono text-sm text-foreground"
+            ? "w-fit rounded-surface border border-border bg-muted px-2 py-1 font-mono text-sm text-foreground"
             : "text-sm font-medium text-foreground"
         }
       >

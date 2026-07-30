@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
         </Link>
 
         {/* Icon */}
-        <div className="mb-4 rounded-2xl flex items-center justify-center mx-auto">
+        <div className="mb-4 rounded-surface flex items-center justify-center mx-auto">
           <Mail className="h-8 w-8 text-foreground" />
         </div>
 

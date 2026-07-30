@@ -28,7 +28,7 @@ export function Picker<T extends string | number>({
           type="button"
           onClick={() => onChange(option.value)}
           className={cn(
-            "rounded-xl border p-4 text-left transition-colors",
+            "rounded-control border p-4 text-left transition-colors",
             value === option.value
               ? "border-primary bg-primary-subtle text-foreground"
               : "border-border bg-surface text-foreground hover:border-primary",

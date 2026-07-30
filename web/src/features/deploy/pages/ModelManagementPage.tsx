@@ -176,7 +176,7 @@ export default function ModelManagementPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               icon={<Search className="h-4 w-4" />}
-              className="h-10! rounded-xl!"
+              className="h-10! rounded-surface!"
             />
           </div>
           <Button
@@ -192,7 +192,7 @@ export default function ModelManagementPage() {
 
         <div className="flex flex-1 flex-col">
           {isLoading ? (
-            <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+            <div className="rounded-surface border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
               {t("loading")}
             </div>
           ) : filteredModels.length === 0 ? (

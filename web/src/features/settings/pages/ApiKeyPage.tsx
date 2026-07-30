@@ -71,7 +71,7 @@ export default function ApiKeyPage() {
         <input
           type="checkbox"
           aria-label={t("apiKey.allowModel", { name: row.original.name })}
-          className="h-4 w-4 rounded border-input accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-4 w-4 rounded-compact border-input accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           checked={apiKeyModels.includes(row.original.id)}
           onChange={(event) => {
             const nextIds = event.target.checked
@@ -127,7 +127,7 @@ export default function ApiKeyPage() {
             {t("apiKey.description")}
             <textarea
               id="input-api-key-description"
-              className="min-h-24 w-full resize-none rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none transition-colors duration-200 placeholder:text-muted-foreground hover:border-primary focus:border-primary"
+              className="min-h-24 w-full resize-none rounded-control border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none transition-colors duration-200 placeholder:text-muted-foreground hover:border-primary focus:border-primary"
               placeholder={t("apiKey.descriptionPlaceholder")}
               value={apiKeyDescription}
               onChange={(event) => setApiKeyDescription(event.target.value)}
@@ -137,7 +137,7 @@ export default function ApiKeyPage() {
             <span className="text-sm font-medium text-foreground">
               {t("apiKey.scope")}
             </span>
-            <div className="rounded-xl border border-border bg-surface overflow-hidden mt-1">
+            <div className="rounded-surface border border-border bg-surface overflow-hidden mt-1">
               <DataTable
                 columns={columns}
                 data={privateModels}
@@ -152,7 +152,7 @@ export default function ApiKeyPage() {
             <span className="text-sm font-medium text-foreground">
               {t("apiKey.python")}
             </span>
-            <div className="relative overflow-hidden rounded-xl border border-terminal-border bg-terminal">
+            <div className="relative overflow-hidden rounded-surface border border-terminal-border bg-terminal">
               <pre className="custom-scrollbar overflow-x-auto p-4 font-mono text-xs text-terminal-foreground">
                 <span className="text-syntax-keyword">import</span>{" "}
                 <span className="text-syntax-type">requests</span>
@@ -202,7 +202,7 @@ export default function ApiKeyPage() {
                   );
                   toast.success(t("apiKey.codeCopied"));
                 }}
-                className="absolute right-3 top-3 rounded-md bg-terminal-header p-2 text-terminal-muted shadow-sm ring-1 ring-terminal-border transition-colors hover:bg-terminal-border hover:text-terminal-foreground active:bg-terminal-muted"
+                className="absolute right-3 top-3 rounded-compact bg-terminal-header p-2 text-terminal-muted shadow-sm ring-1 ring-terminal-border transition-colors hover:bg-terminal-border hover:text-terminal-foreground active:bg-terminal-muted"
                 title={t("apiKey.copyCode")}
               >
                 <Copy className="h-4 w-4" />

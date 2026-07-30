@@ -27,7 +27,7 @@ export function PageHeader({
         {backLink && (
           <Link
             to={backLink.to}
-            className="inline-flex min-h-9 items-center gap-2 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex min-h-9 items-center gap-2 rounded-control text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />
             {backLink.label}

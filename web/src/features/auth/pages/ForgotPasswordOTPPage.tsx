@@ -76,7 +76,7 @@ export default function ForgotPasswordOTPPage() {
           <span className="leading-none">{t('otp.back')}</span>
         </Link>
 
-        <div className="mx-auto mb-4 rounded-2xl flex items-center justify-center">
+        <div className="mx-auto mb-4 rounded-surface flex items-center justify-center">
           <Mail className="h-8 w-8 text-foreground" />
         </div>
 

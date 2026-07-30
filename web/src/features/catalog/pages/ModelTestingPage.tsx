@@ -516,7 +516,7 @@ export default function ModelTestingPage() {
               <p className="mb-4 text-sm font-semibold text-foreground">
                 {t("testingPage.rowsLoaded", { fileName, count: rows.length })}
               </p>
-              <div className="overflow-hidden rounded-xl border border-border h-125">
+              <div className="overflow-hidden rounded-surface border border-border h-125">
                 <CSVEditor initialCsvText={csvText} readOnly={true} />
               </div>
             </div>

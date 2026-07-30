@@ -40,7 +40,7 @@ export function Switch<T extends string | number>({
     >
       <div
         className={cn(
-          "inline-flex rounded-xl shadow-sm",
+          "inline-flex rounded-control shadow-sm",
           fullWidth && "w-full",
         )}
         role="tablist"
@@ -58,9 +58,9 @@ export function Switch<T extends string | number>({
               className={cn(
                 switchVariants({ size, selected: isSelected }),
                 index === 0
-                  ? "rounded-l-lg"
+                  ? "rounded-l-control"
                   : index === options.length - 1
-                    ? "rounded-r-lg -ml-px"
+                    ? "rounded-r-control -ml-px"
                     : "-ml-px",
                 fullWidth && "flex-1",
               )}

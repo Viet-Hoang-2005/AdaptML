@@ -17,7 +17,7 @@ export default function MetadataTrainingJobPage() {
 
   return (
     <>
-      <div className="space-y-6 rounded-xl border border-border bg-surface p-6">
+      <div className="space-y-6 rounded-surface border border-border bg-surface p-6">
         <StepTitle
           title={t("createFlow.metadata.title")}
           subtitle={t("createFlow.metadata.description")}

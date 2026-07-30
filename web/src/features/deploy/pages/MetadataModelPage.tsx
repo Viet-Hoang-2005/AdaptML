@@ -18,7 +18,7 @@ export default function MetadataModelPage() {
 
   return (
     <>
-      <div className="rounded-xl border border-border bg-surface p-6 lg:p-8">
+      <div className="rounded-surface border border-border bg-surface p-6 lg:p-8">
         <ProjectMetadataFields
           form={metadataForm}
           project={project}

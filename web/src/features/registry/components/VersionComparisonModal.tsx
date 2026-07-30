@@ -98,7 +98,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
   if (versions.length < 2) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm">
-        <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden text-center p-8">
+        <div className="bg-surface rounded-overlay shadow-xl w-full max-w-md overflow-hidden text-center p-8">
           <div className="mx-auto bg-muted rounded-full w-16 h-16 flex items-center justify-center mb-4">
             <GitCompare className="h-8 w-8 text-muted-foreground" />
           </div>
@@ -122,10 +122,10 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm">
-      <div className="bg-surface rounded-2xl shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-surface rounded-overlay shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex justify-between items-center p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-info-subtle p-2 text-info">
+            <div className="rounded-surface bg-info-subtle p-2 text-info">
               <GitCompare className="h-5 w-5" />
             </div>
             <div>
@@ -148,9 +148,9 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 bg-muted/50">
-          <div className="grid md:grid-cols-[1fr_1fr_auto] gap-4 mb-6 rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <div className="grid md:grid-cols-[1fr_1fr_auto] gap-4 mb-6 rounded-surface border border-border bg-surface p-4 shadow-sm">
             <select
-              className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-ring"
+              className="w-full rounded-control border border-border bg-surface px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-ring"
               value={leftId}
               onChange={(event) => setLeftId(event.target.value)}
             >
@@ -166,7 +166,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
               ))}
             </select>
             <select
-              className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-ring"
+              className="w-full rounded-control border border-border bg-surface px-3 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-ring"
               value={rightId}
               onChange={(event) => setRightId(event.target.value)}
             >
@@ -196,7 +196,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
 
           {comparison ? (
             <div className="space-y-6">
-              <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+              <section className="rounded-surface border border-border bg-surface p-5 shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-bold text-foreground">
@@ -218,7 +218,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                     {comparison.recommendation.warnings.map((warning) => (
                       <div
                         key={warning}
-                        className="flex items-start gap-2 rounded-xl border border-warning-border bg-warning-subtle p-3 text-sm text-warning"
+                        className="flex items-start gap-2 rounded-surface border border-warning-border bg-warning-subtle p-3 text-sm text-warning"
                       >
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                         {warning}
@@ -232,7 +232,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                 {[comparison.left, comparison.right].map((version, index) => (
                   <div
                     key={version.id}
-                    className="rounded-xl border border-border bg-surface p-5 shadow-sm"
+                    className="rounded-surface border border-border bg-surface p-5 shadow-sm"
                   >
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       {index === 0
@@ -257,7 +257,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                 ))}
               </section>
 
-              <section className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+              <section className="rounded-surface border border-border bg-surface shadow-sm overflow-hidden">
                 <div className="border-b border-border px-5 py-3">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
                     {t("comparison.metricsDiff")}
@@ -318,7 +318,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
               </section>
 
               <section className="grid xl:grid-cols-2 gap-6">
-                <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+                <div className="rounded-surface border border-border bg-surface shadow-sm overflow-hidden">
                   <div className="border-b border-border px-5 py-3">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
                       {t("comparison.paramsDiff")}
@@ -356,7 +356,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                <div className="rounded-surface border border-border bg-surface p-5 shadow-sm">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
                     {t("comparison.deployability")}
                   </h3>
@@ -403,33 +403,33 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
                 </div>
               </section>
 
-              <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+              <section className="rounded-surface border border-border bg-surface p-5 shadow-sm">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
                   {t("comparison.artifactsDiff")}
                 </h3>
                 <div className="mt-4 grid md:grid-cols-4 gap-3 text-sm">
-                  <div className="rounded-xl border border-success-border bg-success-subtle p-3 text-success">
+                  <div className="rounded-surface border border-success-border bg-success-subtle p-3 text-success">
                     <strong>{comparison.artifact_diff.added.length}</strong>
                     <br />
                     {t("comparison.added")}
                   </div>
-                  <div className="rounded-xl border border-danger-border bg-danger-subtle p-3 text-danger">
+                  <div className="rounded-surface border border-danger-border bg-danger-subtle p-3 text-danger">
                     <strong>{comparison.artifact_diff.removed.length}</strong>
                     <br />
                     {t("comparison.removed")}
                   </div>
-                  <div className="rounded-xl border border-warning-border bg-warning-subtle p-3 text-warning">
+                  <div className="rounded-surface border border-warning-border bg-warning-subtle p-3 text-warning">
                     <strong>{comparison.artifact_diff.changed.length}</strong>
                     <br />
                     {t("comparison.changed")}
                   </div>
-                  <div className="rounded-xl bg-muted border border-border p-3">
+                  <div className="rounded-surface bg-muted border border-border p-3">
                     <strong>{comparison.artifact_diff.unchanged_count}</strong>
                     <br />
                     {t("comparison.unchanged")}
                   </div>
                 </div>
-                <div className="mt-4 max-h-64 overflow-auto rounded-xl border border-border">
+                <div className="mt-4 max-h-64 overflow-auto rounded-surface border border-border">
                   <table className="min-w-full text-xs">
                     <tbody className="divide-y divide-border">
                       {comparison.artifact_diff.added.map((item) => (
@@ -468,7 +468,7 @@ export function VersionComparisonModal({ family, versions, onClose }: Props) {
               </section>
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-border bg-surface p-10 text-center text-muted-foreground">
+            <div className="rounded-surface border border-dashed border-border bg-surface p-10 text-center text-muted-foreground">
               {t("comparison.choosePrompt")}
             </div>
           )}

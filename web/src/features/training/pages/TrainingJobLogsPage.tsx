@@ -22,7 +22,7 @@ export default function TrainingJobLogsPage() {
   return (
     <div className="animate-in space-y-4 fade-in duration-300">
       {job.status === "failed" && job.stop_reason && (
-        <div className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger-subtle p-4 text-sm font-medium text-danger">
+        <div className="flex items-start gap-3 rounded-surface border border-danger/20 bg-danger-subtle p-4 text-sm font-medium text-danger">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
           <div>
             <p className="mb-1 font-bold text-danger">{t("detail.logsPage.stopReason")}</p>

@@ -67,7 +67,7 @@ export default function SignUpPage() {
 
   return (
     <AuthCard>
-      <div className="mb-2 rounded-2xl flex items-center justify-center mx-auto">
+      <div className="mb-2 rounded-surface flex items-center justify-center mx-auto">
         <UserPlus className="h-8 w-8 text-foreground" />
       </div>
 

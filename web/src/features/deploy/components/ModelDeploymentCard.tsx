@@ -178,14 +178,14 @@ export function ModelDeploymentCard({
 
   return (
     <article
-      className={`relative flex flex-col rounded-2xl border bg-surface shadow-sm transition-all hover:shadow-md border-t-4 border-x-gray-200 border-b-gray-200 ${accentClass} ${
+      className={`relative flex flex-col rounded-surface border bg-surface shadow-sm transition-all hover:shadow-md border-t-4 border-x-gray-200 border-b-gray-200 ${accentClass} ${
         variant === "compact" ? "p-5" : "p-6 lg:p-8"
       }`}
     >
       {/* ── Header Area ── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="flex items-start gap-4">
-          <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted border border-border text-muted-foreground shadow-inner">
+          <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-surface bg-muted border border-border text-muted-foreground shadow-inner">
             <Box className="h-6 w-6" />
           </div>
           <div>
@@ -270,7 +270,7 @@ export function ModelDeploymentCard({
             {t("deploymentCard.endpointUrl")}
           </label>
           {model.endpoint_url ? (
-            <div className="group flex items-center overflow-hidden rounded-xl border border-border bg-muted shadow-sm transition-colors hover:border-border">
+            <div className="group flex items-center overflow-hidden rounded-surface border border-border bg-muted shadow-sm transition-colors hover:border-border">
               <div className="flex items-center justify-center bg-muted px-3 py-2 border-r border-border text-muted-foreground">
                 <Globe className="h-4 w-4" />
               </div>
@@ -293,7 +293,7 @@ export function ModelDeploymentCard({
               </button>
             </div>
           ) : (
-            <div className="flex h-9 items-center rounded-xl border border-border border-dashed bg-muted/50 px-3 py-2">
+            <div className="flex h-9 items-center rounded-surface border border-border border-dashed bg-muted/50 px-3 py-2">
               <p className="text-xs font-mono text-muted-foreground">
                 {t("deploymentCard.endpointMissing")}
               </p>
@@ -308,7 +308,7 @@ export function ModelDeploymentCard({
               {t("deploymentCard.container")}
             </span>
             <span
-              className="truncate text-xs font-mono text-foreground bg-muted rounded px-2 py-1 border border-border w-fit max-w-full"
+              className="truncate text-xs font-mono text-foreground bg-muted rounded-compact px-2 py-1 border border-border w-fit max-w-full"
               title={model.endpoint_container_name || ""}
             >
               {model.endpoint_container_name || t("statuses.notAvailable", { ns: "common" })}
@@ -318,7 +318,7 @@ export function ModelDeploymentCard({
             <span className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               {t("deploymentCard.lastChecked")}
             </span>
-            <span className="truncate text-xs text-foreground bg-muted rounded px-2 py-1 border border-border w-fit max-w-full">
+            <span className="truncate text-xs text-foreground bg-muted rounded-compact px-2 py-1 border border-border w-fit max-w-full">
               {model.endpoint_last_checked_at
                 ? new Date(model.endpoint_last_checked_at).toLocaleString()
                 : t("statuses.notAvailable", { ns: "common" })}
@@ -329,7 +329,7 @@ export function ModelDeploymentCard({
 
       {/* Errors / Logs */}
       {(model.build_error || model.endpoint_error) && (
-        <div className="mt-6 rounded-xl border border-danger/20 bg-danger-subtle p-4">
+        <div className="mt-6 rounded-surface border border-danger/20 bg-danger-subtle p-4">
           <p className="text-sm font-bold text-danger flex items-center gap-2">
             <XCircle className="h-4 w-4" />
             {t("deploymentCard.deploymentError")}

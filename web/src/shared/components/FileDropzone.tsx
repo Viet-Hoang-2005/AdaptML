@@ -12,7 +12,7 @@ export function FileDropzone({
   onChange: (file: File | null) => void;
 }) {
   return (
-    <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted px-4 text-center hover:border-primary">
+    <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-surface border border-dashed border-border bg-muted px-4 text-center hover:border-primary">
       <UploadCloud className="mb-3 h-6 w-6 text-muted-foreground" />
       <span className="max-w-full truncate text-sm font-semibold text-foreground">
         {title}

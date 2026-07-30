@@ -45,10 +45,10 @@ export function ToastContainer() {
                 current.filter((entry) => entry.id !== item.id),
               )
             }
-            className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-xl border border-border bg-surface p-4 text-foreground shadow-(--shadow-overlay) data-[state=open]:animate-slide-in"
+            className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-surface border border-border bg-surface p-4 text-foreground shadow-(--shadow-overlay) data-[state=open]:animate-slide-in"
           >
             <span
-              className={`flex h-8 w-8 items-center justify-center rounded-xl border ${visual.className}`}
+              className={`flex h-8 w-8 items-center justify-center rounded-surface border ${visual.className}`}
             >
               <Icon className="h-4 w-4" />
             </span>
@@ -56,7 +56,7 @@ export function ToastContainer() {
               {item.message}
             </ToastPrimitive.Description>
             <ToastPrimitive.Close
-              className="flex h-8 w-8 items-center justify-center rounded-xl text-foreground-subtle hover:bg-surface-hover hover:text-foreground active:bg-surface-active"
+              className="flex h-8 w-8 items-center justify-center rounded-surface text-foreground-subtle hover:bg-surface-hover hover:text-foreground active:bg-surface-active"
               aria-label={t("accessibility.dismissNotification")}
             >
               <X className="h-4 w-4" />

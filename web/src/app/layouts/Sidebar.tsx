@@ -31,7 +31,7 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onCloseMobile
   const { t } = useTranslation('common');
 
   const itemClass = (match: string) => cn(
-    'group flex h-10 items-center gap-3 rounded-[8px] px-3 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+    'group flex h-10 items-center gap-3 rounded-compact px-3 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring',
     location.pathname.startsWith(match)
       ? 'bg-primary text-primary-foreground'
       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -61,11 +61,11 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onCloseMobile
       )}>
         <div className="flex h-16 items-center justify-between border-b border-border px-3 md:hidden">
           <span className="text-sm text-muted-foreground">{t('navigation.workspace')}</span>
-          <button type="button" onClick={onCloseMobile} className="flex h-10 w-10 items-center justify-center rounded-[8px] text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t('actions.closeNavigation')}><X className="h-5 w-5" /></button>
+          <button type="button" onClick={onCloseMobile} className="flex h-10 w-10 items-center justify-center rounded-surface text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t('actions.closeNavigation')}><X className="h-5 w-5" /></button>
         </div>
 
         <div className="hidden h-12 items-center gap-1 border-b border-border p-3 md:flex md:justify-center xl:justify-start">
-          <button type="button" onClick={onToggle} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] text-muted-foreground hover:text-foreground" aria-label={collapsed ? t('actions.expandSidebar') : t('actions.collapseSidebar')}>
+          <button type="button" onClick={onToggle} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-surface text-muted-foreground hover:text-foreground" aria-label={collapsed ? t('actions.expandSidebar') : t('actions.collapseSidebar')}>
             <Menu className="h-5 w-5" />
           </button>
           <span className={cn('text-sm tracking-wide text-muted-foreground md:hidden xl:block', collapsed && 'xl:hidden')}>{t('navigation.workspace')}</span>
@@ -76,7 +76,7 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onCloseMobile
           <div className="mb-2 space-y-1">
             {utilityItems.map(renderItem)}
             <button type="button" onClick={logout} className={cn(
-              'flex h-10 w-full items-center gap-3 rounded-[8px] px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger md:justify-center md:px-0 xl:justify-start xl:px-3',
+              'flex h-10 w-full items-center gap-3 rounded-surface px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger md:justify-center md:px-0 xl:justify-start xl:px-3',
               collapsed && 'xl:justify-center xl:px-0',
             )} title={collapsed ? t('actions.logout') : undefined}>
               <LogOut className="h-5 w-5 shrink-0" />

@@ -46,7 +46,7 @@ export default function LoginPage() {
 
   return (
     <AuthCard>
-      <div className="rounded-2xl flex items-center justify-center mx-auto mb-2">
+      <div className="rounded-surface flex items-center justify-center mx-auto mb-2">
         <img src={MLdriftLogo} alt="MLdrift" className="w-8 h-8" />
       </div>
 

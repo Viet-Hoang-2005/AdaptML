@@ -36,7 +36,7 @@ export function ModelFamilyDetail({
   const isEndpointReady = prodVersion && !!prodVersion.endpoint_url;
 
   return (
-    <div className="flex flex-col border border-border rounded-xl overflow-hidden bg-surface shadow-sm">
+    <div className="flex flex-col border border-border rounded-surface overflow-hidden bg-surface shadow-sm">
       {/* Hero Header */}
       <div className="bg-muted border-b border-border p-6 flex flex-col gap-4">
         <div className="flex flex-col md:flex-row md:items-center gap-3">
@@ -47,28 +47,28 @@ export function ModelFamilyDetail({
           <div className="flex flex-wrap items-center gap-2 mt-1 md:mt-0">
             {prodVersion ? (
               <>
-                <span className="inline-flex items-center gap-1 text-success bg-success-subtle px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1 text-success bg-success-subtle px-2 py-0.5 rounded-compact text-xs font-bold uppercase tracking-wider">
                   <Star className="h-3 w-3 fill-success text-success" />{" "}
                   {t("familyDetail.productionVersion", {
                     version: formatVersion(prodVersion.version),
                   })}
                 </span>
                 {isEndpointReady ? (
-                  <span className="inline-flex items-center gap-1 text-success border border-success/20 bg-success-subtle px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-1 text-success border border-success/20 bg-success-subtle px-2 py-0.5 rounded-compact text-xs font-semibold uppercase tracking-wider">
                     <Activity className="h-3 w-3" />{" "}
                     {t("familyDetail.endpointReady")}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-muted-foreground border border-border bg-muted px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-1 text-muted-foreground border border-border bg-muted px-2 py-0.5 rounded-compact text-xs font-semibold uppercase tracking-wider">
                     {t("familyDetail.noEndpoint")}
                   </span>
                 )}
-                <span className="inline-flex items-center text-muted-foreground border border-border bg-surface px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider">
+                <span className="inline-flex items-center text-muted-foreground border border-border bg-surface px-2 py-0.5 rounded-compact text-xs font-semibold uppercase tracking-wider">
                   {t("familyDetail.registryMarkerOnly")}
                 </span>
               </>
             ) : (
-              <span className="inline-flex items-center gap-1 text-muted-foreground bg-muted px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1 text-muted-foreground bg-muted px-2 py-0.5 rounded-compact text-xs font-bold uppercase tracking-wider">
                 {t("familyDetail.noProductionVersion")}
               </span>
             )}

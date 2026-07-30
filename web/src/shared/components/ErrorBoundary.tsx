@@ -15,8 +15,8 @@ function ErrorFallback() {
   const { t } = useTranslation("common");
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 text-center text-foreground">
-      <section className="max-w-md rounded-[8px] border border-border bg-surface p-8 shadow-[var(--shadow-overlay)]">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-danger-subtle text-danger">
+      <section className="max-w-md rounded-surface border border-border bg-surface p-8 shadow-[var(--shadow-overlay)]">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-surface bg-danger-subtle text-danger">
           <AlertTriangle className="h-6 w-6" />
         </span>
         <h1 className="mt-5 text-xl font-bold text-foreground">

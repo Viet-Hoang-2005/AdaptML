@@ -140,7 +140,7 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
           />
         </div>
 
-        <div className="rounded-xl border border-border bg-surface p-6 lg:p-8 flex flex-col flex-1">
+        <div className="rounded-surface border border-border bg-surface p-6 lg:p-8 flex flex-col flex-1">
           <div className="flex flex-col flex-1">
             {activeTab === "1" && <ModelInformationPage modelId={model.id} />}
 

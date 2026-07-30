@@ -392,10 +392,10 @@ export default function TrainingJobDetailPage() {
         {t("detail.backTraining")}
       </button>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-shadow hover:shadow-md">
+      <div className="overflow-hidden rounded-surface border border-border bg-surface shadow-sm transition-shadow hover:shadow-md">
         <div className="flex flex-col gap-6 border-b border-border p-6 sm:flex-row sm:items-start sm:justify-between lg:p-8">
           <div className="flex min-w-0 items-start gap-4">
-            <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground shadow-inner sm:flex">
+            <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-surface border border-border bg-muted text-muted-foreground shadow-inner sm:flex">
               <Bot className="h-6 w-6" />
             </div>
             <div className="min-w-0 flex-1">
@@ -425,7 +425,7 @@ export default function TrainingJobDetailPage() {
                 onClick={() => void refreshHeader()}
                 aria-label={t("detail.refreshStatus")}
                 title={t("detail.refreshStatus")}
-                className="rounded-xl border border-border shadow-sm transition-all hover:border-foreground/30"
+                className="rounded-surface border border-border shadow-sm transition-all hover:border-foreground/30"
               />
               <Button
                 size="icon"
@@ -437,7 +437,7 @@ export default function TrainingJobDetailPage() {
                 onClick={() => downloadMutation.mutate()}
                 aria-label={t("detail.download")}
                 title={t("detail.download")}
-                className="rounded-xl border border-border shadow-sm transition-all hover:border-foreground/30"
+                className="rounded-surface border border-border shadow-sm transition-all hover:border-foreground/30"
               />
               <Button
                 size="icon"
@@ -447,7 +447,7 @@ export default function TrainingJobDetailPage() {
                 onClick={() => setDeleteJobOpen(true)}
                 aria-label={t("table.delete")}
                 title={t("table.delete")}
-                className="rounded-xl border border-danger/30 text-danger shadow-sm transition-all hover:border-danger hover:bg-danger-subtle hover:text-danger"
+                className="rounded-surface border border-danger/30 text-danger shadow-sm transition-all hover:border-danger hover:bg-danger-subtle hover:text-danger"
               />
             </div>
           </div>
@@ -555,7 +555,7 @@ function SummaryCell({
 }
 
 function statusBadgeClass(status: TrainingJobStatus) {
-  const base = "w-fit rounded-md border px-2.5 py-0.5 text-sm font-bold";
+  const base = "w-fit rounded-compact border px-2.5 py-0.5 text-sm font-bold";
   if (status === "completed")
     return `${base} border-success/20 bg-success-subtle text-success`;
   if (status === "failed")
@@ -568,7 +568,7 @@ function statusBadgeClass(status: TrainingJobStatus) {
 }
 
 function modelStatusBadgeClass(status: TrainingJob["model_status"]) {
-  const base = "w-fit rounded-md border px-2.5 py-0.5 text-sm font-bold";
+  const base = "w-fit rounded-compact border px-2.5 py-0.5 text-sm font-bold";
   if (status === "deployed")
     return `${base} border-success/20 bg-success-subtle text-success`;
   if (status === "built")

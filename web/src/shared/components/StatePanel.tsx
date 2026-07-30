@@ -28,12 +28,12 @@ export function StatePanel({
       <Inbox className="h-6 w-6" />
     );
   return (
-    <section className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center">
+    <section className="flex min-h-64 flex-col items-center justify-center rounded-surface border border-dashed border-border bg-surface px-6 py-12 text-center">
       <div
         className={
           kind === "error"
-            ? "mb-4 rounded-xl bg-danger-subtle p-3 text-danger"
-            : "mb-4 rounded-xl bg-muted p-3 text-muted-foreground"
+            ? "mb-4 rounded-surface bg-danger-subtle p-3 text-danger"
+            : "mb-4 rounded-surface bg-muted p-3 text-muted-foreground"
         }
       >
         {icon || fallbackIcon}

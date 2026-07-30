@@ -73,7 +73,7 @@ export function VersionLineage({
                     {formatVersion(v.version)}
                   </span>
                   {isProd && (
-                    <span className="text-[10px] uppercase font-bold text-success bg-success-subtle px-1.5 rounded">
+                    <span className="text-[10px] uppercase font-bold text-success bg-success-subtle px-1.5 rounded-compact">
                       {t("lineage.production")}
                     </span>
                   )}

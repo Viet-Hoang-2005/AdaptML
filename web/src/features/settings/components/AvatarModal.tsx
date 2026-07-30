@@ -31,13 +31,13 @@ export function AvatarModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-surface shadow-xl">
+      <div className="w-full max-w-lg rounded-surface border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-2">
           <h2 className="text-xl font-bold text-foreground">{t("avatar")}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-surface text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={t("avatarDialog.close")}
           >
             <X className="h-6 w-6" />
@@ -75,7 +75,7 @@ export function AvatarModal({
               </div>
             </div>
           ) : (
-            <div className="space-y-4 rounded-xl border border-dashed border-border px-5 py-6 text-center">
+            <div className="space-y-4 rounded-surface border border-dashed border-border px-5 py-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <ImageUp className="h-6 w-6" />
               </div>

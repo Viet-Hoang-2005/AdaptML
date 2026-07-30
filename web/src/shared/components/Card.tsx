@@ -5,7 +5,7 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "rounded-[8px] border border-border bg-surface text-foreground",
+        "rounded-surface border border-border bg-surface text-foreground",
         className,
       )}
       {...props}
@@ -69,7 +69,7 @@ export function CardSummary({
                 : "text-foreground-subtle";
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="rounded-surface border border-border bg-surface p-4">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
           {label}

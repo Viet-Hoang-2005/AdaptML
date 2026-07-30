@@ -70,7 +70,7 @@ export function TerminalViewer({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-xl border border-terminal-border bg-terminal shadow-lg",
+        "overflow-hidden rounded-surface border border-terminal-border bg-terminal shadow-lg",
         className,
       )}
     >

@@ -139,7 +139,7 @@ export default function CreateDriftMonitoringPage() {
           to: `/dashboard/drift-monitoring/${modelId}`,
         }}
       />
-      <section className="flex flex-col flex-1 rounded-xl border border-border bg-surface p-6 space-y-6">
+      <section className="flex flex-col flex-1 rounded-surface border border-border bg-surface p-6 space-y-6">
         <div className="space-y-4">
           <StepTitle
             title={t("createPage.referenceTitle")}
@@ -183,7 +183,7 @@ export default function CreateDriftMonitoringPage() {
             title={t("createPage.previewTitle")}
             description={t("createPage.previewDescription")}
           />
-          <div className="h-100 rounded-xl border border-border overflow-hidden relative bg-muted">
+          <div className="h-100 rounded-surface border border-border overflow-hidden relative bg-muted">
             {isLoadingProductionData ? (
               <div className="flex h-full items-center justify-center text-muted-foreground">
                 {t("createPage.loadingProduction")}

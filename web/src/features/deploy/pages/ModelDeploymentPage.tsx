@@ -17,7 +17,7 @@ export function ModelDeploymentPage({
   const { t } = useTranslation("deploy");
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-surface border border-border bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="font-semibold text-foreground">
             {t("deployment.currentMetadataTitle")}
@@ -59,7 +59,7 @@ export function ModelDeploymentPage({
           <p className="text-sm font-semibold text-muted-foreground">
             {t("deployment.endpoint")}
           </p>
-          <code className="mt-2 block bg-muted p-4 rounded-xl text-sm text-foreground font-mono break-all border border-border">
+          <code className="mt-2 block bg-muted p-4 rounded-surface text-sm text-foreground font-mono break-all border border-border">
             {model.endpoint_url || "-"}
           </code>
         </div>

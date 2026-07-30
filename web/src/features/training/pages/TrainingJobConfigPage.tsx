@@ -7,7 +7,7 @@ export default function TrainingJobConfigPage() {
   const { job } = useTrainingJobDetailContext();
 
   return (
-    <div className="animate-in overflow-hidden rounded-xl border border-border bg-surface shadow-sm fade-in duration-300">
+    <div className="animate-in overflow-hidden rounded-surface border border-border bg-surface shadow-sm fade-in duration-300">
       <div className="border-b border-border bg-muted/50 px-6 py-4">
         <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
           {t("detail.config.title")}

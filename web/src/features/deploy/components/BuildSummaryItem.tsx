@@ -6,7 +6,7 @@ export function BuildSummaryItem({
   value: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-muted p-4">
+    <div className="rounded-surface border border-border bg-muted p-4">
       <p className="text-xs font-semibold uppercase text-muted-foreground">
         {label}
       </p>

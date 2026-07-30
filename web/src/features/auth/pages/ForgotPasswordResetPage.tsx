@@ -57,7 +57,7 @@ export default function ForgotPasswordResetPage() {
           <span className="leading-none">{t('recovery.startOver')}</span>
         </Link>
 
-        <div className="mb-4 rounded-2xl flex items-center justify-center mx-auto">
+        <div className="mb-4 rounded-surface flex items-center justify-center mx-auto">
           <LockKeyhole className="h-8 w-8 text-foreground" />
         </div>
 
