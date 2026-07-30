@@ -27,13 +27,13 @@ export function PageHeader({
         {backLink && (
           <Link
             to={backLink.to}
-            className="inline-flex min-h-9 items-center gap-2 rounded-control text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex min-h-9 items-center gap-2 rounded-control text-style-body-strong text-color-muted-foreground hover:text-color-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />
             {backLink.label}
           </Link>
         )}
-        <h1 className="text-xl font-bold text-foreground">{title}</h1>
+        <h1 className="text-style-page-title text-color-foreground">{title}</h1>
       </div>
 
       {tabs && <PageTabs tabs={tabs} />}

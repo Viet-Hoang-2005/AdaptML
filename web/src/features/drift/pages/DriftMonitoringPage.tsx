@@ -112,7 +112,7 @@ export default function DriftMonitoringPage() {
       accessorKey: "created_at",
       header: t("runAt"),
       cell: ({ row }) => (
-        <span className="whitespace-nowrap text-muted-foreground">
+        <span className="whitespace-nowrap text-color-muted-foreground">
           {new Date(row.original.created_at).toLocaleString(i18n.language)}
         </span>
       ),

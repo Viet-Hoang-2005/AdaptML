@@ -11,11 +11,11 @@ export function StepTitle({ title, subtitle, description, icon: Icon }: StepTitl
   const text = subtitle || description;
   return (
     <div className="mb-4">
-      <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-        {Icon && <Icon className="w-5 h-5 text-muted-foreground" />}
+      <h2 className="flex items-center gap-2 text-style-section-title text-color-foreground">
+        {Icon && <Icon className="w-5 h-5 text-color-muted-foreground" />}
         {title}
       </h2>
-      {text && <p className="text-sm text-muted-foreground mt-1">{text}</p>}
+      {text && <p className="mt-1 text-style-body text-color-muted-foreground">{text}</p>}
     </div>
   );
 }

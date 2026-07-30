@@ -18,6 +18,7 @@ function getAnsiStyle(segment: Anser.AnserJsonEntry): CSSProperties {
   return {
     color: segment.fg_truecolor || segment.fg || undefined,
     backgroundColor: segment.bg_truecolor || segment.bg || undefined,
+    // typography-ignore: ANSI decorations are runtime data, not application typography.
     fontWeight: decorations.has("bold") ? 700 : undefined,
     fontStyle: decorations.has("italic") ? "italic" : undefined,
     opacity: decorations.has("dim") ? 0.7 : undefined,
@@ -75,8 +76,8 @@ export function TerminalViewer({
       )}
     >
       <div className="flex min-h-13 items-center border-b border-terminal-border bg-terminal-header px-4 py-3">
-        <Terminal className="mr-2 h-4 w-4 shrink-0 text-terminal-muted" />
-        <span className="truncate font-mono text-sm text-terminal-foreground">
+        <Terminal className="mr-2 h-4 w-4 shrink-0 text-color-terminal-muted" />
+        <span className="truncate font-mono text-style-code-sm text-color-terminal-foreground">
           {title ?? t("terminal.title")}
         </span>
         <div className="ml-auto flex items-center gap-2">
@@ -88,7 +89,7 @@ export function TerminalViewer({
             size="sm"
             title={t("terminal.copyTitle")}
             icon={<Clipboard className="h-3.5 w-3.5" />}
-            className="border-terminal-border bg-terminal-header text-terminal-foreground hover:border-terminal-muted hover:bg-terminal-border active:bg-terminal-muted"
+            className="border-terminal-border bg-terminal-header text-color-terminal-foreground hover:border-terminal-muted hover:bg-terminal-border active:bg-terminal-muted"
           >
             {t("terminal.copy")}
           </Button>
@@ -97,7 +98,7 @@ export function TerminalViewer({
       <div
         ref={terminalRef}
         className={cn(
-          "custom-scrollbar h-72 w-full overflow-y-auto bg-terminal p-4 font-mono text-sm text-terminal-foreground antialiased",
+          "custom-scrollbar h-72 w-full overflow-y-auto bg-terminal p-4 font-mono text-style-terminal text-color-terminal-foreground antialiased",
           bodyClassName,
         )}
         style={{ scrollBehavior: "smooth" }}
@@ -106,13 +107,13 @@ export function TerminalViewer({
           logs.map((log, index) => (
             <div
               key={`${index}-${log}`}
-              className="mb-1 break-all whitespace-pre-wrap leading-tight"
+              className="mb-1 break-all whitespace-pre-wrap"
             >
               <AnsiLogLine log={log} />
             </div>
           ))
         ) : placeholder ? (
-          <div className="break-all whitespace-pre-wrap text-terminal-muted italic">
+          <div className="break-all whitespace-pre-wrap text-color-terminal-muted italic">
             {placeholder}
           </div>
         ) : null}

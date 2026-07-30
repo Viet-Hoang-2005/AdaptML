@@ -127,15 +127,15 @@ export default function CompleteProfilePage() {
       <div className="max-w-sm w-full mx-auto">
         <Link
           to="/signup"
-          className="mb-4 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground
+          className="mb-4 flex items-center gap-2 text-style-body text-color-muted-foreground hover:text-color-foreground
                     font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="leading-none">{t('profile.back')}</span>
+          <span className="">{t('profile.back')}</span>
         </Link>
 
-        <h2 className="mb-1 text-2xl font-bold text-foreground">{t('profile.title')}</h2>
-        <p className="mb-6 text-sm text-muted-foreground">
+        <h2 className="mb-1 text-style-page-title font-bold text-color-foreground">{t('profile.title')}</h2>
+        <p className="mb-6 text-style-body text-color-muted-foreground">
           {t('profile.registering', { email })}
         </p>
 
@@ -154,7 +154,7 @@ export default function CompleteProfilePage() {
             className="flex w-full items-center justify-between gap-4 rounded-control border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary focus:border-primary focus:outline-none"
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-color-muted-foreground">
                 {avatarPreview ? (
                   <img src={avatarPreview} alt={t('profile.avatarPreview')} className="h-full w-full object-cover" />
                 ) : (
@@ -162,8 +162,8 @@ export default function CompleteProfilePage() {
                 )}
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">{t('profile.avatar')}</p>
-                <p className="text-xs text-muted-foreground">{t('profile.avatarDescription')}</p>
+                <p className="text-style-body-strong text-color-foreground">{t('profile.avatar')}</p>
+                <p className="text-style-caption text-color-muted-foreground">{t('profile.avatarDescription')}</p>
               </div>
             </div>
           </button>

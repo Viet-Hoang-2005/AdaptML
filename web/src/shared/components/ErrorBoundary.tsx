@@ -14,15 +14,15 @@ type ErrorBoundaryState = {
 function ErrorFallback() {
   const { t } = useTranslation("common");
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-center text-foreground">
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-center text-color-foreground">
       <section className="max-w-md rounded-surface border border-border bg-surface p-8 shadow-[var(--shadow-overlay)]">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-surface bg-danger-subtle text-danger">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-surface bg-danger-subtle text-color-danger">
           <AlertTriangle className="h-6 w-6" />
         </span>
-        <h1 className="mt-5 text-xl font-bold text-foreground">
+        <h1 className="mt-5 text-style-section-title font-bold text-color-foreground">
           {t("errors.title")}
         </h1>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        <p className="mt-3 text-style-body text-color-muted-foreground">
           {t("errors.description")}
         </p>
         <Button

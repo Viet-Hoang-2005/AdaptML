@@ -42,7 +42,7 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
 
   if (!project || !form)
     return (
-      <p className="text-sm text-muted-foreground">{t("information.loading")}</p>
+      <p className="text-style-body text-color-muted-foreground">{t("information.loading")}</p>
     );
 
   const setField = <K extends keyof ProjectMetadataForm>(
@@ -74,7 +74,7 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-style-body text-color-muted-foreground">
           {t("information.description")}
         </p>
         {editing ? (
@@ -134,8 +134,8 @@ export function ModelInformationPage({ modelId }: { modelId: string }) {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-sm font-semibold text-muted-foreground">{label}</p>
-      <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+      <p className="text-style-body-strong text-color-muted-foreground">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap text-style-body text-color-foreground">
         {value}
       </p>
     </div>

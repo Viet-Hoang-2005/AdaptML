@@ -68,13 +68,13 @@ export default function SignUpPage() {
   return (
     <AuthCard>
       <div className="mb-2 rounded-surface flex items-center justify-center mx-auto">
-        <UserPlus className="h-8 w-8 text-foreground" />
+        <UserPlus className="h-8 w-8 text-color-foreground" />
       </div>
 
-      <h2 className="mb-1 text-center text-2xl font-bold text-foreground">
+      <h2 className="mb-1 text-center text-style-page-title font-bold text-color-foreground">
         {t("signup.title")}
       </h2>
-      <p className="mb-8 text-center text-sm text-muted-foreground">
+      <p className="mb-8 text-center text-style-body text-color-muted-foreground">
         {t("signup.description")}
       </p>
 
@@ -123,11 +123,11 @@ export default function SignUpPage() {
         </Button>
       </div>
 
-      <p className="mt-8 text-center text-sm text-muted-foreground">
+      <p className="mt-8 text-center text-style-body text-color-muted-foreground">
         {t("signup.hasAccount")}{" "}
         <Link
           to="/login"
-          className="font-semibold text-foreground underline hover:text-primary-hover"
+          className="font-semibold text-color-foreground underline hover:text-color-primary-hover"
         >
           {t("signup.signIn")}
         </Link>

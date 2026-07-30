@@ -10,7 +10,7 @@ export default function DashboardLayout() {
 
   return (
     <ModelSelectionProvider>
-      <div className="flex h-screen flex-col bg-background text-foreground">
+      <div className="flex h-screen flex-col bg-background text-color-foreground">
         <Header onOpenNavigation={() => setMobileSidebarOpen(true)} />
         <div className="flex min-h-0 flex-1">
           <Sidebar

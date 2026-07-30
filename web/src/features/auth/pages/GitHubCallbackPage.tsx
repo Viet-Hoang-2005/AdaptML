@@ -42,9 +42,9 @@ export default function GitHubCallbackPage() {
   }, [loginWithGitHubCode, navigate, searchParams, t]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground">
-      <LoaderCircle className="mb-4 h-8 w-8 animate-spin text-foreground" />
-      <p className="text-sm font-medium">{t('github.completing')}</p>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background text-color-foreground">
+      <LoaderCircle className="mb-4 h-8 w-8 animate-spin text-color-foreground" />
+      <p className="text-style-body-strong">{t('github.completing')}</p>
     </div>
   );
 }

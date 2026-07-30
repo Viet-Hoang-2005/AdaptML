@@ -40,20 +40,20 @@ export default function ForgotPasswordPage() {
         {/* Back to Login */}
         <Link
           to="/login"
-          className="mb-8 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground
+          className="mb-8 flex items-center gap-2 text-style-body text-color-muted-foreground hover:text-color-foreground
                     font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="leading-none">{t('recovery.backToSignIn')}</span>
+          <span className="">{t('recovery.backToSignIn')}</span>
         </Link>
 
         {/* Icon */}
         <div className="mb-4 rounded-surface flex items-center justify-center mx-auto">
-          <Mail className="h-8 w-8 text-foreground" />
+          <Mail className="h-8 w-8 text-color-foreground" />
         </div>
 
-        <h2 className="mb-2 text-center text-2xl font-bold text-foreground">{t('recovery.title')}</h2>
-        <p className="mb-6 text-center text-sm text-muted-foreground">
+        <h2 className="mb-2 text-center text-style-page-title font-bold text-color-foreground">{t('recovery.title')}</h2>
+        <p className="mb-6 text-center text-style-body text-color-muted-foreground">
           {t('recovery.description')}
         </p>
 

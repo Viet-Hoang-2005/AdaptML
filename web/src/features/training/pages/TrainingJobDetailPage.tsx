@@ -305,7 +305,7 @@ export default function TrainingJobDetailPage() {
   if (!parsedJobId) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
-        <p className="text-lg font-medium text-muted-foreground">
+        <p className="text-style-heading font-medium text-color-muted-foreground">
           {t("detail.invalidId")}
         </p>
       </div>
@@ -315,8 +315,8 @@ export default function TrainingJobDetailPage() {
   if (jobLoading) {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
-        <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-        <p className="font-medium text-muted-foreground">
+        <RefreshCw className="h-8 w-8 animate-spin text-color-primary" />
+        <p className="font-medium text-color-muted-foreground">
           {t("detail.loading")}
         </p>
       </div>
@@ -327,12 +327,12 @@ export default function TrainingJobDetailPage() {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
         <div className="rounded-full bg-danger-subtle p-4">
-          <AlertTriangle className="h-10 w-10 text-danger" />
+          <AlertTriangle className="h-10 w-10 text-color-danger" />
         </div>
-        <p className="text-lg font-bold text-foreground">
+        <p className="text-style-heading font-bold text-color-foreground">
           {t("detail.notFound")}
         </p>
-        <p className="max-w-md text-center text-muted-foreground">
+        <p className="max-w-md text-center text-color-muted-foreground">
           {t("detail.notFoundDescription")}
         </p>
         <Button
@@ -386,7 +386,7 @@ export default function TrainingJobDetailPage() {
       <button
         type="button"
         onClick={() => navigate("/dashboard/model-training")}
-        className="group mb-6 flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        className="group mb-6 flex items-center gap-2 text-style-body-strong text-color-muted-foreground transition-colors hover:text-color-foreground"
       >
         <ArrowLeft className="h-4 w-4 transition-all group-hover:-translate-x-0.5" />
         {t("detail.backTraining")}
@@ -395,14 +395,14 @@ export default function TrainingJobDetailPage() {
       <div className="overflow-hidden rounded-surface border border-border bg-surface shadow-sm transition-shadow hover:shadow-md">
         <div className="flex flex-col gap-6 border-b border-border p-6 sm:flex-row sm:items-start sm:justify-between lg:p-8">
           <div className="flex min-w-0 items-start gap-4">
-            <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-surface border border-border bg-muted text-muted-foreground shadow-inner sm:flex">
+            <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-surface border border-border bg-muted text-color-muted-foreground shadow-inner sm:flex">
               <Bot className="h-6 w-6" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-2xl font-extrabold tracking-tight text-foreground">
+              <h1 className="truncate text-style-page-title font-bold text-color-foreground">
                 {job.name}
               </h1>
-              <p className="mt-1 text-xs font-medium text-muted-foreground">
+              <p className="mt-1 text-style-caption-strong text-color-muted-foreground">
                 {t("detail.jobNumber", { id: job.id })}
               </p>
             </div>
@@ -447,7 +447,7 @@ export default function TrainingJobDetailPage() {
                 onClick={() => setDeleteJobOpen(true)}
                 aria-label={t("table.delete")}
                 title={t("table.delete")}
-                className="rounded-surface border border-danger/30 text-danger shadow-sm transition-all hover:border-danger hover:bg-danger-subtle hover:text-danger"
+                className="rounded-surface border border-danger/30 text-color-danger shadow-sm transition-all hover:border-danger hover:bg-danger-subtle hover:text-color-danger"
               />
             </div>
           </div>
@@ -460,10 +460,10 @@ export default function TrainingJobDetailPage() {
             </span>
           </SummaryCell>
           <SummaryCell label={t("detail.runtimeElapsed")}>
-            <p className="text-xl font-bold text-foreground">
+            <p className="text-style-section-title font-bold text-color-foreground">
               {formatDuration(elapsedSeconds) || "-"}
               {job.status === "running" && (
-                <span className="ml-1 animate-pulse text-xs font-normal text-primary">
+                <span className="ml-1 animate-pulse text-style-caption font-normal text-color-primary">
                   {t("detail.live")}
                 </span>
               )}
@@ -475,7 +475,7 @@ export default function TrainingJobDetailPage() {
             </span>
           </SummaryCell>
           <SummaryCell label={t("detail.overview.updatedAt")}>
-            <p className="text-xl font-bold text-foreground">
+            <p className="text-style-section-title font-bold text-color-foreground">
               {new Date(job.updated_at).toLocaleString()}
             </p>
           </SummaryCell>
@@ -546,7 +546,7 @@ function SummaryCell({
 }) {
   return (
     <div className="flex flex-col justify-center p-5">
-      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+      <p className="mb-1.5 text-style-caption font-bold uppercase text-color-muted-foreground">
         {label}
       </p>
       <div className="flex items-center">{children}</div>
@@ -555,25 +555,25 @@ function SummaryCell({
 }
 
 function statusBadgeClass(status: TrainingJobStatus) {
-  const base = "w-fit rounded-compact border px-2.5 py-0.5 text-sm font-bold";
+  const base = "w-fit rounded-compact border px-2.5 py-0.5 text-style-body-strong";
   if (status === "completed")
-    return `${base} border-success/20 bg-success-subtle text-success`;
+    return `${base} border-success/20 bg-success-subtle text-color-success`;
   if (status === "failed")
-    return `${base} border-danger/20 bg-danger-subtle text-danger`;
+    return `${base} border-danger/20 bg-danger-subtle text-color-danger`;
   if (status === "cancelled")
-    return `${base} border-warning/20 bg-warning-subtle text-warning`;
+    return `${base} border-warning/20 bg-warning-subtle text-color-warning`;
   if (status === "running")
-    return `${base} border-primary/20 bg-primary-subtle text-primary`;
-  return `${base} border-border bg-surface text-foreground`;
+    return `${base} border-primary/20 bg-primary-subtle text-color-primary`;
+  return `${base} border-border bg-surface text-color-foreground`;
 }
 
 function modelStatusBadgeClass(status: TrainingJob["model_status"]) {
-  const base = "w-fit rounded-compact border px-2.5 py-0.5 text-sm font-bold";
+  const base = "w-fit rounded-compact border px-2.5 py-0.5 text-style-body-strong";
   if (status === "deployed")
-    return `${base} border-success/20 bg-success-subtle text-success`;
+    return `${base} border-success/20 bg-success-subtle text-color-success`;
   if (status === "built")
-    return `${base} border-primary/20 bg-primary-subtle text-primary`;
+    return `${base} border-primary/20 bg-primary-subtle text-color-primary`;
   if (status === "trained")
-    return `${base} border-warning/20 bg-warning-subtle text-warning`;
-  return `${base} border-border bg-surface text-foreground`;
+    return `${base} border-warning/20 bg-warning-subtle text-color-warning`;
+  return `${base} border-border bg-surface text-color-foreground`;
 }

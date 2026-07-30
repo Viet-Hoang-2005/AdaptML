@@ -71,7 +71,7 @@ export default function DriftReportPage() {
       
       <PageBody className="flex-1 overflow-hidden bg-muted flex items-center justify-center relative p-0 border-t border-border min-h-0">
         {loading ? (
-          <div className="flex flex-col items-center justify-center text-muted-foreground">
+          <div className="flex flex-col items-center justify-center text-color-muted-foreground">
             <Loader2 className="w-8 h-8 animate-spin mb-2" />
             <p>{t('reportPage.loading')}</p>
           </div>
@@ -82,7 +82,7 @@ export default function DriftReportPage() {
             className="absolute inset-0 w-full h-full border-0"
           />
         ) : (
-          <div className="py-20 text-danger">{t('reportPage.loadFailed')}</div>
+          <div className="py-20 text-color-danger">{t('reportPage.loadFailed')}</div>
         )}
       </PageBody>
     </div>

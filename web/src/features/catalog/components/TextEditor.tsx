@@ -87,7 +87,7 @@ export function TextEditor({
     <div className="flex flex-col h-96 border border-border rounded-surface overflow-hidden bg-surface shadow-sm">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-2">
-        <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <div className="text-style-body-strong text-color-foreground flex items-center gap-2">
           <FileArchive className="w-4 h-4" />
           requirements.txt
           {isDirty && (
@@ -110,7 +110,7 @@ export function TextEditor({
             onClick={handleDelete}
             title={t("requirementsEditor.clear")}
           >
-            <Trash2 className="w-4 h-4 text-danger" />
+            <Trash2 className="w-4 h-4 text-color-danger" />
           </button>
           <button
             className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-40"
@@ -149,14 +149,14 @@ export function TextEditor({
             onClick={() => fileInputRef.current?.click()}
             className="w-full h-full flex flex-col items-center justify-center border-0 bg-surface hover:bg-muted transition-colors group cursor-pointer"
           >
-            <Upload className="w-10 h-10 mb-3 text-muted-foreground group-hover:text-info transition-colors" />
-            <p className="text-muted-foreground font-medium group-hover:text-primary transition-colors">
+            <Upload className="w-10 h-10 mb-3 text-color-muted-foreground group-hover:text-color-info transition-colors" />
+            <p className="text-color-muted-foreground font-medium group-hover:text-color-primary transition-colors">
               {t("requirementsEditor.uploadPrompt")}
             </p>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-style-body text-color-muted-foreground mt-1">
               {t("requirementsEditor.typingHint")}
             </p>
-            <p className="text-xs text-muted-foreground mt-3">
+            <p className="text-style-caption text-color-muted-foreground mt-3">
               {t("requirementsEditor.accepted")}
             </p>
           </button>
@@ -169,6 +169,7 @@ export function TextEditor({
             onChange={(val) => setContent(val ?? "")}
             options={{
               minimap: { enabled: false },
+              // typography-ignore: Monaco requires a numeric pixel value.
               fontSize: 14,
               wordWrap: "on",
               scrollBeyondLastLine: false,

@@ -13,9 +13,9 @@ interface ToastItem {
 
 let nextId = 0;
 const visuals = {
-  success: { icon: CheckCircle2, className: "border-success-border bg-success-subtle text-success" },
-  error: { icon: XCircle, className: "border-danger-border bg-danger-subtle text-danger" },
-  warning: { icon: AlertCircle, className: "border-warning-border bg-warning-subtle text-warning" },
+  success: { icon: CheckCircle2, className: "border-success-border bg-success-subtle text-color-success" },
+  error: { icon: XCircle, className: "border-danger-border bg-danger-subtle text-color-danger" },
+  warning: { icon: AlertCircle, className: "border-warning-border bg-warning-subtle text-color-warning" },
 } as const;
 
 export function ToastContainer() {
@@ -45,18 +45,18 @@ export function ToastContainer() {
                 current.filter((entry) => entry.id !== item.id),
               )
             }
-            className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-surface border border-border bg-surface p-4 text-foreground shadow-(--shadow-overlay) data-[state=open]:animate-slide-in"
+            className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-surface border border-border bg-surface p-4 text-color-foreground shadow-(--shadow-overlay) data-[state=open]:animate-slide-in"
           >
             <span
               className={`flex h-8 w-8 items-center justify-center rounded-surface border ${visual.className}`}
             >
               <Icon className="h-4 w-4" />
             </span>
-            <ToastPrimitive.Description className="pt-1 text-sm leading-5 text-foreground">
+            <ToastPrimitive.Description className="pt-1 text-style-body text-color-foreground">
               {item.message}
             </ToastPrimitive.Description>
             <ToastPrimitive.Close
-              className="flex h-8 w-8 items-center justify-center rounded-surface text-foreground-subtle hover:bg-surface-hover hover:text-foreground active:bg-surface-active"
+              className="flex h-8 w-8 items-center justify-center rounded-surface text-color-foreground-subtle hover:bg-surface-hover hover:text-color-foreground active:bg-surface-active"
               aria-label={t("accessibility.dismissNotification")}
             >
               <X className="h-4 w-4" />

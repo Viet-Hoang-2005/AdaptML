@@ -5,7 +5,7 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "rounded-surface border border-border bg-surface text-foreground",
+        "rounded-surface border border-border bg-surface text-color-foreground",
         className,
       )}
       {...props}
@@ -59,32 +59,32 @@ export function CardSummary({
 }) {
   const iconColor =
     tone === "success"
-          ? "text-success"
-          : tone === "error"
-            ? "text-danger"
-            : tone === "warning"
-              ? "text-warning"
-              : tone === "info"
-                ? "text-info"
-                : "text-foreground-subtle";
+      ? "text-color-success"
+      : tone === "error"
+        ? "text-color-danger"
+        : tone === "warning"
+          ? "text-color-warning"
+          : tone === "info"
+            ? "text-color-info"
+            : "text-color-foreground-subtle";
 
   return (
     <div className="rounded-surface border border-border bg-surface p-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
+        <p className="text-style-overline uppercase text-color-foreground-subtle">
           {label}
         </p>
         <div className={iconColor}>{icon}</div>
       </div>
       <p
-        className="mt-2 text-xl font-bold text-foreground truncate"
+        className="mt-2 truncate text-style-metric text-color-foreground"
         title={typeof value === "string" ? value : undefined}
       >
         {value}
       </p>
       {helper && (
         <p
-          className="mt-1 text-xs text-foreground-subtle truncate"
+          className="mt-1 text-style-caption text-color-foreground-subtle truncate"
           title={helper}
         >
           {helper}

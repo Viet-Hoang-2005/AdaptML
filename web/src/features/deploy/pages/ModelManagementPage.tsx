@@ -44,7 +44,7 @@ export default function ModelManagementPage() {
       header: t("columns.index"),
       enableSorting: false,
       cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.index + 1}</span>
+        <span className="text-color-muted-foreground">{row.index + 1}</span>
       ),
     },
     {
@@ -53,7 +53,7 @@ export default function ModelManagementPage() {
       cell: ({ row }) => (
         <button
           type="button"
-          className="text-left font-semibold text-foreground hover:text-primary"
+          className="text-left font-semibold text-color-foreground hover:text-color-primary"
           onClick={() =>
             navigate(`/dashboard/management/model/${row.original.id}`)
           }
@@ -66,7 +66,7 @@ export default function ModelManagementPage() {
       accessorKey: "description",
       header: t("columns.description"),
       cell: ({ row }) => (
-        <span className="line-clamp-2 max-w-sm text-sm text-muted-foreground">
+        <span className="line-clamp-2 max-w-sm text-style-body text-color-muted-foreground">
           {row.original.description || t("noDescription")}
         </span>
       ),
@@ -109,7 +109,7 @@ export default function ModelManagementPage() {
       accessorKey: "updated_at",
       header: t("columns.updated"),
       cell: ({ row }) => (
-        <span className="whitespace-nowrap text-muted-foreground">
+        <span className="whitespace-nowrap text-color-muted-foreground">
           {new Date(row.original.updated_at).toLocaleString(i18n.language)}
         </span>
       ),
@@ -154,7 +154,7 @@ export default function ModelManagementPage() {
               variant="ghost"
               aria-label={t("actions.deleteModel")}
               title={t("actions.deleteModel")}
-              className="text-danger hover:text-danger-hover active:text-danger-active"
+              className="text-color-danger hover:text-color-danger-hover active:text-color-danger-active"
               icon={<Trash2 className="h-4 w-4" />}
               onClick={() => setModelToDelete(record)}
             />
@@ -192,7 +192,7 @@ export default function ModelManagementPage() {
 
         <div className="flex flex-1 flex-col">
           {isLoading ? (
-            <div className="rounded-surface border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+            <div className="rounded-surface border border-dashed border-border py-12 text-center text-style-body text-color-muted-foreground">
               {t("loading")}
             </div>
           ) : filteredModels.length === 0 ? (

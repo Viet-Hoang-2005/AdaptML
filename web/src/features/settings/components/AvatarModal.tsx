@@ -33,11 +33,11 @@ export function AvatarModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4">
       <div className="w-full max-w-lg rounded-surface border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-2">
-          <h2 className="text-xl font-bold text-foreground">{t("avatar")}</h2>
+          <h2 className="text-style-section-title font-bold text-color-foreground">{t("avatar")}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-surface text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-surface text-color-muted-foreground hover:bg-muted hover:text-color-foreground"
             aria-label={t("avatarDialog.close")}
           >
             <X className="h-6 w-6" />
@@ -76,14 +76,14 @@ export function AvatarModal({
             </div>
           ) : (
             <div className="space-y-4 rounded-surface border border-dashed border-border px-5 py-6 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted text-color-muted-foreground">
                 <ImageUp className="h-6 w-6" />
               </div>
               <div className="space-y-1 pb-1">
-                <p className="text-lg font-semibold text-foreground">
+                <p className="text-style-heading font-semibold text-color-foreground">
                   {t("avatarDialog.set")}
                 </p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-style-body text-color-muted-foreground">
                   {t("avatarDialog.setDescription")}
                 </p>
               </div>
@@ -99,11 +99,11 @@ export function AvatarModal({
           {(historyLoading || avatarHistory.length > 0) && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-foreground">
+                <h3 className="text-style-body-strong text-color-foreground">
                   {t("avatarDialog.previous")}
                 </h3>
                 {historyLoading && (
-                  <span className="text-xs font-semibold text-muted-foreground">
+                  <span className="text-style-caption-strong text-color-muted-foreground">
                     {t("avatarDialog.loading")}
                   </span>
                 )}

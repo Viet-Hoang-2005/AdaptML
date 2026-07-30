@@ -20,12 +20,12 @@ export interface ProgressLineStep {
 }
 
 const stepTone: Record<ProgressLineState, string> = {
-  pending: "border-border bg-surface text-muted-foreground",
-  active: "border-primary bg-primary/10 text-primary ring-4 ring-primary/10",
-  completed: "border-success bg-success/10 text-success",
-  failed: "border-danger bg-danger-subtle text-danger ring-4 ring-danger/10",
-  cancelled: "border-warning bg-warning/10 text-warning ring-4 ring-warning/10",
-  skipped: "border-border bg-muted text-muted-foreground opacity-60",
+  pending: "border-border bg-surface text-color-muted-foreground",
+  active: "border-primary bg-primary/10 text-color-primary ring-4 ring-primary/10",
+  completed: "border-success bg-success/10 text-color-success",
+  failed: "border-danger bg-danger-subtle text-color-danger ring-4 ring-danger/10",
+  cancelled: "border-warning bg-warning/10 text-color-warning ring-4 ring-warning/10",
+  skipped: "border-border bg-muted text-color-muted-foreground opacity-60",
 };
 
 export interface ProgressLineProps {
@@ -70,16 +70,16 @@ export function ProgressLine({ steps, className }: ProgressLineProps) {
               )}
             </div>
             <div className="mt-4 w-36 pr-4">
-              <span className="text-sm font-semibold text-foreground">
+              <span className="text-style-body-strong text-color-foreground">
                 {step.label}
               </span>
               {step.timestamp && (
-                <span className="mt-1 block text-xs text-muted-foreground">
+                <span className="mt-1 block text-style-caption text-color-muted-foreground">
                   {step.timestamp}
                 </span>
               )}
               {step.helper && (
-                <span className="mt-1 block text-xs text-muted-foreground">
+                <span className="mt-1 block text-style-caption text-color-muted-foreground">
                   {step.helper}
                 </span>
               )}

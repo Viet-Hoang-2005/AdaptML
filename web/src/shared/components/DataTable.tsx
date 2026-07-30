@@ -59,8 +59,8 @@ export function DataTable<T>({
       className={`overflow-hidden rounded-surface border border-border bg-surface ${className}`}
     >
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead className="border-b border-border bg-surface-muted text-xs font-semibold text-foreground">
+        <table className="w-full border-collapse text-left text-style-body">
+          <thead className="border-b border-border bg-surface-muted text-style-control text-color-foreground">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -72,7 +72,7 @@ export function DataTable<T>({
                     {header.isPlaceholder ? null : header.column.getCanSort() ? (
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1.5 rounded-compact text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="inline-flex items-center gap-1.5 rounded-compact text-left hover:text-color-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         {flexRender(
@@ -115,7 +115,7 @@ export function DataTable<T>({
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className="px-4 py-3.5 align-middle text-foreground"
+                      className="px-4 py-3.5 align-middle text-color-foreground"
                     >
                       {flexRender(
                         cell.column.columnDef.cell,
@@ -129,7 +129,7 @@ export function DataTable<T>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-4 py-12 text-center text-foreground-subtle"
+                  className="px-4 py-12 text-center text-color-foreground-subtle"
                 >
                   {resolvedEmptyMessage}
                 </td>
@@ -139,7 +139,7 @@ export function DataTable<T>({
         </table>
       </div>
       {!loading && table.getPageCount() > 1 && (
-        <div className="flex items-center justify-between border-t border-border bg-surface-muted px-4 py-3 text-xs text-foreground-subtle">
+        <div className="flex items-center justify-between border-t border-border bg-surface-muted px-4 py-3 text-style-caption text-color-foreground-subtle">
           <span>
             {t("pagination.page", {
               current: table.getState().pagination.pageIndex + 1,

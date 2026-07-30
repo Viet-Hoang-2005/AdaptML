@@ -30,13 +30,13 @@ export function Picker<T extends string | number>({
           className={cn(
             "rounded-control border p-4 text-left transition-colors",
             value === option.value
-              ? "border-primary bg-primary-subtle text-foreground"
-              : "border-border bg-surface text-foreground hover:border-primary",
+              ? "border-primary bg-primary-subtle text-color-foreground"
+              : "border-border bg-surface text-color-foreground hover:border-primary",
           )}
         >
-          <span className="text-base font-semibold">{option.title}</span>
+          <span className="text-style-heading">{option.title}</span>
           {option.description && (
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mt-2 text-style-body text-color-muted-foreground">
               {option.description}
             </p>
           )}

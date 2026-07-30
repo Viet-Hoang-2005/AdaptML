@@ -46,7 +46,7 @@ export function CSVEditor({ initialCsvText, onChange, readOnly = false }: CSVEdi
 
   if (data.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+      <div className="flex flex-col items-center justify-center h-full text-color-muted-foreground">
         <p>{t('csv.empty')}</p>
       </div>
     );
@@ -55,7 +55,7 @@ export function CSVEditor({ initialCsvText, onChange, readOnly = false }: CSVEdi
   return (
     <div className="flex flex-col h-full bg-surface relative">
       <div className="flex items-center justify-end p-2 border-b border-border">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-style-body text-color-muted-foreground">
           <span>{t('csv.range', { start: page * pageSize + 1, end: Math.min((page + 1) * pageSize, data.length), total: data.length })}</span>
           <div className="flex items-center gap-1">
             <button
@@ -86,7 +86,7 @@ export function CSVEditor({ initialCsvText, onChange, readOnly = false }: CSVEdi
               const isHeader = actualRowIndex === 0;
               return (
                 <tr key={actualRowIndex} className={isHeader ? "bg-muted sticky top-0 z-10" : "hover:bg-muted"}>
-                  <td className="w-12 px-2 py-1 text-xs text-muted-foreground bg-muted border-r border-b text-center sticky left-0 z-20">
+                  <td className="w-12 px-2 py-1 text-style-caption text-color-muted-foreground bg-muted border-r border-b text-center sticky left-0 z-20">
                     {actualRowIndex + 1}
                   </td>
                   {row.map((cell, colIndex) => (
@@ -96,7 +96,7 @@ export function CSVEditor({ initialCsvText, onChange, readOnly = false }: CSVEdi
                         value={cell || ''}
                         onChange={(e) => handleCellChange(actualRowIndex, colIndex, e.target.value)}
                         readOnly={readOnly}
-                        className={`w-full px-3 py-2 text-sm bg-transparent outline-none focus:ring-2 focus:ring-inset focus:ring-primary ${isHeader ? 'font-bold text-foreground' : 'text-foreground'}`}
+                        className={`w-full px-3 py-2 text-style-body bg-transparent outline-none focus:ring-2 focus:ring-inset focus:ring-primary ${isHeader ? 'font-bold text-color-foreground' : 'text-color-foreground'}`}
                         placeholder={isHeader ? t('csv.column', { index: colIndex + 1 }) : ''}
                       />
                     </td>

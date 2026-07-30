@@ -7,10 +7,10 @@ export function BuildSummaryItem({
 }) {
   return (
     <div className="rounded-surface border border-border bg-muted p-4">
-      <p className="text-xs font-semibold uppercase text-muted-foreground">
+      <p className="text-style-caption-strong uppercase text-color-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 break-all text-sm font-semibold text-foreground">
+      <p className="mt-1 break-all text-style-body-strong text-color-foreground">
         {value}
       </p>
     </div>

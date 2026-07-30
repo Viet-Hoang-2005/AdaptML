@@ -99,7 +99,7 @@ export function PackagePreview({
 
   return (
     <div
-      className={`rounded-surface border border-terminal-border bg-terminal p-4 font-mono text-xs text-terminal-foreground ${compact ? "max-h-60 overflow-auto custom-scrollbar" : ""}`}
+      className={`rounded-surface border border-terminal-border bg-terminal p-4 font-mono text-style-code-sm text-color-terminal-foreground ${compact ? "max-h-60 overflow-auto custom-scrollbar" : ""}`}
     >
       {lines.map((line, idx) => {
         // Extract the connector/prefix part vs the actual file name
@@ -109,9 +109,9 @@ export function PackagePreview({
 
         return (
           <div key={idx} className="flex items-center whitespace-pre py-1">
-            <span className="text-terminal-muted">{prefix}</span>
+            <span className="text-color-terminal-muted">{prefix}</span>
             <span
-              className={`flex items-center gap-1.5 ${line.isDirectory ? "text-terminal-info font-semibold" : "text-terminal-muted"}`}
+              className={`flex items-center gap-1.5 ${line.isDirectory ? "text-color-terminal-info font-semibold" : "text-color-terminal-muted"}`}
             >
               {line.isDirectory ? (
                 <Boxes className="h-3 w-3" />

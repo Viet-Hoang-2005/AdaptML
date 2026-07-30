@@ -57,9 +57,9 @@ export function DriftSummaryCard({
       <header className="flex items-center justify-between gap-3 border-b border-border pb-3">
         <h3
           id="drift-summary-title"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-foreground"
+          className="inline-flex items-center gap-2 text-style-body-strong text-color-foreground"
         >
-          <Activity className="h-4 w-4 text-brand-accent" />
+          <Activity className="h-4 w-4 text-color-brand-accent" />
           {t("driftSummary.title")}
         </h3>
         <Badge variant={presentation.variant}>{presentation.label}</Badge>
@@ -67,7 +67,7 @@ export function DriftSummaryCard({
 
       {!driftSummary || status === "not_configured" ? (
         <div className="mt-4 space-y-4">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-style-body text-color-muted-foreground">
             {t("driftSummary.empty")}
           </p>
           <Button
@@ -83,21 +83,21 @@ export function DriftSummaryCard({
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {driftPercent !== null && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-style-overline uppercase text-color-muted-foreground">
                 {t("driftSummary.latestDrift")}
               </p>
               <p
                 className={
                   status === "drift_detected"
-                    ? "mt-1 text-2xl font-bold text-danger"
-                    : "mt-1 text-2xl font-bold text-success"
+                    ? "mt-1 text-style-page-title font-bold text-color-danger"
+                    : "mt-1 text-style-page-title font-bold text-color-success"
                 }
               >
                 {driftPercent}%
               </p>
               {driftSummary.drifted_features_count !== null &&
               driftSummary.total_features ? (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-style-caption text-color-muted-foreground">
                   {t("driftSummary.featuresDrifted", {
                     drifted: driftSummary.drifted_features_count,
                     total: driftSummary.total_features,
@@ -108,16 +108,16 @@ export function DriftSummaryCard({
           )}
           {lastCheckedAt && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-style-overline uppercase text-color-muted-foreground">
                 {t("driftSummary.lastChecked")}
               </p>
-              <p className="mt-1 text-sm font-medium text-foreground">
+              <p className="mt-1 text-style-body-strong text-color-foreground">
                 {new Date(lastCheckedAt).toLocaleString()}
               </p>
             </div>
           )}
           {driftSummary.message && (
-            <p className="text-sm leading-6 text-muted-foreground sm:col-span-2">
+            <p className="text-style-body text-color-muted-foreground sm:col-span-2">
               {driftSummary.message}
             </p>
           )}

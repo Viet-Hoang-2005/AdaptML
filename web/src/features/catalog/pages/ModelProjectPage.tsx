@@ -44,50 +44,50 @@ export default function ModelProjectPage() {
   return (
     <PageBody>
       <div className="border-b border-border p-6">
-        <p className="text-xs font-semibold uppercase text-muted-foreground">
+        <p className="text-style-caption-strong uppercase text-color-muted-foreground">
           {selectedModel.status}
         </p>
-        <h2 className="mt-2 text-2xl font-bold text-foreground">
+        <h2 className="mt-2 text-style-page-title font-bold text-color-foreground">
           {selectedModel.name}
         </h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+        <p className="mt-2 max-w-3xl text-style-body text-color-muted-foreground">
           {selectedModel.description || t("noDescription")}
         </p>
       </div>
 
       <div className="grid gap-4 p-6 lg:grid-cols-3">
         <div className="rounded-surface border border-border bg-muted p-4">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">
+          <p className="text-style-caption-strong uppercase text-color-muted-foreground">
             {t("access")}
           </p>
-          <p className="mt-2 text-sm font-bold capitalize text-foreground">
+          <p className="mt-2 text-style-body-strong capitalize text-color-foreground">
             {selectedModel.access_mode}
           </p>
         </div>
         <div className="rounded-surface border border-border bg-muted p-4">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">
+          <p className="text-style-caption-strong uppercase text-color-muted-foreground">
             {t("flavor")}
           </p>
-          <p className="mt-2 text-sm font-bold text-foreground capitalize">
+          <p className="mt-2 text-style-body-strong text-color-foreground capitalize">
             {selectedModel.flavor || "-"}
           </p>
         </div>
         <div className="rounded-surface border border-border bg-muted p-4">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">
+          <p className="text-style-caption-strong uppercase text-color-muted-foreground">
             {t("updated")}
           </p>
-          <p className="mt-2 text-sm font-bold text-foreground">
+          <p className="mt-2 text-style-body-strong text-color-foreground">
             {new Date(selectedModel.updated_at).toLocaleString(i18n.language)}
           </p>
         </div>
       </div>
 
       <div className="border-t border-border p-6">
-        <p className="mb-2 text-sm font-semibold text-foreground">
+        <p className="mb-2 text-style-body-strong text-color-foreground">
           {t("endpoint")}
         </p>
         <div className="flex flex-col gap-3 rounded-surface border border-border bg-muted p-3 md:flex-row md:items-center">
-          <code className="min-w-0 flex-1 overflow-x-auto text-sm text-foreground">
+          <code className="min-w-0 flex-1 overflow-x-auto text-style-body text-color-foreground">
             {selectedModel.endpoint_url}
           </code>
           <div className="flex gap-2">

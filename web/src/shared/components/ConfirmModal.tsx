@@ -45,16 +45,16 @@ export function ConfirmModal({
     }}>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-50 bg-overlay animate-fade-in" />
-        <AlertDialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-border bg-surface text-foreground shadow-[var(--shadow-overlay)] animate-fade-in">
+        <AlertDialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-border bg-surface text-color-foreground shadow-[var(--shadow-overlay)] animate-fade-in">
           <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-            <span className={danger ? 'flex h-12 w-12 shrink-0 items-center justify-center rounded-surface bg-danger-subtle text-danger' : 'flex h-12 w-12 shrink-0 items-center justify-center rounded-surface bg-muted text-foreground'}>
+            <span className={danger ? 'flex h-12 w-12 shrink-0 items-center justify-center rounded-surface bg-danger-subtle text-color-danger' : 'flex h-12 w-12 shrink-0 items-center justify-center rounded-surface bg-muted text-color-foreground'}>
               {danger ? <AlertTriangle className="h-5 w-5" /> : <Info className="h-5 w-5" />}
             </span>
-            <AlertDialog.Title className="text-lg font-bold text-foreground">{title}</AlertDialog.Title>
+            <AlertDialog.Title className="text-style-heading text-color-foreground">{title}</AlertDialog.Title>
           </div>
           <div className="space-y-8 px-6 py-6">
             <AlertDialog.Description asChild>
-              <div className="text-base leading-6 text-muted-foreground">{description}</div>
+              <div className="text-style-body-lg text-color-muted-foreground">{description}</div>
             </AlertDialog.Description>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <AlertDialog.Cancel asChild><Button variant="secondary">{resolvedCancelText}</Button></AlertDialog.Cancel>

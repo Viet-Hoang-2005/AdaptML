@@ -13,14 +13,14 @@ export function MetadataRow({
 }) {
   return (
     <div className="flex flex-col gap-1.5 py-1">
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <span className="text-style-overline uppercase text-color-muted-foreground">
         {label}
       </span>
       <span
         className={
           monospace
-            ? "w-fit rounded-surface border border-border bg-muted px-2 py-1 font-mono text-sm text-foreground"
-            : "text-sm font-medium text-foreground"
+            ? "w-fit rounded-surface border border-border bg-muted px-2 py-1 font-mono text-style-code-sm text-color-foreground"
+            : "text-style-body-strong text-color-foreground"
         }
       >
         {value}
@@ -47,7 +47,7 @@ export function TrainingEventHistory({
   const { t } = useTranslation("training");
   if (!events.length) {
     return (
-      <div className="text-sm text-muted-foreground">
+      <div className="text-style-body text-color-muted-foreground">
         {t("runtime.eventEmpty")}
       </div>
     );
@@ -55,18 +55,18 @@ export function TrainingEventHistory({
   return (
     <ol className="space-y-3">
       {events.map((event) => (
-        <li key={event.id} className="flex gap-6 text-sm">
+        <li key={event.id} className="flex gap-6 text-style-body">
           <time
-            className="w-36 shrink-0 text-muted-foreground"
+            className="w-36 shrink-0 text-color-muted-foreground"
             dateTime={event.created_at}
           >
             {new Date(event.created_at).toLocaleString()}
           </time>
           <div className="min-w-0">
-            <p className="font-semibold text-foreground">
+            <p className="font-semibold text-color-foreground">
               {event.event_type.replace(/_/g, " ")}
             </p>
-            <p className="wrap-break-words text-muted-foreground">
+            <p className="wrap-break-words text-color-muted-foreground">
               {event.message}
             </p>
           </div>

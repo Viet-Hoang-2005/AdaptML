@@ -42,14 +42,14 @@ export default function DeveloperSettingPage() {
       header: "#",
       enableSorting: false,
       cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.index + 1}</span>
+        <span className="text-color-muted-foreground">{row.index + 1}</span>
       ),
     },
     {
       accessorKey: "name",
       header: t("apiKey.name"),
       cell: ({ row }) => (
-        <span className="font-semibold text-foreground">
+        <span className="font-semibold text-color-foreground">
           {row.original.name}
         </span>
       ),
@@ -58,7 +58,7 @@ export default function DeveloperSettingPage() {
       accessorKey: "description",
       header: t("apiKey.description"),
       cell: ({ row }) => (
-        <span className="line-clamp-2 max-w-sm text-sm text-muted-foreground">
+        <span className="line-clamp-2 max-w-sm text-style-body text-color-muted-foreground">
           {row.original.description || t("apiKey.noDescription")}
         </span>
       ),
@@ -91,7 +91,7 @@ export default function DeveloperSettingPage() {
       accessorKey: "created_at",
       header: t("apiKey.created"),
       cell: ({ row }) => (
-        <span className="whitespace-nowrap text-muted-foreground">
+        <span className="whitespace-nowrap text-color-muted-foreground">
           {new Date(row.original.created_at).toLocaleString()}
         </span>
       ),
@@ -143,10 +143,10 @@ export default function DeveloperSettingPage() {
       <PageBody>
         <div className="flex flex-col gap-4 border-b border-border px-6 py-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl font-bold text-foreground">
+            <h2 className="text-style-section-title font-bold text-color-foreground">
               {t("apiKey.developerTitle")}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-style-body text-color-muted-foreground">
               {t("apiKey.developerDescription")}
             </p>
           </div>

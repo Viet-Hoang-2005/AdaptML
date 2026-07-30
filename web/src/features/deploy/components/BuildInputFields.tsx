@@ -154,13 +154,13 @@ export function BuildInputFields({ form, setField }: BuildInputFieldsProps) {
         />
         {form.artifact_format === "mlflow_zip" ? (
           <div className="rounded-surface border border-border bg-muted p-4">
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-style-body-strong text-color-foreground">
               {t("uploadFlow.build.packageLayout", { flavor: form.flavor })}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-style-caption text-color-muted-foreground">
               {t("uploadFlow.build.packageLayoutHint")}
             </p>
-            <pre className="mt-4 overflow-x-auto rounded-compact border border-border bg-surface p-4 font-mono text-xs leading-6 text-foreground">
+            <pre className="mt-4 overflow-x-auto rounded-compact border border-border bg-surface p-4 font-mono text-style-code-sm text-color-foreground">
               {packageExamples[form.flavor].join("\n")}
             </pre>
           </div>

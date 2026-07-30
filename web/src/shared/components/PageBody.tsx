@@ -17,7 +17,7 @@ export function PageBody({
   return (
     <section
       className={cn(
-        "flex flex-1 flex-col rounded-surface border border-border bg-surface text-foreground shadow-sm overflow-hidden",
+        "flex flex-1 flex-col rounded-surface border border-border bg-surface text-color-foreground shadow-sm overflow-hidden",
         className,
       )}
     >
@@ -29,7 +29,7 @@ export function PageBody({
           )}
         >
           {typeof title === "string" ? (
-            <h3 className="text-md font-semibold">{title}</h3>
+            <h3 className="text-style-heading">{title}</h3>
           ) : (
             title
           )}

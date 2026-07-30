@@ -87,14 +87,14 @@ export default function ApiKeyPage() {
       accessorKey: "name",
       header: t("apiKey.name"),
       cell: ({ row }) => (
-        <span className="font-medium text-foreground">{row.original.name}</span>
+        <span className="font-medium text-color-foreground">{row.original.name}</span>
       ),
     },
     {
       accessorKey: "description",
       header: t("apiKey.description"),
       cell: ({ row }) => (
-        <span className="text-muted-foreground">
+        <span className="text-color-muted-foreground">
           {row.original.description || t("apiKey.noDescription")}
         </span>
       ),
@@ -122,19 +122,19 @@ export default function ApiKeyPage() {
           />
           <label
             htmlFor="input-api-key-description"
-            className="flex flex-col gap-2 text-sm font-medium text-foreground"
+            className="flex flex-col gap-2 text-style-body-strong text-color-foreground"
           >
             {t("apiKey.description")}
             <textarea
               id="input-api-key-description"
-              className="min-h-24 w-full resize-none rounded-control border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none transition-colors duration-200 placeholder:text-muted-foreground hover:border-primary focus:border-primary"
+              className="min-h-24 w-full resize-none rounded-control border border-border bg-surface px-4 py-3 text-style-body text-color-foreground outline-none transition-colors duration-200 placeholder:text-color-muted-foreground hover:border-primary focus:border-primary"
               placeholder={t("apiKey.descriptionPlaceholder")}
               value={apiKeyDescription}
               onChange={(event) => setApiKeyDescription(event.target.value)}
             />
           </label>
           <div className="flex flex-col gap-2 pt-2">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-style-body-strong text-color-foreground">
               {t("apiKey.scope")}
             </span>
             <div className="rounded-surface border border-border bg-surface overflow-hidden mt-1">
@@ -149,51 +149,51 @@ export default function ApiKeyPage() {
           </div>
 
           <div className="flex flex-col gap-2 pt-4">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-style-body-strong text-color-foreground">
               {t("apiKey.python")}
             </span>
             <div className="relative overflow-hidden rounded-surface border border-terminal-border bg-terminal">
-              <pre className="custom-scrollbar overflow-x-auto p-4 font-mono text-xs text-terminal-foreground">
-                <span className="text-syntax-keyword">import</span>{" "}
-                <span className="text-syntax-type">requests</span>
+              <pre className="custom-scrollbar overflow-x-auto p-4 font-mono text-style-code-sm text-color-terminal-foreground">
+                <span className="text-color-syntax-keyword">import</span>{" "}
+                <span className="text-color-syntax-type">requests</span>
                 {"\n\n"}
-                <span className="text-syntax-property">API_URL</span> ={" "}
-                <span className="text-syntax-string">"your_api_endpoint_url"</span>
+                <span className="text-color-syntax-property">API_URL</span> ={" "}
+                <span className="text-color-syntax-string">"your_api_endpoint_url"</span>
                 {"\n"}
-                <span className="text-syntax-property">API_KEY</span> ={" "}
-                <span className="text-syntax-string">"your_api_key_here"</span>
+                <span className="text-color-syntax-property">API_KEY</span> ={" "}
+                <span className="text-color-syntax-string">"your_api_key_here"</span>
                 {"\n\n"}
-                <span className="text-syntax-variable">headers</span> = {"{\n"}
+                <span className="text-color-syntax-variable">headers</span> = {"{\n"}
                 {"    "}
-                <span className="text-syntax-string">"X-API-Key"</span>:{" "}
-                <span className="text-syntax-property">API_KEY</span>,{"\n"}
+                <span className="text-color-syntax-string">"X-API-Key"</span>:{" "}
+                <span className="text-color-syntax-property">API_KEY</span>,{"\n"}
                 {"    "}
-                <span className="text-syntax-string">"Content-Type"</span>:{" "}
-                <span className="text-syntax-string">"application/json"</span>
+                <span className="text-color-syntax-string">"Content-Type"</span>:{" "}
+                <span className="text-color-syntax-string">"application/json"</span>
                 {"\n"}
                 {"}\n\n"}
-                <span className="text-syntax-variable">payload</span> = {"{\n"}
+                <span className="text-color-syntax-variable">payload</span> = {"{\n"}
                 {"    "}
-                <span className="text-syntax-string">"features"</span>: {"{\n"}
+                <span className="text-color-syntax-string">"features"</span>: {"{\n"}
                 {"        "}
-                <span className="text-syntax-string">"Src Port"</span>:{" "}
-                <span className="text-syntax-number">443</span>,{"\n"}
+                <span className="text-color-syntax-string">"Src Port"</span>:{" "}
+                <span className="text-color-syntax-number">443</span>,{"\n"}
                 {"        "}
-                <span className="text-syntax-comment"># Add other features...</span>
+                <span className="text-color-syntax-comment"># Add other features...</span>
                 {"\n"}
                 {"    }\n"}
                 {"}\n\n"}
-                <span className="text-syntax-variable">response</span> ={" "}
-                <span className="text-syntax-variable">requests</span>.
-                <span className="text-syntax-function">post</span>(
-                <span className="text-syntax-property">API_URL</span>,{" "}
-                <span className="text-syntax-variable">json</span>=
-                <span className="text-syntax-variable">payload</span>,{" "}
-                <span className="text-syntax-variable">headers</span>=
-                <span className="text-syntax-variable">headers</span>){"\n"}
-                <span className="text-syntax-function">print</span>(
-                <span className="text-syntax-variable">response</span>.
-                <span className="text-syntax-function">json</span>())
+                <span className="text-color-syntax-variable">response</span> ={" "}
+                <span className="text-color-syntax-variable">requests</span>.
+                <span className="text-color-syntax-function">post</span>(
+                <span className="text-color-syntax-property">API_URL</span>,{" "}
+                <span className="text-color-syntax-variable">json</span>=
+                <span className="text-color-syntax-variable">payload</span>,{" "}
+                <span className="text-color-syntax-variable">headers</span>=
+                <span className="text-color-syntax-variable">headers</span>){"\n"}
+                <span className="text-color-syntax-function">print</span>(
+                <span className="text-color-syntax-variable">response</span>.
+                <span className="text-color-syntax-function">json</span>())
               </pre>
               <button
                 onClick={() => {
@@ -202,7 +202,7 @@ export default function ApiKeyPage() {
                   );
                   toast.success(t("apiKey.codeCopied"));
                 }}
-                className="absolute right-3 top-3 rounded-compact bg-terminal-header p-2 text-terminal-muted shadow-sm ring-1 ring-terminal-border transition-colors hover:bg-terminal-border hover:text-terminal-foreground active:bg-terminal-muted"
+                className="absolute right-3 top-3 rounded-compact bg-terminal-header p-2 text-color-terminal-muted shadow-sm ring-1 ring-terminal-border transition-colors hover:bg-terminal-border hover:text-color-terminal-foreground active:bg-terminal-muted"
                 title={t("apiKey.copyCode")}
               >
                 <Copy className="h-4 w-4" />

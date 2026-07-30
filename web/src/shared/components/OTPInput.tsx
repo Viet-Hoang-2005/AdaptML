@@ -91,10 +91,10 @@ export function OTPInput({
           onChange={(e) => handleChange(index, e)}
           onKeyDown={(e) => handleKeyDown(index, e)}
           onPaste={index === 0 ? handlePaste : undefined}
-          className="w-12 h-14 text-center text-xl font-bold border-2 border-border rounded-control
+          className="w-12 h-14 text-center text-style-section-title font-bold border-2 border-border rounded-control
                      focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none
                      transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed
-                     bg-surface text-foreground"
+                     bg-surface text-color-foreground"
           autoFocus={index === 0}
         />
       ))}

@@ -22,17 +22,17 @@ function TrackerStep({ label, state }: { label: string; state: string }) {
   else if (isActive) icon = <Loader2 className="h-6 w-6 animate-spin" />;
   else if (isNeutral) icon = <PauseCircle className="h-6 w-6" />;
 
-  let colorClass = "text-muted-foreground";
-  if (isCompleted) colorClass = "text-success";
-  else if (isActive) colorClass = "text-primary";
-  else if (isFailed) colorClass = "text-danger";
-  else if (isNeutral) colorClass = "text-muted-foreground";
+  let colorClass = "text-color-muted-foreground";
+  if (isCompleted) colorClass = "text-color-success";
+  else if (isActive) colorClass = "text-color-primary";
+  else if (isFailed) colorClass = "text-color-danger";
+  else if (isNeutral) colorClass = "text-color-muted-foreground";
 
-  let textClass = "text-muted-foreground font-medium";
-  if (isCompleted) textClass = "text-foreground font-bold";
-  else if (isActive) textClass = "text-primary font-bold";
-  else if (isFailed) textClass = "text-danger font-bold";
-  else if (isNeutral) textClass = "text-muted-foreground font-bold";
+  let textClass = "text-color-muted-foreground font-medium";
+  if (isCompleted) textClass = "text-color-foreground font-bold";
+  else if (isActive) textClass = "text-color-primary font-bold";
+  else if (isFailed) textClass = "text-color-danger font-bold";
+  else if (isNeutral) textClass = "text-color-muted-foreground font-bold";
 
   return (
     <div className="flex w-24 shrink-0 flex-col items-center gap-2">
@@ -42,7 +42,7 @@ function TrackerStep({ label, state }: { label: string; state: string }) {
         {icon}
       </div>
       <span
-        className={`text-center text-[10px] uppercase tracking-wider ${textClass}`}
+        className={`text-center text-style-caption uppercase ${textClass}`}
       >
         {label}
       </span>
@@ -127,20 +127,20 @@ export function ModelStatus({ model }: { model: ModelProject }) {
       {/* ── Deprecation Notice for Realtime Pod Logs ── */}
       <div className="rounded-surface border border-warning/20 bg-warning-subtle p-6">
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-surface bg-warning/10 text-warning">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-surface bg-warning/10 text-color-warning">
             <Activity className="h-6 w-6" />
           </div>
           <div className="flex-1 space-y-2">
-            <h4 className="text-base font-bold text-foreground tracking-tight flex items-center gap-2">
+            <h4 className="text-style-heading text-color-foreground flex items-center gap-2">
               <span>{t("lifecycle.logsDeprecated")}</span>
-              <span className="inline-flex items-center rounded-full bg-warning/10 px-2.5 py-0.5 text-[11px] font-semibold text-warning">
+              <span className="inline-flex items-center rounded-full bg-warning/10 px-2.5 py-0.5 text-style-caption font-semibold text-color-warning">
                 {t("lifecycle.prometheus")}
               </span>
             </h4>
-            <p className="text-sm leading-relaxed text-muted-foreground">
+            <p className="text-style-body text-color-muted-foreground">
               {t("lifecycle.logsDescription")}
             </p>
-            <div className="pt-2 flex items-center gap-2 text-xs font-medium text-warning">
+            <div className="pt-2 flex items-center gap-2 text-style-caption-strong text-color-warning">
               <Info className="h-4 w-4" />
               <span>{t("lifecycle.logsHint")}</span>
             </div>

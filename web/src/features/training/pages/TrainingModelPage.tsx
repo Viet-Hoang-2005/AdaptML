@@ -193,7 +193,7 @@ export default function TrainingModelPage() {
         cell: ({ row }) => (
           <button
             type="button"
-            className="text-left font-medium hover:text-primary transition-colors focus:outline-none"
+            className="text-left font-medium hover:text-color-primary transition-colors focus:outline-none"
             onClick={() =>
               navigate(
                 `/dashboard/model-training/jobs/${row.original.id}/details/overview`,
@@ -306,7 +306,7 @@ export default function TrainingModelPage() {
                 aria-label={t("training:table.delete")}
                 title={t("training:table.delete")}
                 icon={<Trash2 className="h-4 w-4" />}
-                className="text-danger hover:text-danger-hover active:text-danger-active"
+                className="text-color-danger hover:text-color-danger-hover active:text-color-danger-active"
                 disabled={deleting}
                 onClick={() => setJobToDelete(job)}
               />
@@ -326,16 +326,16 @@ export default function TrainingModelPage() {
         <div className="rounded-surface border border-border bg-surface p-5 shadow-sm md:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-style-overline uppercase text-color-muted-foreground">
                 {t("quota")}
               </p>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-2xl font-semibold text-foreground">
+                <span className="text-style-page-title font-semibold text-color-foreground">
                   {isUsageLoading
                     ? "..."
                     : formatDuration(usage?.monthly_runtime_seconds)}
                 </span>
-                <span className="text-sm font-medium text-muted-foreground">
+                <span className="text-style-body-strong text-color-muted-foreground">
                   {t("used", {
                     duration: formatDuration(
                       usage?.monthly_quota_seconds || 43200,
@@ -345,10 +345,10 @@ export default function TrainingModelPage() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-style-overline uppercase text-color-muted-foreground">
                 {t("remaining")}
               </p>
-              <p className="mt-1 text-lg font-semibold text-success">
+              <p className="mt-1 text-style-heading font-semibold text-color-success">
                 {isUsageLoading
                   ? "..."
                   : formatDuration(usage?.remaining_seconds)}
@@ -371,10 +371,10 @@ export default function TrainingModelPage() {
         </div>
 
         <div className="rounded-surface border border-border bg-surface p-5 shadow-sm">
-          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="flex items-center gap-2 text-style-overline uppercase text-color-muted-foreground">
             {t("totalJobs")}
           </p>
-          <span className="mt-3 text-2xl font-semibold text-foreground">
+          <span className="mt-3 text-style-page-title font-semibold text-color-foreground">
             {selectedModelTrainingJobs.length}
           </span>
           <div
@@ -431,7 +431,7 @@ export default function TrainingModelPage() {
 
       {isError ? (
         <div className="rounded-surface border border-danger/20 bg-danger-subtle p-5">
-          <p className="text-sm text-danger">
+          <p className="text-style-body text-color-danger">
             {getApiErrorMessage(jobsError, t("checkApi"))}
           </p>
         </div>

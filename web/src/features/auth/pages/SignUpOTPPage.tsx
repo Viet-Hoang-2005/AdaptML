@@ -70,17 +70,17 @@ export default function SignUpOTPPage() {
       <div className="flex flex-col max-w-sm w-full mx-auto text-center gap-8">
         <Link
           to="/signup"
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground
+          className="flex items-center gap-2 text-style-body text-color-muted-foreground hover:text-color-foreground
                     font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="leading-none">{t('otp.back')}</span>
+          <span className="">{t('otp.back')}</span>
         </Link>
 
         <div className="flex flex-col items-center justify-center gap-3">
-          <Mail className="h-8 w-8 text-foreground" />
-          <h2 className="text-2xl font-bold text-foreground">{t('otp.title')}</h2>
-          <p className="text-sm text-muted-foreground">
+          <Mail className="h-8 w-8 text-color-foreground" />
+          <h2 className="text-style-page-title font-bold text-color-foreground">{t('otp.title')}</h2>
+          <p className="text-style-body text-color-muted-foreground">
             {t('otp.description', { email })}
           </p>
         </div>
@@ -97,16 +97,16 @@ export default function SignUpOTPPage() {
           {t('otp.verify')}
         </Button>
 
-        <p className="text-sm text-muted-foreground">
+        <p className="text-style-body text-color-muted-foreground">
           {t('otp.missing')}{' '}
           {isRunning ? (
-            <span className="font-semibold text-muted-foreground">
+            <span className="font-semibold text-color-muted-foreground">
               {t('otp.resendIn', { seconds })}
             </span>
           ) : (
             <button
               onClick={handleResend}
-              className="cursor-pointer font-semibold text-foreground hover:text-primary-hover"
+              className="cursor-pointer font-semibold text-color-foreground hover:text-color-primary-hover"
             >
               {t('otp.resend')}
             </button>

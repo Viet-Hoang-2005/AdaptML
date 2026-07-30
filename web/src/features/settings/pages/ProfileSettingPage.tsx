@@ -175,7 +175,7 @@ export default function ProfileSettingPage() {
                 type="button"
                 onClick={openAvatarModal}
                 disabled={loading || avatarSaving}
-                className="group relative flex h-36 w-36 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-4xl font-bold text-primary-foreground outline-none ring-offset-2 transition focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
+                className="group relative flex h-36 w-36 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-style-display font-bold text-color-primary-foreground outline-none ring-offset-2 transition focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
                 aria-label={t("profilePage.updateAvatar")}
                 title={t("profilePage.updateAvatar")}
               >
@@ -189,13 +189,13 @@ export default function ProfileSettingPage() {
                   initials
                 )}
                 <span className="absolute inset-0 flex items-center justify-center bg-overlay opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
-                  <Camera className="h-7 w-7 text-foreground-inverse" />
+                  <Camera className="h-7 w-7 text-color-foreground-inverse" />
                 </span>
               </button>
-              <h2 className="mt-5 max-w-full truncate text-xl font-bold text-foreground">
+              <h2 className="mt-5 max-w-full truncate text-style-section-title font-bold text-color-foreground">
                 {profile?.full_name || t("profilePage.roleFallback")}
               </h2>
-              <p className="mt-1 max-w-full truncate text-sm text-muted-foreground">
+              <p className="mt-1 max-w-full truncate text-style-body text-color-muted-foreground">
                 {profile?.email || t("profilePage.loading")}
               </p>
             </div>
@@ -244,7 +244,7 @@ export default function ProfileSettingPage() {
         <div className="rounded-surface border border-border bg-surface p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-base font-bold text-foreground">
+              <h3 className="text-style-heading text-color-foreground">
                 {t("profileInformation")}
               </h3>
               {editingProfile ? (
@@ -284,7 +284,7 @@ export default function ProfileSettingPage() {
               <Input
                 id="profile-full-name"
                 label={t("fullName")}
-                icon={<UserRound className="h-4 w-4 text-muted-foreground" />}
+                icon={<UserRound className="h-4 w-4 text-color-muted-foreground" />}
                 placeholder={t("profilePage.fullNamePlaceholder")}
                 value={formValues.fullName}
                 disabled={loading}
@@ -298,11 +298,11 @@ export default function ProfileSettingPage() {
               {editingProfile ? (
                 <label
                   htmlFor="profile-pronouns"
-                  className="flex flex-col gap-2 text-sm font-medium text-foreground"
+                  className="flex flex-col gap-2 text-style-body-strong text-color-foreground"
                 >
                   {t("pronouns")}
                   <div className="relative">
-                    <Tags className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Tags className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-color-muted-foreground" />
                     <select
                       id="profile-pronouns"
                       value={formValues.pronouns}
@@ -310,7 +310,7 @@ export default function ProfileSettingPage() {
                       onChange={(event) =>
                         updateProfileField("pronouns", event.target.value)
                       }
-                      className="h-14 w-full appearance-none rounded-control border border-border bg-surface pl-10 pr-10 text-sm font-normal text-foreground outline-none transition-colors duration-200 hover:border-primary focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
+                      className="h-14 w-full appearance-none rounded-control border border-border bg-surface pl-10 pr-10 text-style-body font-normal text-color-foreground outline-none transition-colors duration-200 hover:border-primary focus:border-primary disabled:bg-muted disabled:text-color-muted-foreground"
                     >
                       <option value="">{t("profilePage.pronounUnspecified")}</option>
                       <option value="he/him">{t("profilePage.pronounHe")}</option>
@@ -318,14 +318,14 @@ export default function ProfileSettingPage() {
                       <option value="they/them">{t("profilePage.pronounThey")}</option>
                       <option value="other">{t("profilePage.pronounOther")}</option>
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-color-muted-foreground" />
                   </div>
                 </label>
               ) : (
                 <Input
                   id="profile-pronouns"
                   label={t("pronouns")}
-                  icon={<Tags className="h-4 w-4 text-muted-foreground" />}
+                  icon={<Tags className="h-4 w-4 text-color-muted-foreground" />}
                   value={formValues.pronouns || t("profilePage.pronounUnspecified")}
                   disabled={loading}
                   readOnly
@@ -339,7 +339,7 @@ export default function ProfileSettingPage() {
               <Input
                 id="profile-company"
                 label={t("company")}
-                icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
+                icon={<Building2 className="h-4 w-4 text-color-muted-foreground" />}
                 placeholder={t("profilePage.companyPlaceholder")}
                 value={formValues.company}
                 disabled={loading}
@@ -354,7 +354,7 @@ export default function ProfileSettingPage() {
                 id="profile-field-of-work"
                 label={t("fieldOfWork")}
                 icon={
-                  <BriefcaseBusiness className="h-4 w-4 text-muted-foreground" />
+                  <BriefcaseBusiness className="h-4 w-4 text-color-muted-foreground" />
                 }
                 placeholder={t("profilePage.fieldPlaceholder")}
                 value={formValues.fieldOfWork}
@@ -371,7 +371,7 @@ export default function ProfileSettingPage() {
             <Input
               id="profile-country"
               label={t("country")}
-              icon={<Globe2 className="h-4 w-4 text-muted-foreground" />}
+              icon={<Globe2 className="h-4 w-4 text-color-muted-foreground" />}
               placeholder={t("profilePage.countryPlaceholder")}
               value={formValues.country}
               disabled={loading}
@@ -386,14 +386,14 @@ export default function ProfileSettingPage() {
 
             <label
               htmlFor="profile-description"
-              className="flex flex-col gap-2 text-sm font-medium text-foreground"
+              className="flex flex-col gap-2 text-style-body-strong text-color-foreground"
             >
               {t("description")}
               <div className="relative">
-                <FileText className="pointer-events-none absolute left-3 top-4 h-4 w-4 text-muted-foreground" />
+                <FileText className="pointer-events-none absolute left-3 top-4 h-4 w-4 text-color-muted-foreground" />
                 <textarea
                   id="profile-description"
-                  className={`text-sm text-foreground placeholder:text-muted-foreground font-normal placeholder:font-normal min-h-24 w-full resize-y rounded-control border border-border bg-surface py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-muted disabled:text-muted-foreground ${
+                  className={`text-style-body text-color-foreground placeholder:text-color-muted-foreground font-normal placeholder:font-normal min-h-24 w-full resize-y rounded-control border border-border bg-surface py-3 pl-10 pr-4 outline-none transition-colors duration-200 disabled:bg-muted disabled:text-color-muted-foreground ${
                     editingProfile
                       ? "hover:border-primary focus:border-primary"
                       : "cursor-default hover:border-border focus:border-border"
@@ -451,7 +451,7 @@ export default function ProfileSettingPage() {
           title={t("profilePage.verifyOtpTitle")}
           onClose={() => setPasswordModalStep("closed")}
         >
-          <p className="mb-4 text-sm text-muted-foreground">
+          <p className="mb-4 text-style-body text-color-muted-foreground">
             {t("profilePage.otpDescription", { email: profile?.email })}
           </p>
           <OTPInput
@@ -525,7 +525,7 @@ export default function ProfileSettingPage() {
         description={
           <div className="space-y-3">
             <p>{t("profilePage.deleteDescription")}</p>
-            <p className="font-semibold text-foreground">
+            <p className="font-semibold text-color-foreground">
               {t("profilePage.deleteConfirmation", {
                 email: profile?.email || t("profilePage.userFallback"),
               })}
@@ -574,12 +574,12 @@ function ReadOnlyRow({
 }) {
   return (
     <div className="flex items-start gap-3 rounded-compact bg-muted px-3 py-3">
-      <span className="mt-0.5 text-muted-foreground">{icon}</span>
+      <span className="mt-0.5 text-color-muted-foreground">{icon}</span>
       <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="text-style-overline uppercase text-color-muted-foreground">
           {label}
         </p>
-        <p className="truncate text-sm font-semibold text-foreground">
+        <p className="truncate text-style-body-strong text-color-foreground">
           {value}
         </p>
       </div>

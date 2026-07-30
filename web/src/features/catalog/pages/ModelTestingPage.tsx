@@ -460,8 +460,8 @@ export default function ModelTestingPage() {
       <PageBody className="p-6 h-full">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
           <div>
-            <h2 className="text-xl font-bold text-foreground">{t("testingPage.title")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <h2 className="text-style-section-title font-bold text-color-foreground">{t("testingPage.title")}</h2>
+            <p className="mt-1 text-style-body text-color-muted-foreground">
               {t("testingPage.description", {
                 model: selectedModel?.name ?? t("testingPage.selectedModelFallback"),
               })}
@@ -513,7 +513,7 @@ export default function ModelTestingPage() {
         ) : (
           <div className="flex flex-col space-y-6">
             <div>
-              <p className="mb-4 text-sm font-semibold text-foreground">
+              <p className="mb-4 text-style-body-strong text-color-foreground">
                 {t("testingPage.rowsLoaded", { fileName, count: rows.length })}
               </p>
               <div className="overflow-hidden rounded-surface border border-border h-125">
@@ -524,10 +524,10 @@ export default function ModelTestingPage() {
             <div className="border-t border-border pt-6 space-y-6">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h3 className="text-xl font-bold text-foreground">
+                  <h3 className="text-style-section-title font-bold text-color-foreground">
                     {t("testingPage.runTitle")}
                   </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1 text-style-body text-color-muted-foreground">
                     {t("testingPage.runDescription", {
                       model: selectedModel?.name ?? t("testingPage.selectedModelFallback"),
                     })}

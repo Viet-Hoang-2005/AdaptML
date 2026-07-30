@@ -32,18 +32,18 @@ export function Select({
         <button
           type="button"
           className={cn(
-            "flex h-14 w-full items-center justify-between gap-3 rounded-control border bg-surface px-4 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
+            "flex h-14 w-full items-center justify-between gap-3 rounded-control border bg-surface px-4 text-left text-style-body-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
             open
               ? "border-ring"
               : "border-input hover:border-input-hover",
-            !selectedOption ? "text-foreground-subtle" : "text-foreground",
+            !selectedOption ? "text-color-foreground-subtle" : "text-color-foreground",
             className,
           )}
         >
           <span className="truncate">
             {selectedOption?.label || placeholder}
           </span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-foreground-subtle" />
+          <ChevronDown className="h-4 w-4 shrink-0 text-color-foreground-subtle" />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -63,11 +63,11 @@ export function Select({
                 }}
                 className="flex min-h-10 w-full items-center justify-between gap-3 rounded-compact px-3 py-2 text-left hover:bg-surface-hover active:bg-surface-active"
               >
-                <span className="block truncate text-sm font-medium text-foreground">
+                <span className="block truncate text-style-body-strong text-color-foreground">
                   {option.label}
                 </span>
                 {value === option.value && (
-                  <Check className="h-4 w-4 shrink-0 text-primary" />
+                  <Check className="h-4 w-4 shrink-0 text-color-primary" />
                 )}
               </button>
             ))}

@@ -76,12 +76,12 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
     return (
       <div className="text-center py-12 flex flex-col items-center border border-dashed border-border rounded-surface bg-muted/50 px-6 max-w-3xl mx-auto">
         <div className="rounded-full bg-surface border border-border p-4 mb-4 shadow-sm">
-          <BarChart2 className="h-8 w-8 text-muted-foreground" />
+          <BarChart2 className="h-8 w-8 text-color-muted-foreground" />
         </div>
-        <h3 className="text-lg font-bold text-foreground mb-2">
+        <h3 className="text-style-heading font-bold text-color-foreground mb-2">
           {t("metricsPanel.emptyTitle")}
         </h3>
-        <p className="text-sm text-muted-foreground max-w-lg mb-6">
+        <p className="text-style-body text-color-muted-foreground max-w-lg mb-6">
           {t("metricsPanel.exampleDescription")}
         </p>
 
@@ -93,12 +93,12 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
                 <div className="h-2.5 w-2.5 rounded-full bg-terminal-muted"></div>
                 <div className="h-2.5 w-2.5 rounded-full bg-terminal-muted"></div>
               </div>
-              <span className="text-xs font-mono text-muted-foreground">
+              <span className="font-mono text-style-code-sm text-color-muted-foreground">
                 train.py - metric output contract
               </span>
             </div>
             <button
-              className="text-xs text-terminal-muted transition-colors hover:text-terminal-foreground"
+              className="text-style-caption text-color-terminal-muted transition-colors hover:text-color-terminal-foreground"
               onClick={() => {
                 navigator.clipboard.writeText(
                   'import json\n\n# METRIC_JSON stdout works without extra dependencies.\nprint("METRIC_JSON:", json.dumps({\n    "step": 1,\n    "accuracy": 0.95,\n    "loss": 0.12,\n    "f1": 0.93\n}))',
@@ -110,7 +110,7 @@ export function ModelMetricsPanel({ familyId, versionId }: Props) {
             </button>
           </div>
           <div className="p-4">
-            <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-terminal-success">
+            <pre className="overflow-x-auto font-mono text-style-code-sm text-color-terminal-success">
               <code>{`import json
 
 # METRIC_JSON stdout works without extra dependencies.
@@ -124,7 +124,7 @@ print("METRIC_JSON:", json.dumps({
           </div>
         </div>
 
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="text-style-caption-strong text-color-muted-foreground">
           {t("metricsPanel.syncHint")}
         </p>
       </div>
@@ -143,22 +143,22 @@ print("METRIC_JSON:", json.dumps({
               className="bg-muted border border-border rounded-surface p-4"
             >
               <p
-                className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 truncate"
+                className="text-style-caption-strong text-color-muted-foreground uppercase mb-1 truncate"
                 title={m.name}
               >
                 {m.name.replace(/_/g, " ")}
               </p>
               <div className="flex items-end gap-2">
-                <span className="text-2xl font-bold text-foreground">
+                <span className="text-style-page-title font-bold text-color-foreground">
                   {Number.isInteger(m.latest.value)
                     ? m.latest.value
                     : m.latest.value.toFixed(4)}
                 </span>
-                <span className="text-xs text-muted-foreground mb-1">
+                <span className="text-style-caption text-color-muted-foreground mb-1">
                   {t("metricsPanel.step")} {m.latest.step}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground uppercase mt-2">
+              <p className="text-style-caption text-color-muted-foreground uppercase mt-2">
                 {t("metricsPanel.source", { source: m.latest.source })}
               </p>
             </div>
@@ -190,10 +190,10 @@ print("METRIC_JSON:", json.dumps({
               className="border border-border bg-surface shadow-sm rounded-surface p-5"
             >
               <div className="flex justify-between items-center mb-4">
-                <h4 className="text-sm font-bold text-foreground capitalize">
+                <h4 className="text-style-body-strong text-color-foreground capitalize">
                   {t("metricsPanel.progression", { name: m.name.replace(/_/g, " ") })}
                 </h4>
-                <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded-compact">
+                <span className="text-style-caption text-color-muted-foreground font-mono bg-muted px-2 py-1 rounded-compact">
                   {t("metricsPanel.range", {
                     min: m.min.toFixed(2),
                     max: m.max.toFixed(2),
@@ -248,7 +248,7 @@ print("METRIC_JSON:", json.dumps({
                     );
                   })}
                 </svg>
-                <div className="flex justify-between text-xs text-muted-foreground font-mono px-1">
+                <div className="flex justify-between text-style-caption text-color-muted-foreground font-mono px-1">
                   <span>{t("metricsPanel.step")} {m.chartPoints[0].step}</span>
                   <span>{t("metricsPanel.step")} {m.latest.step}</span>
                 </div>
@@ -256,12 +256,12 @@ print("METRIC_JSON:", json.dumps({
 
               {/* Trend Table */}
               <div className="mt-6">
-                <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+                <h5 className="text-style-caption-strong text-color-muted-foreground uppercase mb-2">
                   {t("metricsPanel.recentTrend")}
                 </h5>
                 <div className="border border-border rounded-surface overflow-hidden">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-muted text-muted-foreground text-xs uppercase font-semibold">
+                  <table className="w-full text-style-body text-left">
+                    <thead className="bg-muted text-color-muted-foreground text-style-caption uppercase font-semibold">
                       <tr>
                         <th className="px-3 py-2">{t("metricsPanel.step")}</th>
                         <th className="px-3 py-2 text-right">{t("metricsPanel.value")}</th>
@@ -270,10 +270,10 @@ print("METRIC_JSON:", json.dumps({
                     <tbody className="divide-y divide-border">
                       {last5.map((point) => (
                         <tr key={point.step} className="bg-surface">
-                          <td className="px-3 py-2 font-mono text-muted-foreground">
+                          <td className="px-3 py-2 font-mono text-color-muted-foreground">
                             {point.step}
                           </td>
-                          <td className="px-3 py-2 text-right font-mono text-foreground">
+                          <td className="px-3 py-2 text-right font-mono text-color-foreground">
                             {Number.isInteger(point.value)
                               ? point.value
                               : point.value.toFixed(4)}

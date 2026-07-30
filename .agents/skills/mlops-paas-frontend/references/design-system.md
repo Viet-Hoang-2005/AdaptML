@@ -36,6 +36,23 @@
   needs a narrow `color-ignore: reason` comment.
 - `pnpm lint` also runs `scripts/check-radii.mjs`. A genuine graphical
   exception needs a narrow `radius-ignore: reason` comment.
+- Use the semantic typography roles exported from `tokens.css` with the
+  `text-style-*` prefix: `display`, `page-title`, `section-title`, `heading`,
+  `metric`, `body-lg`, `body`, `body-strong`, `control`, `caption`,
+  `caption-strong`, `overline`, `code-sm`, `code-sm-strong`, and `terminal`.
+  Each role owns size, line height, weight, and tracking.
+- Foreground colors use the separate `text-color-*` prefix, such as
+  `text-color-foreground`, `text-color-danger`, and
+  `text-color-terminal-muted`. Never use the legacy unprefixed semantic
+  `text-*` forms. `cn()` configures Tailwind Merge to keep one typography role
+  and one foreground color at the same time.
+- Inter is the UI font at weights 400–700. Use system monospace only for
+  terminal output, code, UUIDs, URIs, paths, commands, and technical IDs.
+  User-readable text must be at least 12 px.
+- Do not use Tailwind's raw text-size, line-height, or tracking scale, arbitrary
+  typography values, or weights 800/900. `pnpm lint` runs
+  `scripts/check-typography.mjs`; third-party numeric APIs require a narrow
+  `typography-ignore: reason` comment.
 
 Before introducing a new primitive, inspect `shared/components` and extend the
 existing API where appropriate. When adding a color, define its primitive and

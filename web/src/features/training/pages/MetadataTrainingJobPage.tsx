@@ -39,7 +39,7 @@ export default function MetadataTrainingJobPage() {
 
         {flow.mode === "existing" && (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-style-body-strong text-color-foreground">
               {t("createFlow.metadata.selectModel")}
             </p>
             <Select
@@ -70,7 +70,7 @@ export default function MetadataTrainingJobPage() {
           onChange={(value) => flow.setMetadataField("description", value)}
         />
         <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-style-body-strong text-color-foreground">
             {t("createFlow.metadata.accessMode")}
           </p>
           <Picker

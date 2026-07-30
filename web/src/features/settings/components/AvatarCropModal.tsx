@@ -100,13 +100,13 @@ export function AvatarCropModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4">
       <div className="w-full max-w-xl rounded-surface border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="text-xl font-bold text-foreground">
+          <h2 className="text-style-section-title font-bold text-color-foreground">
             {t("avatarDialog.crop")}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-surface text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-surface text-color-muted-foreground hover:bg-muted hover:text-color-foreground"
             aria-label={t("avatarDialog.closeCrop")}
           >
             <X className="h-6 w-6" />
@@ -130,7 +130,7 @@ export function AvatarCropModal({
           </div>
           <label
             htmlFor="avatar-zoom"
-            className="flex flex-col gap-2 text-sm font-medium text-foreground"
+            className="flex flex-col gap-2 text-style-body-strong text-color-foreground"
           >
             {t("avatarDialog.zoom")}
             <input

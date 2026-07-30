@@ -9,13 +9,13 @@ export default function TrainingJobConfigPage() {
   return (
     <div className="animate-in overflow-hidden rounded-surface border border-border bg-surface shadow-sm fade-in duration-300">
       <div className="border-b border-border bg-muted/50 px-6 py-4">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
+        <h3 className="text-style-overline uppercase text-color-foreground">
           {t("detail.config.title")}
         </h3>
       </div>
       <div className="space-y-8 p-6">
         <div>
-          <h4 className="mb-4 border-b border-border pb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <h4 className="mb-4 border-b border-border pb-2 text-style-overline uppercase text-color-muted-foreground">
             {t("detail.config.compute")}
           </h4>
           <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -32,7 +32,7 @@ export default function TrainingJobConfigPage() {
           </div>
         </div>
         <div>
-          <h4 className="mb-4 border-b border-border pb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <h4 className="mb-4 border-b border-border pb-2 text-style-overline uppercase text-color-muted-foreground">
             {t("detail.config.accelerator")}
           </h4>
           <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -53,7 +53,7 @@ export default function TrainingJobConfigPage() {
           </div>
         </div>
         <div>
-          <h4 className="mb-4 border-b border-border pb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <h4 className="mb-4 border-b border-border pb-2 text-style-overline uppercase text-color-muted-foreground">
             {t("detail.config.source")}
           </h4>
           <MetadataRow

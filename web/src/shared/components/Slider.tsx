@@ -50,8 +50,8 @@ export function Slider({ options, value, onChange, getColor }: SliderProps) {
         {options.map((opt, i) => (
           <div 
             key={opt.value}
-            className={`absolute top-0 -translate-x-1/2 text-xs font-medium cursor-pointer transition-colors ${
-              i === currentIndex ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+            className={`absolute top-0 -translate-x-1/2 text-style-caption-strong cursor-pointer transition-colors ${
+              i === currentIndex ? 'text-color-foreground font-bold' : 'text-color-muted-foreground hover:text-color-foreground'
             }`}
             style={{ left: `${(i / (options.length - 1)) * 100}%` }}
             onClick={() => onChange(opt.value)}

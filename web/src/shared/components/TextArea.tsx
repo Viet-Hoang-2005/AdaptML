@@ -34,7 +34,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-sm font-medium text-foreground"
+            className="text-style-body-strong text-color-foreground"
           >
             {label}
           </label>
@@ -47,7 +47,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
           onChange={(event) => onChange?.(event.target.value)}
           className={cn(
             minHeight,
-            "w-full resize-y rounded-control border border-input bg-surface px-4 py-3 text-sm text-foreground shadow-sm outline-none transition-colors placeholder:text-foreground-subtle hover:border-input-hover focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-disabled disabled:text-foreground-disabled disabled:hover:border-border",
+            "w-full resize-y rounded-control border border-input bg-surface px-4 py-3 text-style-body text-color-foreground shadow-sm outline-none transition-colors placeholder:text-color-foreground-subtle hover:border-input-hover focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-disabled disabled:text-color-foreground-disabled disabled:hover:border-border",
             error && "border-danger hover:border-danger focus:border-danger focus:ring-danger/20",
             className,
           )}
@@ -58,8 +58,8 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
             id={messageId}
             role={error ? "alert" : undefined}
             className={cn(
-              "text-xs",
-              error ? "text-danger" : "text-foreground-subtle",
+              "text-style-caption",
+              error ? "text-color-danger" : "text-color-foreground-subtle",
             )}
           >
             {error || helperText}

@@ -35,7 +35,7 @@ export default function ModelDetailPage() {
 
   if (!model) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
+      <div className="p-8 text-center text-color-muted-foreground">
         {t("detail.notFound")}
       </div>
     );
@@ -102,12 +102,12 @@ export function ModelDetailPageContent({ model }: { model: ModelProject }) {
           <div className="mb-2">
             <Link
               to="/dashboard/management"
-              className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
+              className="mb-2 inline-flex items-center gap-2 text-style-body-strong text-color-muted-foreground hover:text-color-foreground"
             >
               <ArrowLeft className="h-4 w-4" />
               {t("detail.back")}
             </Link>
-            <h1 className="text-xl font-bold text-foreground">{t("detail.title")}</h1>
+            <h1 className="text-style-section-title font-bold text-color-foreground">{t("detail.title")}</h1>
           </div>
 
           <PageTabs

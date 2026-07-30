@@ -39,7 +39,7 @@ function LiveBadge() {
   const { t } = useTranslation("deploy");
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary ring-1 ring-inset ring-primary/20"
+      className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-style-caption font-bold uppercase text-color-primary ring-1 ring-inset ring-primary/20"
       title={t("deploymentCard.monitored")}
     >
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
@@ -117,12 +117,12 @@ export function ModelDeploymentCard({
 
   // Top Accent Logic
   let accentClass = "border-t-gray-200";
-  let badgeClass = "bg-muted text-foreground border-border";
+  let badgeClass = "bg-muted text-color-foreground border-border";
   let statusText = t("deploymentCard.statuses.notDeployed");
 
   if (isHealthy) {
     accentClass = "border-t-emerald-500";
-    badgeClass = "bg-success-subtle text-success border-success/20";
+    badgeClass = "bg-success-subtle text-color-success border-success/20";
     statusText = t("deploymentCard.statuses.healthy");
   } else if (
     endpointStatus === "unhealthy" ||
@@ -130,7 +130,7 @@ export function ModelDeploymentCard({
     model.build_status === "error"
   ) {
     accentClass = "border-t-red-500";
-    badgeClass = "bg-danger-subtle text-danger border-danger/20";
+    badgeClass = "bg-danger-subtle text-color-danger border-danger/20";
     statusText =
       model.build_status === "error"
         ? t("deploymentCard.statuses.buildFailed")
@@ -138,17 +138,17 @@ export function ModelDeploymentCard({
   } else if (isDeployingState || isBuildingState) {
     accentClass = "border-t-blue-500";
     badgeClass =
-      "bg-primary-subtle text-primary border-primary/20 animate-pulse";
+      "bg-primary-subtle text-color-primary border-primary/20 animate-pulse";
     statusText = isBuildingState
       ? t("deploymentCard.statuses.building")
       : t("deploymentCard.statuses.deploying");
   } else if (isStopped) {
     accentClass = "border-t-gray-400";
-    badgeClass = "bg-muted text-muted-foreground border-border";
+    badgeClass = "bg-muted text-color-muted-foreground border-border";
     statusText = t("deploymentCard.statuses.stopped");
   } else if (readyToDeploy) {
     accentClass = "border-t-blue-300";
-    badgeClass = "bg-primary-subtle text-primary border-primary/20";
+    badgeClass = "bg-primary-subtle text-color-primary border-primary/20";
     statusText = t("deploymentCard.statuses.buildReady");
   }
 
@@ -185,13 +185,13 @@ export function ModelDeploymentCard({
       {/* ── Header Area ── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="flex items-start gap-4">
-          <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-surface bg-muted border border-border text-muted-foreground shadow-inner">
+          <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-surface bg-muted border border-border text-color-muted-foreground shadow-inner">
             <Box className="h-6 w-6" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                className="text-lg font-extrabold tracking-tight text-foreground hover:text-primary transition-colors focus:outline-none"
+                className="text-style-heading font-bold text-color-foreground hover:text-color-primary transition-colors focus:outline-none"
                 onClick={() => {
                   if (onOpenApiManagement) onOpenApiManagement(model);
                   else navigate(`/dashboard/management/model/${model.id}`);
@@ -199,16 +199,16 @@ export function ModelDeploymentCard({
               >
                 {model.name}
               </button>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground border border-border">
+              <span className="rounded-full bg-muted px-2 py-0.5 text-style-caption-strong text-color-muted-foreground border border-border">
                 {model.version || "v1"}
               </span>
               <span
-                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badgeClass}`}
+                className={`rounded-full border px-2.5 py-0.5 text-style-caption font-bold uppercase ${badgeClass}`}
               >
                 {statusText}
               </span>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground font-medium">
+            <p className="mt-1 text-style-caption text-color-muted-foreground font-medium">
               {model.source_type === "training_job"
                 ? t("deploymentCard.registeredFromTraining", {
                     jobId: model.source_training_job ?? "-",
@@ -226,7 +226,7 @@ export function ModelDeploymentCard({
       </div>
 
       {variant === "full" && model.description && (
-        <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-4 max-w-3xl text-style-body text-color-muted-foreground">
           {model.description}
         </p>
       )}
@@ -266,27 +266,27 @@ export function ModelDeploymentCard({
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Endpoint URL Block */}
         <div className="lg:col-span-7 flex flex-col justify-end">
-          <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          <label className="mb-2 block text-style-caption font-bold uppercase text-color-muted-foreground">
             {t("deploymentCard.endpointUrl")}
           </label>
           {model.endpoint_url ? (
             <div className="group flex items-center overflow-hidden rounded-surface border border-border bg-muted shadow-sm transition-colors hover:border-border">
-              <div className="flex items-center justify-center bg-muted px-3 py-2 border-r border-border text-muted-foreground">
+              <div className="flex items-center justify-center bg-muted px-3 py-2 border-r border-border text-color-muted-foreground">
                 <Globe className="h-4 w-4" />
               </div>
               <code
-                className="flex-1 truncate bg-transparent px-3 py-2 font-mono text-xs text-foreground"
+                className="flex-1 truncate bg-transparent px-3 py-2 font-mono text-style-code-sm text-color-foreground"
                 title={model.endpoint_url}
               >
                 {model.endpoint_url}
               </code>
               <button
                 onClick={copyEndpoint}
-                className="flex items-center justify-center px-3 py-2 text-muted-foreground hover:bg-surface hover:text-foreground border-l border-transparent hover:border-border transition-all focus:outline-none"
+                className="flex items-center justify-center px-3 py-2 text-color-muted-foreground hover:bg-surface hover:text-color-foreground border-l border-transparent hover:border-border transition-all focus:outline-none"
                 title={t("deploymentCard.copyUrl")}
               >
                 {copied ? (
-                  <Check className="h-4 w-4 text-success" />
+                  <Check className="h-4 w-4 text-color-success" />
                 ) : (
                   <Copy className="h-4 w-4" />
                 )}
@@ -294,7 +294,7 @@ export function ModelDeploymentCard({
             </div>
           ) : (
             <div className="flex h-9 items-center rounded-surface border border-border border-dashed bg-muted/50 px-3 py-2">
-              <p className="text-xs font-mono text-muted-foreground">
+              <p className="font-mono text-style-code-sm text-color-muted-foreground">
                 {t("deploymentCard.endpointMissing")}
               </p>
             </div>
@@ -304,21 +304,21 @@ export function ModelDeploymentCard({
         {/* Diagnostics Grid */}
         <div className="lg:col-span-5 grid grid-cols-2 gap-4">
           <div className="flex flex-col justify-end">
-            <span className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="mb-1 text-style-caption font-bold uppercase text-color-muted-foreground">
               {t("deploymentCard.container")}
             </span>
             <span
-              className="truncate text-xs font-mono text-foreground bg-muted rounded-compact px-2 py-1 border border-border w-fit max-w-full"
+              className="truncate font-mono text-style-code-sm text-color-foreground bg-muted rounded-compact px-2 py-1 border border-border w-fit max-w-full"
               title={model.endpoint_container_name || ""}
             >
               {model.endpoint_container_name || t("statuses.notAvailable", { ns: "common" })}
             </span>
           </div>
           <div className="flex flex-col justify-end">
-            <span className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="mb-1 text-style-caption font-bold uppercase text-color-muted-foreground">
               {t("deploymentCard.lastChecked")}
             </span>
-            <span className="truncate text-xs text-foreground bg-muted rounded-compact px-2 py-1 border border-border w-fit max-w-full">
+            <span className="truncate text-style-caption text-color-foreground bg-muted rounded-compact px-2 py-1 border border-border w-fit max-w-full">
               {model.endpoint_last_checked_at
                 ? new Date(model.endpoint_last_checked_at).toLocaleString()
                 : t("statuses.notAvailable", { ns: "common" })}
@@ -330,11 +330,11 @@ export function ModelDeploymentCard({
       {/* Errors / Logs */}
       {(model.build_error || model.endpoint_error) && (
         <div className="mt-6 rounded-surface border border-danger/20 bg-danger-subtle p-4">
-          <p className="text-sm font-bold text-danger flex items-center gap-2">
+          <p className="text-style-body-strong text-color-danger flex items-center gap-2">
             <XCircle className="h-4 w-4" />
             {t("deploymentCard.deploymentError")}
           </p>
-          <p className="mt-1 text-sm text-danger font-medium">
+          <p className="mt-1 text-style-body text-color-danger font-medium">
             {model.build_error || model.endpoint_error}
           </p>
         </div>
@@ -457,7 +457,7 @@ export function ModelDeploymentCard({
                 icon={<FileArchive className="h-4 w-4" />}
                 loading={isCleaningUp}
                 onClick={() => setShowCleanupModal(true)}
-                className="border border-warning-border text-warning hover:border-warning hover:bg-warning-subtle active:bg-warning active:text-warning-foreground"
+                className="border border-warning-border text-color-warning hover:border-warning hover:bg-warning-subtle active:bg-warning active:text-color-warning-foreground"
               >
                 {t("actions.cleanup")}
               </Button>
@@ -518,17 +518,17 @@ function TrackerStep({ label, state }: { label: string; state: string }) {
   else if (isActive) icon = <Loader2 className="h-4 w-4 animate-spin" />;
   else if (isNeutral) icon = <PauseCircle className="h-4 w-4" />;
 
-  let colorClass = "text-muted-foreground";
-  if (isCompleted) colorClass = "text-success";
-  else if (isActive) colorClass = "text-info";
-  else if (isFailed) colorClass = "text-danger";
-  else if (isNeutral) colorClass = "text-muted-foreground";
+  let colorClass = "text-color-muted-foreground";
+  if (isCompleted) colorClass = "text-color-success";
+  else if (isActive) colorClass = "text-color-info";
+  else if (isFailed) colorClass = "text-color-danger";
+  else if (isNeutral) colorClass = "text-color-muted-foreground";
 
-  let textClass = "text-muted-foreground font-medium";
-  if (isCompleted) textClass = "text-foreground font-bold";
-  else if (isActive) textClass = "text-info font-bold";
-  else if (isFailed) textClass = "text-danger font-bold";
-  else if (isNeutral) textClass = "text-muted-foreground font-bold";
+  let textClass = "text-color-muted-foreground font-medium";
+  if (isCompleted) textClass = "text-color-foreground font-bold";
+  else if (isActive) textClass = "text-color-info font-bold";
+  else if (isFailed) textClass = "text-color-danger font-bold";
+  else if (isNeutral) textClass = "text-color-muted-foreground font-bold";
 
   return (
     <div className="flex flex-col items-center gap-2 w-20 shrink-0">
@@ -538,7 +538,7 @@ function TrackerStep({ label, state }: { label: string; state: string }) {
         {icon}
       </div>
       <span
-        className={`text-[10px] uppercase tracking-wider text-center ${textClass}`}
+        className={`text-style-caption uppercase text-center ${textClass}`}
       >
         {label}
       </span>

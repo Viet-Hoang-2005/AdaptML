@@ -17,7 +17,7 @@ export function VersionLineage({
   const { t } = useTranslation("registry");
   if (versions.length === 0) {
     return (
-      <div className="p-8 text-center text-muted-foreground text-sm">
+      <div className="p-8 text-center text-color-muted-foreground text-style-body">
         {t("lineage.empty")}
       </div>
     );
@@ -57,23 +57,23 @@ export function VersionLineage({
                   }`}
                 >
                   {isProd && (
-                    <Star className="h-2 w-2 text-success fill-success" />
+                    <Star className="h-2 w-2 text-color-success fill-success" />
                   )}
                 </button>
                 <div className="absolute -bottom-8 flex flex-col items-center gap-1">
                   <span
-                    className={`whitespace-nowrap text-xs font-bold ${
+                    className={`whitespace-nowrap text-style-caption-strong ${
                       isSelected
-                        ? "text-primary"
+                        ? "text-color-primary"
                         : isProd
-                          ? "text-success"
-                          : "text-foreground"
+                          ? "text-color-success"
+                          : "text-color-foreground"
                     }`}
                   >
                     {formatVersion(v.version)}
                   </span>
                   {isProd && (
-                    <span className="text-[10px] uppercase font-bold text-success bg-success-subtle px-1.5 rounded-compact">
+                    <span className="text-style-caption uppercase font-bold text-color-success bg-success-subtle px-1.5 rounded-compact">
                       {t("lineage.production")}
                     </span>
                   )}

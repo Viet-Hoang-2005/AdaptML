@@ -50,19 +50,19 @@ export default function ForgotPasswordResetPage() {
       <div className="max-w-sm w-full mx-auto">
         <Link
           to="/forgot-password"
-          className="mb-8 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground
+          className="mb-8 flex items-center gap-2 text-style-body text-color-muted-foreground hover:text-color-foreground
                     font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="leading-none">{t('recovery.startOver')}</span>
+          <span className="">{t('recovery.startOver')}</span>
         </Link>
 
         <div className="mb-4 rounded-surface flex items-center justify-center mx-auto">
-          <LockKeyhole className="h-8 w-8 text-foreground" />
+          <LockKeyhole className="h-8 w-8 text-color-foreground" />
         </div>
 
-        <h2 className="mb-2 text-center text-2xl font-bold text-foreground">{t('recovery.newTitle')}</h2>
-        <p className="mb-8 text-center text-sm text-muted-foreground">
+        <h2 className="mb-2 text-center text-style-page-title font-bold text-color-foreground">{t('recovery.newTitle')}</h2>
+        <p className="mb-8 text-center text-style-body text-color-muted-foreground">
           {t('recovery.newDescription', { email })}
         </p>
 

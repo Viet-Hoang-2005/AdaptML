@@ -72,10 +72,10 @@ export default function EditModelModal({
         aria-modal="true"
       >
         <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
-          <h2 className="text-xl font-bold text-foreground">{t('editModel.title')}</h2>
+          <h2 className="text-style-section-title font-bold text-color-foreground">{t('editModel.title')}</h2>
           <button 
             onClick={handleCancel}
-            className="text-muted-foreground hover:text-muted-foreground transition-colors p-1"
+            className="text-color-muted-foreground hover:text-color-muted-foreground transition-colors p-1"
           >
             <X className="h-6 w-6" />
           </button>
@@ -97,7 +97,7 @@ export default function EditModelModal({
                 placeholder=""
               />
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">{t('editModel.accessMode')}</label>
+                <label className="text-style-body-strong text-color-foreground mb-2 block">{t('editModel.accessMode')}</label>
                 <Picker
                   value={form.access_mode}
                   onChange={(v) => setField('access_mode', v as ModelProjectFormValues['access_mode'])}

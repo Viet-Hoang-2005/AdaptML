@@ -181,7 +181,7 @@ export default function ModelEvolutionPage() {
               onSelectVersion={setSelectedVersion}
             />
           ) : (
-            <div className="p-8 text-center text-muted-foreground text-sm">
+            <div className="p-8 text-center text-color-muted-foreground text-style-body">
               {t("selectModelFirst", {
                 defaultValue: "Select a model to view lineage",
               })}
@@ -203,12 +203,12 @@ export default function ModelEvolutionPage() {
           ) : (
             <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-border rounded-surface bg-muted/50">
               <div className="rounded-full bg-surface border border-border p-5 mb-5 shadow-sm">
-                <Component className="h-10 w-10 text-muted-foreground" />
+                <Component className="h-10 w-10 text-color-muted-foreground" />
               </div>
-              <h3 className="text-xl font-bold text-foreground">
+              <h3 className="text-style-section-title font-bold text-color-foreground">
                 {t("noSelection")}
               </h3>
-              <p className="mt-2 text-sm text-muted-foreground max-w-sm">
+              <p className="mt-2 text-style-body text-color-muted-foreground max-w-sm">
                 {t("noSelectionDescription")}
               </p>
             </div>

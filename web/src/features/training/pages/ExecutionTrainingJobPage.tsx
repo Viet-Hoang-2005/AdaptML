@@ -83,7 +83,7 @@ export default function ExecutionTrainingJobPage() {
         />
 
         <div className="space-y-3">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-style-body-strong text-color-foreground">
             {t("createFlow.execution.accelerator")}
           </p>
           <Picker
@@ -111,7 +111,7 @@ export default function ExecutionTrainingJobPage() {
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-medium text-foreground">
+          <p className="mb-2 text-style-body-strong text-color-foreground">
             {t("createFlow.execution.maxRuntime")}
           </p>
           <Slider

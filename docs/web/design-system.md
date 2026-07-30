@@ -12,7 +12,10 @@ Tokens live in `src/app/styles/tokens.css` and follow three layers:
 2. Semantic tokens describe intent: background, surface, foreground, muted, primary, success, warning, danger, border, input, and focus ring.
 3. Component tokens define control heights, semantic radii, shadows, auth glass, and motion duration.
 
-Feature code must use semantic utilities such as `bg-surface`, `text-foreground`, and `border-border`. Fixed dark palettes are reserved for terminals, code samples, syntax highlighting, crop canvases, and modal overlays.
+Feature code must use semantic utilities such as `bg-surface`,
+`text-color-foreground`, and `border-border`. Fixed dark palettes are reserved
+for terminals, code samples, syntax highlighting, crop canvases, and modal
+overlays.
 
 | Intent | Light | Dark |
 | --- | --- | --- |
@@ -40,13 +43,52 @@ themes so runtime output remains legible and predictable.
 
 ## Typography and components
 
-- Inter is self-hosted with `@fontsource/inter`.
+- Inter is self-hosted with `@fontsource/inter` at weights 400, 500, 600, and
+  700. The imports include all subsets so Vietnamese and future Latin Extended
+  locales render without a font fallback.
+- System monospace is reserved for terminal output, source code, UUIDs, URIs,
+  paths, commands, and technical identifiers. Dashboard metrics use Inter.
 - Spacing follows a 4 px grid; interaction transitions use 150–200 ms.
 - Buttons use 32/40/48 px heights and the 12 px `control` radius.
 - Form inputs default to 56 px height and the 12 px `control` radius.
 - Page surfaces use the 8 px `surface` radius, a visible neutral border, and no decorative card shadow.
 - The auth card uses the original translucent white glass in light mode and a near-opaque semantic surface in dark mode.
 - Shared interactions use Tailwind, Radix primitives, CVA, and TanStack Table. Ant Design is forbidden.
+
+Typography roles encapsulate font size, line height, weight, and letter
+spacing. Feature code must use these semantic utilities rather than Tailwind's
+size scale:
+
+| Role | Size / line height | Weight | Usage |
+| --- | ---: | ---: | --- |
+| `display` | 32 / 40 px | 700 | Exceptional display values |
+| `page-title` | 24 / 32 px | 700 | One primary title per page |
+| `section-title` | 20 / 28 px | 700 | Major page sections |
+| `heading` | 16 / 24 px | 600 | Card, modal, and content-group headings |
+| `metric` | 24 / 32 px | 700 | Dashboard and summary values |
+| `body-lg` | 16 / 24 px | 400 | Prominent descriptions |
+| `body` | 14 / 20 px | 400 | Default readable content |
+| `body-strong` | 14 / 20 px | 600 | Emphasized body content |
+| `control` | 14 / 20 px | 600 | Buttons, tabs, menus, and table headers |
+| `caption` | 12 / 16 px | 400 | Helper text and secondary metadata |
+| `caption-strong` | 12 / 16 px | 600 | Badges, statuses, and compact labels |
+| `overline` | 12 / 16 px | 700 | Uppercase summary labels |
+| `code-sm` | 12 / 18 px | 400 | Compact technical identifiers |
+| `terminal` | 14 / 22 px | 400 | Runtime and terminal output |
+
+Typography utilities always use the `text-style-*` prefix, for example
+`text-style-body`, `text-style-control`, and `text-style-overline`. Foreground
+colors always use `text-color-*`, for example `text-color-foreground`,
+`text-color-danger`, and `text-color-terminal-muted`. This distinction is part
+of the Tailwind merge contract and lets typography and foreground color coexist
+without one removing the other.
+
+No user-readable text may be smaller than 12 px. Use
+`text-style-overline` together with `uppercase`; its tracking is already part
+of the token. Do not add raw `text-xs`, `leading-*`, `tracking-*`, arbitrary
+font sizes, or weights 800/900. Monaco's numeric font-size option and runtime
+ANSI decorations are documented technical exceptions. `pnpm lint` runs
+`scripts/check-typography.mjs` to enforce the contract.
 
 ## Radius roles
 
@@ -99,8 +141,9 @@ Notification and Setting form the secondary group. The header keeps the original
 - Define separate light and dark semantic values; never use `dark:` color
   utilities to invert a component.
 - Feature and shared UI use semantic utilities such as `bg-surface-hover`,
-  `text-foreground-subtle`, `border-border-strong`, `bg-success-subtle`,
-  `text-info`, `stroke-chart-1`, and `bg-terminal`.
+  `text-color-foreground-subtle`, `border-border-strong`,
+  `bg-success-subtle`, `text-color-info`, `stroke-chart-1`, and
+  `bg-terminal`.
 - Form controls keep their surface color and use the blue `input-hover` border;
   focus remains distinct through the stronger `ring` treatment.
 - Avoid direct Tailwind palettes, hexadecimal colors, and `rgb()`/`hsl()` in

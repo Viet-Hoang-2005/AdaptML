@@ -23,16 +23,16 @@ export function Placeholder({
   return (
     <section className="flex-1 rounded-surface border border-dashed border-border bg-surface px-8 py-10">
       <div className="flex h-full flex-col items-center justify-center text-center">
-        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-surface bg-muted text-foreground">
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-surface bg-muted text-color-foreground">
           {icon}
         </div>
         {showModelName && (
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="mb-2 text-style-overline uppercase text-color-muted-foreground">
             {selectedModel ? selectedModel.name : t("modelSelector.empty")}
           </p>
         )}
-        <h1 className="mb-3 text-2xl font-bold text-foreground">{title}</h1>
-        <p className="max-w-lg text-sm leading-6 text-muted-foreground">
+        <h1 className="mb-3 text-style-page-title font-bold text-color-foreground">{title}</h1>
+        <p className="max-w-lg text-style-body text-color-muted-foreground">
           {description}
         </p>
         {action && <div className="mt-6">{action}</div>}

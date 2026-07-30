@@ -69,19 +69,19 @@ export default function ForgotPasswordOTPPage() {
       <div className="max-w-sm w-full mx-auto text-center">
         <Link
           to="/forgot-password"
-          className="mb-8 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground
+          className="mb-8 flex items-center gap-2 text-style-body text-color-muted-foreground hover:text-color-foreground
                     font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="leading-none">{t('otp.back')}</span>
+          <span className="">{t('otp.back')}</span>
         </Link>
 
         <div className="mx-auto mb-4 rounded-surface flex items-center justify-center">
-          <Mail className="h-8 w-8 text-foreground" />
+          <Mail className="h-8 w-8 text-color-foreground" />
         </div>
 
-        <h2 className="mb-2 text-2xl font-bold text-foreground">{t('otp.title')}</h2>
-        <p className="mb-8 text-sm text-muted-foreground">
+        <h2 className="mb-2 text-style-page-title font-bold text-color-foreground">{t('otp.title')}</h2>
+        <p className="mb-8 text-style-body text-color-muted-foreground">
           {t('otp.description', { email })}
         </p>
 
@@ -99,16 +99,16 @@ export default function ForgotPasswordOTPPage() {
           {t('otp.verify')}
         </Button>
 
-        <p className="mt-6 text-sm text-muted-foreground">
+        <p className="mt-6 text-style-body text-color-muted-foreground">
           {t('otp.missing')}{' '}
           {isRunning ? (
-            <span className="font-semibold text-muted-foreground">
+            <span className="font-semibold text-color-muted-foreground">
               {t('otp.resendIn', { seconds })}
             </span>
           ) : (
             <button
               onClick={handleResend}
-              className="cursor-pointer font-semibold text-foreground hover:opacity-60"
+              className="cursor-pointer font-semibold text-color-foreground hover:opacity-60"
             >
               {t('otp.resend')}
             </button>

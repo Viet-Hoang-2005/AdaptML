@@ -1,5 +1,30 @@
 /* Primitive palette: raw values may only be consumed by semantic tokens below. */
 :root {
+  /* Typography geometry is shared by light and dark themes. */
+  --font-family-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --typography-display-size: 2rem;
+  --typography-display-line-height: 2.5rem;
+  --typography-page-title-size: 1.5rem;
+  --typography-page-title-line-height: 2rem;
+  --typography-section-title-size: 1.25rem;
+  --typography-section-title-line-height: 1.75rem;
+  --typography-heading-size: 1rem;
+  --typography-heading-line-height: 1.5rem;
+  --typography-metric-size: 1.5rem;
+  --typography-metric-line-height: 2rem;
+  --typography-body-lg-size: 1rem;
+  --typography-body-lg-line-height: 1.5rem;
+  --typography-body-size: 0.875rem;
+  --typography-body-line-height: 1.25rem;
+  --typography-caption-size: 0.75rem;
+  --typography-caption-line-height: 1rem;
+  --typography-code-size: 0.75rem;
+  --typography-code-line-height: 1.125rem;
+  --typography-terminal-size: 0.875rem;
+  --typography-terminal-line-height: 1.375rem;
+  --typography-overline-letter-spacing: 0.06em;
+
   --primitive-white: #ffffff;
   --primitive-black: #000000;
 
@@ -191,7 +216,7 @@
   --duration-normal: 200ms;
 }
 
-.dark {
+:root.dark {
   --background: var(--primitive-slate-950);
   --surface: var(--primitive-slate-900);
   --surface-muted: #172033;
@@ -267,8 +292,55 @@
 }
 
 @theme inline {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
+
+  --text-style-display: var(--typography-display-size);
+  --text-style-display--line-height: var(--typography-display-line-height);
+  --text-style-display--font-weight: 700;
+  --text-style-page-title: var(--typography-page-title-size);
+  --text-style-page-title--line-height: var(--typography-page-title-line-height);
+  --text-style-page-title--font-weight: 700;
+  --text-style-section-title: var(--typography-section-title-size);
+  --text-style-section-title--line-height: var(--typography-section-title-line-height);
+  --text-style-section-title--font-weight: 700;
+  --text-style-heading: var(--typography-heading-size);
+  --text-style-heading--line-height: var(--typography-heading-line-height);
+  --text-style-heading--font-weight: 600;
+  --text-style-metric: var(--typography-metric-size);
+  --text-style-metric--line-height: var(--typography-metric-line-height);
+  --text-style-metric--font-weight: 700;
+  --text-style-body-lg: var(--typography-body-lg-size);
+  --text-style-body-lg--line-height: var(--typography-body-lg-line-height);
+  --text-style-body-lg--font-weight: 400;
+  --text-style-body: var(--typography-body-size);
+  --text-style-body--line-height: var(--typography-body-line-height);
+  --text-style-body--font-weight: 400;
+  --text-style-body-strong: var(--typography-body-size);
+  --text-style-body-strong--line-height: var(--typography-body-line-height);
+  --text-style-body-strong--font-weight: 600;
+  --text-style-control: var(--typography-body-size);
+  --text-style-control--line-height: var(--typography-body-line-height);
+  --text-style-control--font-weight: 600;
+  --text-style-caption: var(--typography-caption-size);
+  --text-style-caption--line-height: var(--typography-caption-line-height);
+  --text-style-caption--font-weight: 400;
+  --text-style-caption-strong: var(--typography-caption-size);
+  --text-style-caption-strong--line-height: var(--typography-caption-line-height);
+  --text-style-caption-strong--font-weight: 600;
+  --text-style-overline: var(--typography-caption-size);
+  --text-style-overline--line-height: var(--typography-caption-line-height);
+  --text-style-overline--font-weight: 700;
+  --text-style-overline--letter-spacing: var(--typography-overline-letter-spacing);
+  --text-style-code-sm: var(--typography-code-size);
+  --text-style-code-sm--line-height: var(--typography-code-line-height);
+  --text-style-code-sm--font-weight: 400;
+  --text-style-code-sm-strong: var(--typography-code-size);
+  --text-style-code-sm-strong--line-height: var(--typography-code-line-height);
+  --text-style-code-sm-strong--font-weight: 600;
+  --text-style-terminal: var(--typography-terminal-size);
+  --text-style-terminal--line-height: var(--typography-terminal-line-height);
+  --text-style-terminal--font-weight: 400;
 
   --color-background: var(--background);
   --color-surface: var(--surface);
@@ -351,6 +423,60 @@
   --color-syntax-number: var(--syntax-number);
   --color-syntax-comment: var(--syntax-comment);
   --color-syntax-function: var(--syntax-function);
+
+  /*
+   * Text foreground aliases intentionally use the `color-*` color name so
+   * Tailwind emits `text-color-*`. This keeps foreground color utilities
+   * visually distinct from the `text-style-*` typography utilities.
+   */
+  --color-color-foreground: var(--foreground);
+  --color-color-foreground-muted: var(--foreground-muted);
+  --color-color-foreground-subtle: var(--foreground-subtle);
+  --color-color-foreground-disabled: var(--foreground-disabled);
+  --color-color-foreground-inverse: var(--foreground-inverse);
+  --color-color-muted-foreground: var(--muted-foreground);
+  --color-color-primary: var(--primary);
+  --color-color-primary-hover: var(--primary-hover);
+  --color-color-primary-active: var(--primary-active);
+  --color-color-primary-foreground: var(--primary-foreground);
+  --color-color-brand-accent: var(--accent);
+  --color-color-accent-foreground: var(--accent-foreground);
+  --color-color-info: var(--info);
+  --color-color-info-hover: var(--info-hover);
+  --color-color-info-active: var(--info-active);
+  --color-color-info-foreground: var(--info-foreground);
+  --color-color-success: var(--success);
+  --color-color-success-hover: var(--success-hover);
+  --color-color-success-active: var(--success-active);
+  --color-color-success-foreground: var(--success-foreground);
+  --color-color-warning: var(--warning);
+  --color-color-warning-hover: var(--warning-hover);
+  --color-color-warning-active: var(--warning-active);
+  --color-color-warning-foreground: var(--warning-foreground);
+  --color-color-danger: var(--danger);
+  --color-color-danger-hover: var(--danger-hover);
+  --color-color-danger-active: var(--danger-active);
+  --color-color-danger-foreground: var(--danger-foreground);
+  --color-color-chart-1: var(--chart-1);
+  --color-color-chart-2: var(--chart-2);
+  --color-color-chart-3: var(--chart-3);
+  --color-color-chart-4: var(--chart-4);
+  --color-color-chart-5: var(--chart-5);
+  --color-color-chart-6: var(--chart-6);
+  --color-color-terminal-foreground: var(--terminal-foreground);
+  --color-color-terminal-muted: var(--terminal-muted);
+  --color-color-terminal-info: var(--terminal-info);
+  --color-color-terminal-success: var(--terminal-success);
+  --color-color-terminal-warning: var(--terminal-warning);
+  --color-color-terminal-danger: var(--terminal-danger);
+  --color-color-syntax-keyword: var(--syntax-keyword);
+  --color-color-syntax-type: var(--syntax-type);
+  --color-color-syntax-variable: var(--syntax-variable);
+  --color-color-syntax-property: var(--syntax-property);
+  --color-color-syntax-string: var(--syntax-string);
+  --color-color-syntax-number: var(--syntax-number);
+  --color-color-syntax-comment: var(--syntax-comment);
+  --color-color-syntax-function: var(--syntax-function);
 
   --radius-compact: var(--component-radius-compact);
   --radius-surface: var(--component-radius-surface);

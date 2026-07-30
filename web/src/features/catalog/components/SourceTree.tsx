@@ -26,7 +26,7 @@ function InlineTreeInput({ onCommit }: { onCommit: (value: string) => void }) {
     <input
       autoFocus
       aria-label={t('sourceEditor.fileFolderName')}
-      className="min-w-0 flex-1 rounded-compact border border-(--color-primary) bg-(--color-surface) px-1 py-0.5 text-sm text-(--color-foreground) outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring)"
+      className="min-w-0 flex-1 rounded-compact border border-(--color-primary) bg-(--color-surface) px-1 py-0.5 text-style-body text-(--color-foreground) outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring)"
       value={value}
       onChange={(event) => setValue(event.target.value)}
       onKeyDown={(event) => {
@@ -82,7 +82,7 @@ export function SourceTree({
                   onSelect(node.path);
                   toggleFolder(node.path);
                 }}
-                className={`flex w-full items-center gap-1.5 rounded-compact px-2 py-1.5 text-left text-sm transition-colors hover:bg-(--color-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring) ${
+                className={`flex w-full items-center gap-1.5 rounded-compact px-2 py-1.5 text-left text-style-body transition-colors hover:bg-(--color-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring) ${
                   isSelected
                     ? 'bg-(--color-primary-subtle) font-medium text-(--color-primary)'
                     : 'text-(--color-muted-foreground)'
@@ -122,7 +122,7 @@ export function SourceTree({
             <button
               type="button"
               onClick={() => onSelect(node.path)}
-              className={`flex w-full items-center gap-1.5 truncate rounded-compact px-2 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring) ${
+              className={`flex w-full items-center gap-1.5 truncate rounded-compact px-2 py-1.5 text-left text-style-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring) ${
                 isSelected
                   ? 'bg-(--color-primary-subtle) font-medium text-(--color-primary)'
                   : 'text-(--color-muted-foreground) hover:bg-(--color-muted)'
@@ -152,7 +152,7 @@ export function SourceTree({
       onFinishCreating ? (
         <li key="new-file-input">
           <div
-            className="flex items-center gap-1.5 px-2 py-1.5 text-sm"
+            className="flex items-center gap-1.5 px-2 py-1.5 text-style-body"
             style={{ paddingLeft: `${level * 12 + (creatingFile.type === 'folder' ? 8 : 30)}px` }}
           >
             {creatingFile.type === 'folder' ? (

@@ -47,10 +47,10 @@ export function ModelHistoryTimeline({ familyId }: Props) {
     return (
       <div className="text-center py-16 flex flex-col items-center border border-dashed border-border rounded-surface bg-muted/50 px-4">
         <div className="rounded-full bg-surface border border-border p-4 mb-4 shadow-sm">
-          <GitCommit className="h-8 w-8 text-muted-foreground" />
+          <GitCommit className="h-8 w-8 text-color-muted-foreground" />
         </div>
-        <h3 className="text-lg font-bold text-foreground">{t('historyTimeline.emptyTitle')}</h3>
-        <p className="mt-2 text-sm text-muted-foreground max-w-md">
+        <h3 className="text-style-heading font-bold text-color-foreground">{t('historyTimeline.emptyTitle')}</h3>
+        <p className="mt-2 text-style-body text-color-muted-foreground max-w-md">
           {t('historyTimeline.emptyDescription')}
         </p>
       </div>
@@ -64,33 +64,33 @@ export function ModelHistoryTimeline({ familyId }: Props) {
         const isFailed = event.status === 'failed';
         
         let Icon = GitCommit;
-        let iconBg = 'bg-muted text-muted-foreground border-border';
+        let iconBg = 'bg-muted text-color-muted-foreground border-border';
 
         // Action-based styling
         if (event.action === 'promoted') {
           Icon = ArrowUpRight;
-          iconBg = 'bg-success-subtle text-success border-success/20';
+          iconBg = 'bg-success-subtle text-color-success border-success/20';
         } else if (event.action === 'rolled_back') {
           Icon = RotateCcw;
-          iconBg = 'bg-warning-subtle text-warning border-warning/20';
+          iconBg = 'bg-warning-subtle text-color-warning border-warning/20';
         } else if (event.action === 'registered') {
           Icon = Package;
-          iconBg = 'bg-primary-subtle text-primary border-primary/20';
+          iconBg = 'bg-primary-subtle text-color-primary border-primary/20';
         } else if (event.action === 'health_checked') {
           Icon = Activity;
-          iconBg = 'bg-primary-subtle text-primary border-primary/20';
+          iconBg = 'bg-primary-subtle text-color-primary border-primary/20';
         } else if (event.action === 'archived' || event.action === 'stopped') {
           Icon = Trash2;
-          iconBg = 'bg-muted text-muted-foreground border-border';
+          iconBg = 'bg-muted text-color-muted-foreground border-border';
         }
 
         // Status overrides
         if (isFailed) {
           Icon = XCircle;
-          iconBg = 'bg-danger-subtle text-danger border-danger/20';
+          iconBg = 'bg-danger-subtle text-color-danger border-danger/20';
         } else if (event.action === 'deployed' && isSuccess) {
           Icon = CheckCircle;
-          iconBg = 'bg-success-subtle text-success border-success/20';
+          iconBg = 'bg-success-subtle text-color-success border-success/20';
         }
 
         let actionText = event.action.replace('_', ' ');
@@ -111,14 +111,14 @@ export function ModelHistoryTimeline({ familyId }: Props) {
             const to = event.to_stage && event.to_stage !== 'production' ? formatVersion(event.to_stage) : formatVersion(event.version);
             
             return (
-              <span className="text-xs text-muted-foreground font-medium">
+              <span className="text-style-caption text-color-muted-foreground font-medium">
                 {t('historyTimeline.previousCurrent', { previous: from, current: to })}
               </span>
             );
           }
 
           return (
-            <span className="text-xs text-muted-foreground font-medium">
+            <span className="text-style-caption text-color-muted-foreground font-medium">
               {event.from_stage} &rarr; {event.to_stage}
             </span>
           );
@@ -136,22 +136,22 @@ export function ModelHistoryTimeline({ familyId }: Props) {
             </span>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold text-foreground">{actionText}</span>
-                <span className="text-xs font-mono font-semibold bg-muted border border-border px-2 py-0.5 rounded-compact text-foreground">{formatVersion(event.version)}</span>
+                <span className="text-style-body-strong text-color-foreground">{actionText}</span>
+                <span className="font-mono text-style-code-sm font-semibold bg-muted border border-border px-2 py-0.5 rounded-compact text-color-foreground">{formatVersion(event.version)}</span>
                 {renderTransition()}
-                <span className="text-xs font-medium text-muted-foreground ml-auto">
+                <span className="text-style-caption-strong text-color-muted-foreground ml-auto">
                   {new Date(event.created_at).toLocaleString()}
                 </span>
               </div>
               
               {event.action === 'promoted' || event.action === 'rolled_back' ? (
-                <p className="text-sm text-muted-foreground">{t('historyTimeline.productionMarkerUpdated')}</p>
+                <p className="text-style-body text-color-muted-foreground">{t('historyTimeline.productionMarkerUpdated')}</p>
               ) : (
-                <p className="text-sm text-muted-foreground">{event.message}</p>
+                <p className="text-style-body text-color-muted-foreground">{event.message}</p>
               )}
               
               {event.actor && (
-                <p className="text-xs font-medium text-muted-foreground">
+                <p className="text-style-caption-strong text-color-muted-foreground">
                   {t('historyTimeline.by', { actor: event.actor })}
                 </p>
               )}

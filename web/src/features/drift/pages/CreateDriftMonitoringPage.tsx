@@ -34,8 +34,8 @@ const DataPlaceholder = ({
   title: string;
   action?: React.ReactNode;
 }) => (
-  <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-    <Database className="w-8 h-8 text-muted-foreground" />
+  <div className="flex h-full flex-col items-center justify-center gap-2 text-color-muted-foreground">
+    <Database className="w-8 h-8 text-color-muted-foreground" />
     <p>{title}</p>
     {action}
   </div>
@@ -185,7 +185,7 @@ export default function CreateDriftMonitoringPage() {
           />
           <div className="h-100 rounded-surface border border-border overflow-hidden relative bg-muted">
             {isLoadingProductionData ? (
-              <div className="flex h-full items-center justify-center text-muted-foreground">
+              <div className="flex h-full items-center justify-center text-color-muted-foreground">
                 {t("createPage.loadingProduction")}
               </div>
             ) : isProductionDataError ? (

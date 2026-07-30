@@ -31,7 +31,7 @@ export default function SourceTrainingJobPage() {
           subtitle={t("createFlow.source.description")}
         />
         <div className="space-y-3">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-style-body-strong text-color-foreground">
             {t("createFlow.source.flavor")}
           </p>
           <Picker
@@ -87,7 +87,7 @@ export default function SourceTrainingJobPage() {
           onDirtyChange={(dirty) => flow.setEditorDirty("data", dirty)}
         />
         <div className="space-y-4">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-style-body-strong text-color-foreground">
             {t("createFlow.source.requirements")}
           </p>
           <FileDropzone

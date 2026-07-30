@@ -50,10 +50,10 @@ export default function LoginPage() {
         <img src={MLdriftLogo} alt="MLdrift" className="w-8 h-8" />
       </div>
 
-      <h2 className="mb-1 text-center text-2xl font-bold text-foreground">
+      <h2 className="mb-1 text-center text-style-page-title font-bold text-color-foreground">
         {t("login.title")}
       </h2>
-      <p className="mb-8 text-center text-sm text-muted-foreground">
+      <p className="mb-8 text-center text-style-body text-color-muted-foreground">
         {t("login.description")}
       </p>
 
@@ -109,7 +109,7 @@ export default function LoginPage() {
         <div className="flex justify-end">
           <Link
             to="/forgot-password"
-            className="text-xs font-semibold text-foreground underline hover:text-primary-hover"
+            className="text-style-caption-strong text-color-foreground underline hover:text-color-primary-hover"
           >
             {t("login.forgotPassword")}
           </Link>
@@ -127,11 +127,11 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-8 text-center text-sm text-muted-foreground">
+      <p className="mt-8 text-center text-style-body text-color-muted-foreground">
         {t("login.noAccount")}{" "}
         <Link
           to="/signup"
-          className="font-semibold text-foreground underline hover:text-primary-hover"
+          className="font-semibold text-color-foreground underline hover:text-color-primary-hover"
         >
           {t("login.signUp")}
         </Link>

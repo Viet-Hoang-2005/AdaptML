@@ -30,10 +30,10 @@ export function PageTabs({ tabs }: PageTabsProps) {
                 to={tab.to}
                 className={({ isActive }) =>
                   [
-                    'inline-flex h-10 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                    'inline-flex h-10 items-center gap-2 border-b-2 px-3 text-style-body-strong transition-colors focus-visible:ring-2 focus-visible:ring-ring',
                     isActive
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
+                      ? 'border-primary text-color-primary'
+                      : 'border-transparent text-color-muted-foreground hover:border-border hover:text-color-foreground',
                   ].join(' ')
                 }
               >
@@ -49,10 +49,10 @@ export function PageTabs({ tabs }: PageTabsProps) {
               type="button"
               onClick={tab.onClick}
               className={[
-                'inline-flex h-10 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                'inline-flex h-10 items-center gap-2 border-b-2 px-3 text-style-body-strong transition-colors focus-visible:ring-2 focus-visible:ring-ring',
                 tab.isActive
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
+                  ? 'border-primary text-color-primary'
+                  : 'border-transparent text-color-muted-foreground hover:border-border hover:text-color-foreground',
               ].join(' ')}
             >
               {Icon && <Icon className="h-4 w-4 shrink-0" />}

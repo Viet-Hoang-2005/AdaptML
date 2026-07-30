@@ -54,21 +54,21 @@ export function LineSteps({
                   aria-label={item.label}
                   className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
                     active
-                      ? "border-primary bg-primary text-primary-foreground"
+                      ? "border-primary bg-primary text-color-primary-foreground"
                       : done
-                        ? "border-primary bg-surface text-foreground hover:bg-muted"
-                        : "border-border bg-surface text-muted-foreground"
+                        ? "border-primary bg-surface text-color-foreground hover:bg-muted"
+                        : "border-border bg-surface text-color-muted-foreground"
                   } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"}`}
                 >
                   <Icon className="h-4 w-4" />
                 </button>
                 <span
-                  className={`absolute -bottom-7 whitespace-nowrap text-xs font-bold ${
+                  className={`absolute -bottom-7 whitespace-nowrap text-style-caption-strong ${
                     active
-                      ? "text-foreground"
+                      ? "text-color-foreground"
                       : done
-                        ? "text-foreground"
-                        : "text-muted-foreground"
+                        ? "text-color-foreground"
+                        : "text-color-muted-foreground"
                   }`}
                 >
                   {item.label}
@@ -94,7 +94,7 @@ export function LineSteps({
                 disabled={isTransitioning || !onStepChange}
                 aria-current={active ? "step" : undefined}
                 onClick={() => onStepChange?.(item.id)}
-                className={`inline-flex min-h-10 items-center gap-2 rounded-control border px-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-surface text-muted-foreground"} disabled:opacity-60`}
+                className={`inline-flex min-h-10 items-center gap-2 rounded-control border px-3 text-style-body-strong focus-visible:ring-2 focus-visible:ring-ring ${active ? "border-primary bg-primary text-color-primary-foreground" : "border-border bg-surface text-color-muted-foreground"} disabled:opacity-60`}
               >
                 <Icon className="h-4 w-4" />
                 {item.label}

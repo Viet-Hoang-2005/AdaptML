@@ -32,14 +32,14 @@ export function StatePanel({
       <div
         className={
           kind === "error"
-            ? "mb-4 rounded-surface bg-danger-subtle p-3 text-danger"
-            : "mb-4 rounded-surface bg-muted p-3 text-muted-foreground"
+            ? "mb-4 rounded-surface bg-danger-subtle p-3 text-color-danger"
+            : "mb-4 rounded-surface bg-muted p-3 text-color-muted-foreground"
         }
       >
         {icon || fallbackIcon}
       </div>
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+      <h2 className="text-style-heading text-color-foreground">{title}</h2>
+      <p className="mt-2 max-w-md text-style-body text-color-muted-foreground">
         {description}
       </p>
       <div className="mt-5">

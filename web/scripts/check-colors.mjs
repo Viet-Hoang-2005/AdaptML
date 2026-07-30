@@ -8,11 +8,13 @@ const sourceFiles = [];
 const failures = [];
 
 const directPalette =
-  /(?:^|[\s"'`])(?:[a-z-]+:)*(?:bg|text|border|ring|outline|decoration|shadow|accent|caret|divide|fill|stroke|from|via|to|selection)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-\d{2,3})(?:\/\d+)?(?=$|[\s"'`])/g;
+  /(?:^|[\s"'`])(?:[a-z-]+:)*(?:bg|text(?:-color)?|border|ring|outline|decoration|shadow|accent|caret|divide|fill|stroke|from|via|to|selection)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-\d{2,3})(?:\/\d+)?(?=$|[\s"'`])/g;
 const directBlackWhite =
-  /(?:^|[\s"'`])(?:[a-z-]+:)*(?:bg|text|border|ring|outline|decoration|shadow|accent|caret|divide|fill|stroke|from|via|to|selection)-(?:black|white)(?:\/\d+)?(?=$|[\s"'`])/g;
+  /(?:^|[\s"'`])(?:[a-z-]+:)*(?:bg|text(?:-color)?|border|ring|outline|decoration|shadow|accent|caret|divide|fill|stroke|from|via|to|selection)-(?:black|white)(?:\/\d+)?(?=$|[\s"'`])/g;
 const darkColorUtility =
-  /(?:^|[\s"'`])dark:(?:hover:|focus:|active:|disabled:)*(?:bg|text|border|ring|outline|fill|stroke|from|via|to)-[\w[\]()./%-]+(?=$|[\s"'`])/g;
+  /(?:^|[\s"'`])dark:(?:hover:|focus:|active:|disabled:)*(?:bg|text(?:-color)?|border|ring|outline|fill|stroke|from|via|to)-[\w[\]()./%-]+(?=$|[\s"'`])/g;
+const legacySemanticTextColor =
+  /\b(?:[a-z-]+:)*text-(?:terminal-(?:foreground|muted|info|success|warning|danger)|foreground(?:-muted|-subtle|-disabled|-inverse)?|muted-foreground|primary(?:-hover|-active|-foreground)?|brand-accent|accent-foreground|info(?:-hover|-active|-foreground)?|success(?:-hover|-active|-foreground)?|warning(?:-hover|-active|-foreground)?|danger(?:-hover|-active|-foreground)?|chart-[1-6]|syntax-(?:keyword|type|variable|property|string|number|comment|function))(?:\/\d+)?\b/g;
 const rawHex = /#[0-9a-fA-F]{3,8}\b/g;
 const functionalColor = /\b(?:rgb|rgba|hsl|hsla)\s*\(/g;
 
@@ -38,6 +40,7 @@ const reportMatches = (file, sourceFile, lines, node, value) => {
     ["direct Tailwind palette", directPalette],
     ["direct black/white utility", directBlackWhite],
     ["dark color utility", darkColorUtility],
+    ["legacy semantic text-color utility", legacySemanticTextColor],
     ["hex color", rawHex],
     ["functional color", functionalColor],
   ];
@@ -118,7 +121,7 @@ for (const file of sourceFiles) {
 
 if (failures.length > 0) {
   console.error(
-    "Frontend color validation failed. Use semantic tokens from tokens.css or add a scoped `color-ignore: reason` comment for an approved technical exception.",
+    "Frontend color validation failed. Use `text-color-*` for semantic foreground colors and other semantic tokens from tokens.css, or add a scoped `color-ignore: reason` comment for an approved technical exception.",
   );
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);

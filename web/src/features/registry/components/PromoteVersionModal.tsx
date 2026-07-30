@@ -60,24 +60,24 @@ export function PromoteVersionModal({
       <div className="bg-surface rounded-overlay shadow-xl w-full max-w-md overflow-hidden">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="rounded-full bg-success-subtle p-2.5 text-success">
+            <div className="rounded-full bg-success-subtle p-2.5 text-color-success">
               <ArrowUpCircle className="h-6 w-6" />
             </div>
-            <h3 className="text-xl font-bold text-foreground">
+            <h3 className="text-style-section-title font-bold text-color-foreground">
               {t("promoteDialog.title")}
             </h3>
           </div>
 
-          <div className="flex gap-3 rounded-surface border border-info-border bg-info-subtle p-4 text-info shadow-sm">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-info" />
-            <p className="text-sm">
+          <div className="flex gap-3 rounded-surface border border-info-border bg-info-subtle p-4 text-color-info shadow-sm">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-color-info" />
+            <p className="text-style-body">
               {t("promoteDialog.description")}
             </p>
           </div>
 
-          <div className="mt-6 flex flex-col gap-3 text-sm bg-muted p-4 rounded-surface border border-border">
+          <div className="mt-6 flex flex-col gap-3 text-style-body bg-muted p-4 rounded-surface border border-border">
             <label className="flex flex-col gap-2 pb-2 border-b border-border">
-              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">
+              <span className="text-color-muted-foreground font-semibold uppercase text-style-caption">
                 {t("promoteDialog.alias")}
               </span>
               <select
@@ -85,7 +85,7 @@ export function PromoteVersionModal({
                 onChange={(event) =>
                   setAlias(event.target.value as RoutingAliasName)
                 }
-                className="rounded-control border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-success focus:ring-2 focus:ring-success-border"
+                className="rounded-control border border-border bg-surface px-3 py-2 text-style-body-strong text-color-foreground outline-none focus:border-success focus:ring-2 focus:ring-success-border"
                 disabled={loading}
               >
                 <option value="production">{t("promoteDialog.production")}</option>
@@ -94,28 +94,28 @@ export function PromoteVersionModal({
               </select>
             </label>
             <div className="flex justify-between py-1 border-b border-border">
-              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">
+              <span className="text-color-muted-foreground font-semibold uppercase text-style-caption">
                 {t("promoteDialog.targetVersion")}
               </span>
-              <span className="rounded-compact bg-success-subtle px-2 font-mono font-bold text-success">
+              <span className="rounded-compact bg-success-subtle px-2 font-mono font-bold text-color-success">
                 {formatVersion(version.version)}
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-border">
-              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">
+              <span className="text-color-muted-foreground font-semibold uppercase text-style-caption">
                 {t("promoteDialog.currentProduction")}
               </span>
-              <span className="font-mono text-muted-foreground">
+              <span className="font-mono text-color-muted-foreground">
                 {family.current_production_version
                   ? formatVersion(family.current_production_version.version)
                   : t("statuses.none", { ns: "common" })}
               </span>
             </div>
             <div className="flex justify-between py-1">
-              <span className="text-muted-foreground font-semibold uppercase tracking-wider text-xs">
+              <span className="text-color-muted-foreground font-semibold uppercase text-style-caption">
                 {t("promoteDialog.family")}
               </span>
-              <span className="font-bold text-foreground">
+              <span className="font-bold text-color-foreground">
                 {family.display_name || family.name}
               </span>
             </div>

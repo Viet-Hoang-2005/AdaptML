@@ -125,16 +125,16 @@ export default function TrainingJobOverviewPage() {
 
       {job.status === "failed" && (
         <div className="rounded-surface border border-danger/20 bg-danger-subtle p-5">
-          <h4 className="mb-2 flex items-center gap-2 text-base font-bold text-danger">
+          <h4 className="mb-2 flex items-center gap-2 text-style-heading text-color-danger">
             <AlertTriangle className="h-5 w-5" />
             {t("detail.overview.failedTitle")}
           </h4>
-          <p className="mb-3 text-sm font-medium text-danger">
+          <p className="mb-3 text-style-body-strong text-color-danger">
             {job.stop_reason || t("detail.overview.failedFallback")}
           </p>
           {job.error_message && (
             <div className="overflow-x-auto rounded-surface border border-danger/20 bg-surface p-4">
-              <code className="wrap-break-words whitespace-pre-wrap font-mono text-xs text-danger">
+              <code className="wrap-break-words whitespace-pre-wrap font-mono text-style-code-sm text-color-danger">
                 {job.error_message}
               </code>
             </div>
@@ -144,11 +144,11 @@ export default function TrainingJobOverviewPage() {
 
       {job.status === "cancelled" && (
         <div className="rounded-surface border border-warning/20 bg-warning-subtle p-5">
-          <h4 className="mb-2 flex items-center gap-2 text-base font-bold text-warning">
+          <h4 className="mb-2 flex items-center gap-2 text-style-heading text-color-warning">
             <AlertTriangle className="h-5 w-5" />
             {t("detail.overview.cancelledTitle")}
           </h4>
-          <p className="text-sm font-medium text-warning">
+          <p className="text-style-body-strong text-color-warning">
             {job.stop_reason || t("detail.overview.cancelledFallback")}
           </p>
         </div>
@@ -158,7 +158,7 @@ export default function TrainingJobOverviewPage() {
         title={
           <div className="flex items-center gap-2">
             <Info className="h-5 w-5" />
-            <h3 className="text-md font-semibold">{t("detail.overview.metadataTitle")}</h3>
+            <h3 className="text-style-heading">{t("detail.overview.metadataTitle")}</h3>
           </div>
         }
       >
