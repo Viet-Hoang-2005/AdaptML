@@ -312,8 +312,17 @@ Deployment configuration & Docker Compose/K8s/Argo files & Supports local integr
 \bottomrule
 \end{tabular}
 \end{table}
+
+\textit{Training execution.} In the configured Kubernetes path, the control plane submits a training webhook to Argo Events, and Argo Workflows may instantiate a Kubeflow \texttt{PyTorchJob} on Karpenter-backed nodes where configured. The runner path executes the selected entry point, exchanges \texttt{model.tar.gz} through S3-compatible storage, and returns completion metadata. User scripts need not import MLflow; optional tracking metadata does not determine Native Registry validity.
+
+\textit{Metadata and registry.} On job-artifact ingestion, the control plane records available metrics, parameters, insights, and deployability summaries. The Native Registry groups family and version records linked to \texttt{ModelAPI} records, with PostgreSQL remaining the product-level source of truth for tenant ownership, lifecycle, and drift results. MLflow, when configured, provides internal tracking or serving adaptation rather than product-state ownership.
+
+\textit{Packaging, serving, and monitoring.} The configured packaging path can build an image through Argo/Docker, push it to Harbor, and request a FastAPI pod; Section~8 does not evaluate each branch. In the prototype flow, prediction logs pass asynchronously through Redpanda to PostgreSQL, and Evidently produces monitoring reports. Drift remains a review signal, not an automatic redeployment decision.
+
+\textit{Deployment and operational scope.} The submitted testbed configuration includes Docker Compose, Kubernetes (K3s) manifests, and Argo templates. Node provisioning through Karpenter is configured but its elasticity is not evaluated. The evidence exercises a controlled offline evaluation and one bounded serving replay; autonomous promotion, canary deployment, and production hardening remain future work.
+
 Figures~\ref{fig:ui-evolution} and~\ref{fig:ui-drift} provide interface evidence for recorded registry state and an illustrative monitoring report.
-\begin{figure}[t]
+\begin{figure}[htbp]
 \centering
 \begin{minipage}[t]{0.49\linewidth}
   \centering
@@ -328,14 +337,6 @@ Figures~\ref{fig:ui-evolution} and~\ref{fig:ui-drift} provide interface evidence
   \label{fig:ui-drift}
 \end{minipage}
 \end{figure}
-
-\textit{Training execution.} In the configured Kubernetes path, the control plane submits a training webhook to Argo Events, and Argo Workflows may instantiate a Kubeflow \texttt{PyTorchJob} on Karpenter-backed nodes where configured. The runner path executes the selected entry point, exchanges \texttt{model.tar.gz} through S3-compatible storage, and returns completion metadata. User scripts need not import MLflow; optional tracking metadata does not determine Native Registry validity.
-
-\textit{Metadata and registry.} On job-artifact ingestion, the control plane records available metrics, parameters, insights, and deployability summaries. The Native Registry groups family and version records linked to \texttt{ModelAPI} records, with PostgreSQL remaining the product-level source of truth for tenant ownership, lifecycle, and drift results. MLflow, when configured, provides internal tracking or serving adaptation rather than product-state ownership.
-
-\textit{Packaging, serving, and monitoring.} The configured packaging path can build an image through Argo/Docker, push it to Harbor, and request a FastAPI pod; Section~8 does not evaluate each branch. In the prototype flow, prediction logs pass asynchronously through Redpanda to PostgreSQL, and Evidently produces monitoring reports. Drift remains a review signal, not an automatic redeployment decision.
-
-\textit{Deployment and operational scope.} The submitted testbed configuration includes Docker Compose, Kubernetes (K3s) manifests, and Argo templates. Node provisioning through Karpenter is configured but its elasticity is not evaluated. The evidence exercises a controlled offline evaluation and one bounded serving replay; autonomous promotion, canary deployment, and production hardening remain future work.
 
 \FloatBarrier
 \section{Preliminary Evaluation}
