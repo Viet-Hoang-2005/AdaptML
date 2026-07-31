@@ -313,7 +313,7 @@ Deployment configuration & Docker Compose/K8s/Argo files & Supports local integr
 \end{tabular}
 \end{table}
 Figures~\ref{fig:ui-evolution} and~\ref{fig:ui-drift} provide interface evidence for recorded registry state and an illustrative monitoring report.
-\begin{figure}[htbp]
+\begin{figure}[t]
 \centering
 \begin{minipage}[t]{0.49\linewidth}
   \centering
@@ -375,7 +375,7 @@ Attack Family & Level & Atk\% & Mean KS & Fixed M-F1 & Chall. M-F1 & $\Delta$M-F
 \end{tabular}
 \end{table}
 
-All nine windows satisfy the $0.30$ dataset rule, with 50--51 of 52 features marked drifted. As the controlled attack fraction rises, mean KS increases from 0.07--0.10 to 0.38--0.50 and fixed-model Macro-F1 falls from about 0.46 to 0.13. The corresponding challengers achieve Macro-F1 of 0.988--1.000. Over five seeds, standard deviations remain below 0.004 for all reported metrics, indicating that the results are stable with respect to random sampling. Because trigger and future-holdout rows share the same source distribution (i.i.d.\ split) and CIC-IDS2017 attack classes are well separated in the 52-feature space, the near-perfect challenger scores reflect the constructed evaluation setting rather than general robustness. The primary signal is the recovery gap $\Delta$M-F1: the framework detects drift and the retrained challenger recovers Macro-F1 by 0.54--0.87 depending on severity. These results demonstrate lifecycle feasibility in this controlled setting, not robustness across environments, natural drift, or general adaptation effectiveness.
+All nine windows satisfy the $0.30$ dataset rule (50--51 of 52 features drifted). As the attack fraction rises, mean KS increases from 0.07--0.10 to 0.38--0.50 and fixed-model Macro-F1 falls from 0.46 to 0.13; challengers recover to 0.988--1.000 ($\Delta$M-F1 of +0.54 to +0.87). Over five seeds, all standard deviations remain below 0.004. The near-perfect challenger scores reflect the i.i.d.\ split and well-separated CIC-IDS2017 features rather than general robustness; the primary signal is the recovery gap, not the absolute score. These results demonstrate lifecycle feasibility in this controlled setting, not robustness across environments or natural drift.
 
 One bounded testbed replay used 100 Locust users for approximately 89 seconds and issued 4,343 client-side requests. Locust recorded 47.6 requests/s on average, 1.74 s mean response time, 2.30 s p95, and four HTTP 502 responses. Prometheus recorded a 144.1 requests/s peak server-side rate and 1.60 s mean handler latency. Client averages and server-side peaks use different measurement and aggregation semantics and are not directly comparable. This single observation is not capacity, scalability, reliability, availability, SLA, or production evidence. Figure~\ref{fig:endpoint-benchmark} shows the client-side time series.
 
