@@ -41,7 +41,7 @@ Tên branch **phải viết bằng tiếng Anh**, dùng dấu gạch ngang `-` �
 
 | Prefix      | Dùng khi nào                            | Ví dụ                                 |
 | ----------- | --------------------------------------- | ------------------------------------- |
-| `feature/`  | Thêm tính năng mới                      | `feature/cloudnativepg-ha-setup`      |
+| `feat/`     | Thêm tính năng mới                      | `feature/cloudnativepg-ha-setup`      |
 | `fix/`      | Sửa bug                                 | `fix/postgres-connection-timeout`     |
 | `docs/`     | Cập nhật tài liệu                       | `docs/update-architecture-diagram`    |
 | `refactor/` | Cải thiện code, không thay đổi behavior | `refactor/db-manager-dual-endpoint`   |
@@ -96,7 +96,7 @@ Commit message **phải viết bằng tiếng Anh**, tuân thủ chuẩn [Conven
 
 ### Scope gợi ý cho dự án này
 
-`api` · `db` · `monitoring` · `k8s` · `infra` · `training` · `pipeline` · `docs`
+`web` · `control-plane` · `model-server` · `terraform` · `ansible` · `k8s` · `cicd` · `skills`
 
 ### ✅ Ví dụ đúng
 

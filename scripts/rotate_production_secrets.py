@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Rotate compromised credentials without printing secret values.
 
 Run only after untrusted workloads no longer receive production secrets.
@@ -71,12 +70,18 @@ def _rotate_application_secrets(client, secret_id, args):
     private_key, public_key = _jwt_key_pair()
     payload.update(
         {
+            "DJANGO_SECRET_KEY": secrets.token_urlsafe(64),
             "CONTROL_PLANE_WEBHOOK_SECRET": secrets.token_urlsafe(48),
             "JWT_PRIVATE_KEY": private_key,
             "JWT_PUBLIC_KEY": public_key,
         }
     )
-    rotated = ["CONTROL_PLANE_WEBHOOK_SECRET", "JWT_PRIVATE_KEY", "JWT_PUBLIC_KEY"]
+    rotated = [
+        "DJANGO_SECRET_KEY",
+        "CONTROL_PLANE_WEBHOOK_SECRET",
+        "JWT_PRIVATE_KEY",
+        "JWT_PUBLIC_KEY",
+    ]
     if args.rotate_github_oauth:
         payload["GITHUB_OAUTH2_CLIENT_SECRET"] = _provider_secret("New GitHub OAuth client secret: ")
         rotated.append("GITHUB_OAUTH2_CLIENT_SECRET")

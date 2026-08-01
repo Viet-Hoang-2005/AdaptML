@@ -22,6 +22,7 @@ __pycache__/
 *.so
 .Python
 venv/
+.venv-ansible/
 *.egg-info/
 dist/
 build/

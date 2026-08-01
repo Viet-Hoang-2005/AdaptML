@@ -59,6 +59,21 @@ spec:
                 secretKeyRef:
                   name: mlops-paas-secret
                   key: DJANGO_SECRET_KEY
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: JWT_PRIVATE_KEY
+            - name: JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: JWT_PUBLIC_KEY
+            - name: CONTROL_PLANE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: CONTROL_PLANE_WEBHOOK_SECRET
           envFrom:
             - configMapRef:
                 name: mlops-paas-control-plane-config

@@ -25,6 +25,7 @@
     cache_valid_time: 3600
     name:
       - ca-certificates
+      - chrony
       - curl
       - git
       - jq
@@ -101,5 +102,5 @@
     enabled: true
     state: started
   loop:
-    - systemd-timesyncd
+    - chrony
     - iscsid
