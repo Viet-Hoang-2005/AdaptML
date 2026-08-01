@@ -48,6 +48,11 @@ phase. The single server uses embedded etcd, secrets encryption, snapshots, a
 control-plane taint and a root-only kubeconfig. Two static workers join over the
 server private IP and receive AWS provider IDs from IMDSv2.
 
+The bundled Traefik entrypoints use an explicit 600-second request timeout.
+This matches the public ALB idle timeout and prevents large Harbor layer uploads
+from being terminated by Traefik's 60-second default while the request body is
+still being streamed.
+
 Core operators are pinned and installed with Ansible modules in this order:
 
 1. AWS EBS CSI

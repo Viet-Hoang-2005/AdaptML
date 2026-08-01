@@ -82,6 +82,23 @@
   delay: 5
   changed_when: false
 
+- name: Render the bundled Traefik timeout configuration
+  become: true
+  ansible.builtin.template:
+    src: traefik-config.yaml.j2
+    dest: /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Wait for Traefik to reconcile the timeout configuration
+  become: true
+  ansible.builtin.command: >-
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
+    --namespace kube-system rollout status deployment/traefik --timeout=180s
+  register: traefik_rollout
+  changed_when: false
+
 - name: Wait for the K3s node token
   become: true
   ansible.builtin.wait_for:
