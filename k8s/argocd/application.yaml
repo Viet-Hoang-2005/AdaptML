@@ -74,6 +74,65 @@ spec:
         - /spec/volumeClaimTemplates/0/apiVersion
         - /spec/volumeClaimTemplates/0/kind
         - /spec/volumeClaimTemplates/0/spec/volumeMode
+    # The Harbor chart omits API-server defaults from its rendered database and
+    # Redis StatefulSets. Ignore only those defaulted paths so application drift
+    # still reports changes to images, credentials, storage, and runtime config.
+    - group: apps
+      kind: StatefulSet
+      name: mlops-paas-harbor-database
+      namespace: harbor
+      jsonPointers:
+        - /spec/persistentVolumeClaimRetentionPolicy
+        - /spec/podManagementPolicy
+        - /spec/revisionHistoryLimit
+        - /spec/template/spec/containers/0/livenessProbe/failureThreshold
+        - /spec/template/spec/containers/0/livenessProbe/successThreshold
+        - /spec/template/spec/containers/0/readinessProbe/failureThreshold
+        - /spec/template/spec/containers/0/readinessProbe/successThreshold
+        - /spec/template/spec/containers/0/resources
+        - /spec/template/spec/containers/0/terminationMessagePath
+        - /spec/template/spec/containers/0/terminationMessagePolicy
+        - /spec/template/spec/containers/0/volumeMounts/0/subPath
+        - /spec/template/spec/dnsPolicy
+        - /spec/template/spec/initContainers/0/resources
+        - /spec/template/spec/initContainers/0/terminationMessagePath
+        - /spec/template/spec/initContainers/0/terminationMessagePolicy
+        - /spec/template/spec/initContainers/0/volumeMounts/0/subPath
+        - /spec/template/spec/restartPolicy
+        - /spec/template/spec/schedulerName
+        - /spec/updateStrategy
+        - /spec/volumeClaimTemplates/0/apiVersion
+        - /spec/volumeClaimTemplates/0/kind
+        - /spec/volumeClaimTemplates/0/metadata/annotations
+        - /spec/volumeClaimTemplates/0/spec/volumeMode
+        - /spec/volumeClaimTemplates/0/status
+    - group: apps
+      kind: StatefulSet
+      name: mlops-paas-harbor-redis
+      namespace: harbor
+      jsonPointers:
+        - /spec/persistentVolumeClaimRetentionPolicy
+        - /spec/podManagementPolicy
+        - /spec/revisionHistoryLimit
+        - /spec/template/spec/containers/0/livenessProbe/failureThreshold
+        - /spec/template/spec/containers/0/livenessProbe/successThreshold
+        - /spec/template/spec/containers/0/livenessProbe/timeoutSeconds
+        - /spec/template/spec/containers/0/readinessProbe/failureThreshold
+        - /spec/template/spec/containers/0/readinessProbe/successThreshold
+        - /spec/template/spec/containers/0/readinessProbe/timeoutSeconds
+        - /spec/template/spec/containers/0/resources
+        - /spec/template/spec/containers/0/terminationMessagePath
+        - /spec/template/spec/containers/0/terminationMessagePolicy
+        - /spec/template/spec/containers/0/volumeMounts/0/subPath
+        - /spec/template/spec/dnsPolicy
+        - /spec/template/spec/restartPolicy
+        - /spec/template/spec/schedulerName
+        - /spec/updateStrategy
+        - /spec/volumeClaimTemplates/0/apiVersion
+        - /spec/volumeClaimTemplates/0/kind
+        - /spec/volumeClaimTemplates/0/metadata/annotations
+        - /spec/volumeClaimTemplates/0/spec/volumeMode
+        - /spec/volumeClaimTemplates/0/status
     # CloudNativePG writes operator defaults into spec. Keep Git focused on the
     # authored intent while ignoring defaulted runtime fields.
     - group: postgresql.cnpg.io
