@@ -90,13 +90,14 @@ module "dns" {
 }
 
 module "alb" {
-  count               = local.enable_alb_stack ? 1 : 0
-  source              = "./modules/alb"
-  vpc_id              = module.network[0].vpc_id
-  public_subnet_ids   = [module.network[0].public_subnet_1a_id, module.network[0].public_subnet_1b_id]
-  lb_sg_id            = module.security[0].lb_sg_id
-  worker_instance_ids = module.compute[0].worker_instance_ids
-  certificate_arn     = module.dns[0].certificate_arn
+  count                = local.enable_alb_stack ? 1 : 0
+  source               = "./modules/alb"
+  vpc_id               = module.network[0].vpc_id
+  public_subnet_ids    = [module.network[0].public_subnet_1a_id, module.network[0].public_subnet_1b_id]
+  lb_sg_id             = module.security[0].lb_sg_id
+  worker_instance_ids  = module.compute[0].worker_instance_ids
+  certificate_arn      = module.dns[0].certificate_arn
+  idle_timeout_seconds = var.alb_idle_timeout_seconds
 }
 
 check "nat_gateway_requires_network" {
