@@ -35,8 +35,7 @@ persistence:
       rootdirectory: /harbor-registry
 
 registry:
-  registry:
-    relativeurls: true
+  relativeurls: true
   nodeSelector: { workload-type: worker }
 
 trivy:
