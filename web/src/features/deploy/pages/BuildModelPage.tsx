@@ -79,7 +79,8 @@ export default function BuildModelPage() {
                 </TerminalActionButton>
               ) : (
                 <TerminalActionButton
-                  icon={<Play className="h-3 w-3" />}
+                  icon={<Play className="h-4 w-4" />}
+                  tone="start"
                   loading={transitionState === "starting-build"}
                   disabled={startDisabled}
                   onClick={() => void startBuild()}

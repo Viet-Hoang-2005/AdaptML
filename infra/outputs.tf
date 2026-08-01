@@ -13,9 +13,24 @@ output "worker_private_ips" {
   value       = local.enable_k3s_compute_stack ? module.compute[0].worker_private_ips : []
 }
 
+output "vpc_id" {
+  description = "VPC containing the K3s cluster"
+  value       = var.enable_network ? module.network[0].vpc_id : null
+}
+
+output "ec2_key_pair_name" {
+  description = "EC2 key pair expected by the Ansible control host"
+  value       = local.enable_k3s_compute_stack ? var.key_name : null
+}
+
 output "alb_dns" {
   description = "Application Load Balancer AWS Domain"
   value       = local.enable_alb_stack ? module.alb[0].lb_dns_name : null
+}
+
+output "alb_target_group_arn" {
+  description = "Target group used to validate K3s worker health"
+  value       = local.enable_alb_stack ? module.alb[0].target_group_arn : null
 }
 
 output "frontend_url" {

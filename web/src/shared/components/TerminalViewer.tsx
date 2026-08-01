@@ -88,8 +88,7 @@ export function TerminalViewer({
             variant="secondary"
             size="sm"
             title={t("terminal.copyTitle")}
-            icon={<Clipboard className="h-3.5 w-3.5" />}
-            className="border-terminal-border bg-terminal-header text-color-terminal-foreground hover:border-terminal-muted hover:bg-terminal-border active:bg-terminal-muted"
+            icon={<Clipboard className="h-4 w-4" />}
           >
             {t("terminal.copy")}
           </Button>
@@ -122,7 +121,12 @@ export function TerminalViewer({
   );
 }
 
-type TerminalActionTone = "secondary" | "danger";
+type TerminalActionTone =
+  | "default"
+  | "start"
+  | "warning"
+  | "danger"
+  | "success";
 
 export interface TerminalActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   tone?: TerminalActionTone;
@@ -131,7 +135,7 @@ export interface TerminalActionButtonProps extends ButtonHTMLAttributes<HTMLButt
 }
 
 export function TerminalActionButton({
-  tone = "secondary",
+  tone = "default",
   loading = false,
   icon,
   children,
@@ -139,12 +143,20 @@ export function TerminalActionButton({
   disabled,
   ...props
 }: TerminalActionButtonProps) {
+  const variantMap = {
+    default: "secondary",
+    start: "info-outline",
+    success: "success-outline",
+    warning: "warning-outline",
+    danger: "danger-outline",
+  } as const;
+
   return (
     <Button
       type="button"
       disabled={disabled}
       loading={loading}
-      variant={tone}
+      variant={variantMap[tone]}
       size="sm"
       className={className}
       icon={icon}

@@ -1,5 +1,5 @@
 import * as ToastPrimitive from "@radix-ui/react-toast";
-import { AlertCircle, CheckCircle2, X, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, XCircle, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { setGlobalToastCallback } from "./toastStore";
@@ -13,9 +13,9 @@ interface ToastItem {
 
 let nextId = 0;
 const visuals = {
-  success: { icon: CheckCircle2, className: "border-success-border bg-success-subtle text-color-success" },
-  error: { icon: XCircle, className: "border-danger-border bg-danger-subtle text-color-danger" },
-  warning: { icon: AlertCircle, className: "border-warning-border bg-warning-subtle text-color-warning" },
+  success: { icon: CheckCircle2, className: "text-color-success" },
+  error: { icon: XCircle, className: "text-color-danger" },
+  warning: { icon: AlertCircle, className: "text-color-warning" },
 } as const;
 
 export function ToastContainer() {
@@ -31,7 +31,7 @@ export function ToastContainer() {
   }, [addToast]);
 
   return (
-    <ToastPrimitive.Provider duration={4500} swipeDirection="right">
+    <ToastPrimitive.Provider duration={4000} swipeDirection="right">
       {items.map((item) => {
         const visual = visuals[item.type];
         const Icon = visual.icon;
@@ -48,11 +48,11 @@ export function ToastContainer() {
             className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-surface border border-border bg-surface p-4 text-color-foreground shadow-(--shadow-overlay) data-[state=open]:animate-slide-in"
           >
             <span
-              className={`flex h-8 w-8 items-center justify-center rounded-surface border ${visual.className}`}
+              className={`flex h-8 w-8 items-center justify-center ${visual.className}`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-6 w-6" />
             </span>
-            <ToastPrimitive.Description className="pt-1 text-style-body text-color-foreground">
+            <ToastPrimitive.Description className="pt-1.5 text-style-body text-color-foreground">
               {item.message}
             </ToastPrimitive.Description>
             <ToastPrimitive.Close

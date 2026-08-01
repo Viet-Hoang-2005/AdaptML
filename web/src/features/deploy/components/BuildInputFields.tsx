@@ -121,19 +121,21 @@ export function BuildInputFields({ form, setField }: BuildInputFieldsProps) {
       <hr className="border-border" />
 
       <section className="space-y-5">
-        <StepTitle
-          title={t("uploadFlow.build.artifactTitle")}
-          description={t("uploadFlow.build.artifactDescription")}
-        />
-        <Switch
-          value={form.artifact_format}
-          onChange={(value) => selectFormat(value as ModelArtifactFormat)}
-          options={[
-            { value: "raw", title: t("uploadFlow.build.raw") },
-            { value: "mlflow_zip", title: t("uploadFlow.build.package") },
-          ]}
-          ariaLabel={t("uploadFlow.build.artifactFormat")}
-        />
+        <div className="flex items-center justify-between gap-4">
+          <StepTitle
+            title={t("uploadFlow.build.artifactTitle")}
+            description={t("uploadFlow.build.artifactDescription")}
+          />
+          <Switch
+            value={form.artifact_format}
+            onChange={(value) => selectFormat(value as ModelArtifactFormat)}
+            options={[
+              { value: "raw", title: t("uploadFlow.build.raw") },
+              { value: "mlflow_zip", title: t("uploadFlow.build.package") },
+            ]}
+            ariaLabel={t("uploadFlow.build.artifactFormat")}
+          />
+        </div>
         <FileDropzone
           accept={extensions.join(",")}
           title={
