@@ -124,6 +124,17 @@ variable "enable_alb" {
   default     = true
 }
 
+variable "alb_idle_timeout_seconds" {
+  description = "Maximum idle time for long-running API and Harbor registry uploads through the public ALB."
+  type        = number
+  default     = 600
+
+  validation {
+    condition     = var.alb_idle_timeout_seconds >= 60 && var.alb_idle_timeout_seconds <= 4000
+    error_message = "alb_idle_timeout_seconds must be between 60 and 4000 seconds."
+  }
+}
+
 variable "enable_karpenter" {
   description = "Create Karpenter IAM, queue and discovery resources."
   type        = bool
