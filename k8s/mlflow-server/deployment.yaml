@@ -29,8 +29,6 @@ spec:
                 --host 0.0.0.0 \
                 --port 5000 \
                 --workers 1 \
-                --allowed-hosts "*" \
-                --cors-allowed-origins "*" \
                 --backend-store-uri "postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@mlops-paas-postgres-rw.default.svc.cluster.local:5432/mlops_paas_db?options=-c%20search_path%3Dmlflow" \
                 --serve-artifacts \
                 --artifacts-destination "s3://${AWS_BUCKET_NAME}"
