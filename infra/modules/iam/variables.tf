@@ -19,7 +19,7 @@ variable "mlflow_basic_auth_arn" {
 }
 
 
-variable "enable_github_actions_iam" {
+variable "enable_github_oidc" {
   description = "Whether to create GitHub Actions OIDC and IAM resources"
   type        = bool
   default     = false

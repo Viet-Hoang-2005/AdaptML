@@ -40,32 +40,32 @@ variable "public_subnet_1b_cidr" {
   default     = "10.0.3.0/24"
 }
 
-variable "enable_alb" {
-  description = "Enable legacy Application Load Balancer and DNS alias"
-  type        = bool
-  default     = true
-}
-
-variable "enable_dns" {
-  description = "Enable Route53 hosted zone and ACM certificate"
-  type        = bool
-  default     = true
-}
-
-variable "enable_github_actions_iam" {
-  description = "Enable GitHub Actions OIDC and IAM resources"
+variable "enable_artifact_storage" {
+  description = "Create the persistent S3 artifact bucket."
   type        = bool
   default     = true
 }
 
 variable "enable_secrets_manager" {
-  description = "Enable AWS Secrets Manager resources consumed by External Secrets and CI/CD"
+  description = "Create persistent Secrets Manager resources."
   type        = bool
   default     = true
 }
 
-variable "enable_karpenter" {
-  description = "Enable IAM and discovery tags required by Karpenter on the K3s cluster"
+variable "enable_github_oidc" {
+  description = "Create GitHub Actions OIDC provider and deployment role."
+  type        = bool
+  default     = true
+}
+
+variable "enable_acm_certificate" {
+  description = "Create the ACM certificate used by the public ALB."
+  type        = bool
+  default     = true
+}
+
+variable "enable_network" {
+  description = "Create the VPC, subnets, route tables and Internet Gateway."
   type        = bool
   default     = true
 }
@@ -77,13 +77,25 @@ variable "karpenter_cluster_name" {
 }
 
 variable "enable_nat_gateway" {
-  description = "Enable NAT Gateway for private subnet outbound access"
+  description = "Create a NAT Gateway for private K3s workers."
   type        = bool
   default     = true
 }
 
-variable "enable_compute" {
-  description = "Enable legacy K3s EC2 master/worker compute"
+variable "enable_k3s_compute" {
+  description = "Create the EC2 K3s server and static worker nodes."
+  type        = bool
+  default     = true
+}
+
+variable "enable_alb" {
+  description = "Create the public ALB and target group for K3s ingress."
+  type        = bool
+  default     = true
+}
+
+variable "enable_karpenter" {
+  description = "Create Karpenter IAM, queue and discovery resources."
   type        = bool
   default     = true
 }
