@@ -29,10 +29,13 @@
   ansible.builtin.command: >-
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
     get node/{{ groups['master'][0] }}
-    -o jsonpath={.spec.taints[?(@.key=="node-role.kubernetes.io/control-plane")].effect}
+    -o json
   register: verified_control_plane_taint
   changed_when: false
-  failed_when: verified_control_plane_taint.stdout != 'NoSchedule'
+  failed_when: >-
+    'NoSchedule' not in
+    (verified_control_plane_taint.stdout | from_json |
+    json_query("spec.taints[?key=='node-role.kubernetes.io/control-plane'].effect"))
   when: verify_scope == 'bootstrap'
 
 - name: Verify core Kubernetes components

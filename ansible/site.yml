@@ -17,6 +17,7 @@
 
 - name: Install the pinned K3s server
   hosts: master
+  become: true
   gather_facts: true
   tags: [bootstrap]
   roles:
@@ -33,6 +34,7 @@
 
 - name: Verify K3s bootstrap
   hosts: master
+  become: true
   gather_facts: false
   tags: [bootstrap, verify]
   roles:
@@ -42,6 +44,7 @@
 
 - name: Install core platform operators and bootstrap GitOps
   hosts: master
+  become: true
   gather_facts: true
   tags: [platform-core]
   roles:
@@ -52,6 +55,7 @@
 
 - name: Install the optional training platform
   hosts: master
+  become: true
   gather_facts: true
   tags: [platform-training]
   roles:
@@ -62,6 +66,7 @@
 
 - name: Verify the reconciled platform
   hosts: master
+  become: true
   gather_facts: false
   tags: [verify]
   roles:

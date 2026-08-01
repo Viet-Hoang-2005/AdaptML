@@ -112,7 +112,10 @@ def main():
             }
             if master_ip:
                 host_vars["ansible_ssh_common_args"] = (
-                    f"-o ProxyJump=ubuntu@{master_ip} "
+                    "-o ProxyCommand=\"ssh -i ~/.ssh/aws_key "
+                    "-o IdentitiesOnly=yes "
+                    "-o StrictHostKeyChecking=accept-new "
+                    f"-W %h:%p ubuntu@{master_ip}\" "
                     "-o StrictHostKeyChecking=accept-new"
                 )
             inventory["_meta"]["hostvars"][worker_host] = host_vars
