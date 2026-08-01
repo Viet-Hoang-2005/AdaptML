@@ -12,7 +12,7 @@ images:
   newTag: 375afde3ae576f56733e93b52b2d27fb0faed48d
 - name: mlops-paas-control-plane
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-control-plane
-  newTag: 012b0ccc4bbca7a50847e5edbae2feea9ce28912
+  newTag: 7ab6d78280dd916b749cb68a7e6be433f20e2dfe
 - name: mlops-paas-model-server
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-server
   newTag: 375afde3ae576f56733e93b52b2d27fb0faed48d
