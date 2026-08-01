@@ -27,4 +27,6 @@ Current dependencies are enforced by root `check` blocks:
 
 Turning a flag off proposes resource destruction; it is not a pause mechanism. Review the plan and protect or separate persistent foundation state before disabling S3 or Secrets Manager.
 
+The three repository-managed Secrets Manager containers intentionally use `recovery_window_in_days = 0`. A Terraform destroy therefore permanently deletes their metadata and stored versions without a recovery window. After a later apply recreates the empty containers, `scripts/push_secrets_to_aws.py` is responsible for publishing their values. Never destroy this module unless permanent secret loss is explicitly intended and the source values needed to repopulate it are available.
+
 Do not edit generated state, commit tfvars containing secrets, or infer that AWS EC2 is still the only target; the deployment may use external VMs while retaining S3/Secrets Manager.

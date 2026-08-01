@@ -90,6 +90,9 @@ htmlcov/
 .terraform.tfstate
 .terraform.lock.hcl
 terraform.tfvars
+tfplan
+ansible/artifacts/
+ansible/.cache/
 .ssh/
 *.zip
 *.pem
