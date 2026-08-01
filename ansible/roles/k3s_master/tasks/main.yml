@@ -82,7 +82,7 @@
   delay: 5
   changed_when: false
 
-- name: Render the bundled Traefik timeout configuration
+- name: Render the bundled Traefik runtime configuration
   become: true
   ansible.builtin.template:
     src: traefik-config.yaml.j2
@@ -91,7 +91,22 @@
     group: root
     mode: "0600"
 
-- name: Wait for Traefik to reconcile the timeout configuration
+- name: Wait for Traefik to receive the trusted proxy configuration
+  become: true
+  ansible.builtin.command: >-
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
+    --namespace kube-system get deployment traefik
+    --output jsonpath={.spec.template.spec.containers[0].args}
+  register: traefik_deployment_arguments
+  until: >-
+    ('--entryPoints.web.forwardedHeaders.trustedIPs=' ~
+    (traefik_forwarded_headers_trusted_ips | join(','))) in
+    traefik_deployment_arguments.stdout
+  retries: 36
+  delay: 5
+  changed_when: false
+
+- name: Wait for Traefik to finish reconciling the runtime configuration
   become: true
   ansible.builtin.command: >-
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}

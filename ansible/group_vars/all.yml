@@ -7,6 +7,11 @@ k3s_etcd_snapshot_schedule: "0 */6 * * *"
 k3s_etcd_snapshot_retention: 12
 k3s_expected_worker_count: 2
 traefik_request_timeout: "600s"
+traefik_forwarded_headers_trusted_ips:
+  # K3s ServiceLB uses externalTrafficPolicy=Cluster, so Traefik sees the
+  # Flannel gateway of the worker selected by the ALB rather than the ALB IP.
+  - "10.42.1.0/32"
+  - "10.42.2.0/32"
 
 # Rollout phases are deliberately independent. Core is safe by default; the
 # training plane and elastic capacity require explicit opt-in.

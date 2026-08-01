@@ -53,6 +53,14 @@ This matches the public ALB idle timeout and prevents large Harbor layer uploads
 from being terminated by Traefik's 60-second default while the request body is
 still being streamed.
 
+TLS terminates at the public ALB. Because the bundled K3s ServiceLB currently
+uses `externalTrafficPolicy: Cluster`, Traefik sees the selected worker's
+Flannel gateway as the immediate proxy. `traefik_forwarded_headers_trusted_ips`
+must therefore contain only those gateway `/32` addresses. This allows Django
+to honor the ALB's `X-Forwarded-Proto: https` without enabling Traefik's unsafe
+`forwardedHeaders.insecure` mode. Revalidate these addresses after changing the
+static worker topology or cluster PodCIDR allocation.
+
 Core operators are pinned and installed with Ansible modules in this order:
 
 1. AWS EBS CSI

@@ -23,4 +23,11 @@ Terraform owns AWS primitives, Ansible owns host/operator bootstrap and
 cluster-specific Karpenter resources, and Argo CD owns root application state.
 Do not add Karpenter NodeClass/NodePool back to root GitOps.
 
+Ansible also owns the bundled Traefik `HelmChartConfig`. Public TLS terminates
+at the ALB, while K3s ServiceLB with `externalTrafficPolicy: Cluster` presents
+the static worker Flannel gateway as Traefik's immediate peer. Trust only those
+gateway `/32` addresses for forwarded headers; never use
+`forwardedHeaders.insecure`. Revalidate the addresses whenever worker PodCIDRs
+or ServiceLB traffic policy changes.
+
 Prefer idempotent modules and handlers. Do not embed shell commands when a maintained Ansible module expresses the operation safely.
