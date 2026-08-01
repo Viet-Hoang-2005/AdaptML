@@ -1,147 +1,123 @@
-# Ansible — K3s Cluster Provisioning
+# Ansible K3s rollout
 
-Thư mục `ansible/` chứa các Playbook Ansible để tự động cài đặt và cấu hình **K3s Cluster** trên các EC2 instances được tạo bởi Terraform. Một lệnh duy nhất cài đặt hoàn chỉnh từ OS đến toàn bộ K8s add-ons.
+This directory bootstraps the AWS-hosted K3s cluster from WSL Ubuntu. Terraform
+owns AWS resources, Ansible owns host preparation and operator bootstrap, and
+Argo CD owns application workloads declared by the root `k8s/kustomization.yaml`.
 
----
+## Control-host setup
 
-## Cấu Trúc Thư Mục
+Use a dedicated Python virtual environment in WSL. Never store the EC2 private
+key in the repository.
 
-```
-ansible/
-├── site.yml              # Playbook chính: 4 play theo thứ tự
-├── ansible.cfg           # Cấu hình: inventory, SSH key, remote_user=ubuntu
-├── inventory/
-│   └── terraform.py      # Dynamic inventory: tự động lấy IP từ Terraform outputs
-├── group_vars/           # Biến theo nhóm host (master, workers, all)
-├── templates/            # Jinja2 templates (config files, unit files)
-└── roles/
-    ├── common/           # Play 1: OS preparation cho tất cả nodes
-    ├── k3s_master/       # Play 2: Cài K3s Server (Master)
-    ├── k3s_worker/       # Play 2: Join Workers vào cluster
-    ├── helm/             # Play 2 + 4: Cài Helm 3
-    └── k8s_addons/       # Play 4: Cài toàn bộ K8s add-ons
+```bash
+cd /mnt/d/AI\ Models/mlops-paas-system
+python3 -m venv .venv-ansible
+source .venv-ansible/bin/activate
+pip install -r ansible/requirements-control.txt
+ansible-galaxy collection install -r ansible/requirements.yml
+install -m 0600 /path/to/aws_key ~/.ssh/aws_key
 ```
 
----
+The active AWS CLI session is used only from WSL for preflight checks and, when
+Karpenter is explicitly enabled, writing the K3s agent token to Secrets Manager.
+The playbook does not copy AWS access keys to a node or Kubernetes Secret.
 
-## Playbook Chính (`site.yml`)
+The dynamic inventory reads applied Terraform outputs. After adding or changing
+output blocks, refresh the state deliberately before running Ansible:
 
-4 play chạy tuần tự, có thể chạy độc lập qua tags:
+```bash
+terraform -chdir=infra apply -refresh-only
+terraform -chdir=infra output -json
+```
 
-| Play | Hosts | Tag | Mô tả |
-|---|---|---|---|
-| 1 | `all` | `bootstrap`, `platform` | `common`: OS update, cài curl/git/jq/nfs-common |
-| 2 | `master` | `bootstrap` | `k3s_master`: Cài K3s server, setup kubeconfig; `helm`: Cài Helm 3 |
-| 3 | `workers` | `bootstrap` | `k3s_worker`: Join worker nodes vào cluster |
-| 4 | `master` | `platform` | `helm` + `k8s_addons`: Cài tất cả add-ons |
+Review the refresh-only plan before approval; the Ansible workflow never runs
+Terraform apply on your behalf.
 
-Các play Bootstrap (1-3) chỉ chạy khi `bootstrap_k3s_cluster = true`.
-Play Platform (4) chỉ chạy khi `deploy_k8s_platform = true`.
+## Phases
 
----
-
-## Roles Chi Tiết
-
-### `common` — OS Preparation (tất cả nodes)
-- Update apt packages
-- Cài đặt: `curl`, `git`, `jq`, `nfs-common`, `unzip`, `awscli`
-- Thiết lập hostname, timezone
-
-### `k3s_master` — K3s Server
-- Cài K3s server mode với Traefik disabled (dùng Traefik từ Helm)
-- Lưu K3s node token để workers join
-- Copy kubeconfig về máy local (`~/.kube/config`)
-- Gán node label: `workload-type=control-plane`
-
-### `k3s_worker` — K3s Agent
-- Join workers vào cluster qua K3s token từ Master
-- SSH ProxyJump qua Master (vì Workers trong Private Subnet)
-- Gán node label: `workload-type=worker`
-
-### `helm` — Helm 3
-- Cài Helm 3 binary
-
-### `k8s_addons` — K8s Add-ons (cài qua Helm hoặc kubectl apply)
-
-| Add-on | Namespace | Mô tả |
+| Tag | Responsibility | Default |
 |---|---|---|
-| **EBS CSI Driver** | `kube-system` | Dynamic provisioning ổ cứng EBS cho PersistentVolumeClaims |
-| **External Secrets Operator** | `external-secrets` | Đồng bộ AWS Secrets Manager → K8s Secrets |
-| **KEDA** | `keda` | Event-driven autoscaling, Scale-to-Zero cho model endpoints |
-| **ArgoCD** | `argocd` | GitOps pull-based continuous delivery |
-| **Argo Workflows** | `argo` | Workflow orchestration cho MLOps pipelines |
-| **Argo Events** | `argo-events` | Event-driven trigger (HTTP Webhook → Argo Workflow) |
-| **Prometheus + Grafana** | `monitoring` | Cluster metrics, HTTP request monitoring, dashboards |
-| **Traefik Ingress** | `kube-system` | API Gateway, dynamic IngressRoute cho model endpoints |
+| `preflight` | Validate Linux, Terraform inventory, SSH key and rollout flags | Always |
+| `bootstrap` | Prepare Ubuntu, install K3s `v1.34.9+k3s1`, join static workers | Enabled |
+| `platform-core` | Install pinned operators, bootstrap External Secrets and Argo CD | Enabled |
+| `platform-training` | Install Kubeflow and optionally Karpenter capacity | Disabled |
+| `verify` | Validate nodes, bundled components and root GitOps health | Explicit/final |
 
----
+K3s keeps its bundled Traefik, ServiceLB and local-path provisioner during this
+phase. The single server uses embedded etcd, secrets encryption, snapshots, a
+control-plane taint and a root-only kubeconfig. Two static workers join over the
+server private IP and receive AWS provider IDs from IMDSv2.
 
-## Dynamic Inventory
+Core operators are pinned and installed with Ansible modules in this order:
 
-`inventory/terraform.py` là Python script tự động đọc Terraform outputs để lấy danh sách IP của Master và Workers — không cần cập nhật inventory thủ công khi tạo lại EC2.
+1. AWS EBS CSI
+2. External Secrets Operator
+3. CloudNativePG
+4. KEDA
+5. Argo Workflows and Argo Events
+6. kube-prometheus-stack
+7. Argo CD
 
----
+Operator controllers are scheduled on static workers, whose EC2 instance
+profile provides AWS access where required. Ansible applies the
+`ClusterSecretStore`, waits for it, creates the Argo repository credential via
+an `ExternalSecret`, then creates and waits for the root Application.
 
-## Hướng dẫn Chạy
+## Commands
 
-### Yêu cầu
-- Python 3.x + `ansible` (`pip install ansible`)
-- SSH Key đặt tại `~/.ssh/aws_key` (tương ứng EC2 Key Pair `mlops-keypair`)
-- Terraform đã `apply` xong, EC2 instances đang chạy
-
-### Lệnh
+Run static checks before touching hosts:
 
 ```bash
-cd ansible/
+cd ansible
+export ANSIBLE_CONFIG=./ansible.cfg
+ansible-inventory --graph
+ansible-playbook --syntax-check site.yml
+ansible-lint .
+kubectl kustomize --enable-helm ../k8s >/dev/null
+```
 
-# Cài K3s cluster đầy đủ (Bootstrap + Platform add-ons)
-ansible-playbook site.yml
+Roll out deliberately:
 
-# Chỉ chạy Bootstrap K3s (không cài add-ons)
+```bash
 ansible-playbook site.yml --tags bootstrap
-
-# Chỉ cài K8s add-ons (cluster đã có sẵn)
-ansible-playbook site.yml --tags platform
-
-# Chỉ chạy trên Master
-ansible-playbook site.yml --limit master
-
-# Kiểm tra kết nối đến tất cả nodes
-ansible all -m ping
+ansible-playbook site.yml --tags bootstrap  # idempotency check
+ansible-playbook site.yml --tags platform-core
+ansible-playbook site.yml --tags verify
 ```
 
-### Sau khi chạy xong
+After the core platform is stable, enable training explicitly:
 
 ```bash
-# Kubeconfig đã được copy về local
-kubectl get nodes
-
-# Kết quả mong đợi:
-# NAME           STATUS   ROLES         AGE   VERSION
-# ip-10-0-1-61   Ready    master        5m    v1.28.x+k3s1
-# ip-10-0-2-193  Ready    <none>        3m    v1.28.x+k3s1
-# ip-10-0-2-114  Ready    <none>        3m    v1.28.x+k3s1
+ansible-playbook site.yml --tags platform-training \
+  -e deploy_training_platform=true
 ```
 
----
+Karpenter remains off unless both `deploy_training_platform=true` and
+`enable_karpenter=true` are provided. The CPU NodePool is created first. GPU
+resources require the additional `enable_gpu_nodepool=true` flag and must not be
+advertised until the AMI, NVIDIA driver, container toolkit and device plugin are
+validated.
 
-## SSH Access
+## Access and artifacts
 
-Workers nằm trong **Private Subnet** — không có Public IP. Phải SSH qua Master làm Jump Host:
+Workers have private IPs and use `ProxyJump` through the server. Host keys use
+OpenSSH `accept-new`; existing mismatches still fail. The fetched kubeconfig is
+written to ignored `ansible/artifacts/kubeconfig` with mode `0600`. For remote
+administration, tunnel the private Kubernetes API through the server instead of
+publishing port 6443.
 
-```bash
-# SSH vào Worker qua ProxyJump
-ssh -J ubuntu@<master-public-ip> ubuntu@<worker-private-ip> -i ~/.ssh/aws_key
+## Ownership and deferred hardening
 
-# Hoặc thêm vào ~/.ssh/config
-Host master
-  HostName <master-public-ip>
-  User ubuntu
-  IdentityFile ~/.ssh/aws_key
+- Terraform: VPC, EC2, ALB, IAM, S3, Secrets Manager and Karpenter AWS resources.
+- Ansible: OS/K3s, pinned operators, GitOps bootstrap and cluster-specific
+  Karpenter NodeClass/NodePool.
+- Argo CD: resources referenced by root Kustomize, including applications and
+  platform manifests already present there.
 
-Host worker1
-  HostName <worker-private-ip>
-  User ubuntu
-  IdentityFile ~/.ssh/aws_key
-  ProxyJump master
-```
+`k8s/security` is intentionally not referenced by root GitOps in this rollout.
+Custom NetworkPolicies and PodDisruptionBudgets are deferred until the platform
+is stable. This is a temporary operational decision, not a production security
+guarantee.
+
+One K3s server is still a control-plane single point of failure. Local etcd
+snapshots improve recovery but do not provide HA; that requires three servers.
