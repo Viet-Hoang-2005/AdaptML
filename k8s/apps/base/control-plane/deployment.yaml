@@ -100,6 +100,10 @@ spec:
                 secretKeyRef:
                   name: postgres-secrets
                   key: DB_PASSWORD
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: DJANGO_SECRET_KEY
               valueFrom:
                 secretKeyRef:

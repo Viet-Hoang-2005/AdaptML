@@ -10,6 +10,10 @@ CONTROL_PLANE_WEBHOOK_SECRET = env("CONTROL_PLANE_WEBHOOK_SECRET", required=True
 if len(CONTROL_PLANE_WEBHOOK_SECRET) < 32:
     raise ImproperlyConfigured("CONTROL_PLANE_WEBHOOK_SECRET must contain at least 32 characters")
 
+POD_IP = str(env("POD_IP", "")).strip()
+if POD_IP and POD_IP not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS = [*ALLOWED_HOSTS, POD_IP]
+
 DEBUG = False
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
