@@ -69,7 +69,6 @@ spec:
                 - {name: entry_point, value: "{{inputs.parameters.entry_point}}"}
                 - {name: model_version, value: "{{inputs.parameters.model_version}}"}
                 - {name: requirements_text, value: "{{inputs.parameters.requirements_text}}"}
-
     - name: cpu-pytorch-job
       inputs:
         parameters:
@@ -126,7 +125,7 @@ spec:
                       - name: harbor-registry-pull-secret
                     containers:
                       - name: pytorch
-                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:276dba0c13cbb3737b6ab730a64f737174cc37c1
+                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:375afde3ae576f56733e93b52b2d27fb0faed48d
                         resources:
                           requests:
                             cpu: "{{inputs.parameters.vcpu}}"
@@ -144,7 +143,6 @@ spec:
                           - {name: TENANT_ID, value: "{{inputs.parameters.tenant_id}}"}
                           - {name: ENTRY_POINT, value: "{{inputs.parameters.entry_point}}"}
                           - {name: MODEL_VERSION, value: "{{inputs.parameters.model_version}}"}
-
     - name: gpu-pytorch-job
       inputs:
         parameters:
@@ -207,7 +205,7 @@ spec:
                       - name: harbor-registry-pull-secret
                     containers:
                       - name: pytorch
-                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:276dba0c13cbb3737b6ab730a64f737174cc37c1
+                        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:375afde3ae576f56733e93b52b2d27fb0faed48d
                         imagePullPolicy: Always
                         resources:
                           requests:
@@ -228,7 +226,6 @@ spec:
                           - {name: TENANT_ID, value: "{{inputs.parameters.tenant_id}}"}
                           - {name: ENTRY_POINT, value: "{{inputs.parameters.entry_point}}"}
                           - {name: MODEL_VERSION, value: "{{inputs.parameters.model_version}}"}
-
     - name: report-status
       container:
         image: curlimages/curl:latest
