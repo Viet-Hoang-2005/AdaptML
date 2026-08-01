@@ -16,7 +16,8 @@ resources:
   - harbor
   - argo-workflows
   - mlflow-server
-  - karpenter
+  # Karpenter NodeClass/NodePool are rendered by Ansible because their API
+  # endpoint, instance profile and bootstrap token are cluster-specific.
 
   # 2. Applications (Overlay production)
   - apps/production

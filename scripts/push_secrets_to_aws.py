@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-"""
-Script đẩy biến môi trường từ .env lên AWS Secrets Manager cho MLOps PaaS.
-Sử dụng boto3 để cập nhật vào 3 kho Secrets:
-  1. mlops/aws-secrets
-  2. mlops/github-actions-secrets
-  3. mlops/production-secrets
-"""
-
 import json
 import os
 import sys
