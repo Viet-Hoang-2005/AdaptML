@@ -8,22 +8,55 @@ spec:
   entrypoint: deploy-model
   templates:
     - name: deploy-model
-      nodeSelector:
-        workload-type: worker
       inputs:
         parameters:
           - name: tenant_id
-          - name: model_id
-          - name: hashid
+          - name: project_id
+          - name: model_version_id
           - name: version
           - name: image_name
           - name: container_name
-      script:
-        image: bitnami/kubectl:latest
-        command: [bash]
-        source: |
-          set -e
-          cat <<'EOF' | kubectl apply -f -
+          - name: model_type
+            default: "ml"
+          - name: target_port
+            default: "5001"
+          - name: model_uri
+            default: ""
+      steps:
+        - - name: deployment
+            template: apply-deployment
+            arguments:
+              parameters:
+                - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
+                - {name: project_id, value: "{{inputs.parameters.project_id}}"}
+                - {name: model_version_id, value: "{{inputs.parameters.model_version_id}}"}
+                - {name: version, value: "{{inputs.parameters.version}}"}
+                - {name: image_name, value: "{{inputs.parameters.image_name}}"}
+                - {name: container_name, value: "{{inputs.parameters.container_name}}"}
+                - {name: target_port, value: "{{inputs.parameters.target_port}}"}
+                - {name: model_uri, value: "{{inputs.parameters.model_uri}}"}
+        - - name: service
+            template: apply-service
+            arguments:
+              parameters:
+                - {name: container_name, value: "{{inputs.parameters.container_name}}"}
+                - {name: model_type, value: "{{inputs.parameters.model_type}}"}
+                - {name: target_port, value: "{{inputs.parameters.target_port}}"}
+
+    - name: apply-deployment
+      inputs:
+        parameters:
+          - name: tenant_id
+          - name: project_id
+          - name: model_version_id
+          - name: version
+          - name: image_name
+          - name: container_name
+          - name: target_port
+          - name: model_uri
+      resource:
+        action: apply
+        manifest: |
           apiVersion: apps/v1
           kind: Deployment
           metadata:
@@ -32,7 +65,8 @@ spec:
             labels:
               app: model-endpoint
               tenant: {{inputs.parameters.tenant_id}}
-              model: "{{inputs.parameters.model_id}}"
+              project: "{{inputs.parameters.project_id}}"
+              model-version: "{{inputs.parameters.model_version_id}}"
           spec:
             replicas: 1
             selector:
@@ -43,6 +77,7 @@ spec:
                 labels:
                   app: {{inputs.parameters.container_name}}
               spec:
+                automountServiceAccountToken: false
                 nodeSelector:
                   workload-type: worker
                 containers:
@@ -50,39 +85,32 @@ spec:
                     image: {{inputs.parameters.image_name}}
                     imagePullPolicy: Always
                     ports:
-                      - containerPort: 5000
-                    envFrom:
-                      - secretRef:
-                          name: mlops-paas-secret
-                      - configMapRef:
-                          name: mlops-paas-control-plane-config
+                      - containerPort: {{inputs.parameters.target_port}}
                     env:
-                      - name: TENANT_ID
-                        value: "{{inputs.parameters.tenant_id}}"
-                      - name: MODEL_ID
-                        value: "{{inputs.parameters.model_id}}"
-                      - name: MODEL_HASHID
-                        value: "{{inputs.parameters.hashid}}"
-                      - name: MODEL_VERSION
-                        value: "{{inputs.parameters.version}}"
-                      - name: DB_USER
-                        valueFrom:
-                          secretKeyRef:
-                            name: postgres-secrets
-                            key: DB_USER
-                      - name: DB_PASSWORD
-                        valueFrom:
-                          secretKeyRef:
-                            name: postgres-secrets
-                            key: DB_PASSWORD
+                      - {name: PROJECT_ID, value: "{{inputs.parameters.project_id}}"}
+                      - {name: MODEL_VERSION_ID, value: "{{inputs.parameters.model_version_id}}"}
+                      - {name: MODEL_VERSION, value: "{{inputs.parameters.version}}"}
+                      - {name: MODEL_URI, value: "{{inputs.parameters.model_uri}}"}
+                      - {name: PYTHONPATH, value: "/app/libs:/app"}
+                    volumeMounts:
+                      - {name: dynamic-libs, mountPath: /app/libs}
+                      - {name: pip-cache, mountPath: /root/.cache/pip}
                     resources:
-                      requests:
-                        cpu: 250m
-                        memory: 512Mi
-                      limits:
-                        cpu: 1000m
-                        memory: 1Gi
-          ---
+                      requests: {cpu: 250m, memory: 512Mi}
+                      limits: {cpu: 1000m, memory: 1Gi}
+                volumes:
+                  - {name: dynamic-libs, emptyDir: {}}
+                  - {name: pip-cache, emptyDir: {}}
+
+    - name: apply-service
+      inputs:
+        parameters:
+          - name: container_name
+          - name: model_type
+          - name: target_port
+      resource:
+        action: apply
+        manifest: |
           apiVersion: v1
           kind: Service
           metadata:
@@ -90,39 +118,12 @@ spec:
             namespace: default
             labels:
               component: model-server
+              serving-engine: {{inputs.parameters.model_type}}
           spec:
             selector:
               app: {{inputs.parameters.container_name}}
             ports:
               - name: http
                 protocol: TCP
-                port: 5000
-                targetPort: 5000
-          ---
-          apiVersion: traefik.io/v1alpha1
-          kind: Middleware
-          metadata:
-            name: rewrite-{{inputs.parameters.container_name}}
-            namespace: default
-          spec:
-            replacePath:
-              path: /models/{{inputs.parameters.hashid}}/predict
-          ---
-          apiVersion: traefik.io/v1alpha1
-          kind: IngressRoute
-          metadata:
-            name: ingressroute-{{inputs.parameters.container_name}}
-            namespace: default
-          spec:
-            entryPoints:
-              - web
-            routes:
-              - match: PathPrefix(`/{{inputs.parameters.tenant_id}}/models/{{inputs.parameters.hashid}}/{{inputs.parameters.version}}/predict`)
-                kind: Rule
-                middlewares:
-                  - name: rewrite-{{inputs.parameters.container_name}}
-                services:
-                  - name: {{inputs.parameters.container_name}}-svc
-                    port: 5000
-          EOF
-          echo "Deployment successfully created: {{inputs.parameters.container_name}} using image {{inputs.parameters.image_name}}"
+                port: {{inputs.parameters.target_port}}
+                targetPort: {{inputs.parameters.target_port}}

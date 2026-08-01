@@ -14,7 +14,8 @@ spec:
         parameters:
           - name: job_id
           - name: tenant_id
-          - name: model_id
+          - name: project_id
+          - name: model_version_id
           - name: model_name
           - name: model_uri
           - name: reference_data_url
@@ -29,7 +30,6 @@ spec:
       container:
         image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-evidently:276dba0c13cbb3737b6ab730a64f737174cc37c1
         imagePullPolicy: Always
-        command: ["python", "/app/detect_drift.py"]
         envFrom:
           - secretRef:
               name: mlops-paas-secret
@@ -42,8 +42,10 @@ spec:
             value: "{{inputs.parameters.job_id}}"
           - name: TENANT_ID
             value: "{{inputs.parameters.tenant_id}}"
-          - name: MODEL_ID
-            value: "{{inputs.parameters.model_id}}"
+          - name: PROJECT_ID
+            value: "{{inputs.parameters.project_id}}"
+          - name: MODEL_VERSION_ID
+            value: "{{inputs.parameters.model_version_id}}"
           - name: MODEL_NAME
             value: "{{inputs.parameters.model_name}}"
           - name: MODEL_URI

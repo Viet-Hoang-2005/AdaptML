@@ -3,19 +3,6 @@ kind: Namespace
 metadata:
   name: user-jobs
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: mlops-paas-control-plane-config
-  namespace: user-jobs
-data:
-  AWS_DEFAULT_REGION: "ap-southeast-1"
-  AWS_BUCKET_NAME: "mlops-paas-artifacts"
-  HARBOR_REGISTRY_URL: "registry.mlops-nids-nt114.id.vn"
-  HARBOR_USER_PROJECT: "user-images"
-  MLFLOW_TRACKING_URI: "http://mlflow-server.mlflow-server.svc.cluster.local:5000"
-  REDIS_URL: "redis://mlops-paas-redis.default.svc.cluster.local:6379/1"
----
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -46,26 +33,6 @@ spec:
         key: mlops/production-secrets
         property: HARBOR_PASSWORD
 ---
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: mlops-paas-app-secret-sync-user-jobs
-  namespace: user-jobs
-spec:
-  refreshInterval: "1h"
-  secretStoreRef:
-    name: aws-secrets-manager
-    kind: ClusterSecretStore
-  target:
-    name: mlops-paas-secret
-    creationPolicy: Owner
-    deletionPolicy: Retain
-  data:
-    - secretKey: CONTROL_PLANE_WEBHOOK_SECRET
-      remoteRef:
-        key: mlops/production-secrets
-        property: CONTROL_PLANE_WEBHOOK_SECRET
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -76,7 +43,7 @@ rules:
     resources: ["pytorchjobs", "pytorchjobs/status"]
     verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "events", "services", "configmaps", "secrets"]
+    resources: ["pods", "pods/log", "events"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

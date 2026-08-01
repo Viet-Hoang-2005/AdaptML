@@ -12,7 +12,7 @@ spec:
 
   # Nguồn: GitHub Repo và thư mục k8s/ (quản lý toàn bộ thông qua root kustomization)
   source:
-    repoURL: https://github.com/Viet-Hoang-2005/MLOps-nids-system.git
+    repoURL: https://github.com/Viet-Hoang-2005/MLOps-paas-system.git
     targetRevision: main
     path: k8s
 
@@ -120,13 +120,3 @@ spec:
         - /spec/stopDelay
         - /spec/storage/resizeInUseVolumes
         - /spec/switchoverDelay
-    # Karpenter EC2NodeClass userData and discovery selectors are cluster-specific
-    # for self-managed K3s. Ansible renders/applies these resources per cluster.
-    - group: karpenter.k8s.aws
-      kind: EC2NodeClass
-      jsonPointers:
-        - /spec
-    - group: karpenter.sh
-      kind: NodePool
-      jsonPointers:
-        - /spec

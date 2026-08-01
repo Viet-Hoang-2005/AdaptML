@@ -13,13 +13,11 @@ resources:
   - storage
   - health
   - monitoring
+  - harbor
   - argo-workflows
   - mlflow-server
+  # Karpenter NodeClass/NodePool are rendered by Ansible because their API
+  # endpoint, instance profile and bootstrap token are cluster-specific.
 
-  # 2. Applications (Dùng overlay production)
+  # 2. Applications (Overlay production)
   - apps/production
-
-  # 3. MLOps Training Platform
-  # Kubeflow Training Operator CRDs/controller are installed by
-  # k8s/scripts/kubeflow-training-operator-install.sh before GitOps sync.
-  - karpenter

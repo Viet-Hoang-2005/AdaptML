@@ -10,8 +10,11 @@ images:
 - name: mlops-paas-consumer
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-consumer
   newTag: 276dba0c13cbb3737b6ab730a64f737174cc37c1
-- name: mlops-paas-django
-  newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-django
+- name: mlops-paas-control-plane
+  newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-control-plane
+  newTag: 276dba0c13cbb3737b6ab730a64f737174cc37c1
+- name: mlops-paas-model-server
+  newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-server
   newTag: 276dba0c13cbb3737b6ab730a64f737174cc37c1
 - name: mlops-paas-web
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-web

@@ -1,4 +1,3 @@
-# consumer.py: Consumer liên tục lắng nghe Redpanda, gom nhóm dữ liệu, và lưu vào PostgreSQL
 import os
 import json
 import time
@@ -6,13 +5,18 @@ import requests
 import signal
 import pandas as pd
 from confluent_kafka import Consumer, KafkaError
-from src.database import save_dataframe_to_db, get_production_data_count_by_model, get_model_drift_thresholds
+from src.database import (
+    get_model_drift_thresholds,
+    get_production_data_count_by_model_version,
+    save_dataframe_to_db,
+)
 
 # Lấy biến môi trường
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
+KAFKA_TOPIC_RETRY_SECONDS = max(1, int(os.environ.get("KAFKA_TOPIC_RETRY_SECONDS", "5")))
 EVIDENTLY_TRIGGER_THRESHOLD = int(os.environ.get('EVIDENTLY_TRIGGER_THRESHOLD', '100'))
-CONTROL_PLANE_WEBHOOK_URL = os.environ.get("CONTROL_PLANE_WEBHOOK_URL", "http://control_plane:8000/api/v1/internal/trigger-drift-job")
+CONTROL_PLANE_WEBHOOK_URL = os.environ.get("CONTROL_PLANE_WEBHOOK_URL", "").strip()
 WEBHOOK_SECRET = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key")
 
 # Cờ báo hiệu trạng thái hoạt động
@@ -25,8 +29,10 @@ def handle_sigterm(*args):
     RUNNING = False
 
 # Hàm gửi Webhook cảnh báo về Django Control Plane để kích hoạt Argo Workflows / Celery
-def trigger_django_webhook(model_name: str, count: int):
-    print(f"[{model_name}] Triggering Django webhook for drift check...")
+def trigger_django_webhook(model_version_id: str, count: int):
+    if not CONTROL_PLANE_WEBHOOK_URL:
+        return
+    print(f"[{model_version_id}] Triggering Django webhook for drift check...")
 
     headers = {
         "Authorization": f"Bearer {WEBHOOK_SECRET}",
@@ -34,42 +40,45 @@ def trigger_django_webhook(model_name: str, count: int):
     }
     payload = {
         "event_type": "trigger_drift_check",
-        "model_id": model_name,
+        "model_version_id": model_version_id,
         "current_data_count": count
     }
 
     try:
         response = requests.post(CONTROL_PLANE_WEBHOOK_URL, headers=headers, json=payload, timeout=10)
         if response.status_code in [200, 201, 204]:
-            print(f"[{model_name}] Webhook sent Successfully! Django has been notified.")
+            print(f"[{model_version_id}] Webhook sent Successfully! Django has been notified.")
         else:
-            print(f"[{model_name}] Webhook failed! HTTP {response.status_code}: {response.text}")
+            print(f"[{model_version_id}] Webhook failed! HTTP {response.status_code}: {response.text}")
     except Exception as e:
-        print(f"[{model_name}] Error sending webhook: {e}")
+        print(f"[{model_version_id}] Error sending webhook: {e}")
 
 # Hàm kiểm tra và gọi webhook nếu Production Data vượt ngưỡng
 def check_threshold_and_trigger(last_triggered_counts: dict, df_batch: pd.DataFrame) -> dict:
     """Kiểm tra số lượng và gọi webhook nếu vượt ngưỡng. Trả về last_triggered_counts mới."""
-    if df_batch is None or df_batch.empty or 'model_id' not in df_batch.columns:
+    if df_batch is None or df_batch.empty or 'model_version_id' not in df_batch.columns:
         return last_triggered_counts
 
     thresholds = get_model_drift_thresholds()
-    unique_models = df_batch['model_id'].dropna().unique()
+    unique_models = df_batch['model_version_id'].dropna().unique()
     
-    for model_name in unique_models:
-        threshold = thresholds.get(model_name)
+    for model_version_id in unique_models:
+        threshold = thresholds.get(model_version_id)
         if not threshold:
             continue
             
-        count = get_production_data_count_by_model(model_name)
-        last_count = last_triggered_counts.get(model_name, 0)
+        count = get_production_data_count_by_model_version(model_version_id)
+        last_count = last_triggered_counts.get(model_version_id, 0)
         diff = count - last_count
         
-        print(f"Drift monitoring [{model_name}]: {count} total rows. New rows since last trigger: {diff}/{threshold}")
+        print(
+            f"Drift monitoring [{model_version_id}]: {count} total rows. "
+            f"New rows since last trigger: {diff}/{threshold}"
+        )
         
         if diff >= threshold:
-            trigger_django_webhook(model_name, count)
-            last_triggered_counts[model_name] = count
+            trigger_django_webhook(model_version_id, count)
+            last_triggered_counts[model_version_id] = count
             
     return last_triggered_counts
 
@@ -79,6 +88,17 @@ def build_batch_dataframe(records: list[dict]) -> pd.DataFrame:
         if column in df.columns:
             df[column] = pd.to_datetime(df[column], utc=True, errors="coerce")
     return df
+
+
+def flush_batch(consumer, records: list[dict], last_triggered_counts: dict) -> tuple[bool, dict]:
+    """Persist one batch and commit Kafka offsets only after a successful write."""
+    if not records:
+        return True, last_triggered_counts
+    dataframe = build_batch_dataframe(records)
+    if not save_dataframe_to_db(dataframe, "paas_production_logs"):
+        return False, last_triggered_counts
+    consumer.commit()
+    return True, check_threshold_and_trigger(last_triggered_counts, dataframe)
 
 # Hàm main để chạy Consumer liên tục lắng nghe Redpanda và xử lý dữ liệu
 def main():
@@ -113,12 +133,11 @@ def main():
             # Cơ chế "Flush on Idle": Nếu không có message mới nào trong 1 giây, tự động flush batch hiện tại vào DB.
             if msg is None:
                 if len(current_batch) > 0:
-                    df = build_batch_dataframe(current_batch)
-                    # Chuyển đổi chuỗi text created_at (isoformat) lại thành DateTime object chuẩn pandas
-                    if save_dataframe_to_db(df, "paas_production_logs"):
-                        consumer.commit() # Chỉ commit khi đã lưu thẳng vào Database thành công
+                    saved, last_triggered_counts = flush_batch(
+                        consumer, current_batch, last_triggered_counts
+                    )
+                    if saved:
                         print(f"Flushed {len(current_batch)} records to DB due to idle time.")
-                        last_triggered_counts = check_threshold_and_trigger(last_triggered_counts, df)
                     current_batch = []
                 continue
                 
@@ -126,9 +145,14 @@ def main():
             if msg.error():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
                     continue
-                else:
-                    print(msg.error())
-                    break
+                if msg.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART or msg.error().retriable():
+                    print(
+                        f"Kafka topic '{KAFKA_TOPIC}' is temporarily unavailable; "
+                        f"retrying in {KAFKA_TOPIC_RETRY_SECONDS}s: {msg.error()}"
+                    )
+                    time.sleep(KAFKA_TOPIC_RETRY_SECONDS)
+                    continue
+                raise RuntimeError(f"Kafka consumer error: {msg.error()}")
                     
             try:
                 # Đọc payload từ API và parse lại thành Dictionary
@@ -138,11 +162,11 @@ def main():
                 
                 # Gom đủ một hộp (BATCH) thì mang đi phân phối
                 if len(current_batch) >= BATCH_SIZE:
-                    df = build_batch_dataframe(current_batch)
-                    if save_dataframe_to_db(df, "paas_production_logs"):
-                        consumer.commit()
+                    saved, last_triggered_counts = flush_batch(
+                        consumer, current_batch, last_triggered_counts
+                    )
+                    if saved:
                         print(f"Completed batch delivery: {len(current_batch)} records to DB.")
-                        last_triggered_counts = check_threshold_and_trigger(last_triggered_counts, df)
                     current_batch = []
                     
             except Exception as parse_e:
@@ -153,10 +177,7 @@ def main():
     finally:
         # Trước khi đóng Consumer, nếu còn dữ liệu trong batch thì cũng nên flush nốt vào DB để tránh mất mát dữ liệu cuối cùng.
         if len(current_batch) > 0:
-            df = build_batch_dataframe(current_batch)
-            if save_dataframe_to_db(df, "paas_production_logs"):
-                consumer.commit()
-                last_triggered_counts = check_threshold_and_trigger(last_triggered_counts, df)
+            _, last_triggered_counts = flush_batch(consumer, current_batch, last_triggered_counts)
         consumer.close()
         print("Consumer cleaned up safely.")
 

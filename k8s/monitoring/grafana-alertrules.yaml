@@ -45,31 +45,31 @@ spec:
             summary: "Frontend Web Pods unavailable"
             description: "The mlops-paas-web deployment has 0 available replicas!"
 
-        # Cảnh báo khi HTTP Latency p95 vượt ngưỡng 500ms
+        # Cảnh báo khi p95 latency của đường predict qua gateway vượt ngưỡng 500ms
         - alert: HighServiceLatency
           expr: |
             histogram_quantile(0.95,
-              rate(http_request_duration_seconds_bucket[5m])
+              sum(rate(paas_prediction_latency_seconds_bucket[5m])) by (le)
             ) > 0.5
           for: 3m
           labels:
             severity: warning
             team: mlops
           annotations:
-            summary: "HTTP Service p95 latency > 500ms"
+            summary: "Model gateway p95 latency > 500ms"
             description: "Current p95 latency is {{ $value | humanizeDuration }}."
 
-        # Cảnh báo khi tỷ lệ lỗi HTTP 5xx vượt 1%
+        # Cảnh báo khi tỷ lệ lỗi predict qua gateway vượt 1%
         - alert: HighHTTPErrorRate
           expr: |
-            rate(http_requests_total{status=~"5.."}[5m]) /
-            rate(http_requests_total[5m]) > 0.01
+            sum(rate(paas_predictions_total{status=~"error.*"}[5m])) /
+            clamp_min(sum(rate(paas_predictions_total[5m])), 0.001) > 0.01
           for: 2m
           labels:
             severity: critical
             team: mlops
           annotations:
-            summary: "HTTP Error Rate > 1%"
+            summary: "Model gateway error rate > 1%"
             description: "Current error rate is {{ $value | humanizePercentage }}."
 
     # Nhóm 2: AI Inference & Model Endpoints

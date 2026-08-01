@@ -8,8 +8,8 @@ Tài liệu này cung cấp các nguyên tắc và quy trình để tham gia đ�
 
 ```bash
 # 1. Fork repository và clone về máy local
-git clone https://github.com/<your-username>/mlops-nids-system.git
-cd mlops-nids-system
+git clone https://github.com/<your-username>/mlops-paas-system.git
+cd mlops-paas-system
 
 # 2. Tạo branch mới từ main (xem quy tắc đặt tên branch bên dưới)
 git checkout -b feature/add-locust-stress-test
@@ -118,8 +118,8 @@ but api-deployment.yaml was pulling label_nids_encoder_v1.pkl.
 refactor(db): split db_manager into rw and ro connection pools
 
 Support CloudNativePG dual-endpoint architecture:
-- engine_rw -> mlops-nids-postgres-rw (Primary, for INSERT)
-- engine_ro -> mlops-nids-postgres-ro (Standby, for SELECT)
+- engine_rw -> mlops-paas-postgres-rw (Primary, for INSERT)
+- engine_ro -> mlops-paas-postgres-ro (Standby, for SELECT)
 ```
 
 ```
@@ -173,4 +173,4 @@ Khi báo bug, vui lòng cung cấp:
 | --------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Email tác giả 1 | <23520541@gm.uit.edu.vn>                                                                                             |
 | Email tác giả 2 | <23521412@gm.uit.edu.vn>                                                                                             |
-| GitHub Issues   | [github.com/Viet-Hoang-2005/MLOps-nids-system/issues](https://github.com/Viet-Hoang-2005/MLOps-nids-system/issues) |
+| GitHub Issues   | [github.com/Viet-Hoang-2005/MLOps-paas-system/issues](https://github.com/Viet-Hoang-2005/MLOps-paas-system/issues) |

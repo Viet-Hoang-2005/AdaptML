@@ -1,4 +1,3 @@
-# database.py: Quản lý kết nối đến PostgreSQL cho Consumer
 import os
 import json
 from urllib.parse import quote_plus
@@ -60,7 +59,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS paas_production_logs (
             id VARCHAR(255) PRIMARY KEY,
             tenant_id VARCHAR(255),
-            model_id VARCHAR(255),
+            project_id VARCHAR(255),
+            model_version_id VARCHAR(255),
             model_version VARCHAR(255),
             endpoint_url TEXT,
             request_id VARCHAR(255),
@@ -82,9 +82,18 @@ def init_db():
     execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN features TYPE JSONB USING features::JSONB;", ignore_error=True)
     execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN raw_payload TYPE JSONB USING raw_payload::JSONB;", ignore_error=True)
     execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN prediction TYPE TEXT USING prediction::TEXT;", ignore_error=True)
+    execute_safe(
+        "ALTER TABLE paas_production_logs ADD COLUMN IF NOT EXISTS project_id VARCHAR(255);"
+    )
+    execute_safe(
+        "ALTER TABLE paas_production_logs ADD COLUMN IF NOT EXISTS model_version_id VARCHAR(255);"
+    )
 
     # 4. Create Indexes
-    execute_safe("CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_tenant_model ON paas_production_logs(tenant_id, model_id);")
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_tenant_model_version "
+        "ON paas_production_logs(tenant_id, project_id, model_version_id);"
+    )
     execute_safe("CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_timestamp ON paas_production_logs(timestamp);")
     
     print("[RW] Initialized 'paas_production_logs' schema.")
@@ -145,7 +154,7 @@ def get_production_data_count() -> int:
         print(f"Error counting records: {e}")
         return 0
 
-def get_production_data_count_by_model(model_id: str) -> int:
+def get_production_data_count_by_model_version(model_version_id: str) -> int:
     engine = engine_ro if engine_ro else engine_rw
     if engine is None:
         return 0
@@ -153,8 +162,11 @@ def get_production_data_count_by_model(model_id: str) -> int:
     try:
         with engine.connect() as conn:
             result = conn.execute(
-                text("SELECT COUNT(*) FROM paas_production_logs WHERE model_id = :model_id"),
-                {"model_id": model_id}
+                text(
+                    "SELECT COUNT(*) FROM paas_production_logs "
+                    "WHERE model_version_id = :model_version_id"
+                ),
+                {"model_version_id": model_version_id}
             )
             return result.scalar()
     except Exception as e:
@@ -169,11 +181,14 @@ def get_model_drift_thresholds() -> dict:
 
     try:
         with engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT model_api_id, trigger_threshold FROM authentication_driftmonitoringjob WHERE status = 'active'")
-            )
+            result = conn.execute(text("""
+                SELECT version.public_id, monitor.trigger_threshold
+                FROM drift_driftmonitor AS monitor
+                INNER JOIN registry_modelversion AS version ON version.id = monitor.version_id
+                WHERE monitor.is_active = TRUE
+            """))
             return {str(row[0]): row[1] for row in result.fetchall()}
     except Exception as e:
-        if "relation \"authentication_driftmonitoringjob\" does not exist" not in str(e):
+        if "relation \"drift_driftmonitor\" does not exist" not in str(e):
             print(f"Error getting drift thresholds: {e}")
         return {}

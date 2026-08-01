@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - grafana-alertrules.yaml
   - model-server-servicemonitor.yaml
+  - control-plane-servicemonitor.yaml

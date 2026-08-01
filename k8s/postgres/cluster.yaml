@@ -23,6 +23,9 @@ spec:
       owner: postgres
       secret:
         name: postgres-secrets
+      postInitApplicationSQL:
+        - "CREATE SCHEMA IF NOT EXISTS control_plane;"
+        - "CREATE SCHEMA IF NOT EXISTS mlflow;"
 
   # Cấu hình Storage cho mỗi instance
   storage:

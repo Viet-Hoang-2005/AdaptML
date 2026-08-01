@@ -27,17 +27,21 @@ infra/
 
 ## Feature Flags (variables.tf)
 
-Mỗi module có thể bật/tắt độc lập qua `terraform.tfvars`:
+Các nhóm tài nguyên có thể bật/tắt qua `terraform.tfvars`. Terraform kiểm tra dependency giữa các nhóm và báo lỗi sớm nếu một tổ hợp không thể hoạt động:
 
 | Variable | Default | Mô tả |
 |---|---|---|
-| `enable_compute` | `true` | EC2 Master + Worker nodes |
+| `enable_artifact_storage` | `true` | S3 artifact bucket bền vững |
+| `enable_secrets_manager` | `true` | Secrets Manager resources bền vững |
+| `enable_github_oidc` | `true` | GitHub Actions OIDC provider và deployment role |
+| `enable_acm_certificate` | `true` | ACM certificate cho public ALB |
+| `enable_network` | `true` | VPC, subnets, routes và Internet Gateway |
+| `enable_nat_gateway` | `true` | NAT Gateway cho private K3s workers |
+| `enable_k3s_compute` | `true` | EC2 K3s server và static worker nodes |
 | `enable_alb` | `true` | Application Load Balancer |
-| `enable_dns` | `true` | Route53 + ACM Certificate |
-| `enable_nat_gateway` | `true` | NAT Gateway cho Private Subnet |
 | `enable_karpenter` | `true` | IAM + discovery tags cho Karpenter |
-| `enable_github_actions_iam` | `true` | OIDC Provider cho GitHub Actions |
-| `enable_secrets_manager` | `true` | AWS Secrets Manager resources |
+
+`enable_k3s_compute` hiện cần Network, NAT Gateway, S3 và Secrets Manager. ALB cần Network, K3s Compute và ACM. Karpenter cần cụm K3s tĩnh cùng Network/NAT. GitHub OIDC hiện cần S3 và Secrets Manager vì deployment policy tham chiếu các ARN này.
 
 ---
 
@@ -71,11 +75,11 @@ Mỗi module có thể bật/tắt độc lập qua `terraform.tfvars`:
 S3 Bucket `mlops-paas-artifacts`:
 ```
 mlops-paas-artifacts/
-├── user-models/{tenant_id}/{model_id}/    # Model artifact ZIPs (upload từ Tenant)
+├── users/{tenant_id}/models/{project_id}/ # Workspace và model artifacts theo project
 ├── training-data/                          # Training datasets
 ├── training-artifacts/{job_id}/            # model.tar.gz output từ Training Runner
 ├── drift-reports/{job_id}/                 # HTML + JSON drift reports từ Evidently
-└── users/{tenant_id}/models/{hashid}/...  # MLflow artifact store
+└── users/{tenant_id}/models/{project_uuid}/training/jobs/{job_uuid}/mlflow/...
 ```
 
 ### ALB (`modules/alb/`)

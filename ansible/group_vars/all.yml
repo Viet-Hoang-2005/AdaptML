@@ -1,13 +1,19 @@
 ---
 domain_name: "mlops-nids-nt114.id.vn"
 aws_region: "ap-southeast-1"
-k3s_channel: "stable"
+k3s_version: "v1.34.9+k3s1"
+helm_version: "v3.17.3"
+k3s_etcd_snapshot_schedule: "0 */6 * * *"
+k3s_etcd_snapshot_retention: 12
+k3s_expected_worker_count: 2
 
-# Execution modes:
-# - bootstrap_k3s_cluster=true installs K3s server/agents on EC2 nodes.
-# - deploy_k8s_platform=true installs platform controllers and lets ArgoCD sync k8s/.
+# Rollout phases are deliberately independent. Core is safe by default; the
+# training plane and elastic capacity require explicit opt-in.
 bootstrap_k3s_cluster: true
-deploy_k8s_platform: true
+deploy_core_platform: true
+deploy_training_platform: false
+enable_karpenter: false
+enable_gpu_nodepool: false
 
 # Karpenter/K3s self-managed bootstrap defaults. These values match the
 # Terraform defaults and can be overridden from inventory/group_vars.
@@ -30,6 +36,16 @@ karpenter_gpu_instance_types:
 # Operator versions are intentionally configurable so a new cluster can pin the
 # exact versions used in production without editing shell scripts.
 karpenter_version: "1.13.0"
-karpenter_bridge_crd_version: "1.0.8"
 kubeflow_training_operator_version: "v1.7.0"
-cnpg_operator_chart_version: ""
+aws_ebs_csi_driver_chart_version: "2.40.1"
+external_secrets_chart_version: "2.6.0"
+cnpg_operator_chart_version: "0.24.0"
+keda_chart_version: "2.17.2"
+argo_workflows_chart_version: "0.45.11"
+argo_events_chart_version: "2.4.16"
+monitoring_chart_version: "69.8.2"
+argocd_chart_version: "7.8.23"
+
+ansible_artifacts_directory: "{{ playbook_dir }}/artifacts"
+k3s_local_kubeconfig: "{{ ansible_artifacts_directory }}/kubeconfig"
+k3s_remote_kubeconfig: "/etc/rancher/k3s/k3s.yaml"

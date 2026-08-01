@@ -1,0 +1,26 @@
+# Ansible K3s
+
+Ansible owns host and cluster bootstrap through roles:
+
+- `common`: OS packages, kernel/sysctl, users, prerequisites.
+- `k3s_master`: first server/control-plane node and kubeconfig/token.
+- `k3s_worker`: additional nodes joining the cluster.
+- `helm`: pinned Helm client.
+- `platform_core`: pinned operators, External Secrets, and root Argo CD bootstrap.
+- `platform_training`: Kubeflow plus optional Karpenter bootstrap.
+- `verify`: bootstrap and reconciled-platform assertions.
+
+Use the rollout tags `preflight`, `bootstrap`, `platform-core`,
+`platform-training`, and `verify`. Core defaults on; training, Karpenter, and GPU
+capacity require explicit opt-in. K3s is configured through protected
+`/etc/rancher/k3s/config.yaml` files and pinned by `INSTALL_K3S_VERSION`.
+
+Dynamic inventory requires Terraform outputs for the server, workers, VPC and
+EC2 key pair. Workers use ProxyJump through the server. Keep SSH keys outside
+committed source; the WSL key must be `~/.ssh/aws_key` with mode `0600`.
+
+Terraform owns AWS primitives, Ansible owns host/operator bootstrap and
+cluster-specific Karpenter resources, and Argo CD owns root application state.
+Do not add Karpenter NodeClass/NodePool back to root GitOps.
+
+Prefer idempotent modules and handlers. Do not embed shell commands when a maintained Ansible module expresses the operation safely.

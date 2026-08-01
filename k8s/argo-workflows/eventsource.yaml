@@ -18,6 +18,10 @@ spec:
       port: "12000"
       endpoint: /deploy
       method: POST
+    delete:
+      port: "12000"
+      endpoint: /delete
+      method: POST
     drift:
       port: "12000"
       endpoint: /drift

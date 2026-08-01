@@ -9,6 +9,7 @@ resources:
   - webhook-service.yaml
   - build-workflowtemplate.yaml
   - deploy-workflowtemplate.yaml
+  - delete-workflowtemplate.yaml
   - evidently-workflowtemplate.yaml
   - training-workflowtemplate.yaml
   - training-cancel-workflowtemplate.yaml

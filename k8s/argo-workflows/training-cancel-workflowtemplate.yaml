@@ -6,19 +6,44 @@ metadata:
 spec:
   serviceAccountName: argo-workflow-sa
   entrypoint: cancel-training
+  onExit: report-cancellation
+  arguments:
+    parameters:
+      - name: job_id
+      - name: job_name
+      - name: namespace
+      - name: control_plane_callback_url
+      - name: cancel_reporter_capability
   templates:
     - name: cancel-training
-      inputs:
-        parameters:
-          - name: job_name
-          - name: namespace
-      resource:
-        action: delete
-        flags:
-          - --ignore-not-found
-        manifest: |
-          apiVersion: kubeflow.org/v1
-          kind: PyTorchJob
-          metadata:
-            name: {{inputs.parameters.job_name}}
-            namespace: {{inputs.parameters.namespace}}
+      container:
+        image: bitnami/kubectl:1.30
+        command: [kubectl]
+        args:
+          - delete
+          - pytorchjob.kubeflow.org
+          - "{{workflow.parameters.job_name}}"
+          - "--namespace={{workflow.parameters.namespace}}"
+          - "--ignore-not-found=true"
+          - "--wait=true"
+          - "--timeout=120s"
+
+    - name: report-cancellation
+      container:
+        image: curlimages/curl:8.7.1
+        command: [curl]
+        args:
+          - --fail-with-body
+          - --silent
+          - --show-error
+          - --request
+          - POST
+          - --header
+          - "Authorization: Bearer {{workflow.parameters.cancel_reporter_capability}}"
+          - --header
+          - "Content-Type: application/json"
+          - --header
+          - "Idempotency-Key: cancel-{{workflow.uid}}"
+          - --data
+          - '{"workflow_status":"{{workflow.status}}","job_id":"{{workflow.parameters.job_id}}"}'
+          - "{{workflow.parameters.control_plane_callback_url}}"

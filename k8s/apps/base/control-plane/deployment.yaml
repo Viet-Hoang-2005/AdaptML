@@ -33,13 +33,16 @@ spec:
                       values:
                         - mlops-paas-control-plane
                 topologyKey: "kubernetes.io/hostname"
+      volumes:
+        - name: staticfiles
+          emptyDir: {}
       initContainers:
         - name: db-migrate
-          image: mlops-paas-django:latest
+          image: mlops-paas-control-plane:latest
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
-            - "python src/manage.py ensure_db_schema && python src/manage.py migrate && python src/manage.py collectstatic --noinput"
+            - "python manage.py migrate && python manage.py collectstatic --noinput"
           env:
             - name: DB_USER
               valueFrom:
@@ -59,13 +62,16 @@ spec:
           envFrom:
             - configMapRef:
                 name: mlops-paas-control-plane-config
+          volumeMounts:
+            - name: staticfiles
+              mountPath: /app/staticfiles
       containers:
         - name: control-plane
-          image: mlops-paas-django:latest
+          image: mlops-paas-control-plane:latest
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
-            - "cd src && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
+            - "gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --graceful-timeout 30 --access-logfile -"
           ports:
             - containerPort: 8000
           env:
@@ -127,6 +133,9 @@ spec:
           envFrom:
             - configMapRef:
                 name: mlops-paas-control-plane-config
+          volumeMounts:
+            - name: staticfiles
+              mountPath: /app/staticfiles
           resources:
             requests:
               cpu: 250m
@@ -134,3 +143,20 @@ spec:
             limits:
               cpu: 1000m
               memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            periodSeconds: 20

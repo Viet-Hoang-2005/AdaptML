@@ -7,3 +7,8 @@ resources:
   - configmap.yaml
   - service.yaml
   - deployment.yaml
+
+images:
+  - name: mlops-paas-mlflow
+    newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-mlflow
+    newTag: latest

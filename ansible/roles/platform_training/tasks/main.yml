@@ -1,0 +1,129 @@
+---
+- name: Install the pinned Kubeflow Training Operator
+  ansible.builtin.command: >-
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
+    apply --server-side
+    -k github.com/kubeflow/training-operator/manifests/overlays/standalone?ref={{ kubeflow_training_operator_version }}
+  register: kubeflow_operator_apply
+  changed_when: "'configured' in kubeflow_operator_apply.stdout or 'created' in kubeflow_operator_apply.stdout"
+
+- name: Pin the Kubeflow Training Operator to static workers
+  kubernetes.core.k8s:
+    state: patched
+    kind: Deployment
+    api_version: apps/v1
+    name: training-operator
+    namespace: kubeflow
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    definition:
+      spec:
+        template:
+          spec:
+            nodeSelector:
+              workload-type: worker
+
+- name: Wait for the Kubeflow Training Operator
+  ansible.builtin.command: >-
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
+    -n kubeflow rollout status deployment/training-operator --timeout=300s
+  changed_when: false
+
+- name: Resolve the private K3s API endpoint for elastic nodes
+  ansible.builtin.set_fact:
+    k3s_cluster_endpoint: >-
+      https://{{ hostvars[groups['master'][0]].private_ip }}:6443
+  when: enable_karpenter | bool
+
+- name: Resolve the effective K3s node token
+  ansible.builtin.set_fact:
+    effective_k3s_node_token: >-
+      {{ k3s_node_token_override | trim
+         if k3s_node_token_override | trim
+         else hostvars[groups['master'][0]].k3s_node_token }}
+  no_log: true
+  when: enable_karpenter | bool
+
+- name: Require the Terraform Karpenter outputs
+  ansible.builtin.assert:
+    that:
+      - karpenter_node_instance_profile_name | length > 0
+      - karpenter_interruption_queue_name | length > 0
+      - effective_k3s_node_token | length > 0
+    fail_msg: Enable and apply the Terraform Karpenter stack before this phase.
+  no_log: true
+  when: enable_karpenter | bool
+
+- name: Store the K3s agent token from the WSL control host
+  delegate_to: localhost
+  become: false
+  community.aws.secretsmanager_secret:
+    name: "{{ karpenter_k3s_token_secret_name }}"
+    description: K3s agent token for self-managed Karpenter nodes
+    state: present
+    secret_type: string
+    json_secret:
+      token: "{{ effective_k3s_node_token }}"
+    overwrite: true
+    region: "{{ aws_region }}"
+  no_log: true
+  when: enable_karpenter | bool
+
+- name: Install Karpenter CRDs
+  kubernetes.core.helm:
+    name: karpenter-crd
+    chart_ref: oci://public.ecr.aws/karpenter/karpenter-crd
+    chart_version: "{{ karpenter_version }}"
+    release_namespace: karpenter
+    create_namespace: true
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    timeout: 10m0s
+  when: enable_karpenter | bool
+
+- name: Install Karpenter controller on static workers
+  kubernetes.core.helm:
+    name: karpenter
+    chart_ref: oci://public.ecr.aws/karpenter/karpenter
+    chart_version: "{{ karpenter_version }}"
+    release_namespace: karpenter
+    create_namespace: true
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    timeout: 10m0s
+    release_values:
+      replicas: 1
+      nodeSelector:
+        workload-type: worker
+      settings:
+        clusterName: "{{ karpenter_cluster_name }}"
+        clusterEndpoint: "https://{{ private_ip }}:6443"
+        interruptionQueue: "{{ karpenter_interruption_queue_name }}"
+  when: enable_karpenter | bool
+
+- name: Render the cluster-specific CPU NodePool and EC2NodeClass
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/templates/karpenter-nodepool.yaml.j2"
+    dest: /var/lib/rancher/k3s/server/manifests/karpenter-nodepool.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  when:
+    - enable_karpenter | bool
+    - manage_karpenter_nodepools_with_ansible | bool
+
+- name: Remove the rendered Karpenter manifest when elastic capacity is disabled
+  become: true
+  ansible.builtin.file:
+    path: /var/lib/rancher/k3s/server/manifests/karpenter-nodepool.yaml
+    state: absent
+  when: not enable_karpenter | bool
+
+- name: Wait for the CPU EC2NodeClass to become Ready
+  ansible.builtin.command: >-
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
+    wait ec2nodeclass/training-cpu --for=condition=Ready --timeout=300s
+  changed_when: false
+  when:
+    - enable_karpenter | bool
+    - manage_karpenter_nodepools_with_ansible | bool

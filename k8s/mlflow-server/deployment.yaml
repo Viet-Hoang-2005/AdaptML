@@ -17,40 +17,10 @@ spec:
     spec:
       nodeSelector:
         workload-type: worker
-      initContainers:
-        - name: ensure-mlflow-schema
-          image: ghcr.io/mlflow/mlflow:latest
-          imagePullPolicy: IfNotPresent
-          command: ["python", "-c"]
-          args:
-            - |
-              import os, psycopg2
-              conn = psycopg2.connect(
-                  host="mlops-paas-postgres-rw.default.svc.cluster.local",
-                  port=5432,
-                  user=os.environ["DB_USER"],
-                  password=os.environ["DB_PASSWORD"],
-                  dbname="mlops_paas_db"
-              )
-              conn.autocommit = True
-              with conn.cursor() as cur:
-                  cur.execute("CREATE SCHEMA IF NOT EXISTS mlflow;")
-              conn.close()
-              print("Schema mlflow verified successfully.")
-          env:
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secrets
-                  key: DB_USER
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secrets
-                  key: DB_PASSWORD
+
       containers:
         - name: mlflow-server
-          image: ghcr.io/mlflow/mlflow:latest
+          image: mlops-paas-mlflow
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
@@ -61,8 +31,9 @@ spec:
                 --workers 1 \
                 --allowed-hosts "*" \
                 --cors-allowed-origins "*" \
-                --backend-store-uri "postgresql://${DB_USER}:${DB_PASSWORD}@mlops-paas-postgres-rw.default.svc.cluster.local:5432/mlops_paas_db?options=-c%20search_path%3Dmlflow" \
-                --default-artifact-root "s3://mlops-paas-artifacts/mlflow/"
+                --backend-store-uri "postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@mlops-paas-postgres-rw.default.svc.cluster.local:5432/mlops_paas_db?options=-c%20search_path%3Dmlflow" \
+                --serve-artifacts \
+                --artifacts-destination "s3://${AWS_BUCKET_NAME}"
           ports:
             - containerPort: 5000
               name: http

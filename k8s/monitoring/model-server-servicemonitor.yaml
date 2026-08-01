@@ -9,9 +9,13 @@ metadata:
     release: monitoring
 spec:
   selector:
-    matchLabels:
-      # Tìm TẤT CẢ các Service có chứa nhãn này
-      component: model-server
+    matchExpressions:
+      # Scrape both dynamic serving workers and the central model gateway.
+      - key: component
+        operator: In
+        values:
+          - model-server
+          - model-gateway
   namespaceSelector:
     matchNames:
       - default # Argo Workflow tạo model-server ở namespace default

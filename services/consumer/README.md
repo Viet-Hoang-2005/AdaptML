@@ -36,7 +36,7 @@ Redpanda (topic: mlops_paas_production_data)
 ```
 src/
 ├── main.py       # Consumer loop: subscribe, poll, batch, commit, threshold check
-└── database.py   # PostgreSQL helpers: save_dataframe_to_db, get_production_data_count_by_model, get_model_drift_thresholds
+└── database.py   # PostgreSQL helpers for persistence, per-version counts and drift thresholds
 ```
 
 ---
