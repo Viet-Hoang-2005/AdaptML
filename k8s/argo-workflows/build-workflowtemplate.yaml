@@ -69,7 +69,6 @@ spec:
                 - {name: image_repository, value: "{{inputs.parameters.image_repository}}"}
                 - {name: image_tag, value: "{{inputs.parameters.image_tag}}"}
                 - {name: control_plane_webhook_url, value: "{{inputs.parameters.control_plane_webhook_url}}"}
-
     - name: prepare-package
       nodeSelector: {workload-type: worker}
       inputs:
@@ -88,7 +87,7 @@ spec:
           - {name: output_upload_url}
           - {name: control_plane_webhook_url}
       container:
-        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:latest
+        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:375afde3ae576f56733e93b52b2d27fb0faed48d
         imagePullPolicy: Always
         volumeMounts:
           - {name: workspace, mountPath: /workspace}
@@ -111,7 +110,6 @@ spec:
           - name: CONTROL_PLANE_WEBHOOK_SECRET
             valueFrom:
               secretKeyRef: {name: mlops-paas-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}
-
     - name: build-image
       nodeSelector: {workload-type: worker}
       inputs:
@@ -129,7 +127,6 @@ spec:
         volumeMounts:
           - {name: workspace, mountPath: /workspace}
           - {name: harbor-config, mountPath: /kaniko/.docker/}
-
     - name: notify-success
       nodeSelector: {workload-type: worker}
       inputs:
@@ -139,7 +136,7 @@ spec:
           - {name: image_tag}
           - {name: control_plane_webhook_url}
       container:
-        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:latest
+        image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-model-packager:375afde3ae576f56733e93b52b2d27fb0faed48d
         imagePullPolicy: Always
         volumeMounts:
           - {name: workspace, mountPath: /workspace}
@@ -152,7 +149,6 @@ spec:
           - name: CONTROL_PLANE_WEBHOOK_SECRET
             valueFrom:
               secretKeyRef: {name: mlops-paas-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}
-
     - name: notify-build-exit
       nodeSelector: {workload-type: worker}
       container:
