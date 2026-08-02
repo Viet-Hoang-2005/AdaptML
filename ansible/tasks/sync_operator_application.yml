@@ -45,6 +45,10 @@
     - adopted_operator_application.resources[0].status.sync.status | default('') == 'Synced'
     - adopted_operator_application.resources[0].status.health.status | default('') == 'Healthy'
     - adopted_operator_application.resources[0].operation is not defined
+  failed_when: >-
+    adopted_operator_application.resources | length == 1 and
+    adopted_operator_application.resources[0].status.operationState.phase | default('')
+    in ['Error', 'Failed']
   retries: 90
   delay: 10
   changed_when: false
