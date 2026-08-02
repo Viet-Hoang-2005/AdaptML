@@ -21,6 +21,18 @@ deploy_training_platform: true
 enable_karpenter: true
 enable_gpu_nodepool: true
 
+# Operator ownership is migrated in two stages. Keep Ansible as the active
+# owner while Argo CD Applications are introduced with manual sync; switch to
+# argocd only after each child Application has adopted the live resources.
+training_operators_owner: "ansible"
+platform_operators_application_name: "platform-operators"
+platform_operator_application_names:
+  - platform-kubeflow-training
+  - platform-karpenter-crds
+  - platform-karpenter
+  - platform-node-feature-discovery
+  - platform-gpu-operator
+
 # Karpenter/K3s self-managed bootstrap defaults. These values match the
 # Terraform defaults and can be overridden from inventory/group_vars.
 karpenter_cluster_name: "mlops-paas-cluster"
@@ -47,6 +59,9 @@ training_smoke_namespace: "ansible-training-smoke"
 training_smoke_timeout: "20m"
 training_smoke_node_cleanup_timeout: "15m"
 training_smoke_image: "nvidia/cuda@sha256:001469ea0f3dec85a1ca929aeea3b58ae369d4c11228b10aec1f642bb6ca7a6f"
+# GPU smoke remains opt-in until the AWS G/VT quota request is approved and
+# effective. The CPU smoke test remains part of every training verification.
+training_gpu_smoke_enabled: false
 
 # Operator versions are intentionally configurable so a new cluster can pin the
 # exact versions used in production without editing shell scripts.

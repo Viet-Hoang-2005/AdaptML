@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform-operators
+  namespace: argocd
+spec:
+  description: Pinned training-platform operators for the in-cluster K3s environment.
+  sourceRepos:
+    - https://github.com/Viet-Hoang-2005/MLOps-paas-system.git
+    - https://github.com/kubeflow/trainer.git
+    - public.ecr.aws/karpenter
+    - registry.k8s.io/nfd/charts
+    - https://helm.ngc.nvidia.com/nvidia
+  destinations:
+    - namespace: kubeflow
+      server: https://kubernetes.default.svc
+    - namespace: karpenter
+      server: https://kubernetes.default.svc
+    - namespace: gpu-operator
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  orphanedResources:
+    warn: true

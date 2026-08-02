@@ -48,6 +48,7 @@
     kustomize {{ kubeflow_training_operator_crds_kustomize_path }}?ref={{ kubeflow_training_operator_version }}
   register: kubeflow_operator_crds_render
   changed_when: false
+  when: training_operators_owner == 'ansible'
 
 - name: Validate the Kubeflow Training Operator CRDs against the live API server
   ansible.builtin.command: >-
@@ -55,6 +56,7 @@
     apply --server-side --dry-run=server
     -k {{ kubeflow_training_operator_crds_kustomize_path }}?ref={{ kubeflow_training_operator_version }}
   changed_when: false
+  when: training_operators_owner == 'ansible'
 
 - name: Install the pinned Kubeflow Training Operator CRDs
   ansible.builtin.command: >-
@@ -65,12 +67,14 @@
   changed_when: >-
     'configured' in kubeflow_operator_crds_apply.stdout or
     'created' in kubeflow_operator_crds_apply.stdout
+  when: training_operators_owner == 'ansible'
 
 - name: Wait for the PyTorchJob CRD to be established
   ansible.builtin.command: >-
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
     wait crd/pytorchjobs.kubeflow.org --for=condition=Established --timeout=300s
   changed_when: false
+  when: training_operators_owner == 'ansible'
 
 - name: Ensure the Kubeflow Training Operator namespace exists
   kubernetes.core.k8s:
@@ -79,6 +83,7 @@
     kind: Namespace
     name: kubeflow
     kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  when: training_operators_owner == 'ansible'
 
 - name: Render the pinned Kubeflow Training Operator controller manifests
   ansible.builtin.command: >-
@@ -86,6 +91,7 @@
     kustomize {{ kubeflow_training_operator_kustomize_path }}?ref={{ kubeflow_training_operator_version }}
   register: kubeflow_operator_controller_render
   changed_when: false
+  when: training_operators_owner == 'ansible'
 
 - name: Validate the Kubeflow Training Operator controller against the live API server
   ansible.builtin.command: >-
@@ -93,6 +99,7 @@
     apply --server-side --dry-run=server
     -k {{ kubeflow_training_operator_kustomize_path }}?ref={{ kubeflow_training_operator_version }}
   changed_when: false
+  when: training_operators_owner == 'ansible'
 
 - name: Install the pinned Kubeflow Training Operator controller
   ansible.builtin.command: >-
@@ -103,6 +110,7 @@
   changed_when: >-
     'configured' in kubeflow_operator_controller_apply.stdout or
     'created' in kubeflow_operator_controller_apply.stdout
+  when: training_operators_owner == 'ansible'
 
 - name: Pin the Kubeflow Training Operator to static workers
   kubernetes.core.k8s:
@@ -118,12 +126,14 @@
           spec:
             nodeSelector:
               workload-type: worker
+  when: training_operators_owner == 'ansible'
 
 - name: Wait for the Kubeflow Training Operator
   ansible.builtin.command: >-
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
     -n kubeflow rollout status deployment/training-operator --timeout=300s
   changed_when: false
+  when: training_operators_owner == 'ansible'
 
 - name: Store the K3s agent token from the WSL control host
   delegate_to: localhost
@@ -140,6 +150,25 @@
   no_log: true
   when: enable_karpenter | bool
 
+- name: Bootstrap the Argo CD platform-operators parent application
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    definition: "{{ lookup('ansible.builtin.file', playbook_dir + '/../k8s/argocd/platform-operators.yaml') | from_yaml }}"
+
+- name: Require the Argo CD platform-operators parent application
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ platform_operators_application_name }}"
+    namespace: argocd
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: platform_operators_application
+  until: platform_operators_application.resources | length == 1
+  retries: 12
+  delay: 5
+  changed_when: false
+
 - name: Install Karpenter CRDs
   kubernetes.core.helm:
     name: karpenter-crd
@@ -150,7 +179,9 @@
     kubeconfig: "{{ k3s_remote_kubeconfig }}"
     wait: true
     timeout: 10m0s
-  when: enable_karpenter | bool
+  when:
+    - enable_karpenter | bool
+    - training_operators_owner == 'ansible'
 
 - name: Install Karpenter controller on static workers
   kubernetes.core.helm:
@@ -170,13 +201,17 @@
         clusterName: "{{ karpenter_cluster_name }}"
         clusterEndpoint: "{{ k3s_cluster_endpoint }}"
         interruptionQueue: "{{ karpenter_interruption_queue_name }}"
-  when: enable_karpenter | bool
+  when:
+    - enable_karpenter | bool
+    - training_operators_owner == 'ansible'
 
 - name: Configure the NVIDIA Helm repository
   kubernetes.core.helm_repository:
     name: nvidia
     repo_url: https://helm.ngc.nvidia.com/nvidia
-  when: enable_gpu_nodepool | bool
+  when:
+    - enable_gpu_nodepool | bool
+    - training_operators_owner == 'ansible'
 
 - name: Install Node Feature Discovery only on elastic training nodes
   kubernetes.core.helm:
@@ -203,7 +238,62 @@
       gc:
         nodeSelector:
           workload-type: worker
-  when: enable_gpu_nodepool | bool
+  when:
+    - enable_gpu_nodepool | bool
+    - training_operators_owner == 'ansible'
+
+- name: Require Argo CD to reconcile every training operator application
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ item }}"
+    namespace: argocd
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: reconciled_platform_operator_application
+  until:
+    - reconciled_platform_operator_application.resources | length == 1
+    - reconciled_platform_operator_application.resources[0].status.sync.status | default('') == 'Synced'
+    - reconciled_platform_operator_application.resources[0].status.health.status | default('') == 'Healthy'
+  retries: 60
+  delay: 10
+  changed_when: false
+  loop: "{{ platform_operator_application_names }}"
+  when: training_operators_owner == 'argocd'
+
+- name: Inject cluster-specific Karpenter controller settings outside Git
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: karpenter
+    namespace: karpenter
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    definition:
+      spec:
+        template:
+          spec:
+            containers:
+              - name: controller
+                env:
+                  - name: CLUSTER_NAME
+                    value: "{{ karpenter_cluster_name }}"
+                  - name: CLUSTER_ENDPOINT
+                    value: "{{ k3s_cluster_endpoint }}"
+                  - name: INTERRUPTION_QUEUE
+                    value: "{{ karpenter_interruption_queue_name }}"
+  no_log: true
+  when:
+    - training_operators_owner == 'argocd'
+    - enable_karpenter | bool
+
+- name: Wait for Karpenter after injecting runtime controller settings
+  ansible.builtin.command: >-
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
+    -n karpenter rollout status deployment/karpenter --timeout=300s
+  changed_when: false
+  when:
+    - training_operators_owner == 'argocd'
+    - enable_karpenter | bool
 
 - name: Install NVIDIA GPU Operator for elastic training nodes
   kubernetes.core.helm:
@@ -241,7 +331,9 @@
             value: nvidia
           - name: CONTAINERD_SET_AS_DEFAULT
             value: "true"
-  when: enable_gpu_nodepool | bool
+  when:
+    - enable_gpu_nodepool | bool
+    - training_operators_owner == 'ansible'
 
 - name: Render the cluster-specific Karpenter NodePools and EC2NodeClasses
   ansible.builtin.template:

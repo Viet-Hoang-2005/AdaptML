@@ -43,6 +43,7 @@
       - helm_version is match('^v[0-9]+\\.[0-9]+\\.[0-9]+$')
       - not enable_karpenter | bool or deploy_training_platform | bool
       - not enable_gpu_nodepool | bool or enable_karpenter | bool
+      - training_operators_owner in ['ansible', 'argocd']
     fail_msg: Version pins or phased rollout flags are inconsistent.
 
 - name: Validate the WSL AWS session

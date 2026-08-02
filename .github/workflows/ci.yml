@@ -57,6 +57,7 @@ jobs:
               - 'services/requirements-test.txt'
             infra:
               - 'k8s/**'
+              - 'ansible/**'
 
       - name: Generate Dynamic Matrix
         id: matrix
@@ -337,8 +338,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Python for Ansible validation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Setup Kustomize
         uses: imranismail/setup-kustomize@v2
+      - name: Validate Ansible syntax
+        run: |
+          pip install -r ansible/requirements-control.txt
+          ansible-galaxy collection install -r ansible/requirements.yml
+          ansible-playbook -i 'localhost,' ansible/site.yml --syntax-check
       - name: Install Kubeconform
         run: |
           wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
@@ -347,15 +357,18 @@ jobs:
       - name: Validate K8s Manifests
         run: |
           echo "Building Kustomize to check syntax..."
-          for i in 1 2 3; do
-            kustomize build --enable-helm k8s/ > full_manifest.yaml && break || sleep 10
+          for target in k8s k8s/operators/bootstrap k8s/operators/kubeflow-training; do
+            output="$(echo "$target" | tr '/' '-')-manifest.yaml"
+            for i in 1 2 3; do
+              kustomize build --enable-helm "$target" > "$output" && break || sleep 10
+            done
+            if [ ! -s "$output" ]; then
+              echo "::error::Kustomize build failed for $target after 3 retries."
+              exit 1
+            fi
+            echo "Validating $target with Kubeconform..."
+            kubeconform -ignore-missing-schemas -summary "$output"
           done
-          if [ ! -s full_manifest.yaml ]; then
-            echo "::error::Kustomize build failed after 3 retries due to network timeouts!"
-            exit 1
-          fi
-          echo "Validating structure with Kubeconform..."
-          kubeconform -ignore-missing-schemas -summary full_manifest.yaml
 
   build-and-scan:
     name: "Build & Scan (${{ matrix.target.name }})"

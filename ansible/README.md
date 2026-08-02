@@ -40,7 +40,7 @@ Terraform apply on your behalf.
 | `preflight` | Validate Linux, Terraform inventory, SSH key and rollout flags | Always |
 | `bootstrap` | Prepare Ubuntu, install K3s `v1.34.9+k3s1`, join static workers | Enabled |
 | `platform-core` | Install pinned operators, bootstrap External Secrets and Argo CD | Enabled |
-| `platform-training` | Install Kubeflow, Karpenter, GPU Operator and smoke tests | Explicit |
+| `platform-training` | Bootstrap Argo CD training operators, Karpenter capacity resources and smoke tests | Explicit |
 | `verify` | Validate nodes, bundled components and root GitOps health | Explicit/final |
 
 K3s keeps its bundled Traefik, ServiceLB and local-path provisioner during this

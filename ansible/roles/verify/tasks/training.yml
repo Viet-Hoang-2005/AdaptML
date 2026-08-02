@@ -1,4 +1,19 @@
 ---
+- name: Verify Argo CD owns the training operator applications
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ item }}"
+    namespace: argocd
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: verified_training_operator_application
+  failed_when: >-
+    verified_training_operator_application.resources | length != 1 or
+    verified_training_operator_application.resources[0].status.sync.status | default('') != 'Synced' or
+    verified_training_operator_application.resources[0].status.health.status | default('') != 'Healthy'
+  loop: "{{ platform_operator_application_names }}"
+  when: training_operators_owner == 'argocd'
+
 - name: Verify the PyTorchJob CRD and Kubeflow Training Operator
   ansible.builtin.command: >-
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
@@ -108,15 +123,16 @@
                             cpu: "1"
                             memory: 1Gi
                             nvidia.com/gpu: "1"
+      when: >-
+        item.metadata.name != 'ansible-gpu-smoke' or
+        training_gpu_smoke_enabled | bool
 
     - name: Wait for CPU and GPU PyTorchJob smoke workloads to succeed
       ansible.builtin.command: >-
         /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
         -n {{ training_smoke_namespace }} wait pytorchjob/{{ item }}
         --for=condition=Succeeded --timeout={{ training_smoke_timeout }}
-      loop:
-        - ansible-cpu-smoke
-        - ansible-gpu-smoke
+      loop: "{{ ['ansible-cpu-smoke'] + (['ansible-gpu-smoke'] if training_gpu_smoke_enabled | bool else []) }}"
       changed_when: false
 
     - name: Verify the GPU node advertises an allocatable GPU
@@ -126,12 +142,14 @@
         -o jsonpath='{.items[0].status.allocatable.nvidia\\.com/gpu}'
       register: training_smoke_gpu_allocatable
       changed_when: false
+      when: training_gpu_smoke_enabled | bool
 
     - name: Require an allocatable GPU on the smoke node
       ansible.builtin.assert:
         that:
           - training_smoke_gpu_allocatable.stdout | int >= 1
         fail_msg: NVIDIA GPU Operator did not expose nvidia.com/gpu on the Karpenter node.
+      when: training_gpu_smoke_enabled | bool
 
     - name: Verify GPU Operator and feature-discovery DaemonSets on the GPU node
       ansible.builtin.command: >-
@@ -144,6 +162,7 @@
         - nvidia-device-plugin-daemonset
         - nvidia-dcgm-exporter
       changed_when: false
+      when: training_gpu_smoke_enabled | bool
   always:
     - name: Remove the isolated training smoke namespace
       kubernetes.core.k8s:
@@ -168,3 +187,4 @@
     wait --for=delete node -l mlops-paas/nodepool=training-gpu
     --timeout={{ training_smoke_node_cleanup_timeout }}
   changed_when: false
+  when: training_gpu_smoke_enabled | bool

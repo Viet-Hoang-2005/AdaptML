@@ -402,7 +402,7 @@ Các phase hiện có:
 | `preflight` | Kiểm tra WSL, Terraform inventory, SSH và rollout flags | Luôn chạy |
 | `bootstrap` | Cài K3s `v1.34.9+k3s1`, một server và hai worker | Bật |
 | `platform-core` | EBS CSI, ESO, CNPG, KEDA, Argo Workflows/Events, monitoring và Argo CD | Bật |
-| `platform-training` | Kubeflow và Karpenter cluster resources | Tắt |
+| `platform-training` | Bootstrap training-operator GitOps, Karpenter capacity resources và smoke tests | Opt-in |
 | `verify` | Xác minh node, operator và root Application | Chạy cuối |
 
 Ansible cài operator theo thứ tự phụ thuộc, áp dụng `ClusterSecretStore`, chờ repository credential được ESO đồng bộ, rồi tạo root Application `mlops-paas-system`. Không cần `kubectl apply` thủ công cho Argo CD Application hoặc Argo Workflows sau khi `platform-core` hoàn tất.
@@ -433,7 +433,7 @@ ansible-playbook site.yml --tags platform-training \
   -e enable_karpenter=true
 ```
 
-GPU vẫn mặc định tắt. Chỉ đặt `enable_gpu_nodepool=true` sau khi AMI, NVIDIA driver, container toolkit và device plugin đã được xác minh. Karpenter NodeClass/NodePool thuộc Ansible vì chứa endpoint, instance profile và bootstrap token theo từng cluster; không thêm chúng trở lại root GitOps.
+Kubeflow Training Operator, Karpenter CRD/controller, NFD và NVIDIA GPU Operator được Argo CD quản lý qua parent Application `platform-operators`. Karpenter NodeClass/NodePool vẫn thuộc Ansible vì chứa endpoint, instance profile và bootstrap token theo từng cluster; không thêm chúng trở lại root GitOps. GPU smoke chỉ bật sau khi quota G/VT AWS đã effective.
 
 ---
 

@@ -9,10 +9,13 @@
 
 - Inspect the root entry for the production app overlay; a descriptive suffix/comment embedded as path text may make it invalid.
 - `k8s/security/` contains policies but is not currently referenced by the root Kustomization.
-- Operators are installed by Ansible rather than root GitOps.
+- The optional training operators are reconciled by Argo CD child Applications
+  beneath the `platform-operators` parent, which Ansible bootstraps after core
+  GitOps is healthy. They are intentionally not part of the root application.
 - Karpenter NodeClass and NodePool are rendered by Ansible and intentionally
-  excluded from root Kustomize because endpoint, instance profile, token, and
-  user data are cluster-specific.
+  excluded from GitOps because endpoint, instance profile, token, and user data
+  are cluster-specific. Argo ignores only the Karpenter controller runtime
+  endpoint/name/queue fields that Ansible injects.
 - `k8s/security/` remains intentionally excluded during the current stability
   phase; do not describe its NetworkPolicies or custom PDBs as active.
 

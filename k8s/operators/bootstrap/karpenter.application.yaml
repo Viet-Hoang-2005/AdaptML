@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-karpenter
+  namespace: argocd
+spec:
+  project: platform-operators
+  source:
+    repoURL: public.ecr.aws/karpenter
+    chart: karpenter
+    targetRevision: 1.13.0
+    helm:
+      releaseName: karpenter
+      values: |
+        replicas: 1
+        nodeSelector:
+          workload-type: worker
+        settings:
+          clusterName: runtime-injected
+          clusterEndpoint: https://runtime-injected.invalid:6443
+          interruptionQueue: runtime-injected
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: karpenter
+  syncPolicy:
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+      - PruneLast=true
+      - FailOnSharedResource=true
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: karpenter
+      namespace: karpenter
+      jqPathExpressions:
+        - .spec.template.spec.containers[] | select(.name == "controller").env[] | select(.name == "CLUSTER_NAME" or .name == "CLUSTER_ENDPOINT" or .name == "INTERRUPTION_QUEUE")
