@@ -153,34 +153,24 @@ MLOps-paas-system/
 │   └── test/                                 # Integration & End-to-End Test suites
 │
 ├── k8s/
-│   ├── apps/                                 # ArgoCD-managed manifests theo chuẩn GitOps
-│   │   ├── base/                             # Base manifests: control-plane, web, consumer, redis...
-│   │   └── production/                       # Production overlays: ingress, configmaps, replicas
-│   │
-│   ├── argo-workflows/                       # Argo Workflows: Event-driven Pipelines & Templates
-│   │   ├── eventsource.yaml                  # EventSource: Lắng nghe webhook /train, /cancel-train
-│   │   ├── sensor.yaml                       # Sensor: Map event thành WorkflowTemplate triggers
-│   │   ├── build-workflowtemplate.yaml       # Kaniko rootless build Docker image & push Harbor
-│   │   ├── deploy-workflowtemplate.yaml      # Tạo Deployment/Service cho model worker
-│   │   ├── training-workflowtemplate.yaml    # Khởi tạo Kubeflow PyTorchJob CRD
-│   │   ├── training-cancel-workflowtemplate.yaml # Hủy job huấn luyện đang chạy
-│   │   ├── evidently-workflowtemplate.yaml   # Lập lịch chạy Evidently Drift Detection Job
-│   │   └── delete-workflowtemplate.yaml      # Dọn dẹp tài nguyên khi xóa model
-│   │
-│   ├── kubeflow/                             # Kubeflow Training Operator (PyTorchJob / TFJob CRDs)
-│   ├── karpenter/                            # Template tham chiếu; tài nguyên cluster-specific do Ansible render
-│   ├── argocd/                               # Cấu hình ArgoCD Application & RBAC
-│   ├── postgres/                             # CloudNativePG HA Cluster manifests
-│   ├── redis/                                # Redis Deployment & Service
-│   ├── redpanda/                             # Redpanda Kafka StatefulSet & Console
-│   ├── harbor/                               # Harbor Registry & Cosign manifests
-│   ├── monitoring/                           # Prometheus + Grafana + AlertManager stack
-│   ├── security/                             # NetworkPolicy/PDB dự kiến; chưa được root GitOps reconcile
-│   ├── storage/                              # AWS EBS StorageClass & PVCs
-│   ├── secrets/                              # External Secrets Operator + ClusterSecretStore
-│   ├── cloudflare/                           # Cloudflare Tunnel (Expose HTTPS an toàn)
-│   ├── health/                               # Traefik Ping & ALB Health Check endpoints
-│   └── scripts/                              # Shell scripts cài đặt Operators (Argo, KEDA, ESO...)
+│   ├── kustomization.yaml                    # Root chỉ render GitOps control tree production
+│   ├── gitops/production/
+│   │   ├── projects/                         # AppProject theo trust boundary
+│   │   ├── applications/                     # Explicit child Applications, gồm operator apps
+│   │   └── repositories/                     # Public Helm/OCI repository descriptors
+│   ├── platform/
+│   │   ├── foundation/                       # Namespace và StorageClass
+│   │   ├── secrets/                          # ClusterSecretStore và ExternalSecrets
+│   │   ├── data/                             # PostgreSQL, Redis và Redpanda
+│   │   ├── registry/harbor/                  # Harbor registry
+│   │   ├── mlflow/                           # MLflow tracking
+│   │   ├── observability/                    # Prometheus, Grafana và Alertmanager
+│   │   └── edge/                             # Cloudflare, Traefik routes và health
+│   ├── execution/argo/                        # Argo Events/Workflows, templates và RBAC
+│   ├── workloads/                             # Control Plane, consumer, model-server và web
+│   ├── operators/kubeflow-training/          # Runtime settings cho Training Operator
+│   ├── deferred/security/                    # Policy dự kiến, chưa được reconcile
+│   └── argocd/                               # Tài nguyên bootstrap Argo CD do Ansible sử dụng
 │
 ├── ansible/                                  # Ansible: Tự động hóa cài đặt & triển khai K3s
 │   ├── ansible.cfg                           # Cấu hình SSH pipelining, remote_user, key

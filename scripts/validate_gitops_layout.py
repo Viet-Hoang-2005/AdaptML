@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,12 @@ ALLOWED_BASELINE_EXTRAS = {
     ("v1", "Namespace", "", "karpenter"),
     ("v1", "Namespace", "", "gpu-operator"),
 }
+LEGACY_K8S_PATHS = (
+    "k8s/.kube",
+    "k8s/apps",
+    "k8s/harbor",
+    "k8s/operators/bootstrap",
+)
 
 
 def render(repo_root: Path, path: str) -> list[dict]:
@@ -107,16 +114,7 @@ def canonical(resource: dict) -> str:
     return json.dumps(normalized(resource), sort_keys=True, separators=(",", ":"))
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--baseline",
-        type=Path,
-        help="Optional manifest rendered by the legacy monolithic root.",
-    )
-    args = parser.parse_args()
-
-    repo_root = Path(__file__).resolve().parents[1]
+def validate(repo_root: Path, baseline: Path | None) -> int:
     root_resources = render(repo_root, "k8s")
     applications = [
         resource
@@ -159,10 +157,10 @@ def main() -> int:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    if args.baseline:
+    if baseline:
         baseline_resources = {
             identity(resource): resource
-            for resource in yaml.safe_load_all(args.baseline.read_text(encoding="utf-8"))
+            for resource in yaml.safe_load_all(baseline.read_text(encoding="utf-8"))
             if resource
         }
         baseline_keys = set(baseline_resources)
@@ -185,6 +183,28 @@ def main() -> int:
         f"{len(rendered)} unique resources."
     )
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="Optional manifest rendered by the legacy monolithic root.",
+    )
+    args = parser.parse_args()
+
+    repo_root = Path(__file__).resolve().parents[1]
+    legacy_paths = [path for path in LEGACY_K8S_PATHS if (repo_root / path).exists()]
+    if legacy_paths:
+        for path in legacy_paths:
+            print(f"ERROR: legacy Kubernetes path still exists: {path}", file=sys.stderr)
+        return 1
+
+    with tempfile.TemporaryDirectory(prefix="mlops-gitops-") as temporary_directory:
+        render_root = Path(temporary_directory)
+        shutil.copytree(repo_root / "k8s", render_root / "k8s")
+        return validate(render_root, args.baseline)
 
 
 if __name__ == "__main__":
