@@ -3,7 +3,6 @@ kind: Kustomization
 
 resources:
   - gitops/production
-  - platform/observability
   - execution/argo
   - workloads/control-plane
   - workloads/consumer
