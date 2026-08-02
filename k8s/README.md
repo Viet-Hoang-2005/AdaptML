@@ -78,3 +78,8 @@ Debug the smallest unhealthy child first. Check its comparison conditions,
 rendered source, events and owned resource health before inspecting the root.
 Rollback a manifest through Git; do not delete CRDs, stateful resources or
 runtime-created workloads to repair an Application status.
+
+Orphan warnings stay enabled. AppProjects ignore only the accepted resources
+created by CloudNativePG, Kubernetes, Argo Workflows and the bootstrap-managed
+`monitoring` Helm release. A new orphan name outside those exact identities or
+release prefixes remains visible as an `OrphanedResourceWarning`.
