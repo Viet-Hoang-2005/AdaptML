@@ -30,7 +30,7 @@
 
 ## 1. Tổng quan ⭐
 
-Hệ thống này là một **nền tảng AI Platform-as-a-Service (AI PaaS) MLOps hoàn chỉnh** cung cấp kiến trúc đa người thuê (Multi-Tenant), tự động hóa toàn diện từ giai đoạn phát triển mô hình (Model Packaging), triển khai dịch vụ suy luận động (Dynamic Serving), theo dõi chất lượng mô hình (Drift Monitoring) đến tự động tái huấn luyện trên hạ tầng điều phối GPU mở rộng tự động (Kubeflow + Karpenter).
+Hệ thống này là một **nền tảng AI Platform-as-a-Service MLOps phục vụ đa mô hình ML/DL**, tự động hóa từ đóng gói mô hình, triển khai dịch vụ suy luận động, quản lý phiên bản, giám sát drift đến huấn luyện mô hình. Nền tảng core chạy trên K3s; Kubeflow Training Operator và Karpenter là phase mở rộng tùy chọn, chỉ được bật sau khi core platform ổn định.
 
 ---
 
@@ -43,11 +43,11 @@ Hệ thống này là một **nền tảng AI Platform-as-a-Service (AI PaaS) ML
 | 3   | **Dynamic Model Serving**                      | Traefik chuyển request vào model-server gateway; gateway resolve version/alias tới worker khỏe mạnh | Traefik + FastAPI + BentoML     |
 | 4   | **Drift Detection**                            | Tạo monitor/run theo model version, phân tích production/reference data và lưu report trên S3 | Evidently AI + Celery + Argo Workflows |
 | 5   | **Training Orchestration**                     | Snapshot bất biến code/data/requirements; Celery chạy Docker local hoặc kích hoạt Argo/Kubeflow | Celery + Argo + Kubeflow PyTorchJob |
-| 6   | **GPU Auto-Scaling & Cost Optimization**       | Tự động cung cấp (provision) và thu hồi node GPU EC2 theo nhu cầu huấn luyện thực tế (Scale-to-Zero)| Karpenter NodePool                 |
+| 6   | **Optional Elastic Training Capacity**         | Có thể provision/thu hồi node CPU/GPU theo nhu cầu sau khi training platform được bật và xác minh | Karpenter NodePool                 |
 | 7   | **Job Events, Logs & Metrics**                 | Lưu trạng thái trong PostgreSQL; stream log/metrics runtime qua Redis và cung cấp API polling cho UI | PostgreSQL + Redis + React Query |
 | 8   | **Immutable Model Registry**                   | Quản lý version, artifact, metric, alias và lineage; MLflow theo dõi experiment/artifact theo job | Django Registry + MLflow + S3 |
 | 9   | **GitOps Deployment**                          | Build/sign image, cập nhật Kustomize tag và đồng bộ rolling update qua ArgoCD                     | ArgoCD GitOps + GitHub Actions     |
-| 10  | **HA Database & Streaming**                    | PostgreSQL production gồm primary/standby; Redpanda vận chuyển inference và domain events          | CloudNativePG + Redpanda Kafka     |
+| 10  | **HA PostgreSQL & Event Streaming**            | PostgreSQL production gồm primary/standby; Redpanda vận chuyển inference và domain events          | CloudNativePG + Redpanda Kafka     |
 | 11  | **Full-Stack Observability**                   | Giám sát toàn diện API Latency, Throughput, Error Rate, tài nguyên K3s và Kafka Lag                | Prometheus + Grafana + AlertManager|
 | 12  | **Automated Infrastructure & IaC**             | Chuẩn hóa hạ tầng AWS bằng Terraform và cài đặt hoàn toàn cụm K3s cùng Add-ons chỉ qua 1 lệnh      | Terraform + Ansible Playbook       |
 
@@ -109,7 +109,7 @@ Control Plane là modular monolith theo capability: `auth`, `access`, `catalog`,
 | **Automation**             | Ansible Playbook                                          | Tự động hóa cài đặt K3s Master/Worker và triển khai toàn bộ K8s Add-ons |
 | **Security & Secrets**     | AWS Secrets Manager, External Secrets Operator (ESO)      | Quản lý bảo mật biến môi trường và đồng bộ secret vào Kubernetes         |
 | **Observability**          | Prometheus, Grafana, AlertManager                         | Thu thập metrics, trực quan hóa dashboard và phát cảnh báo tự động      |
-| **Autoscaling**            | KEDA (Event-driven), Karpenter NodePool                   | Tự động mở rộng pod theo event/kafka và mở rộng node GPU theo nhu cầu    |
+| **Autoscaling**            | KEDA (core), Karpenter NodePool (optional)                | Mở rộng pod theo event; mở rộng node chỉ khi training phase được bật     |
 
 ---
 
@@ -168,14 +168,14 @@ MLOps-paas-system/
 │   │   └── delete-workflowtemplate.yaml      # Dọn dẹp tài nguyên khi xóa model
 │   │
 │   ├── kubeflow/                             # Kubeflow Training Operator (PyTorchJob / TFJob CRDs)
-│   ├── karpenter/                            # Karpenter NodePool cấu hình auto-scale GPU EC2
+│   ├── karpenter/                            # Template tham chiếu; tài nguyên cluster-specific do Ansible render
 │   ├── argocd/                               # Cấu hình ArgoCD Application & RBAC
 │   ├── postgres/                             # CloudNativePG HA Cluster manifests
 │   ├── redis/                                # Redis Deployment & Service
 │   ├── redpanda/                             # Redpanda Kafka StatefulSet & Console
 │   ├── harbor/                               # Harbor Registry & Cosign manifests
 │   ├── monitoring/                           # Prometheus + Grafana + AlertManager stack
-│   ├── security/                             # Network Policies (Zero-Trust isolation)
+│   ├── security/                             # NetworkPolicy/PDB dự kiến; chưa được root GitOps reconcile
 │   ├── storage/                              # AWS EBS StorageClass & PVCs
 │   ├── secrets/                              # External Secrets Operator + ClusterSecretStore
 │   ├── cloudflare/                           # Cloudflare Tunnel (Expose HTTPS an toàn)
@@ -192,7 +192,9 @@ MLOps-paas-system/
 │       ├── k3s_master/                       # Cài K3s Server + thiết lập kubeconfig
 │       ├── k3s_worker/                       # Join Worker nodes vào cluster qua SSH ProxyJump
 │       ├── helm/                             # Cài đặt Helm 3 package manager
-│       └── k8s_addons/                       # Tự động triển khai toàn bộ K8s Add-ons
+│       ├── platform_core/                    # Operator core, External Secrets và Argo CD bootstrap
+│       ├── platform_training/                # Kubeflow/Karpenter tùy chọn
+│       └── verify/                           # Kiểm tra bootstrap và platform sau rollout
 │
 ├── infra/                                    # Terraform IaC: Khai báo hạ tầng AWS
 │   ├── main.tf                               # Root module: VPC, EC2, ALB, S3, IAM Roles
@@ -210,20 +212,17 @@ MLOps-paas-system/
 │
 ├── web/                                      # React Frontend: AI PaaS Dashboard
 │   ├── src/
-│   │   ├── components/                       # Các components tái sử dụng
-│   │   ├── pages/                            # Các trang quản lý: Training, Models, Drift, Dashboard
-│   │   ├── lib/                              # API calls
-│   │   ├── hooks/                            # Custom Hooks
-│   │   └── types/                            # Type definitions
+│   │   ├── app/                              # Router, providers, application shell, theme và i18n
+│   │   ├── features/                         # Auth, catalog, deploy, training, registry, drift, settings
+│   │   └── shared/                           # API client, hooks, types, utilities và UI primitives
 │   └── nginx.conf                            # Nginx reverse proxy & định hướng traffic
-│
-├── training/                                 # Mã nguồn huấn luyện mẫu & requirements
-│   ├── nids-xgboost/                         # XGBoost NIDS trainer (chạy trên Kubeflow / Local)
-│   └── deployable-sklearn/                   # Scikit-learn classification trainer mẫu
 │
 ├── models/                                   # Local model artifacts mẫu (phục vụ dev/demo)
 │   ├── v1/                                   # Mô hình NIDS 2 phân lớp (BENIGN + DDoS)
-│   └── v2/                                   # Mô hình NIDS 3 phân lớp (+ PortScan)
+│   ├── v2/                                   # Mô hình NIDS 3 phân lớp (+ PortScan)
+│   ├──training/                              # Mã nguồn huấn luyện mẫu & requirements
+│   ├── nids-xgboost/
+│   └── deployable-sklearn/
 │
 ├── data/                                     # Tập dữ liệu mẫu CIC-IDS2017 (CSV)
 ├── docker-compose.yml                        # Môi trường Local Development hoàn chỉnh
@@ -293,17 +292,22 @@ pnpm dev
 
 ### 6.2 Triển khai Production (K3s Cluster)
 
-Ở production, đặt **`EXECUTION_BACKEND=argo`**. Celery vẫn sở hữu vòng đời tác vụ và gửi webhook sang Argo Events; build dùng Kaniko, training tạo Kubeflow `PyTorchJob`, deployment tạo model worker, còn drift chạy Evidently Workflow. Karpenter mở rộng node CPU/GPU theo nhu cầu và thu hồi khi workload kết thúc.
+Production được triển khai theo ba lớp ownership rõ ràng:
+
+- **Terraform** quản lý VPC, EC2, ALB, IAM, ACM, S3 và Secrets Manager.
+- **Ansible** chuẩn bị Ubuntu, cài K3s, operator core, External Secrets và bootstrap Argo CD.
+- **Argo CD** reconcile các resource được tham chiếu bởi root [`k8s/kustomization.yaml`](k8s/kustomization.yaml).
+
+Core platform dùng một K3s server và hai static worker. Server chạy embedded etcd, secrets encryption và snapshot định kỳ; đây vẫn là **single control-plane**, chưa phải HA. `k8s/security` (NetworkPolicy và custom PodDisruptionBudget) hiện được chủ động hoãn trong giai đoạn ổn định. Kubeflow/Karpenter cũng mặc định tắt và không được mô tả là capability đang hoạt động cho đến khi phase training được bật và kiểm thử.
+
+Ở production, Celery giữ lifecycle state trong PostgreSQL và dispatch side effect sau transaction commit. Build, deployment và drift đi qua Argo Events/Workflows. Training chỉ đi qua Kubeflow khi optional training platform đã được bật.
 
 #### Bước 1: Khởi tạo hạ tầng AWS bằng Terraform
 
 ```bash
 cd infra/
 
-# Cấu hình AWS CLI credentials
-aws configure
-
-# Khởi tạo và triển khai hạ tầng tự động
+# Xác thực AWS CLI bằng profile/session cục bộ, sau đó review plan trước apply
 terraform init
 terraform plan
 terraform apply
@@ -313,7 +317,7 @@ terraform apply
 
 - VPC với Public Subnet (Master Node) và Private Subnet (Worker Nodes).
 - EC2 Master Node (`t3.medium`) + Worker Nodes (`t3.large` × 2, tùy chỉnh trong `terraform.tfvars`).
-- Application Load Balancer (ALB) + Route53 DNS + ACM SSL Certificate.
+- Application Load Balancer (ALB) + ACM SSL Certificate; DNS public hiện được quản lý tại Cloudflare.
 - S3 Bucket lưu model artifacts và tập dữ liệu huấn luyện.
 - IAM Roles cho Worker nodes (S3 access) và GitHub Actions OIDC.
 
@@ -329,7 +333,7 @@ cp .env.example .env
 
 **2. Điền các thông tin quan trọng vào file `.env`:**
 
-- **AWS Credentials**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`
+- **AWS client configuration**: chỉ dùng khi workload thực sự không thể nhận IAM role; ưu tiên EC2 instance profile cho cluster.
 - **Cơ sở dữ liệu PostgreSQL**: `DB_USER`, `DB_PASSWORD`
 - **Harbor Registry**: `HARBOR_USERNAME`, `HARBOR_PASSWORD`, `HARBOR_GITHUB_USERNAME`, `HARBOR_GITHUB_PASSWORD`
 - **GitHub & CI/CD**: `GITHUB_REPO`, `GITHUB_TOKEN`
@@ -353,76 +357,83 @@ python scripts/push_secrets_to_aws.py
 - **`mlops/github-actions-secrets`**: Lưu thông tin cho CI/CD GitOps và ký Cosign.
 - **`mlops/production-secrets`**: Lưu toàn bộ cấu hình bảo mật cho cụm K3s (DB, Harbor, JWT, OAuth, Webhook...).
 
-#### Bước 3: Cấu hình SSH Key cho Ansible
+#### Bước 3: Chuẩn bị Ansible control host trong WSL
 
 ```bash
-# Đảm bảo SSH key đặt đúng đường dẫn
-ls ~/.ssh/aws_key
+cd /mnt/d/AI\ Models/mlops-paas-system
+python3 -m venv .venv-ansible
+source .venv-ansible/bin/activate
+pip install -r ansible/requirements-control.txt
+ansible-galaxy collection install -r ansible/requirements.yml
 
-# Nạp key vào ssh-agent (để cơ chế ProxyJump Worker nodes hoạt động an toàn)
-ssh-add ~/.ssh/aws_key
+# Private key không được commit vào repository.
+install -m 0600 /path/to/aws_key ~/.ssh/aws_key
 ```
 
-#### Bước 4: Tự động cài đặt K3s Cluster & Add-ons bằng Ansible
+Dynamic inventory đọc Terraform outputs. Worker dùng SSH `ProxyJump` qua server; Kubernetes API chỉ được quản trị qua private network/SSH tunnel.
 
-**Chỉ cần một lệnh duy nhất từ thư mục `ansible/`:**
+#### Bước 4: Triển khai K3s và core platform theo phase
+
+Chạy static validation trước khi thay đổi host:
 
 ```bash
-cd ansible/
+cd ansible
+export ANSIBLE_CONFIG=./ansible.cfg
 
-# Kiểm tra Ansible đã nhận diện đúng danh sách các node từ Terraform chưa
 ansible-inventory --graph
-
-# Chạy playbook tự động hóa cài đặt toàn bộ cụm K3s
-ansible-playbook site.yml
+ansible-playbook --syntax-check site.yml
+ansible-lint .
+kubectl kustomize --enable-helm ../k8s >/dev/null
 ```
 
-**Ansible sẽ thực hiện tuần tự:**
+Rollout theo từng phase và chạy bootstrap lần hai để xác minh idempotency:
 
-1. **`common`**: Cập nhật OS, cài đặt `curl`, `git`, `jq`, `nfs-common` trên tất cả nodes.
-2. **`k3s_master`**: Cài đặt K3s Server, thiết lập `kubeconfig`, gán node-label `workload-type=control-plane`.
-3. **`k3s_worker`**: Join tất cả Worker nodes vào cluster qua SSH ProxyJump, gán node-label `workload-type=worker`.
-4. **`helm`**: Cài đặt Helm 3 package manager trên Master node.
-5. **`k8s_addons`**: Đồng bộ thư mục `k8s/` và cài đặt EBS CSI Driver, External Secrets Operator, KEDA, ArgoCD, Argo Workflows, Prometheus + Grafana.
+```bash
+ansible-playbook site.yml --tags bootstrap
+ansible-playbook site.yml --tags bootstrap
+ansible-playbook site.yml --tags platform-core
+ansible-playbook site.yml --tags verify
+```
 
-#### Bước 5: Triển khai ArgoCD Applications (GitOps)
+Các phase hiện có:
 
-Sau khi Ansible hoàn tất, SSH vào Master node để triển khai ArgoCD Application:
+| Phase/tag | Trách nhiệm | Mặc định |
+| --- | --- | --- |
+| `preflight` | Kiểm tra WSL, Terraform inventory, SSH và rollout flags | Luôn chạy |
+| `bootstrap` | Cài K3s `v1.34.9+k3s1`, một server và hai worker | Bật |
+| `platform-core` | EBS CSI, ESO, CNPG, KEDA, Argo Workflows/Events, monitoring và Argo CD | Bật |
+| `platform-training` | Kubeflow và Karpenter cluster resources | Tắt |
+| `verify` | Xác minh node, operator và root Application | Chạy cuối |
+
+Ansible cài operator theo thứ tự phụ thuộc, áp dụng `ClusterSecretStore`, chờ repository credential được ESO đồng bộ, rồi tạo root Application `mlops-paas-system`. Không cần `kubectl apply` thủ công cho Argo CD Application hoặc Argo Workflows sau khi `platform-core` hoàn tất.
+
+#### Bước 5: Xác minh GitOps và workload
 
 ```bash
 ssh -i ~/.ssh/aws_key ubuntu@$(cd ../infra && terraform output -raw master_public_ip)
 
-# Cài đặt ArgoCD Application quản lý toàn bộ thư mục k8s/apps/
-kubectl apply -f k8s/argocd/application.yaml
-
-# Lấy mật khẩu admin ban đầu của ArgoCD
-kubectl -n argocd get secret argocd-initial-admin-secret \
-  -o jsonpath="{.data.password}" | base64 --decode
+sudo k3s kubectl get nodes -L workload-type
+sudo k3s kubectl get applications -n argocd
+sudo k3s kubectl get pods -A
+sudo k3s kubectl get clustersecretstore,externalsecret -A
+sudo k3s kubectl get clusters.postgresql.cnpg.io -A
 ```
 
-#### Bước 6: Cài đặt Kubeflow Training Operator & Karpenter GPU Autoscaling
+Không ghi mật khẩu Argo CD, token K3s, kubeconfig hoặc secret value vào log/tài liệu. Đổi mật khẩu admin ban đầu sau lần đăng nhập đầu tiên.
+
+#### Bước 6: Bật training platform khi core đã ổn định
 
 ```bash
-# Triển khai Kubeflow Training Operator (Hỗ trợ PyTorchJob CRD)
-kubectl apply -k k8s/kubeflow/
+ansible-playbook site.yml --tags platform-training \
+  -e deploy_training_platform=true
 
-# Triển khai Karpenter NodePool cho GPU Training nodes (Scale-to-Zero)
-kubectl apply -k k8s/karpenter/
+# Karpenter cần opt-in riêng; CPU NodePool phải được kiểm thử trước GPU.
+ansible-playbook site.yml --tags platform-training \
+  -e deploy_training_platform=true \
+  -e enable_karpenter=true
 ```
 
-#### Bước 7: Cài đặt Argo Workflows Event Pipeline
-
-```bash
-# Triển khai EventBus, EventSource, Sensor và các WorkflowTemplates
-kubectl apply -k k8s/argo-workflows/
-```
-
-#### Bước 8: Thiết lập dọn dẹp dung lượng S3 tự động (Harbor Garbage Collection)
-
-```bash
-# Thiết lập lịch tự động dọn layer không dùng trên S3 qua Harbor API (00:00 AM hàng ngày)
-python3 scripts/setup_harbor_schedule.py
-```
+GPU vẫn mặc định tắt. Chỉ đặt `enable_gpu_nodepool=true` sau khi AMI, NVIDIA driver, container toolkit và device plugin đã được xác minh. Karpenter NodeClass/NodePool thuộc Ansible vì chứa endpoint, instance profile và bootstrap token theo từng cluster; không thêm chúng trở lại root GitOps.
 
 ---
 
@@ -430,14 +441,15 @@ python3 scripts/setup_harbor_schedule.py
 
 | Dịch vụ              | URL Production                                | Mô tả                              |
 | -------------------- | --------------------------------------------- | ---------------------------------- |
-| **Frontend**         | <https://app.mlops-nids-nt114.id.vn>          | React AI PaaS Dashboard            |
+| **Frontend**         | <https://mlops-nids-nt114.id.vn>              | React AI PaaS Dashboard            |
 | **Control Plane**    | <https://api.mlops-nids-nt114.id.vn/api/>     | REST API của Control Plane         |
 | **MLflow Server**    | <https://mlflow.mlops-nids-nt114.id.vn>       | Model Registry & Experiment UI     |
 | **Grafana Dashboard**| <https://grafana.mlops-nids-nt114.id.vn>      | Monitoring & Observability Hub     |
 | **ArgoCD Dashboard** | <https://argocd.mlops-nids-nt114.id.vn>       | GitOps CD Management Portal        |
 | **Argo Workflow UI** | <https://workflow.mlops-nids-nt114.id.vn>     | Orchestration & Workflow UI        |
 | **Harbor Registry**  | <https://registry.mlops-nids-nt114.id.vn>     | Private Container Registry         |
-| **Redpanda Console** | <https://redpanda.mlops-nids-nt114.id.vn>     | Kafka Streaming Management Console |
+
+Frontend, Argo CD, Argo Workflows, Grafana và MLflow đi qua Cloudflare Tunnel. Control Plane và Harbor đi qua public ALB với TLS termination; Traefik chỉ tin `X-Forwarded-*` từ các Flannel gateway `/32` đã cấu hình, không bật `forwardedHeaders.insecure`.
 
 ---
 
@@ -501,7 +513,7 @@ curl -X POST https://api.mlops-nids-nt114.id.vn/{tenant_id}/models/{project_uuid
 
 1. Tạo draft qua `/api/training-jobs/`, sau đó submit qua `/{job_uuid}/submit/`.
 2. Quan sát Celery task gửi Argo webhook và workflow khởi tạo **Kubeflow PyTorchJob** trên Kubernetes.
-3. Nếu ở Production: **Karpenter** tự động provision node EC2 GPU mới trong vòng vài mươi giây. Nếu ở Local: Job chạy trực tiếp trên engine local.
+3. Nếu production training phase đã bật: Kubeflow tạo `PyTorchJob`; Karpenter chỉ provision node động khi được opt-in và đã kiểm thử. Nếu ở local, job chạy trực tiếp bằng Docker backend.
 4. Theo dõi log huấn luyện trực tiếp trên Web UI (cập nhật realtime mỗi 3 giây qua Redis).
 5. Sau khi hoàn tất, kiểm tra `model.tar.gz`, metadata bundle và MLflow run theo job; bấm **Build & Register** để tạo image và chỉ cấp immutable `ModelVersion` khi build thành công. Deployment của version training được thực hiện từ Model Evolution.
 
