@@ -6,6 +6,16 @@ resources:
 
 patches:
   - target:
+      version: v1
+      kind: Namespace
+      name: kubeflow
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: kubeflow
+  - target:
       kind: CustomResourceDefinition
     patch: |-
       - op: add

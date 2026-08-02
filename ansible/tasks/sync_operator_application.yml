@@ -1,4 +1,17 @@
 ---
+- name: "Request a hard refresh of {{ operator_application_name }}"
+  kubernetes.core.k8s:
+    state: patched
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ operator_application_name }}"
+    namespace: argocd
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    definition:
+      metadata:
+        annotations:
+          argocd.argoproj.io/refresh: hard
+
 - name: "Read {{ operator_application_name }} before adoption"
   kubernetes.core.k8s_info:
     api_version: argoproj.io/v1alpha1
@@ -7,6 +20,15 @@
     namespace: argocd
     kubeconfig: "{{ k3s_remote_kubeconfig }}"
   register: operator_application_before_adoption
+  until:
+    - operator_application_before_adoption.resources | length == 1
+    - >-
+      gitops_expected_revision is not defined or
+      operator_application_before_adoption.resources[0].status.sync.revision | default('')
+      == gitops_expected_revision
+  retries: 30
+  delay: 5
+  changed_when: false
 
 - name: "Require {{ operator_application_name }} to exist"
   ansible.builtin.assert:

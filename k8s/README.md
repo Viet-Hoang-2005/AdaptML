@@ -22,8 +22,8 @@ are not adopted by Argo CD.
 ## Foundation
 
 `mlops-prod-foundation` is the only owner of production namespaces declared in
-Git and the EBS StorageClass. Operator-created namespaces remain owned by their
-operator Application when the upstream manifest creates them.
+Git and the EBS StorageClass. Upstream operator namespace manifests are removed
+from their rendered sources so namespace ownership stays with foundation.
 
 ## Secrets
 
