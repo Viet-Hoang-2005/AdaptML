@@ -266,6 +266,10 @@
   ansible.builtin.command: >-
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
     wait ec2nodeclass/training-cpu --for=condition=Ready --timeout=300s
+  register: training_cpu_nodeclass_ready
+  retries: 30
+  delay: 10
+  until: training_cpu_nodeclass_ready.rc == 0
   changed_when: false
   when:
     - enable_karpenter | bool
@@ -275,6 +279,10 @@
   ansible.builtin.command: >-
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
     wait nodepool/mlops-paas-training-cpu --for=condition=Ready --timeout=300s
+  register: training_cpu_nodepool_ready
+  retries: 30
+  delay: 10
+  until: training_cpu_nodepool_ready.rc == 0
   changed_when: false
   when:
     - enable_karpenter | bool
@@ -287,6 +295,10 @@
   loop:
     - ec2nodeclass/training-gpu
     - nodepool/mlops-paas-training-gpu
+  register: training_gpu_capacity_ready
+  retries: 30
+  delay: 10
+  until: training_gpu_capacity_ready.rc == 0
   changed_when: false
   when:
     - enable_karpenter | bool
