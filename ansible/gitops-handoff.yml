@@ -1,0 +1,40 @@
+---
+- name: Control the production GitOps ownership handoff
+  hosts: master
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require an explicit root prune setting
+      ansible.builtin.assert:
+        that:
+          - gitops_root_prune is defined
+          - gitops_root_prune | string | lower in ['true', 'false']
+
+    - name: Set root pruning for the handoff stage
+      kubernetes.core.k8s:
+        state: patched
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        name: mlops-paas-system
+        namespace: argocd
+        kubeconfig: "{{ k3s_remote_kubeconfig }}"
+        definition:
+          spec:
+            syncPolicy:
+              automated:
+                prune: "{{ gitops_root_prune | bool }}"
+                selfHeal: true
+                allowEmpty: false
+
+    - name: Request a hard refresh of the root Application
+      kubernetes.core.k8s:
+        state: patched
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        name: mlops-paas-system
+        namespace: argocd
+        kubeconfig: "{{ k3s_remote_kubeconfig }}"
+        definition:
+          metadata:
+            annotations:
+              argocd.argoproj.io/refresh: hard
