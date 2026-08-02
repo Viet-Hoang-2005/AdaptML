@@ -3,8 +3,4 @@ kind: Kustomization
 
 resources:
   - gitops/production
-  - workloads/control-plane
-  - workloads/consumer
-  - workloads/model-server
-  - workloads/web
   - platform/edge
