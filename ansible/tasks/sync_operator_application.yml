@@ -1,0 +1,50 @@
+---
+- name: "Read {{ operator_application_name }} before adoption"
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ operator_application_name }}"
+    namespace: argocd
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: operator_application_before_adoption
+
+- name: "Require {{ operator_application_name }} to exist"
+  ansible.builtin.assert:
+    that:
+      - operator_application_before_adoption.resources | length == 1
+    fail_msg: "Argo CD Application {{ operator_application_name }} does not exist."
+
+- name: "Synchronize {{ operator_application_name }} without pruning"
+  kubernetes.core.k8s:
+    state: patched
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ operator_application_name }}"
+    namespace: argocd
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    definition:
+      operation:
+        sync:
+          prune: false
+          syncOptions:
+            - ServerSideApply=true
+            - RespectIgnoreDifferences=true
+            - ApplyOutOfSyncOnly=true
+            - FailOnSharedResource=true
+
+- name: "Wait for {{ operator_application_name }} adoption"
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ operator_application_name }}"
+    namespace: argocd
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: adopted_operator_application
+  until:
+    - adopted_operator_application.resources | length == 1
+    - adopted_operator_application.resources[0].status.sync.status | default('') == 'Synced'
+    - adopted_operator_application.resources[0].status.health.status | default('') == 'Healthy'
+    - adopted_operator_application.resources[0].operation is not defined
+  retries: 90
+  delay: 10
+  changed_when: false
