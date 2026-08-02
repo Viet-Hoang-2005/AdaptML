@@ -66,6 +66,7 @@ def main():
         )
     karpenter_node_instance_profile = tf_data.get('karpenter_node_instance_profile_name', {}).get('value')
     karpenter_interruption_queue = tf_data.get('karpenter_interruption_queue_name', {}).get('value')
+    karpenter_controller_policy = tf_data.get('karpenter_controller_policy_arn', {}).get('value')
     alb_target_group_arn = tf_data.get("alb_target_group_arn", {}).get("value")
 
     inventory = {
@@ -95,6 +96,9 @@ def main():
             "ansible_host": master_ip,
             "private_ip": master_private_ip,
             "k3s_node_name": master_host,
+            "terraform_karpenter_node_instance_profile_name": karpenter_node_instance_profile or "",
+            "terraform_karpenter_interruption_queue_name": karpenter_interruption_queue or "",
+            "terraform_karpenter_controller_policy_arn": karpenter_controller_policy or "",
         }
         if karpenter_node_instance_profile:
             inventory["_meta"]["hostvars"][master_host]["karpenter_node_instance_profile_name"] = karpenter_node_instance_profile

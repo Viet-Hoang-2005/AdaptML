@@ -16,8 +16,14 @@ from apps.training.services.jobs import (
     submit_job,
 )
 from apps.training.services.logs import training_logs
+from common.api.exceptions import ServiceUnavailable
 
 from .serializers import TrainingBuildSerializer, TrainingJobEventSerializer, TrainingJobSerializer
+
+
+def require_training_enabled():
+    if not settings.TRAINING_ENABLED:
+        raise ServiceUnavailable("Training is temporarily unavailable while the platform is being validated.")
 
 
 class TrainingJobListCreateEndpoint(generics.ListCreateAPIView):
@@ -33,6 +39,7 @@ class TrainingJobListCreateEndpoint(generics.ListCreateAPIView):
         )
 
     def perform_create(self, serializer):
+        require_training_enabled()
         project = serializer.validated_data.pop("project")
         serializer.instance = create_job(project=project, validated_data=serializer.validated_data)
 
@@ -67,6 +74,7 @@ class TrainingJobDetailEndpoint(generics.RetrieveUpdateDestroyAPIView):
 
 class TrainingJobSubmitEndpoint(APIView):
     def post(self, request, job_id):
+        require_training_enabled()
         job = submit_job(job_for_user(request.user, job_id))
         return Response(TrainingJobSerializer(job).data, status=status.HTTP_202_ACCEPTED)
 
@@ -131,6 +139,15 @@ class TrainingJobOutputsEndpoint(APIView):
 
 class TrainingRuntimeCapabilitiesEndpoint(APIView):
     def get(self, request):
+        if not settings.TRAINING_ENABLED:
+            return Response(
+                {
+                    "enabled": False,
+                    "backend": settings.TRAINING_BACKEND,
+                    "cpu_profiles": [],
+                    "accelerators": [],
+                }
+            )
         accelerators = [{"type": "none", "counts": [0]}]
         if settings.TRAINING_GPU_ENABLED:
             accelerators.append(
@@ -138,6 +155,7 @@ class TrainingRuntimeCapabilitiesEndpoint(APIView):
             )
         return Response(
             {
+                "enabled": True,
                 "backend": settings.TRAINING_BACKEND,
                 "cpu_profiles": [
                     {"id": "small", "vcpu": 1, "memory_mb": 2048},

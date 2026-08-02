@@ -64,6 +64,16 @@
     - role: platform_training
       when: deploy_training_platform | bool
 
+- name: Verify the optional training platform and smoke workloads
+  hosts: master
+  become: true
+  gather_facts: false
+  tags: [platform-training, verify]
+  roles:
+    - role: verify
+      verify_scope: training
+      when: deploy_training_platform | bool
+
 - name: Verify the reconciled platform
   hosts: master
   become: true

@@ -3,6 +3,8 @@ kind: NodePool
 metadata:
   name: mlops-paas-training-cpu
 spec:
+  limits:
+    nodes: {{ karpenter_cpu_node_limit }}
   template:
     metadata:
       labels:
@@ -25,13 +27,14 @@ spec:
 {% for instance_type in karpenter_cpu_instance_types %}
             - "{{ instance_type }}"
 {% endfor %}
+      expireAfter: {{ karpenter_node_expire_after | quote }}
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
         name: training-cpu
   disruption:
     consolidationPolicy: WhenEmpty
-    consolidateAfter: 30s
+    consolidateAfter: {{ karpenter_consolidate_after | quote }}
 {% if enable_gpu_nodepool | bool %}
 ---
 apiVersion: karpenter.sh/v1
@@ -39,6 +42,8 @@ kind: NodePool
 metadata:
   name: mlops-paas-training-gpu
 spec:
+  limits:
+    nodes: {{ karpenter_gpu_node_limit }}
   template:
     metadata:
       labels:
@@ -69,9 +74,10 @@ spec:
         - key: nvidia.com/gpu
           value: "true"
           effect: NoSchedule
+      expireAfter: {{ karpenter_node_expire_after | quote }}
   disruption:
     consolidationPolicy: WhenEmpty
-    consolidateAfter: 30s
+    consolidateAfter: {{ karpenter_consolidate_after | quote }}
 {% endif %}
 ---
 apiVersion: karpenter.k8s.aws/v1

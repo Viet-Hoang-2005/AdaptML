@@ -207,6 +207,8 @@ export const trainingEn = {
       gpuCount: 'GPU count', maxRuntime: 'Maximum runtime (seconds)', console: 'Training Console',
       placeholder: 'Run training to stream lifecycle logs here.', train: 'Train', retrain: 'Re-Train',
       stop: 'Stop', model: 'Model', compute: 'Compute', running: 'Training running', status: 'Current status: {{status}}',
+      unavailableTitle: 'Training is temporarily unavailable',
+      unavailableDescription: 'The training platform is being validated. Creating and submitting training jobs is disabled until the rollout is complete.',
     },
   },
   createJob: {

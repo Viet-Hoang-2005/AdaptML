@@ -7,6 +7,7 @@ import type { TrainingAcceleratorType } from "@/features/training/types";
 import { useRuntimeLogStream } from "@/shared/hooks/useRuntimeLogStream";
 import { Button } from "@/shared/components/Button";
 import { Slider } from "@/shared/components/Slider";
+import { StatePanel } from "@/shared/components/StatePanel";
 import { StepTitle } from "@/shared/components/StepTitle";
 import {
   TerminalActionButton,
@@ -37,6 +38,7 @@ export default function ExecutionTrainingJobPage() {
     flow.job &&
     ["pending", "queued", "uploading", "running"].includes(flow.job.status);
   const profiles = flow.capabilities?.cpu_profiles ?? [];
+  const trainingEnabled = flow.capabilities?.enabled ?? false;
   const accelerators = flow.capabilities?.accelerators ?? [
     { type: "none" as const, counts: [0] },
   ];
@@ -59,6 +61,26 @@ export default function ExecutionTrainingJobPage() {
       void flow.refreshJob(stream.status);
     }
   }, [flow, stream.status]);
+
+  if (!trainingEnabled) {
+    return (
+      <>
+        <StatePanel
+          title={t("createFlow.execution.unavailableTitle")}
+          description={t("createFlow.execution.unavailableDescription")}
+        />
+        <footer className="grid gap-3 pb-6">
+          <Button
+            variant="secondary"
+            icon={<ArrowLeft className="h-4 w-4" />}
+            onClick={() => void flow.goToStep(2)}
+          >
+            {t("createFlow.actions.back")}
+          </Button>
+        </footer>
+      </>
+    );
+  }
 
   return (
     <>

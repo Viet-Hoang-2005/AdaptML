@@ -13,13 +13,13 @@ traefik_forwarded_headers_trusted_ips:
   - "10.42.1.0/32"
   - "10.42.2.0/32"
 
-# Rollout phases are deliberately independent. Core is safe by default; the
-# training plane and elastic capacity require explicit opt-in.
+# Rollout phases are deliberately independent. This production rollout enables
+# the training infrastructure, but the tenant-facing feature stays disabled.
 bootstrap_k3s_cluster: true
 deploy_core_platform: true
-deploy_training_platform: false
-enable_karpenter: false
-enable_gpu_nodepool: false
+deploy_training_platform: true
+enable_karpenter: true
+enable_gpu_nodepool: true
 
 # Karpenter/K3s self-managed bootstrap defaults. These values match the
 # Terraform defaults and can be overridden from inventory/group_vars.
@@ -35,14 +35,27 @@ karpenter_cpu_instance_types:
   - c6i.4xlarge
 karpenter_gpu_instance_types:
   - g4dn.xlarge
-  - g4dn.12xlarge
   - g5.xlarge
-  - g5.12xlarge
+karpenter_cpu_node_limit: 1
+karpenter_gpu_node_limit: 1
+karpenter_consolidate_after: "5m"
+karpenter_node_expire_after: "24h"
+
+# The smoke jobs use a pinned public CUDA image. They never receive tenant
+# credentials, application Secrets, or run in the tenant workload namespace.
+training_smoke_namespace: "ansible-training-smoke"
+training_smoke_timeout: "20m"
+training_smoke_node_cleanup_timeout: "15m"
+training_smoke_image: "nvidia/cuda@sha256:001469ea0f3dec85a1ca929aeea3b58ae369d4c11228b10aec1f642bb6ca7a6f"
 
 # Operator versions are intentionally configurable so a new cluster can pin the
 # exact versions used in production without editing shell scripts.
 karpenter_version: "1.13.0"
-kubeflow_training_operator_version: "v1.7.0"
+kubeflow_training_operator_version: "v1.9.2"
+kubeflow_training_operator_crds_kustomize_path: "github.com/kubeflow/trainer/manifests/base/crds"
+kubeflow_training_operator_kustomize_path: "github.com/kubeflow/trainer/manifests/overlays/standalone"
+nvidia_gpu_operator_chart_version: "v26.3.3"
+nfd_chart_version: "0.18.3"
 aws_ebs_csi_driver_chart_version: "2.40.1"
 external_secrets_chart_version: "2.6.0"
 cnpg_operator_chart_version: "0.24.0"

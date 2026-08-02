@@ -207,3 +207,7 @@
   when: verify_scope == 'platform'
   vars:
     root_kustomization_text: "{{ lookup('ansible.builtin.file', playbook_dir + '/../k8s/kustomization.yaml') }}"
+
+- name: Verify the optional training platform
+  ansible.builtin.import_tasks: training.yml
+  when: verify_scope == 'training'

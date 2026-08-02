@@ -116,6 +116,7 @@ export interface TrainingJobFormValues {
 }
 
 export interface TrainingRuntimeCapabilities {
+  enabled: boolean;
   backend: 'docker' | 'argo';
   cpu_profiles: Array<{ id: string; vcpu: number; memory_mb: number }>;
   accelerators: Array<{ type: TrainingAcceleratorType; counts: number[] }>;

@@ -155,6 +155,12 @@ BUILD_BACKEND = execution_backend_override("BUILD_BACKEND")
 DEPLOYMENT_BACKEND = execution_backend_override("DEPLOYMENT_BACKEND")
 TRAINING_BACKEND = execution_backend_override("TRAINING_BACKEND")
 DRIFT_BACKEND = execution_backend_override("DRIFT_BACKEND")
+TRAINING_ENABLED = str(env("TRAINING_ENABLED", "true")).lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 TRAINING_GPU_ENABLED = str(env("TRAINING_GPU_ENABLED", "true" if TRAINING_BACKEND == "argo" else "false")).lower() in {
     "1",
     "true",

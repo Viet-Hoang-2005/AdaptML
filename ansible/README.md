@@ -40,7 +40,7 @@ Terraform apply on your behalf.
 | `preflight` | Validate Linux, Terraform inventory, SSH key and rollout flags | Always |
 | `bootstrap` | Prepare Ubuntu, install K3s `v1.34.9+k3s1`, join static workers | Enabled |
 | `platform-core` | Install pinned operators, bootstrap External Secrets and Argo CD | Enabled |
-| `platform-training` | Install Kubeflow and optionally Karpenter capacity | Disabled |
+| `platform-training` | Install Kubeflow, Karpenter, GPU Operator and smoke tests | Explicit |
 | `verify` | Validate nodes, bundled components and root GitOps health | Explicit/final |
 
 K3s keeps its bundled Traefik, ServiceLB and local-path provisioner during this
@@ -100,16 +100,40 @@ ansible-playbook site.yml --tags verify
 
 After the core platform is stable, enable training explicitly:
 
+The training platform is deployed only through Ansible and remains closed to
+tenant traffic after rollout. It installs the Kubeflow Training Operator
+(PyTorchJob V1), Karpenter, NVIDIA GPU Operator, and Karpenter CPU/GPU capacity
+objects. It also executes disposable CPU and GPU PyTorchJob smoke tests in
+`ansible-training-smoke`.
+
+Run the production rollout from WSL, copying the configuration to the native
+WSL filesystem (Ansible rejects configuration stored directly on `/mnt/d`):
+
 ```bash
-ansible-playbook site.yml --tags platform-training \
-  -e deploy_training_platform=true
+cd /mnt/d/AI\ Models/mlops-paas-system/ansible
+export ANSIBLE_CONFIG="$(mktemp /tmp/mlops-paas-ansible.XXXXXX.cfg)"
+trap 'rm -f "$ANSIBLE_CONFIG"' EXIT
+install -m 0600 ansible.cfg "$ANSIBLE_CONFIG"
+ansible-playbook -i inventory/terraform.py site.yml \
+  --tags preflight,platform-training,verify
 ```
 
-Karpenter remains off unless both `deploy_training_platform=true` and
-`enable_karpenter=true` are provided. The CPU NodePool is created first. GPU
-resources require the additional `enable_gpu_nodepool=true` flag and must not be
-advertised until the AMI, NVIDIA driver, container toolkit and device plugin are
-validated.
+The rollout requires Terraform outputs for the Karpenter instance profile,
+interruption queue, and controller policy. Each Karpenter NodePool is capped at
+one node and permits Spot first with On-Demand fallback. The smoke namespace is
+always removed, then Ansible waits for the temporary Karpenter nodes to
+consolidate. It never uses `user-jobs` or application secrets.
+
+`TRAINING_ENABLED=false` remains in the Control Plane ConfigMap. The API returns
+HTTP 503 for training submission and the UI hides training execution controls,
+even while the platform components are installed. Do not set an Argo training
+webhook URL or enable the feature until Sensor mapping, EventSource
+authentication, and workload-isolation controls have been reviewed.
+
+For rollback, first delete smoke resources and wait until no `PyTorchJob` is
+running. Disable/delete Karpenter NodePools, let empty training nodes drain, then
+remove Karpenter. Remove the GPU Operator before the Training Operator; do not
+change core GitOps workloads during this process.
 
 ## Access and artifacts
 
