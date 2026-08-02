@@ -1,0 +1,81 @@
+---
+- name: Retire the obsolete platform operator parent without cascading
+  hosts: master
+  become: true
+  gather_facts: false
+  vars:
+    operator_child_applications:
+      - platform-kubeflow-training
+      - platform-karpenter-crds
+      - platform-karpenter
+      - platform-node-feature-discovery
+      - platform-gpu-operator
+  tasks:
+    - name: Read operator child Applications
+      kubernetes.core.k8s_info:
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        name: "{{ item }}"
+        namespace: argocd
+        kubeconfig: "{{ k3s_remote_kubeconfig }}"
+      loop: "{{ operator_child_applications }}"
+      register: operator_children_before_parent_retirement
+
+    - name: Require every operator child to be synchronized and healthy
+      ansible.builtin.assert:
+        that:
+          - item.resources | length == 1
+          - item.resources[0].status.sync.status | default('') == 'Synced'
+          - item.resources[0].status.health.status | default('') == 'Healthy'
+          - item.resources[0].operation is not defined
+          - item.resources[0].metadata.ownerReferences | default([]) | length == 0
+        fail_msg: >-
+          Refusing to retire platform-operators while child {{ item.item }} is
+          missing, unhealthy, unsynchronized, operating, or owner-referenced.
+      loop: "{{ operator_children_before_parent_retirement.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read the obsolete operator parent
+      kubernetes.core.k8s_info:
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        name: platform-operators
+        namespace: argocd
+        kubeconfig: "{{ k3s_remote_kubeconfig }}"
+      register: obsolete_operator_parent
+
+    - name: Require a non-cascading manual parent
+      ansible.builtin.assert:
+        that:
+          - obsolete_operator_parent.resources | length == 1
+          - obsolete_operator_parent.resources[0].spec.syncPolicy.automated is not defined
+          - obsolete_operator_parent.resources[0].metadata.finalizers | default([]) | length == 0
+          - obsolete_operator_parent.resources[0].operation is not defined
+        fail_msg: >-
+          Refusing to delete platform-operators unless it is manual, idle, and
+          has no Argo CD resource finalizer.
+
+    - name: Delete only the obsolete parent Application
+      kubernetes.core.k8s:
+        state: absent
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        name: platform-operators
+        namespace: argocd
+        kubeconfig: "{{ k3s_remote_kubeconfig }}"
+        wait: true
+        wait_timeout: 60
+
+    - name: Confirm the obsolete parent is absent
+      kubernetes.core.k8s_info:
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        name: platform-operators
+        namespace: argocd
+        kubeconfig: "{{ k3s_remote_kubeconfig }}"
+      register: retired_operator_parent
+      until: retired_operator_parent.resources | length == 0
+      retries: 12
+      delay: 5
+      changed_when: false
