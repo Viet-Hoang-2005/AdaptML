@@ -31,14 +31,15 @@ patches:
         path: /metadata/labels/mlops-paas.io~1environment
         value: production
       - op: add
-        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
-        value: "0"
-      - op: add
         path: /spec/revisionHistoryLimit
         value: 10
       - op: add
         path: /spec/syncPolicy
         value:
+          automated:
+            prune: true
+            selfHeal: true
+            allowEmpty: false
           syncOptions:
             - ApplyOutOfSyncOnly=true
             - ServerSideApply=true

@@ -29,7 +29,7 @@ spec:
   syncPolicy:
     automated:
       selfHeal: true
-      prune: false
+      prune: true
       allowEmpty: false
     syncOptions:
       - ApplyOutOfSyncOnly=true
