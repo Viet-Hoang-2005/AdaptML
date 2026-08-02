@@ -1,4 +1,17 @@
 ---
+- name: "Request a hard refresh of {{ gitops_application_name }}"
+  kubernetes.core.k8s:
+    state: patched
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ gitops_application_name }}"
+    namespace: argocd
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    definition:
+      metadata:
+        annotations:
+          argocd.argoproj.io/refresh: hard
+
 - name: "Read {{ gitops_application_name }} before adoption"
   kubernetes.core.k8s_info:
     api_version: argoproj.io/v1alpha1
@@ -7,6 +20,15 @@
     namespace: argocd
     kubeconfig: "{{ k3s_remote_kubeconfig }}"
   register: gitops_application_before_adoption
+  until:
+    - gitops_application_before_adoption.resources | length == 1
+    - >-
+      gitops_expected_revision is not defined or
+      gitops_application_before_adoption.resources[0].status.sync.revision | default('')
+      == gitops_expected_revision
+  retries: 30
+  delay: 5
+  changed_when: false
 
 - name: "Require {{ gitops_application_name }} to be a manual child Application"
   ansible.builtin.assert:
@@ -27,6 +49,7 @@
       {{ gitops_resource_identity.kind }}/{{
         gitops_resource_identity.namespace | default('cluster')
       }}/{{ gitops_resource_identity.name }}
+  when: gitops_transfer_tracking | bool
 
 - name: "Synchronize {{ gitops_application_name }} without pruning"
   kubernetes.core.k8s:

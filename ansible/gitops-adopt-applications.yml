@@ -5,6 +5,7 @@
   gather_facts: false
   vars:
     gitops_previous_application_name: mlops-paas-system
+    gitops_transfer_tracking: true
   tasks:
     - name: Normalize the requested child Application names
       ansible.builtin.set_fact:
