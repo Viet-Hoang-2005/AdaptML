@@ -5,6 +5,8 @@ metadata:
   namespace: argocd
   labels:
     argocd.argoproj.io/secret-type: repository
+    app.kubernetes.io/part-of: mlops-paas
+    mlops-paas.io/environment: production
 stringData:
   type: helm
   name: karpenter-public-oci
@@ -18,6 +20,8 @@ metadata:
   namespace: argocd
   labels:
     argocd.argoproj.io/secret-type: repository
+    app.kubernetes.io/part-of: mlops-paas
+    mlops-paas.io/environment: production
 stringData:
   type: helm
   name: nfd-public-oci

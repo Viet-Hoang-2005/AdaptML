@@ -16,6 +16,7 @@ resources:
   - consumer.yaml
   - model-server.yaml
   - web.yaml
+  - operators
 
 patches:
   - target:

@@ -5,3 +5,4 @@ resources:
   - platform.yaml
   - execution.yaml
   - workloads.yaml
+  - operators.yaml

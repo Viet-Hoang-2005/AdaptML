@@ -6,6 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: mlops-paas
     mlops-paas.io/environment: production
+    mlops-paas.io/plane: operator
 spec:
   description: Pinned training-platform operators for the in-cluster K3s environment.
   sourceRepos:

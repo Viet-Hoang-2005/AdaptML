@@ -6,6 +6,8 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-11"
   labels:
+    app.kubernetes.io/part-of: mlops-paas
+    mlops-paas.io/environment: production
     mlops-paas.io/plane: operator
     mlops-paas.io/component: karpenter-crds
 spec:
