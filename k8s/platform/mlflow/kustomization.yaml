@@ -9,4 +9,4 @@ resources:
 images:
 - name: mlops-paas-mlflow
   newName: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-mlflow
-  newTag: 375afde3ae576f56733e93b52b2d27fb0faed48d
+  newTag: 72750ebd637720697d5d47d82e4acabd825d9dfe
