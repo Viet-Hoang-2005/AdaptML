@@ -13,9 +13,20 @@
     that:
       - gitops_application_before_adoption.resources | length == 1
       - gitops_application_before_adoption.resources[0].spec.syncPolicy.automated is not defined
+      - gitops_application_before_adoption.resources[0].status.resources | default([]) | length > 0
     fail_msg: >-
       Argo CD Application {{ gitops_application_name }} must exist and remain
       manual during ownership adoption.
+
+- name: "Transfer tracking metadata to {{ gitops_application_name }}"
+  ansible.builtin.include_tasks: transfer_gitops_resource_tracking.yml
+  loop: "{{ gitops_application_before_adoption.resources[0].status.resources }}"
+  loop_control:
+    loop_var: gitops_resource_identity
+    label: >-
+      {{ gitops_resource_identity.kind }}/{{
+        gitops_resource_identity.namespace | default('cluster')
+      }}/{{ gitops_resource_identity.name }}
 
 - name: "Synchronize {{ gitops_application_name }} without pruning"
   kubernetes.core.k8s:
@@ -55,4 +66,3 @@
   retries: 90
   delay: 10
   changed_when: false
-
