@@ -3,8 +3,6 @@ kind: Kustomization
 
 resources:
   - gitops/production
-  - platform/foundation
-  - platform/secrets
   - platform/data/postgres
   - platform/data/redis
   - platform/data/redpanda

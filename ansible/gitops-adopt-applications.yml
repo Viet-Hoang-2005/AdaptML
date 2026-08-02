@@ -1,0 +1,23 @@
+---
+- name: Adopt production resources into Argo CD child Applications
+  hosts: master
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require an explicit list of child Applications
+      ansible.builtin.assert:
+        that:
+          - gitops_adopt_applications is defined
+          - gitops_adopt_applications is sequence
+          - gitops_adopt_applications is not string
+          - gitops_adopt_applications | length > 0
+        fail_msg: >-
+          Pass gitops_adopt_applications as a non-empty list. Adoption never
+          enables automated sync or pruning.
+
+    - name: Adopt each child Application in the requested order
+      ansible.builtin.include_tasks: tasks/sync_gitops_application.yml
+      loop: "{{ gitops_adopt_applications }}"
+      loop_control:
+        loop_var: gitops_application_name
+
