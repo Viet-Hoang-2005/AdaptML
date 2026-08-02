@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: mlops-workloads
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: mlops-paas
+    mlops-paas.io/environment: production
+spec:
+  description: Static production workloads in the default namespace.
+  sourceRepos:
+    - https://github.com/Viet-Hoang-2005/MLOps-paas-system.git
+  destinations:
+    - namespace: default
+      server: https://kubernetes.default.svc
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: keda.sh
+      kind: ScaledObject
+  orphanedResources:
+    warn: true

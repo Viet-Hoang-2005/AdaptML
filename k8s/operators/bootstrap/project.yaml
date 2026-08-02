@@ -3,6 +3,9 @@ kind: AppProject
 metadata:
   name: platform-operators
   namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: mlops-paas
+    mlops-paas.io/environment: production
 spec:
   description: Pinned training-platform operators for the in-cluster K3s environment.
   sourceRepos:

@@ -1,8 +1,9 @@
 # Platform services
 
-Root/platform manifests cover PostgreSQL/CloudNativePG resources, Redis,
+Service/domain child Applications cover PostgreSQL/CloudNativePG, Redis,
 Redpanda, MLflow, Harbor, monitoring, Cloudflare, storage, health, workflows,
-and application workloads. Karpenter NodeClass/NodePool are not root-owned.
+and application workloads. The root Application owns only GitOps control
+resources. Karpenter NodeClass/NodePool are not GitOps-owned.
 
 Operators/controllers may be installed first by Ansible:
 
@@ -13,9 +14,9 @@ Operators/controllers may be installed first by Ansible:
 - Monitoring stack.
 - Argo CD.
 
-Kubeflow and Karpenter belong to the optional Ansible training phase. CPU
-capacity comes before GPU capacity; the GPU NodePool must remain disabled until
-the complete NVIDIA runtime stack is verified.
+Kubeflow Training Operator, Karpenter CRD/controller, NFD and GPU Operator are
+Argo CD child Applications. Ansible still supplies cluster-specific Karpenter
+runtime settings and capacity resources. CPU capacity comes before GPU capacity.
 
 Confirm CRDs/controllers exist before applying custom resources. Harbor is reconciled through its GitOps directory once referenced by root. Cloudflare exposes selected low-bandwidth/private UIs; do not assume it is suitable for large model uploads or registry pushes.
 

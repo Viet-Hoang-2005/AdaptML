@@ -1,9 +1,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Compatibility shim for the existing platform-operators parent during the
+# non-pruning ownership handoff. Removed after the root Application adopts the
+# operator AppProject, repositories and child Applications.
 resources:
   - project.yaml
-  - namespaces.yaml
   - repositories.yaml
   - kubeflow-training.application.yaml
   - karpenter-crds.application.yaml

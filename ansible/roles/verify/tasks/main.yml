@@ -202,8 +202,8 @@
 - name: Verify security hardening resources remain intentionally deferred
   ansible.builtin.assert:
     that:
-      - root_kustomization_text is not search('(^|\n)\s*-\s*security\s*($|\n)')
-    fail_msg: k8s/security must remain outside root GitOps during this rollout phase.
+      - root_kustomization_text is not search('deferred/security')
+    fail_msg: k8s/deferred/security must remain outside root GitOps during this rollout phase.
   when: verify_scope == 'platform'
   vars:
     root_kustomization_text: "{{ lookup('ansible.builtin.file', playbook_dir + '/../k8s/kustomization.yaml') }}"

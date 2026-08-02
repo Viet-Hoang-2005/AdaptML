@@ -150,25 +150,6 @@
   no_log: true
   when: enable_karpenter | bool
 
-- name: Bootstrap the Argo CD platform-operators parent application
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    definition: "{{ lookup('ansible.builtin.file', playbook_dir + '/../k8s/argocd/platform-operators.yaml') | from_yaml }}"
-
-- name: Require the Argo CD platform-operators parent application
-  kubernetes.core.k8s_info:
-    api_version: argoproj.io/v1alpha1
-    kind: Application
-    name: "{{ platform_operators_application_name }}"
-    namespace: argocd
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-  register: platform_operators_application
-  until: platform_operators_application.resources | length == 1
-  retries: 12
-  delay: 5
-  changed_when: false
-
 - name: Install Karpenter CRDs
   kubernetes.core.helm:
     name: karpenter-crd

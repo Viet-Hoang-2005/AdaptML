@@ -7,7 +7,7 @@ Ansible owns host and cluster bootstrap through roles:
 - `k3s_worker`: additional nodes joining the cluster.
 - `helm`: pinned Helm client.
 - `platform_core`: pinned operators, External Secrets, and root Argo CD bootstrap.
-- `platform_training`: bootstrap the Argo CD training-operator parent application,
+- `platform_training`: wait for root-owned training operator child Applications,
   maintain cluster-specific Karpenter runtime settings and render capacity resources.
 - `verify`: bootstrap and reconciled-platform assertions.
 
@@ -23,8 +23,9 @@ committed source; the WSL key must be `~/.ssh/aws_key` with mode `0600`.
 Terraform owns AWS primitives; Ansible owns host bootstrap, the K3s agent-token
 secret, Karpenter runtime endpoint settings and cluster-specific capacity
 resources. Argo CD owns Kubeflow Training Operator, Karpenter CRD/controller,
-Node Feature Discovery and NVIDIA GPU Operator through the `platform-operators`
-parent Application. Do not add Karpenter NodeClass/NodePool back to root GitOps.
+Node Feature Discovery and NVIDIA GPU Operator through the unified
+`mlops-paas-system` app-of-apps root. Do not add Karpenter NodeClass/NodePool
+back to GitOps.
 
 Ansible also owns the bundled Traefik `HelmChartConfig`. Public TLS terminates
 at the ALB, while K3s ServiceLB with `externalTrafficPolicy: Cluster` presents

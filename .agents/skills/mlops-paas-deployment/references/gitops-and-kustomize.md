@@ -1,22 +1,19 @@
 # GitOps and Kustomize
 
-- Argo CD bootstraps repository synchronization and Applications.
-- Root `k8s/kustomization.yaml` composes platform directories and the application production overlay.
-- `k8s/apps/base` defines shared workloads; `k8s/apps/production` applies production changes.
-- Argo CD bootstrap resources under `k8s/argocd` are separate from ordinary root reconciliation unless explicitly referenced.
+- Ansible bootstraps repository credentials and the `mlops-paas-system` root Application.
+- Root `k8s/kustomization.yaml` renders only the production GitOps control tree after migration.
+- Explicit child Applications under `k8s/gitops/production` own service/domain Kustomizations.
+- Static workloads live under `k8s/workloads`; platform, execution and operator resources have separate ownership paths.
 
 ## Current topology caveats
 
-- Inspect the root entry for the production app overlay; a descriptive suffix/comment embedded as path text may make it invalid.
-- `k8s/security/` contains policies but is not currently referenced by the root Kustomization.
-- The optional training operators are reconciled by Argo CD child Applications
-  beneath the `platform-operators` parent, which Ansible bootstraps after core
-  GitOps is healthy. They are intentionally not part of the root application.
+- `k8s/deferred/security/` contains inactive policies and is intentionally outside every Application source.
+- Training operators are child Applications of the unified production root and retain the `platform-*` names.
 - Karpenter NodeClass and NodePool are rendered by Ansible and intentionally
   excluded from GitOps because endpoint, instance profile, token, and user data
   are cluster-specific. Argo ignores only the Karpenter controller runtime
   endpoint/name/queue fields that Ansible injects.
-- `k8s/security/` remains intentionally excluded during the current stability
+- `k8s/deferred/security/` remains intentionally excluded during the current stability
   phase; do not describe its NetworkPolicies or custom PDBs as active.
 
 Do not silently claim an unreferenced manifest is active. Fix ownership/reconciliation explicitly and validate rendered output.

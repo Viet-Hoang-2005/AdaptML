@@ -3,8 +3,20 @@ kind: Application
 metadata:
   name: platform-karpenter-crds
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-11"
+  labels:
+    mlops-paas.io/plane: operator
+    mlops-paas.io/component: karpenter-crds
 spec:
   project: platform-operators
+  info:
+    - name: Owner
+      value: Platform Engineering
+    - name: Source
+      value: public.ecr.aws/karpenter/karpenter-crd@1.13.0
+    - name: Runbook
+      value: https://github.com/Viet-Hoang-2005/MLOps-paas-system/blob/main/k8s/README.md#operators
   source:
     repoURL: public.ecr.aws/karpenter
     chart: karpenter-crd

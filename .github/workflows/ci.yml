@@ -356,8 +356,9 @@ jobs:
           sudo mv kubeconform /usr/local/bin/
       - name: Validate K8s Manifests
         run: |
-          echo "Building Kustomize to check syntax..."
-          for target in k8s k8s/operators/bootstrap k8s/operators/kubeflow-training; do
+          echo "Building every Kustomize package to check syntax..."
+          mapfile -t targets < <(find k8s -name kustomization.yaml -printf '%h\n' | sort -u)
+          for target in "${targets[@]}"; do
             output="$(echo "$target" | tr '/' '-')-manifest.yaml"
             for i in 1 2 3; do
               kustomize build --enable-helm "$target" > "$output" && break || sleep 10
@@ -369,6 +370,7 @@ jobs:
             echo "Validating $target with Kubeconform..."
             kubeconform -ignore-missing-schemas -summary "$output"
           done
+          python scripts/validate_gitops_layout.py
 
   build-and-scan:
     name: "Build & Scan (${{ matrix.target.name }})"
