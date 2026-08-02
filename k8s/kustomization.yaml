@@ -3,9 +3,6 @@ kind: Kustomization
 
 resources:
   - gitops/production
-  - platform/data/postgres
-  - platform/data/redis
-  - platform/data/redpanda
   - platform/registry/harbor
   - platform/mlflow
   - platform/observability
