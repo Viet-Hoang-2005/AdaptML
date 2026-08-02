@@ -3,7 +3,7 @@
 - Ansible bootstraps repository credentials and the `mlops-paas-system` root Application.
 - Root `k8s/kustomization.yaml` renders only the production GitOps control tree after migration.
 - Explicit child Applications under `k8s/gitops/production` own service/domain Kustomizations.
-- Static workloads live under `k8s/workloads`; platform, execution and operator resources have separate ownership paths.
+- Static workload manifests live under `k8s/workloads/base`; Argo CD reconciles only environment overlays such as `k8s/workloads/overlays/production`. Platform, execution and operator resources have separate ownership paths.
 
 ## Current topology caveats
 

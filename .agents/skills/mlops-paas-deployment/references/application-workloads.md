@@ -7,6 +7,12 @@ The application base contains:
 - Consumer.
 - model-server inference gateway.
 
+Environment-neutral manifests and logical image names live under
+`k8s/workloads/base/<service>`. Argo CD Applications point to the independent
+`k8s/workloads/overlays/production/<service>` packages. Production image
+promotion updates only each overlay's Git SHA tag; never write registry or
+environment-specific image values into base.
+
 Dynamic model workers are created by deployment workflows, not a fixed per-model Deployment. Training jobs run in `user-jobs`.
 
 For each workload verify:

@@ -199,19 +199,19 @@ jobs:
           
           # 1. Promote each independently reconciled workload.
           if [ "${{ needs.detect-changes.outputs.frontend }}" == "true" ]; then
-            (cd k8s/workloads/web && kustomize edit set image mlops-paas-web=$REG/mlops-paas-web:$SHA)
+            (cd k8s/workloads/overlays/production/web && kustomize edit set image mlops-paas-web=$REG/mlops-paas-web:$SHA)
           fi
           
           if [ "${{ needs.detect-changes.outputs.control_plane }}" == "true" ]; then
-            (cd k8s/workloads/control-plane && kustomize edit set image mlops-paas-control-plane=$REG/mlops-paas-control-plane:$SHA)
+            (cd k8s/workloads/overlays/production/control-plane && kustomize edit set image mlops-paas-control-plane=$REG/mlops-paas-control-plane:$SHA)
           fi
           
           if [ "${{ needs.detect-changes.outputs.consumer }}" == "true" ]; then
-            (cd k8s/workloads/consumer && kustomize edit set image mlops-paas-consumer=$REG/mlops-paas-consumer:$SHA)
+            (cd k8s/workloads/overlays/production/consumer && kustomize edit set image mlops-paas-consumer=$REG/mlops-paas-consumer:$SHA)
           fi
 
           if [ "${{ needs.detect-changes.outputs.model_server }}" == "true" ]; then
-            (cd k8s/workloads/model-server && kustomize edit set image mlops-paas-model-server=$REG/mlops-paas-model-server:$SHA)
+            (cd k8s/workloads/overlays/production/model-server && kustomize edit set image mlops-paas-model-server=$REG/mlops-paas-model-server:$SHA)
           fi
           
           if [ "${{ needs.detect-changes.outputs.mlflow }}" == "true" ]; then

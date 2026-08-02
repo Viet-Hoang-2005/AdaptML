@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render Git-backed Argo CD applications and reject duplicate ownership."""
+"""Validate the production GitOps layout, rendering, and resource ownership."""
 
 from __future__ import annotations
 
@@ -26,6 +26,12 @@ LEGACY_K8S_PATHS = (
     "k8s/harbor",
     "k8s/operators/bootstrap",
 )
+WORKLOAD_APPLICATIONS = {
+    "mlops-prod-control-plane": ("control-plane", "mlops-paas-control-plane"),
+    "mlops-prod-consumer": ("consumer", "mlops-paas-consumer"),
+    "mlops-prod-model-server": ("model-server", "mlops-paas-model-server"),
+    "mlops-prod-web": ("web", "mlops-paas-web"),
+}
 
 
 def render(repo_root: Path, path: str) -> list[dict]:
@@ -114,6 +120,48 @@ def canonical(resource: dict) -> str:
     return json.dumps(normalized(resource), sort_keys=True, separators=(",", ":"))
 
 
+def validate_workload_layout(repo_root: Path, applications: list[dict]) -> list[str]:
+    applications_by_name = {
+        (application.get("metadata") or {}).get("name", ""): application
+        for application in applications
+    }
+    errors: list[str] = []
+
+    for application_name, (service, logical_image) in WORKLOAD_APPLICATIONS.items():
+        expected_path = f"k8s/workloads/overlays/production/{service}"
+        application = applications_by_name.get(application_name)
+        source_path = ((application or {}).get("spec") or {}).get("source", {}).get("path")
+        if source_path != expected_path:
+            errors.append(
+                f"{application_name} source must be {expected_path}, found {source_path or 'missing'}"
+            )
+
+        base_resources = render(repo_root, f"k8s/workloads/base/{service}")
+        application_images: list[str] = []
+        for resource in base_resources:
+            pod_spec = (
+                (resource.get("spec") or {})
+                .get("template", {})
+                .get("spec", {})
+            )
+            for container_type in ("initContainers", "containers"):
+                application_images.extend(
+                    container.get("image", "")
+                    for container in pod_spec.get(container_type, [])
+                    if container.get("image", "").split(":", 1)[0] == logical_image
+                )
+
+        if not application_images:
+            errors.append(f"{service} base does not reference logical image {logical_image}")
+        for image in application_images:
+            if image != logical_image:
+                errors.append(
+                    f"{service} base image must not contain a tag or digest: {image}"
+                )
+
+    return errors
+
+
 def validate(repo_root: Path, baseline: Path | None) -> int:
     root_resources = render(repo_root, "k8s")
     applications = [
@@ -121,6 +169,12 @@ def validate(repo_root: Path, baseline: Path | None) -> int:
         for resource in root_resources
         if resource.get("kind") == "Application"
     ]
+
+    layout_errors = validate_workload_layout(repo_root, applications)
+    if layout_errors:
+        for error in layout_errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        return 1
 
     ownership: dict[tuple[str, str, str, str], str] = {}
     rendered: dict[tuple[str, str, str, str], dict] = {}

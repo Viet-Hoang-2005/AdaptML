@@ -38,7 +38,7 @@ spec:
           emptyDir: {}
       initContainers:
         - name: db-migrate
-          image: mlops-paas-control-plane:latest
+          image: mlops-paas-control-plane
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
@@ -82,7 +82,7 @@ spec:
               mountPath: /app/staticfiles
       containers:
         - name: control-plane
-          image: mlops-paas-control-plane:latest
+          image: mlops-paas-control-plane
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:

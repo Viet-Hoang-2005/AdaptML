@@ -40,7 +40,7 @@ spec:
           args: ["rpk topic create mlops_paas_production_data --brokers redpanda-service:9092 || true"]
       containers:
         - name: consumer
-          image: mlops-paas-consumer:latest
+          image: mlops-paas-consumer
           imagePullPolicy: Always
           command: ["python", "-m", "src.main"]
           envFrom:

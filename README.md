@@ -167,7 +167,9 @@ MLOps-paas-system/
 │   │   ├── observability/                    # Prometheus, Grafana và Alertmanager
 │   │   └── edge/                             # Cloudflare, Traefik routes và health
 │   ├── execution/argo/                        # Argo Events/Workflows, templates và RBAC
-│   ├── workloads/                             # Control Plane, consumer, model-server và web
+│   ├── workloads/
+│   │   ├── base/                             # Manifest dùng chung cho bốn workload
+│   │   └── overlays/production/              # Registry và Git SHA tag cho production
 │   ├── operators/kubeflow-training/          # Runtime settings cho Training Operator
 │   ├── deferred/security/                    # Policy dự kiến, chưa được reconcile
 │   └── argocd/                               # Tài nguyên bootstrap Argo CD do Ansible sử dụng

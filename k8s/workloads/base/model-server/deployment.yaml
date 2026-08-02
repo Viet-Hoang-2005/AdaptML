@@ -20,7 +20,7 @@ spec:
         workload-type: worker
       containers:
         - name: model-server
-          image: mlops-paas-model-server:latest
+          image: mlops-paas-model-server
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
