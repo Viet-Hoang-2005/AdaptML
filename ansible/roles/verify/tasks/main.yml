@@ -131,6 +131,43 @@
     fail_msg: CloudNativePG does not have two ready instances.
   when: verify_scope == 'platform'
 
+- name: Validate a build Workflow against the live API server
+  ansible.builtin.command:
+    cmd: >-
+      /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
+      create --dry-run=server -f -
+    stdin: "{{ build_workflow_dry_run | to_nice_yaml }}"
+  register: verified_build_workflow_dry_run
+  changed_when: false
+  when: verify_scope == 'platform'
+  tags: [workflow-dry-run]
+  vars:
+    build_workflow_dry_run:
+      apiVersion: argoproj.io/v1alpha1
+      kind: Workflow
+      metadata:
+        generateName: ansible-build-dry-run-
+        namespace: default
+      spec:
+        workflowTemplateRef:
+          name: mlops-paas-model-packager-template
+        arguments:
+          parameters:
+            - {name: build_id, value: "00000000-0000-4000-8000-000000000001"}
+            - {name: project_id, value: "00000000-0000-4000-8000-000000000002"}
+            - {name: tenant_id, value: "00000000-0000-4000-8000-000000000003"}
+            - {name: image_repository, value: "registry.invalid/mlops-paas/dry-run"}
+            - {name: image_tag, value: "validation"}
+            - {name: flavor, value: "python"}
+            - {name: task_type, value: "classification"}
+            - {name: requirements_text, value: ""}
+            - {name: source_artifact_name, value: "dry-run.tar.gz"}
+            - {name: source_type, value: "manual_upload"}
+            - {name: source_download_url, value: "https://example.invalid/source"}
+            - {name: output_upload_url, value: "https://example.invalid/output"}
+            - name: control_plane_webhook_url
+              value: "http://mlops-paas-control-plane.default.svc.cluster.local/api/v1/builds/callback"
+
 - name: Verify EBS dynamic provisioning and attachment
   when: verify_scope == 'platform'
   block:
