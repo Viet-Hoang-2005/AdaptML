@@ -13,6 +13,10 @@ spec:
     server: https://kubernetes.default.svc
     namespace: kubeflow
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
     syncOptions:
       - ApplyOutOfSyncOnly=true
       - ServerSideApply=true

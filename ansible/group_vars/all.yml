@@ -24,7 +24,7 @@ enable_gpu_nodepool: true
 # Operator ownership is migrated in two stages. Keep Ansible as the active
 # owner while Argo CD Applications are introduced with manual sync; switch to
 # argocd only after each child Application has adopted the live resources.
-training_operators_owner: "ansible"
+training_operators_owner: "argocd"
 platform_operators_application_name: "platform-operators"
 platform_operator_application_names:
   - platform-kubeflow-training

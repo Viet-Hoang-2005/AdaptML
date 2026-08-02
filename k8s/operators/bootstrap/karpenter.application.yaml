@@ -23,6 +23,10 @@ spec:
     server: https://kubernetes.default.svc
     namespace: karpenter
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
     syncOptions:
       - ApplyOutOfSyncOnly=true
       - ServerSideApply=true
