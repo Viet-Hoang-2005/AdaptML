@@ -9,9 +9,9 @@ each child owns one independently observable service or domain.
 | Plane | Source | Argo CD project |
 | --- | --- | --- |
 | GitOps control | `k8s/gitops/production` | `default` |
-| Foundation and platform | `k8s/platform` | `mlops-platform` |
-| Argo execution | `k8s/execution/argo` | `mlops-execution` |
-| Static workloads | `k8s/workloads/overlays/production` | `mlops-workloads` |
+| Foundation and platform | `k8s/infra` | `mlops-platform` |
+| Argo execution | `k8s/argo` | `mlops-execution` |
+| Static workloads | `k8s/apps/overlays/production` | `mlops-workloads` |
 | Training operators | `k8s/operators` and pinned Helm charts | `platform-operators` |
 
 Karpenter EC2NodeClass and NodePool resources remain Ansible-owned because they
@@ -46,8 +46,8 @@ Workflow remain runtime-owned.
 ## Workloads
 
 Control Plane, consumer, model-server and web share environment-neutral manifests
-under `k8s/workloads/base`. Each service has an independent production overlay
-under `k8s/workloads/overlays/production`; these overlays are the only workload
+under `k8s/apps/base`. Each service has an independent production overlay
+under `k8s/apps/overlays/production`; these overlays are the only workload
 paths reconciled by Argo CD. GitHub Actions changes only the affected production
 overlay and keeps promotion on Git SHA tags during the current phase.
 
@@ -69,7 +69,7 @@ only at the exact controller environment paths.
 
 ## Deferred security resources
 
-`k8s/deferred/security` is intentionally outside every reconciled
+`k8s/security` is intentionally outside every reconciled
 Kustomization. Its NetworkPolicies and PDBs are not active controls.
 
 ## Validation and debugging

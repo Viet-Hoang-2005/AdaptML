@@ -199,37 +199,37 @@ jobs:
           
           # 1. Promote each independently reconciled workload.
           if [ "${{ needs.detect-changes.outputs.frontend }}" == "true" ]; then
-            (cd k8s/workloads/overlays/production/web && kustomize edit set image mlops-paas-web=$REG/mlops-paas-web:$SHA)
+            (cd k8s/apps/overlays/production/web && kustomize edit set image mlops-paas-web=$REG/mlops-paas-web:$SHA)
           fi
           
           if [ "${{ needs.detect-changes.outputs.control_plane }}" == "true" ]; then
-            (cd k8s/workloads/overlays/production/control-plane && kustomize edit set image mlops-paas-control-plane=$REG/mlops-paas-control-plane:$SHA)
+            (cd k8s/apps/overlays/production/control-plane && kustomize edit set image mlops-paas-control-plane=$REG/mlops-paas-control-plane:$SHA)
           fi
           
           if [ "${{ needs.detect-changes.outputs.consumer }}" == "true" ]; then
-            (cd k8s/workloads/overlays/production/consumer && kustomize edit set image mlops-paas-consumer=$REG/mlops-paas-consumer:$SHA)
+            (cd k8s/apps/overlays/production/consumer && kustomize edit set image mlops-paas-consumer=$REG/mlops-paas-consumer:$SHA)
           fi
 
           if [ "${{ needs.detect-changes.outputs.model_server }}" == "true" ]; then
-            (cd k8s/workloads/overlays/production/model-server && kustomize edit set image mlops-paas-model-server=$REG/mlops-paas-model-server:$SHA)
+            (cd k8s/apps/overlays/production/model-server && kustomize edit set image mlops-paas-model-server=$REG/mlops-paas-model-server:$SHA)
           fi
           
           if [ "${{ needs.detect-changes.outputs.mlflow }}" == "true" ]; then
-            (cd k8s/platform/mlflow && kustomize edit set image mlops-paas-mlflow=$REG/mlops-paas-mlflow:$SHA)
+            (cd k8s/infra/mlflow && kustomize edit set image mlops-paas-mlflow=$REG/mlops-paas-mlflow:$SHA)
           fi
           
           # 2. Update Argo Workflow Templates (packager and evidently)
           if [ "${{ needs.detect-changes.outputs.packager }}" == "true" ]; then
-            yq e -i '(.spec.templates[] | select(.name == "prepare-package" or .name == "notify-success") | .container.image) = "'$REG'/mlops-paas-model-packager:'$SHA'"' k8s/execution/argo/build-workflowtemplate.yaml
+            yq e -i '(.spec.templates[] | select(.name == "prepare-package" or .name == "notify-success") | .container.image) = "'$REG'/mlops-paas-model-packager:'$SHA'"' k8s/argo/workflows/build-workflowtemplate.yaml
           fi
 
           if [ "${{ needs.detect-changes.outputs.evidently }}" == "true" ]; then
-            yq e -i '(.spec.templates[] | select(.name == "run-evidently") | .container.image) = "'$REG'/mlops-paas-evidently:'$SHA'"' k8s/execution/argo/evidently-workflowtemplate.yaml
+            yq e -i '(.spec.templates[] | select(.name == "run-evidently") | .container.image) = "'$REG'/mlops-paas-evidently:'$SHA'"' k8s/argo/workflows/evidently-workflowtemplate.yaml
           fi
 
           if [ "${{ needs.detect-changes.outputs.training_runner }}" == "true" ]; then
-            yq e -i '(.spec.templates[] | select(.name == "cpu-pytorch-job") | .resource.manifest) |= sub("image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:[^\\n]+", "image: '$REG'/mlops-paas-training-runner:'$SHA'")' k8s/execution/argo/training-workflowtemplate.yaml
-            yq e -i '(.spec.templates[] | select(.name == "gpu-pytorch-job") | .resource.manifest) |= sub("image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:[^\\n]+", "image: '$REG'/mlops-paas-training-runner:'$SHA'")' k8s/execution/argo/training-workflowtemplate.yaml
+            yq e -i '(.spec.templates[] | select(.name == "cpu-pytorch-job") | .resource.manifest) |= sub("image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:[^\\n]+", "image: '$REG'/mlops-paas-training-runner:'$SHA'")' k8s/argo/workflows/training-workflowtemplate.yaml
+            yq e -i '(.spec.templates[] | select(.name == "gpu-pytorch-job") | .resource.manifest) |= sub("image: registry.mlops-nids-nt114.id.vn/mlops-paas/mlops-paas-training-runner:[^\\n]+", "image: '$REG'/mlops-paas-training-runner:'$SHA'")' k8s/argo/workflows/training-workflowtemplate.yaml
           fi
 
       - name: Generate Summary Table

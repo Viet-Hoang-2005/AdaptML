@@ -22,9 +22,12 @@ ALLOWED_BASELINE_EXTRAS = {
 }
 LEGACY_K8S_PATHS = (
     "k8s/.kube",
-    "k8s/apps",
     "k8s/harbor",
     "k8s/operators/bootstrap",
+    "k8s/platform",
+    "k8s/workloads",
+    "k8s/execution",
+    "k8s/deferred",
 )
 WORKLOAD_APPLICATIONS = {
     "mlops-prod-control-plane": ("control-plane", "mlops-paas-control-plane"),
@@ -128,7 +131,7 @@ def validate_workload_layout(repo_root: Path, applications: list[dict]) -> list[
     errors: list[str] = []
 
     for application_name, (service, logical_image) in WORKLOAD_APPLICATIONS.items():
-        expected_path = f"k8s/workloads/overlays/production/{service}"
+        expected_path = f"k8s/apps/overlays/production/{service}"
         application = applications_by_name.get(application_name)
         source_path = ((application or {}).get("spec") or {}).get("source", {}).get("path")
         if source_path != expected_path:
@@ -136,7 +139,7 @@ def validate_workload_layout(repo_root: Path, applications: list[dict]) -> list[
                 f"{application_name} source must be {expected_path}, found {source_path or 'missing'}"
             )
 
-        base_resources = render(repo_root, f"k8s/workloads/base/{service}")
+        base_resources = render(repo_root, f"k8s/apps/base/{service}")
         application_images: list[str] = []
         for resource in base_resources:
             pod_spec = (
@@ -185,26 +188,27 @@ def validate(repo_root: Path, baseline: Path | None) -> int:
         metadata = application.get("metadata") or {}
         spec = application.get("spec") or {}
         app_name = metadata.get("name", "")
-        source = spec.get("source") or {}
-        source_path = source.get("path")
-        if source.get("repoURL") == REPOSITORY_URL and source_path:
-            resources = render(repo_root, source_path)
-        elif source.get("chart"):
-            resources = render_helm(application)
-        else:
-            raise ValueError(f"Unsupported Application source for {app_name}")
-        for resource in resources:
-            key = identity(resource)
-            if not all((key[0], key[1], key[3])):
-                raise ValueError(f"Resource without a complete identity in {app_name}: {key}")
-            previous_owner = ownership.get(key)
-            if previous_owner:
-                duplicate_errors.append(f"{key} is owned by {previous_owner} and {app_name}")
-                continue
-            ownership[key] = app_name
-            rendered[key] = resource
-            if app_name.startswith("mlops-prod-"):
-                core_rendered[key] = resource
+        sources = spec.get("sources") or [spec.get("source") or {}]
+        for source in sources:
+            source_path = source.get("path")
+            if source.get("repoURL") == REPOSITORY_URL and source_path:
+                resources = render(repo_root, source_path)
+            elif source.get("chart"):
+                resources = render_helm(application)
+            else:
+                raise ValueError(f"Unsupported Application source for {app_name}")
+            for resource in resources:
+                key = identity(resource)
+                if not all((key[0], key[1], key[3])):
+                    raise ValueError(f"Resource without a complete identity in {app_name}: {key}")
+                previous_owner = ownership.get(key)
+                if previous_owner:
+                    duplicate_errors.append(f"{key} is owned by {previous_owner} and {app_name}")
+                    continue
+                ownership[key] = app_name
+                rendered[key] = resource
+                if app_name.startswith("mlops-prod-"):
+                    core_rendered[key] = resource
 
     if duplicate_errors:
         for error in duplicate_errors:

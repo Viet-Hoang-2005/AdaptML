@@ -158,20 +158,20 @@ MLOps-paas-system/
 │   │   ├── projects/                         # AppProject theo trust boundary
 │   │   ├── applications/                     # Explicit child Applications, gồm operator apps
 │   │   └── repositories/                     # Public Helm/OCI repository descriptors
-│   ├── platform/
+│   ├── infra/
 │   │   ├── foundation/                       # Namespace và StorageClass
 │   │   ├── secrets/                          # ClusterSecretStore và ExternalSecrets
-│   │   ├── data/                             # PostgreSQL, Redis và Redpanda
-│   │   ├── registry/harbor/                  # Harbor registry
+│   │   ├── {postgres,redis,redpanda}/        # Data services
+│   │   ├── harbor/                           # Harbor registry
 │   │   ├── mlflow/                           # MLflow tracking
 │   │   ├── observability/                    # Prometheus, Grafana và Alertmanager
-│   │   └── edge/                             # Cloudflare, Traefik routes và health
-│   ├── execution/argo/                        # Argo Events/Workflows, templates và RBAC
-│   ├── workloads/
+│   │   └── {cloudflare,routing,health}/      # Edge resources
+│   ├── argo/                                 # Argo Events/Workflows, templates và RBAC
+│   ├── apps/
 │   │   ├── base/                             # Manifest dùng chung cho bốn workload
 │   │   └── overlays/production/              # Registry và Git SHA tag cho production
 │   ├── operators/kubeflow-training/          # Runtime settings cho Training Operator
-│   ├── deferred/security/                    # Policy dự kiến, chưa được reconcile
+│   ├── security/                             # Policy dự kiến, chưa được reconcile
 │   └── argocd/                               # Tài nguyên bootstrap Argo CD do Ansible sử dụng
 │
 ├── ansible/                                  # Ansible: Tự động hóa cài đặt & triển khai K3s
