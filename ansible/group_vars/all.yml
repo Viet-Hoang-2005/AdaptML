@@ -22,8 +22,7 @@ enable_karpenter: true
 enable_gpu_nodepool: true
 
 # Training operators are child Applications of the unified production root.
-# Ansible still owns cluster-specific Karpenter runtime and capacity settings.
-training_operators_owner: "argocd"
+# Ansible owns only cluster-specific Karpenter runtime and capacity settings.
 platform_operator_application_names:
   - platform-kubeflow-training
   - platform-karpenter-crds
@@ -61,14 +60,6 @@ training_smoke_image: "nvidia/cuda@sha256:001469ea0f3dec85a1ca929aeea3b58ae369d4
 # effective. The CPU smoke test remains part of every training verification.
 training_gpu_smoke_enabled: false
 
-# Operator versions are intentionally configurable so a new cluster can pin the
-# exact versions used in production without editing shell scripts.
-karpenter_version: "1.13.0"
-kubeflow_training_operator_version: "v1.9.2"
-kubeflow_training_operator_crds_kustomize_path: "github.com/kubeflow/trainer/manifests/base/crds"
-kubeflow_training_operator_kustomize_path: "github.com/kubeflow/trainer/manifests/overlays/standalone"
-nvidia_gpu_operator_chart_version: "v26.3.3"
-nfd_chart_version: "0.18.3"
 aws_ebs_csi_driver_chart_version: "2.40.1"
 external_secrets_chart_version: "2.6.0"
 cnpg_operator_chart_version: "0.24.0"
