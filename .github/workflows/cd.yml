@@ -4,6 +4,24 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      component:
+        description: "Component to build, sign, and promote"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - frontend
+          - control_plane
+          - consumer
+          - packager
+          - evidently
+          - mlflow
+          - model_server
+          - machine_learning_serving
+          - deep_learning_serving
+          - training_runner
 
 permissions:
   id-token: write
@@ -15,16 +33,16 @@ jobs:
     name: "Detect Changed Components"
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      control_plane: ${{ steps.filter.outputs.control_plane == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      consumer: ${{ steps.filter.outputs.consumer == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      packager: ${{ steps.filter.outputs.packager == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      evidently: ${{ steps.filter.outputs.evidently == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      mlflow: ${{ steps.filter.outputs.mlflow == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      model_server: ${{ steps.filter.outputs.model_server == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      machine_learning_serving: ${{ steps.filter.outputs.machine_learning_serving == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      deep_learning_serving: ${{ steps.filter.outputs.deep_learning_serving == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      training_runner: ${{ steps.filter.outputs.training_runner == 'true' || steps.filter.outputs.cd_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
+      frontend: ${{ steps.filter.outputs.frontend == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'frontend')) }}
+      control_plane: ${{ steps.filter.outputs.control_plane == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'control_plane')) }}
+      consumer: ${{ steps.filter.outputs.consumer == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'consumer')) }}
+      packager: ${{ steps.filter.outputs.packager == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'packager')) }}
+      evidently: ${{ steps.filter.outputs.evidently == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'evidently')) }}
+      mlflow: ${{ steps.filter.outputs.mlflow == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'mlflow')) }}
+      model_server: ${{ steps.filter.outputs.model_server == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'model_server')) }}
+      machine_learning_serving: ${{ steps.filter.outputs.machine_learning_serving == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'machine_learning_serving')) }}
+      deep_learning_serving: ${{ steps.filter.outputs.deep_learning_serving == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'deep_learning_serving')) }}
+      training_runner: ${{ steps.filter.outputs.training_runner == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'training_runner')) }}
       matrix_targets: ${{ steps.matrix.outputs.targets }}
     steps:
       - uses: actions/checkout@v4
@@ -53,27 +71,25 @@ jobs:
               - 'services/deep-learning-serving/**'
             training_runner:
               - 'services/training-runner/**'
-            cd_workflow:
-              - '.github/workflows/cd.yml'
-
       - name: Generate Dynamic Matrix
         id: matrix
         run: |
           python3 -c '
           import os, json
-          is_manual = "${{ github.event_name }}" == "workflow_dispatch"
-          is_cd_workflow_change = "${{ steps.filter.outputs.cd_workflow }}" == "true"
+          manual_component = "${{ inputs.component || '' }}"
+          def selected(component):
+              return manual_component in ("all", component)
           changed = {
-              "frontend": "${{ steps.filter.outputs.frontend }}" == "true" or is_cd_workflow_change or is_manual,
-              "control_plane": "${{ steps.filter.outputs.control_plane }}" == "true" or is_cd_workflow_change or is_manual,
-              "consumer": "${{ steps.filter.outputs.consumer }}" == "true" or is_cd_workflow_change or is_manual,
-              "packager": "${{ steps.filter.outputs.packager }}" == "true" or is_cd_workflow_change or is_manual,
-              "evidently": "${{ steps.filter.outputs.evidently }}" == "true" or is_cd_workflow_change or is_manual,
-              "mlflow": "${{ steps.filter.outputs.mlflow }}" == "true" or is_cd_workflow_change or is_manual,
-              "model_server": "${{ steps.filter.outputs.model_server }}" == "true" or is_cd_workflow_change or is_manual,
-              "machine_learning_serving": "${{ steps.filter.outputs.machine_learning_serving }}" == "true" or is_cd_workflow_change or is_manual,
-              "deep_learning_serving": "${{ steps.filter.outputs.deep_learning_serving }}" == "true" or is_cd_workflow_change or is_manual,
-              "training_runner": "${{ steps.filter.outputs.training_runner }}" == "true" or is_cd_workflow_change or is_manual,
+              "frontend": "${{ steps.filter.outputs.frontend }}" == "true" or selected("frontend"),
+              "control_plane": "${{ steps.filter.outputs.control_plane }}" == "true" or selected("control_plane"),
+              "consumer": "${{ steps.filter.outputs.consumer }}" == "true" or selected("consumer"),
+              "packager": "${{ steps.filter.outputs.packager }}" == "true" or selected("packager"),
+              "evidently": "${{ steps.filter.outputs.evidently }}" == "true" or selected("evidently"),
+              "mlflow": "${{ steps.filter.outputs.mlflow }}" == "true" or selected("mlflow"),
+              "model_server": "${{ steps.filter.outputs.model_server }}" == "true" or selected("model_server"),
+              "machine_learning_serving": "${{ steps.filter.outputs.machine_learning_serving }}" == "true" or selected("machine_learning_serving"),
+              "deep_learning_serving": "${{ steps.filter.outputs.deep_learning_serving }}" == "true" or selected("deep_learning_serving"),
+              "training_runner": "${{ steps.filter.outputs.training_runner }}" == "true" or selected("training_runner"),
           }
           configs = {
               "frontend": {"name": "Frontend Web", "id": "frontend", "context": "web", "image": "mlops-paas-web"},
@@ -160,11 +176,18 @@ jobs:
           SHA: "${{ github.sha }}"
         run: |
           printf "%b\n" "${COSIGN_PRIVATE_KEY}" > cosign.key
-          
+          trap 'rm -f cosign.key' EXIT
           DIGEST="${{ steps.build-and-push.outputs.digest }}"
-          cosign sign --yes --key cosign.key "${REGISTRY_HOST}/mlops-paas/${IMAGE}@${DIGEST}"
-          
-          rm -f cosign.key
+          for attempt in 1 2 3 4 5; do
+            if cosign sign --yes --key cosign.key "${REGISTRY_HOST}/mlops-paas/${IMAGE}@${DIGEST}"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 5 ]; then
+              echo "Cosign signing attempt $attempt failed; retrying in $((attempt * 10)) seconds."
+              sleep $((attempt * 10))
+            fi
+          done
+          exit 1
 
   gitops-promotion:
     name: "GitOps: Update Kustomize & Create PR"
