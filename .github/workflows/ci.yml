@@ -346,7 +346,7 @@ jobs:
         uses: imranismail/setup-kustomize@v2
       - name: Validate Ansible syntax
         run: |
-          pip install -r ansible/requirements-control.txt
+          pip install -r ansible/requirements.txt
           ansible-galaxy collection install -r ansible/requirements.yml
           ansible-playbook -i 'localhost,' ansible/site.yml --syntax-check
       - name: Install Kubeconform

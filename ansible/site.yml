@@ -53,14 +53,12 @@
     - role: platform_core
       when: deploy_core_platform | bool
 
-- name: Install the optional training platform
+- name: Configure optional training capacity and verify GitOps operators
   hosts: master
   become: true
   gather_facts: true
   tags: [platform-training]
   roles:
-    - role: helm
-      when: deploy_training_platform | bool
     - role: platform_training
       when: deploy_training_platform | bool
 

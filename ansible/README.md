@@ -13,7 +13,7 @@ key in the repository.
 cd /mnt/d/AI\ Models/mlops-paas-system
 python3 -m venv .venv-ansible
 source .venv-ansible/bin/activate
-pip install -r ansible/requirements-control.txt
+pip install -r ansible/requirements.txt
 ansible-galaxy collection install -r ansible/requirements.yml
 install -m 0600 /path/to/aws_key ~/.ssh/aws_key
 ```
@@ -40,7 +40,7 @@ Terraform apply on your behalf.
 | `preflight` | Validate Linux, Terraform inventory, SSH key and rollout flags | Always |
 | `bootstrap` | Prepare Ubuntu, install K3s `v1.34.9+k3s1`, join static workers | Enabled |
 | `platform-core` | Install pinned operators, bootstrap External Secrets and Argo CD | Enabled |
-| `platform-training` | Bootstrap Argo CD training operators, Karpenter capacity resources and smoke tests | Explicit |
+| `platform-training` | Verify Argo CD training operators, configure Karpenter capacity resources and smoke tests | Explicit |
 | `verify` | Validate nodes, bundled components and root GitOps health | Explicit/final |
 
 K3s keeps its bundled Traefik, ServiceLB and local-path provisioner during this
@@ -100,11 +100,12 @@ ansible-playbook site.yml --tags verify
 
 After the core platform is stable, enable training explicitly:
 
-The training platform is deployed only through Ansible and remains closed to
-tenant traffic after rollout. It installs the Kubeflow Training Operator
-(PyTorchJob V1), Karpenter, NVIDIA GPU Operator, and Karpenter CPU/GPU capacity
-objects. It also executes disposable CPU and GPU PyTorchJob smoke tests in
-`ansible-training-smoke`.
+Argo CD deploys the Kubeflow Training Operator (PyTorchJob V1), Karpenter,
+Node Feature Discovery and NVIDIA GPU Operator. Ansible waits for those
+Applications, injects the Karpenter runtime settings that are specific to this
+cluster, manages Karpenter CPU/GPU capacity objects, and executes disposable
+CPU and GPU PyTorchJob smoke tests in `ansible-training-smoke`. Tenant traffic
+remains closed after rollout.
 
 Run the production rollout from WSL, copying the configuration to the native
 WSL filesystem (Ansible rejects configuration stored directly on `/mnt/d`):
@@ -146,8 +147,8 @@ publishing port 6443.
 ## Ownership and deferred hardening
 
 - Terraform: VPC, EC2, ALB, IAM, S3, Secrets Manager and Karpenter AWS resources.
-- Ansible: OS/K3s, pinned operators, GitOps bootstrap and cluster-specific
-  Karpenter NodeClass/NodePool.
+- Ansible: OS/K3s, core bootstrap operators, GitOps bootstrap and
+  cluster-specific Karpenter runtime settings and NodeClass/NodePool.
 - Argo CD: resources referenced by root Kustomize, including applications and
   platform manifests already present there.
 

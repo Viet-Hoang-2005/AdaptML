@@ -12,7 +12,6 @@
     verified_training_operator_application.resources[0].status.sync.status | default('') != 'Synced' or
     verified_training_operator_application.resources[0].status.health.status | default('') != 'Healthy'
   loop: "{{ platform_operator_application_names }}"
-  when: training_operators_owner == 'argocd'
 
 - name: Verify the PyTorchJob CRD and Kubeflow Training Operator
   ansible.builtin.command: >-

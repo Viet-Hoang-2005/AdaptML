@@ -355,7 +355,7 @@ python scripts/push_secrets_to_aws.py
 cd /mnt/d/AI\ Models/mlops-paas-system
 python3 -m venv .venv-ansible
 source .venv-ansible/bin/activate
-pip install -r ansible/requirements-control.txt
+pip install -r ansible/requirements.txt
 ansible-galaxy collection install -r ansible/requirements.yml
 
 # Private key không được commit vào repository.
@@ -394,7 +394,7 @@ Các phase hiện có:
 | `preflight` | Kiểm tra WSL, Terraform inventory, SSH và rollout flags | Luôn chạy |
 | `bootstrap` | Cài K3s `v1.34.9+k3s1`, một server và hai worker | Bật |
 | `platform-core` | EBS CSI, ESO, CNPG, KEDA, Argo Workflows/Events, monitoring và Argo CD | Bật |
-| `platform-training` | Bootstrap training-operator GitOps, Karpenter capacity resources và smoke tests | Opt-in |
+| `platform-training` | Verify training-operator GitOps, inject Karpenter runtime/capacity resources và chạy smoke tests | Opt-in |
 | `verify` | Xác minh node, operator và root Application | Chạy cuối |
 
 Ansible cài operator theo thứ tự phụ thuộc, áp dụng `ClusterSecretStore`, chờ repository credential được ESO đồng bộ, rồi tạo root Application `mlops-paas-system`. Không cần `kubectl apply` thủ công cho Argo CD Application hoặc Argo Workflows sau khi `platform-core` hoàn tất.
