@@ -33,16 +33,16 @@ jobs:
     name: "Detect Changed Components"
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'frontend')) }}
-      control_plane: ${{ steps.filter.outputs.control_plane == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'control_plane')) }}
-      consumer: ${{ steps.filter.outputs.consumer == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'consumer')) }}
-      packager: ${{ steps.filter.outputs.packager == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'packager')) }}
-      evidently: ${{ steps.filter.outputs.evidently == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'evidently')) }}
-      mlflow: ${{ steps.filter.outputs.mlflow == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'mlflow')) }}
-      model_server: ${{ steps.filter.outputs.model_server == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'model_server')) }}
-      machine_learning_serving: ${{ steps.filter.outputs.machine_learning_serving == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'machine_learning_serving')) }}
-      deep_learning_serving: ${{ steps.filter.outputs.deep_learning_serving == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'deep_learning_serving')) }}
-      training_runner: ${{ steps.filter.outputs.training_runner == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'training_runner')) }}
+      frontend: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.frontend == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'frontend')) }}
+      control_plane: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.control_plane == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'control_plane')) }}
+      consumer: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.consumer == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'consumer')) }}
+      packager: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.packager == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'packager')) }}
+      evidently: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.evidently == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'evidently')) }}
+      mlflow: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.mlflow == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'mlflow')) }}
+      model_server: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.model_server == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'model_server')) }}
+      machine_learning_serving: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.machine_learning_serving == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'machine_learning_serving')) }}
+      deep_learning_serving: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.deep_learning_serving == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'deep_learning_serving')) }}
+      training_runner: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.training_runner == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'training_runner')) }}
       matrix_targets: ${{ steps.matrix.outputs.targets }}
     steps:
       - uses: actions/checkout@v4
@@ -77,19 +77,20 @@ jobs:
           python3 -c '
           import os, json
           manual_component = "${{ inputs.component || '' }}"
+          is_manual = "${{ github.event_name }}" == "workflow_dispatch"
           def selected(component):
               return manual_component in ("all", component)
           changed = {
-              "frontend": "${{ steps.filter.outputs.frontend }}" == "true" or selected("frontend"),
-              "control_plane": "${{ steps.filter.outputs.control_plane }}" == "true" or selected("control_plane"),
-              "consumer": "${{ steps.filter.outputs.consumer }}" == "true" or selected("consumer"),
-              "packager": "${{ steps.filter.outputs.packager }}" == "true" or selected("packager"),
-              "evidently": "${{ steps.filter.outputs.evidently }}" == "true" or selected("evidently"),
-              "mlflow": "${{ steps.filter.outputs.mlflow }}" == "true" or selected("mlflow"),
-              "model_server": "${{ steps.filter.outputs.model_server }}" == "true" or selected("model_server"),
-              "machine_learning_serving": "${{ steps.filter.outputs.machine_learning_serving }}" == "true" or selected("machine_learning_serving"),
-              "deep_learning_serving": "${{ steps.filter.outputs.deep_learning_serving }}" == "true" or selected("deep_learning_serving"),
-              "training_runner": "${{ steps.filter.outputs.training_runner }}" == "true" or selected("training_runner"),
+              "frontend": selected("frontend") if is_manual else "${{ steps.filter.outputs.frontend }}" == "true",
+              "control_plane": selected("control_plane") if is_manual else "${{ steps.filter.outputs.control_plane }}" == "true",
+              "consumer": selected("consumer") if is_manual else "${{ steps.filter.outputs.consumer }}" == "true",
+              "packager": selected("packager") if is_manual else "${{ steps.filter.outputs.packager }}" == "true",
+              "evidently": selected("evidently") if is_manual else "${{ steps.filter.outputs.evidently }}" == "true",
+              "mlflow": selected("mlflow") if is_manual else "${{ steps.filter.outputs.mlflow }}" == "true",
+              "model_server": selected("model_server") if is_manual else "${{ steps.filter.outputs.model_server }}" == "true",
+              "machine_learning_serving": selected("machine_learning_serving") if is_manual else "${{ steps.filter.outputs.machine_learning_serving }}" == "true",
+              "deep_learning_serving": selected("deep_learning_serving") if is_manual else "${{ steps.filter.outputs.deep_learning_serving }}" == "true",
+              "training_runner": selected("training_runner") if is_manual else "${{ steps.filter.outputs.training_runner }}" == "true",
           }
           configs = {
               "frontend": {"name": "Frontend Web", "id": "frontend", "context": "web", "image": "mlops-paas-web"},
