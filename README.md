@@ -290,19 +290,47 @@ Production được triển khai theo ba lớp ownership rõ ràng:
 - **Ansible** chuẩn bị Ubuntu, cài K3s, operator core, External Secrets và bootstrap Argo CD.
 - **Argo CD** reconcile các resource được tham chiếu bởi root [`k8s/kustomization.yaml`](k8s/kustomization.yaml).
 
-Core platform dùng một K3s server và hai static worker. Server chạy embedded etcd, secrets encryption và snapshot định kỳ; đây vẫn là **single control-plane**, chưa phải HA. `k8s/security` (NetworkPolicy và custom PodDisruptionBudget) hiện được chủ động hoãn trong giai đoạn ổn định. Kubeflow/Karpenter cũng mặc định tắt và không được mô tả là capability đang hoạt động cho đến khi phase training được bật và kiểm thử.
+Core platform dùng một K3s server và hai static worker. Server chạy embedded etcd, secrets encryption và snapshot định kỳ; đây vẫn là **single control-plane**, chưa phải HA. `k8s/security` (NetworkPolicy và custom PodDisruptionBudget) hiện được chủ động hoãn trong giai đoạn ổn định.
 
-Ở production, Celery giữ lifecycle state trong PostgreSQL và dispatch side effect sau transaction commit. Build, deployment và drift đi qua Argo Events/Workflows. Training chỉ đi qua Kubeflow khi optional training platform đã được bật.
+Sau `platform-core`, root Application sẽ để Argo CD reconcile Kubeflow Training Operator, Karpenter, Node Feature Discovery và NVIDIA GPU Operator. Capacity cluster-specific của Karpenter (EC2NodeClass/NodePool) và smoke test chỉ được Ansible cấu hình trong phase `platform-training`. Dù các operator được cài, tenant training vẫn đóng: `TRAINING_ENABLED=false`, API submit trả HTTP 503 và UI không hiển thị thao tác submit/GPU.
+
+Ở production, Celery giữ lifecycle state trong PostgreSQL và dispatch side effect sau transaction commit. Build, deployment và drift đi qua Argo Events/Workflows. Training controllers có thể được cài nhưng tenant training vẫn chỉ được mở sau một rollout bảo mật riêng.
 
 #### Bước 1: Khởi tạo hạ tầng AWS bằng Terraform
+
+Sau khi destroy **toàn bộ** AWS, chuẩn bị trước khi apply:
+
+- Khôi phục `.env` từ kho bí mật an toàn. Terraform destroy xóa ba Secrets Manager container với recovery window bằng `0`, nên secret cũ không thể phục hồi từ AWS.
+- Giữ private key ở ngoài repository và bảo đảm public key tương ứng đã tồn tại trong EC2 Key Pairs với đúng tên `key_name` (mặc định `mlops-keypair`). Terraform chỉ tham chiếu key pair, không tạo nó. Ví dụ từ WSL:
+
+  ```bash
+  aws ec2 import-key-pair \
+    --region ap-southeast-1 \
+    --key-name mlops-keypair \
+    --public-key-material "fileb://$HOME/.ssh/aws_key.pub"
+  ```
+
+- Chuẩn bị quyền sửa DNS Cloudflare cho domain. ACM DNS validation không được Terraform tự tạo record vì DNS public do Cloudflare quản lý.
 
 ```bash
 cd infra/
 
-# Xác thực AWS CLI bằng profile/session cục bộ, sau đó review plan trước apply
+# Xác thực AWS CLI bằng profile/session cục bộ, sau đó kiểm tra cấu hình.
 terraform init
-terraform plan
-terraform apply
+terraform fmt -check -recursive
+terraform validate
+
+# Chỉ bootstrap certificate để lấy CNAME validation của ACM.
+terraform apply -target='module.dns[0].aws_acm_certificate.mlops_cert'
+terraform output -json acm_ssl_validation_records
+```
+
+Tạo các CNAME được output ở Cloudflare, chờ ACM hiển thị `ISSUED`, rồi mới chạy full apply. `-target` chỉ dùng cho bootstrap certificate; các lần sau luôn review full plan:
+
+```bash
+terraform plan -out=tfplan
+terraform apply tfplan
+terraform output -json
 ```
 
 **Terraform sẽ tự động tạo ra:**
@@ -311,11 +339,13 @@ terraform apply
 - EC2 Master Node (`t3.medium`) + Worker Nodes (`t3.large` × 2, tùy chỉnh trong `terraform.tfvars`).
 - Application Load Balancer (ALB) + ACM SSL Certificate; DNS public hiện được quản lý tại Cloudflare.
 - S3 Bucket lưu model artifacts và tập dữ liệu huấn luyện.
-- IAM Roles cho Worker nodes (S3 access) và GitHub Actions OIDC.
+- IAM Roles cho Worker nodes (S3 access), GitHub Actions OIDC và Karpenter (instance profile, controller policy, interruption queue).
 
 #### Bước 2: Tự động đồng bộ cấu hình lên AWS Secrets Manager
 
 Hệ thống cung cấp script `scripts/push_secrets_to_aws.py` sử dụng thư viện `boto3` để tự động đọc file `.env` và đẩy lên AWS Secrets Manager (region: `ap-southeast-1`).
+
+Quay lại root repository trước khi chạy script; ở bước Terraform, working directory đang là `infra/`.
 
 **1. Chuẩn bị file `.env` từ file mẫu:**
 
@@ -336,11 +366,16 @@ cp .env.example .env
 **3. Chạy script đồng bộ lên AWS Secrets Manager:**
 
 ```bash
-# Cài đặt thư viện cần thiết (nếu chưa có)
-pip install boto3 python-dotenv
+cd ..
+
+# Dùng virtual environment riêng để không sửa Python hệ thống của WSL.
+python3 -m venv .venv-secrets
+source .venv-secrets/bin/activate
+python -m pip install boto3 python-dotenv
 
 # Thực hiện đẩy tự động lên AWS Secrets Manager
 python scripts/push_secrets_to_aws.py
+deactivate
 ```
 
 **Script sẽ tự động phân nhóm và tạo/cập nhật chính xác 3 kho Secret trên AWS:**
@@ -353,6 +388,9 @@ python scripts/push_secrets_to_aws.py
 
 ```bash
 cd /mnt/d/AI\ Models/mlops-paas-system
+
+# Control host cần có Terraform >= 1.5, AWS CLI, OpenSSH và kubectl; Ansible
+# preflight sẽ kiểm tra terraform/aws/ssh trước khi kết nối vào cluster.
 python3 -m venv .venv-ansible
 source .venv-ansible/bin/activate
 pip install -r ansible/requirements.txt
@@ -378,13 +416,22 @@ ansible-lint .
 kubectl kustomize --enable-helm ../k8s >/dev/null
 ```
 
-Rollout theo từng phase và chạy bootstrap lần hai để xác minh idempotency:
+Rollout đầy đủ theo từng phase và chạy bootstrap lần hai để xác minh idempotency:
 
 ```bash
 ansible-playbook site.yml --tags bootstrap
 ansible-playbook site.yml --tags bootstrap
 ansible-playbook site.yml --tags platform-core
-ansible-playbook site.yml --tags verify
+ansible-playbook site.yml --tags preflight,platform-training,verify
+```
+
+Với group vars hiện tại, training platform, Karpenter và GPU NodePool đều được bật. Vì vậy không chạy `--tags verify` độc lập ngay sau `platform-core`: verification training sẽ cần NodePool mà phase `platform-training` chưa render. Nếu chủ đích chỉ xác minh core, tắt rõ ràng training capacity trong lần chạy đó:
+
+```bash
+ansible-playbook site.yml --tags verify \
+  -e deploy_training_platform=false \
+  -e enable_karpenter=false \
+  -e enable_gpu_nodepool=false
 ```
 
 Các phase hiện có:
@@ -394,38 +441,48 @@ Các phase hiện có:
 | `preflight` | Kiểm tra WSL, Terraform inventory, SSH và rollout flags | Luôn chạy |
 | `bootstrap` | Cài K3s `v1.34.9+k3s1`, một server và hai worker | Bật |
 | `platform-core` | EBS CSI, ESO, CNPG, KEDA, Argo Workflows/Events, monitoring và Argo CD | Bật |
-| `platform-training` | Verify training-operator GitOps, inject Karpenter runtime/capacity resources và chạy smoke tests | Opt-in |
+| `platform-training` | Verify 5 training-operator Application, inject Karpenter runtime/capacity resources và chạy smoke tests | Bật trong group vars hiện tại |
 | `verify` | Xác minh node, operator và root Application | Chạy cuối |
 
 Ansible cài operator theo thứ tự phụ thuộc, áp dụng `ClusterSecretStore`, chờ repository credential được ESO đồng bộ, rồi tạo root Application `mlops-paas-system`. Không cần `kubectl apply` thủ công cho Argo CD Application hoặc Argo Workflows sau khi `platform-core` hoàn tất.
 
-#### Bước 5: Xác minh GitOps và workload
+#### Bước 5: Xác minh GitOps, workload và AWS edge health
 
 ```bash
 ssh -i ~/.ssh/aws_key ubuntu@$(cd ../infra && terraform output -raw master_public_ip)
 
 sudo k3s kubectl get nodes -L workload-type
-sudo k3s kubectl get applications -n argocd
-sudo k3s kubectl get pods -A
+sudo k3s kubectl get applications -n argocd \
+  -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+sudo k3s kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded
 sudo k3s kubectl get clustersecretstore,externalsecret -A
 sudo k3s kubectl get clusters.postgresql.cnpg.io -A
 ```
 
+Mọi Application phải là `Synced/Healthy`; CNPG phải có hai instance Ready; lệnh pod bất thường không được trả về workload lỗi. `verify` của Ansible cũng kiểm tra ESO, root GitOps, Traefik trên static worker, ALB target health, CNPG, Argo Workflow server-side dry-run và EBS smoke/cleanup.
+
+Từ WSL control host, xác nhận cả hai ALB targets healthy:
+
+```bash
+aws elbv2 describe-target-health \
+  --region ap-southeast-1 \
+  --target-group-arn "$(cd ../infra && terraform output -raw alb_target_group_arn)" \
+  --query 'TargetHealthDescriptions[*].[Target.Id,TargetHealth.State]' \
+  --output table
+```
+
 Không ghi mật khẩu Argo CD, token K3s, kubeconfig hoặc secret value vào log/tài liệu. Đổi mật khẩu admin ban đầu sau lần đăng nhập đầu tiên.
 
-#### Bước 6: Bật training platform khi core đã ổn định
+#### Bước 6: Cấu hình training capacity và smoke test sau khi core đã ổn định
 
 ```bash
 ansible-playbook site.yml --tags platform-training \
-  -e deploy_training_platform=true
-
-# Karpenter cần opt-in riêng; CPU NodePool phải được kiểm thử trước GPU.
-ansible-playbook site.yml --tags platform-training \
   -e deploy_training_platform=true \
-  -e enable_karpenter=true
+  -e enable_karpenter=true \
+  -e enable_gpu_nodepool=true
 ```
 
-Kubeflow Training Operator, Karpenter CRD/controller, NFD và NVIDIA GPU Operator được Argo CD quản lý qua parent Application `platform-operators`. Karpenter NodeClass/NodePool vẫn thuộc Ansible vì chứa endpoint, instance profile và bootstrap token theo từng cluster; không thêm chúng trở lại root GitOps. GPU smoke chỉ bật sau khi quota G/VT AWS đã effective.
+Root Application trực tiếp quản lý 5 operator Application: Kubeflow Training Operator, Karpenter CRD, Karpenter controller, NFD và NVIDIA GPU Operator. Karpenter NodeClass/NodePool vẫn thuộc Ansible vì chứa endpoint, instance profile và bootstrap token theo từng cluster; không thêm chúng trở lại root GitOps. CPU smoke phải hoàn tất và tự cleanup. GPU smoke chỉ bật sau khi quota G/VT AWS đã effective; `training_gpu_smoke_enabled=false` là kết quả mong đợi khi quota chưa sẵn sàng.
 
 ---
 
@@ -447,22 +504,23 @@ Frontend, Argo CD, Argo Workflows, Grafana và MLflow đi qua Cloudflare Tunnel.
 
 ### 6.3 Gỡ cài đặt hệ thống (Uninstallation & Cleanup)
 
+> **Cảnh báo mất dữ liệu:** Chỉ tiếp tục sau khi đã backup dữ liệu cần giữ (S3 artifacts, PostgreSQL/PVC nếu áp dụng) và `.env`/secret material. Terraform destroy sẽ xóa Secrets Manager không có recovery window; EBS volumes có thể còn lại nếu PVC/PV không được prune trước khi cluster bị xóa.
+
 ```bash
-# 1. Xóa ArgoCD Application để kích hoạt cơ chế tự dọn dẹp tài nguyên K8s (Prune)
-kubectl delete -f k8s/argocd/application.yaml --ignore-not-found
-kubectl delete namespace argocd --ignore-not-found
+# Trên master: xóa root Application và chờ Argo CD prune tài nguyên nó sở hữu.
+sudo k3s kubectl delete -f k8s/argocd/application.yaml --ignore-not-found
+sudo k3s kubectl get pvc,pv -A
 
-# 2. Gỡ các Helm releases
-helm uninstall monitoring -n monitoring --ignore-not-found
-helm uninstall keda -n keda --ignore-not-found
-helm uninstall external-secrets -n external-secrets --ignore-not-found
+# Review và xóa rõ ràng PVC/PV còn lại ở mọi namespace trước khi hủy cluster.
+# Không chỉ xóa PVC trong namespace default.
+```
 
-# 3. Xóa toàn bộ Persistent Volume Claims (giải phóng AWS EBS volumes)
-kubectl delete pvc --all -n default
+Thoát phiên SSH, quay lại WSL control host rồi review destroy plan:
 
-# 4. Xóa hoàn toàn hạ tầng AWS bằng Terraform (CẢNH BÁO: Không thể hoàn tác)
+```bash
 cd infra/
-terraform destroy
+terraform plan -destroy -out=destroy.tfplan
+terraform apply destroy.tfplan
 ```
 
 ---
@@ -472,12 +530,12 @@ terraform destroy
 ### Giai đoạn 1: Xác nhận sức khỏe hệ thống K3s
 
 ```bash
-# Kiểm tra trạng thái các node trong cụm
-kubectl get nodes -L workload-type
+# Trên master: kiểm tra trạng thái các node trong cụm.
+sudo k3s kubectl get nodes -L workload-type
 # Mong đợi: master (workload-type=control-plane) + workers (workload-type=worker) ở trạng thái Ready
 
 # Kiểm tra trạng thái toàn bộ pod dịch vụ
-kubectl get pods -A
+sudo k3s kubectl get pods -A
 ```
 
 ### Giai đoạn 2: Kiểm thử Upload & Build Model
@@ -503,11 +561,7 @@ curl -X POST https://api.mlops-nids-nt114.id.vn/{tenant_id}/models/{project_uuid
 
 ### Giai đoạn 4: Kiểm thử Tự động Huấn luyện (Training & Retraining Job)
 
-1. Tạo draft qua `/api/training-jobs/`, sau đó submit qua `/{job_uuid}/submit/`.
-2. Quan sát Celery task gửi Argo webhook và workflow khởi tạo **Kubeflow PyTorchJob** trên Kubernetes.
-3. Nếu production training phase đã bật: Kubeflow tạo `PyTorchJob`; Karpenter chỉ provision node động khi được opt-in và đã kiểm thử. Nếu ở local, job chạy trực tiếp bằng Docker backend.
-4. Theo dõi log huấn luyện trực tiếp trên Web UI (cập nhật realtime mỗi 3 giây qua Redis).
-5. Sau khi hoàn tất, kiểm tra `model.tar.gz`, metadata bundle và MLflow run theo job; bấm **Build & Register** để tạo image và chỉ cấp immutable `ModelVersion` khi build thành công. Deployment của version training được thực hiện từ Model Evolution.
+Tenant training cố ý chưa được mở trong production: không gọi submit endpoint và không dùng UI để kiểm thử training, vì `TRAINING_ENABLED=false` trả HTTP 503. Kiểm thử được hỗ trợ ở phase hiện tại là Ansible CPU PyTorchJob smoke trong namespace riêng `ansible-training-smoke`; job phải hoàn tất, namespace phải bị xóa và Karpenter phải consolidate node tạm thời. GPU smoke chỉ chạy sau khi quota AWS G/VT có hiệu lực.
 
 ### Giai đoạn 5: Kiểm thử Phát hiện Data Drift (Evidently AI)
 
