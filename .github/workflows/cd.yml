@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: "Component to build, sign, and promote"
         required: true
         default: all
         type: choice
@@ -44,6 +43,7 @@ jobs:
       deep_learning_serving: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.deep_learning_serving == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'deep_learning_serving')) }}
       training_runner: ${{ (github.event_name != 'workflow_dispatch' && steps.filter.outputs.training_runner == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.component == 'all' || inputs.component == 'training_runner')) }}
       matrix_targets: ${{ steps.matrix.outputs.targets }}
+      gitops_promotion: ${{ steps.matrix.outputs.gitops_promotion }}
     steps:
       - uses: actions/checkout@v4
       - name: Filter changed paths
@@ -100,13 +100,19 @@ jobs:
               "evidently": {"name": "Evidently Drift", "id": "evidently", "context": "services/evidently", "image": "mlops-paas-evidently"},
               "mlflow": {"name": "MLflow Tracking Server", "id": "mlflow", "context": "services/mlflow", "image": "mlops-paas-mlflow"},
               "model_server": {"name": "Model Server", "id": "model_server", "context": "services/model-server", "image": "mlops-paas-model-server"},
-              "machine_learning_serving": {"name": "Machine Learning Serving", "id": "machine_learning_serving", "context": "services/machine-learning-serving", "image": "mlops-paas-machine-learning-serving"},
-              "deep_learning_serving": {"name": "Deep Learning Serving", "id": "deep_learning_serving", "context": "services/deep-learning-serving", "image": "mlops-paas-deep-learning-serving"},
+              "machine_learning_serving": {"name": "Machine Learning Serving Base Image", "id": "machine_learning_serving", "context": "services/machine-learning-serving", "image": "machine-learning-serving"},
+              "deep_learning_serving": {"name": "Deep Learning Serving Base Image", "id": "deep_learning_serving", "context": "services/deep-learning-serving", "image": "deep-learning-serving"},
               "training_runner": {"name": "Training Runner", "id": "training_runner", "context": "services/training-runner", "image": "mlops-paas-training-runner"}
           }
           targets = [configs[k] for k, v in changed.items() if v]
+          gitops_components = {
+              "frontend", "control_plane", "consumer", "packager", "evidently",
+              "mlflow", "model_server", "training_runner",
+          }
+          gitops_promotion = any(changed[key] for key in gitops_components)
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"targets={json.dumps(targets)}\n")
+              f.write(f"gitops_promotion={'true' if gitops_promotion else 'false'}\n")
           '
 
   build-and-push:
@@ -193,7 +199,7 @@ jobs:
   gitops-promotion:
     name: "GitOps: Update Kustomize & Create PR"
     needs: [detect-changes, build-and-push]
-    if: needs.detect-changes.outputs.matrix_targets != '[]'
+    if: needs.detect-changes.outputs.gitops_promotion == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -302,11 +308,11 @@ jobs:
           fi
 
           if [ "${{ needs.detect-changes.outputs.machine_learning_serving }}" == "true" ]; then
-            MACHINE_LEARNING_SERVING_TAG="$REG/mlops-paas-machine-learning-serving:$SHA"
+            MACHINE_LEARNING_SERVING_TAG="$REG/machine-learning-serving:$SHA"
           fi
 
           if [ "${{ needs.detect-changes.outputs.deep_learning_serving }}" == "true" ]; then
-            DEEP_LEARNING_SERVING_TAG="$REG/mlops-paas-deep-learning-serving:$SHA"
+            DEEP_LEARNING_SERVING_TAG="$REG/deep-learning-serving:$SHA"
           fi
 
           if [ "${{ needs.detect-changes.outputs.training_runner }}" == "true" ]; then
@@ -315,19 +321,19 @@ jobs:
           
           EOF_DELIM=$(openssl rand -hex 8)
           
-          RAW_SUMMARY="### Production Promotion Summary
-          | Service | Image Tag |
-          | :--- | :--- |
-          | **Frontend Web** (\`mlops-paas-web\`) | \`$WEB_TAG\` |
-          | **Control Plane** (\`mlops-paas-control-plane\`) | \`$DJANGO_TAG\` |
-          | **Redpanda Consumer** (\`mlops-paas-consumer\`) | \`$CONSUMER_TAG\` |
-          | **Model Packager** (\`mlops-paas-model-packager\`) | \`$PACKAGER_TAG\` |
-          | **Evidently Drift** (\`mlops-paas-evidently\`) | \`$EVIDENTLY_TAG\` |
-          | **MLflow Tracking Server** (\`mlops-paas-mlflow\`) | \`$MLFLOW_TAG\` |
-          | **Model Server** (\`mlops-paas-model-server\`) | \`$MODEL_SERVER_TAG\` |
-          | **Machine Learning Serving** (\`mlops-paas-machine-learning-serving\`) | \`$MACHINE_LEARNING_SERVING_TAG\` |
-          | **Deep Learning Serving** (\`mlops-paas-deep-learning-serving\`) | \`$DEEP_LEARNING_SERVING_TAG\` |
-          | **Training Runner** (\`mlops-paas-training-runner\`) | \`$TRAINING_RUNNER_TAG\` |"
+          RAW_SUMMARY="### Delivery Summary
+          | Component | Image Tag | Delivery |
+          | :--- | :--- | :--- |
+          | **Frontend Web** (\`mlops-paas-web\`) | \`$WEB_TAG\` | GitOps promotion |
+          | **Control Plane** (\`mlops-paas-control-plane\`) | \`$DJANGO_TAG\` | GitOps promotion |
+          | **Redpanda Consumer** (\`mlops-paas-consumer\`) | \`$CONSUMER_TAG\` | GitOps promotion |
+          | **Model Packager** (\`mlops-paas-model-packager\`) | \`$PACKAGER_TAG\` | GitOps promotion |
+          | **Evidently Drift** (\`mlops-paas-evidently\`) | \`$EVIDENTLY_TAG\` | GitOps promotion |
+          | **MLflow Tracking Server** (\`mlops-paas-mlflow\`) | \`$MLFLOW_TAG\` | GitOps promotion |
+          | **Model Server** (\`mlops-paas-model-server\`) | \`$MODEL_SERVER_TAG\` | GitOps promotion |
+          | **Machine Learning Serving Base** (\`machine-learning-serving\`) | \`$MACHINE_LEARNING_SERVING_TAG\` | Registry base image |
+          | **Deep Learning Serving Base** (\`deep-learning-serving\`) | \`$DEEP_LEARNING_SERVING_TAG\` | Registry base image |
+          | **Training Runner** (\`mlops-paas-training-runner\`) | \`$TRAINING_RUNNER_TAG\` | GitOps promotion |"
           
           SUMMARY_CONTENT=$(echo "$RAW_SUMMARY" | sed 's/^ *//')
           
