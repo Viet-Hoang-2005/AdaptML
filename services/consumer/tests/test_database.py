@@ -70,34 +70,45 @@ def test_insert_on_conflict_do_nothing_uses_event_id(monkeypatch):
     statement.on_conflict_do_nothing.assert_called_once_with(index_elements=["id"])
 
 
-def test_count_queries_and_fallback(monkeypatch):
-    result = Mock()
-    result.scalar.return_value = 7
-    conn = Mock()
-    conn.execute.return_value = result
+def test_save_dataframe_and_signals_share_one_transaction(monkeypatch):
+    connection = Mock()
     engine = Mock()
-    engine.connect.return_value = Context(conn)
-    monkeypatch.setattr(database, "engine_ro", engine)
-    monkeypatch.setattr(database, "engine_rw", None)
-    assert database.get_production_data_count() == 7
-    assert database.get_production_data_count_by_model_version("m") == 7
-    assert conn.execute.call_args.args[1] == {"model_version_id": "m"}
+    engine.begin.return_value = Context(connection)
+    monkeypatch.setattr(database, "engine_rw", engine)
+    save = Mock()
+    monkeypatch.setattr(database, "_save_dataframe", save)
+
+    assert database.save_dataframe_and_automatic_drift_signals(
+        pd.DataFrame({"id": ["event-1"]}),
+        "paas_production_logs",
+        [{"model_version_id": "version-1", "idempotency_key": "signal-1"}],
+    )
+
+    save.assert_called_once()
+    assert connection.execute.call_args.args[1] == [
+        {"model_version_id": "version-1", "idempotency_key": "signal-1"}
+    ]
 
 
-def test_count_without_engine_returns_zero(monkeypatch):
+def test_save_dataframe_and_signals_handles_no_engine(monkeypatch):
     monkeypatch.setattr(database, "engine_ro", None)
     monkeypatch.setattr(database, "engine_rw", None)
-    assert database.get_production_data_count() == 0
-    assert database.get_production_data_count_by_model_version("m") == 0
+    assert not database.save_dataframe_and_automatic_drift_signals(
+        pd.DataFrame({"id": ["event-1"]}), "paas_production_logs", []
+    )
 
 
-def test_get_drift_thresholds(monkeypatch):
-    rows = [("v1", 100), ("v2", 250)]
-    result = Mock()
-    result.fetchall.return_value = rows
-    conn = Mock()
-    conn.execute.return_value = result
+def test_reschedule_signal_uses_claim_attempt_count(monkeypatch):
+    connection = Mock()
     engine = Mock()
-    engine.connect.return_value = Context(conn)
-    monkeypatch.setattr(database, "engine_ro", engine)
-    assert database.get_model_drift_thresholds() == {"v1": 100, "v2": 250}
+    engine.begin.return_value = Context(connection)
+    monkeypatch.setattr(database, "engine_rw", engine)
+
+    database.reschedule_automatic_drift_signal(4, 3, "HTTP 503", 20)
+
+    assert connection.execute.call_args.args[1] == {
+        "event_id": 4,
+        "attempts": 3,
+        "delay_seconds": 20,
+        "error": "HTTP 503",
+    }

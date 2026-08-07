@@ -1,17 +1,14 @@
 import os
 import json
 import time
-import requests
 import signal
 from dataclasses import dataclass
 from typing import Any
 import pandas as pd
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 from src.database import (
-    get_model_drift_thresholds,
-    get_production_data_count_by_model_version,
     init_db,
-    save_dataframe_to_db,
+    save_dataframe_and_automatic_drift_signals,
 )
 
 # Lấy biến môi trường
@@ -26,10 +23,6 @@ KAFKA_DB_RETRY_MAX_SECONDS = max(
     KAFKA_DB_RETRY_INITIAL_SECONDS,
     int(os.environ.get("KAFKA_DB_RETRY_MAX_SECONDS", "60")),
 )
-EVIDENTLY_TRIGGER_THRESHOLD = int(os.environ.get('EVIDENTLY_TRIGGER_THRESHOLD', '100'))
-CONTROL_PLANE_WEBHOOK_URL = os.environ.get("CONTROL_PLANE_WEBHOOK_URL", "").strip()
-WEBHOOK_SECRET = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "super-secret-key")
-
 # Cờ báo hiệu trạng thái hoạt động
 RUNNING = True
 
@@ -55,66 +48,32 @@ def handle_sigterm(*args):
     print("Received SIGTERM. Shutting down gracefully...")
     RUNNING = False
 
-# Hàm gửi Webhook cảnh báo về Django Control Plane để kích hoạt Argo Workflows / Celery
-def trigger_django_webhook(model_version_id: str, count: int):
-    if not CONTROL_PLANE_WEBHOOK_URL:
-        return
-    print(f"[{model_version_id}] Triggering Django webhook for drift check...")
-
-    headers = {
-        "Authorization": f"Bearer {WEBHOOK_SECRET}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "event_type": "trigger_drift_check",
-        "model_version_id": model_version_id,
-        "current_data_count": count
-    }
-
-    try:
-        response = requests.post(CONTROL_PLANE_WEBHOOK_URL, headers=headers, json=payload, timeout=10)
-        if response.status_code in [200, 201, 204]:
-            print(f"[{model_version_id}] Webhook sent Successfully! Django has been notified.")
-        else:
-            print(f"[{model_version_id}] Webhook failed! HTTP {response.status_code}: {response.text}")
-    except Exception as e:
-        print(f"[{model_version_id}] Error sending webhook: {e}")
-
-# Hàm kiểm tra và gọi webhook nếu Production Data vượt ngưỡng
-def check_threshold_and_trigger(last_triggered_counts: dict, df_batch: pd.DataFrame) -> dict:
-    """Kiểm tra số lượng và gọi webhook nếu vượt ngưỡng. Trả về last_triggered_counts mới."""
-    if df_batch is None or df_batch.empty or 'model_version_id' not in df_batch.columns:
-        return last_triggered_counts
-
-    thresholds = get_model_drift_thresholds()
-    unique_models = df_batch['model_version_id'].dropna().unique()
-    
-    for model_version_id in unique_models:
-        threshold = thresholds.get(model_version_id)
-        if not threshold:
-            continue
-            
-        count = get_production_data_count_by_model_version(model_version_id)
-        last_count = last_triggered_counts.get(model_version_id, 0)
-        diff = count - last_count
-        
-        print(
-            f"Drift monitoring [{model_version_id}]: {count} total rows. "
-            f"New rows since last trigger: {diff}/{threshold}"
-        )
-        
-        if diff >= threshold:
-            trigger_django_webhook(model_version_id, count)
-            last_triggered_counts[model_version_id] = count
-            
-    return last_triggered_counts
-
 def build_batch_dataframe(records: list[KafkaRecord]) -> pd.DataFrame:
     df = pd.DataFrame([record.payload for record in records])
     for column in ("timestamp", "created_at"):
         if column in df.columns:
             df[column] = pd.to_datetime(df[column], utc=True, errors="coerce")
     return df
+
+
+def build_automatic_drift_signals(records: list[KafkaRecord]) -> list[dict[str, str]]:
+    """Create replay-safe outbox rows for every model represented in one batch."""
+    if not records:
+        return []
+    first, last = records[0], records[-1]
+    model_version_ids = {
+        str(record.payload["model_version_id"])
+        for record in records
+        if record.payload.get("model_version_id")
+    }
+    batch_key = f"{first.topic}:{first.partition}:{first.offset}:{last.offset}"
+    return [
+        {
+            "model_version_id": model_version_id,
+            "idempotency_key": f"automatic-drift:{batch_key}:{model_version_id}",
+        }
+        for model_version_id in sorted(model_version_ids)
+    ]
 
 
 def _commit_batch_offset(consumer, record: KafkaRecord) -> bool:
@@ -139,22 +98,21 @@ def _commit_batch_offset(consumer, record: KafkaRecord) -> bool:
     return True
 
 
-def flush_batch(
-    consumer, records: list[KafkaRecord], last_triggered_counts: dict
-) -> tuple[bool, dict]:
-    """Persist one partition batch before committing its exact next offset."""
+def flush_batch(consumer, records: list[KafkaRecord]) -> bool:
+    """Persist a batch and its outbox signals before its Kafka offset."""
     if not records:
-        return True, last_triggered_counts
+        return True
     partitions = {(record.topic, record.partition) for record in records}
     if len(partitions) != 1:
         raise ValueError("A Kafka batch must contain records from exactly one partition.")
 
     dataframe = build_batch_dataframe(records)
-    if not save_dataframe_to_db(dataframe, "paas_production_logs"):
-        return False, last_triggered_counts
+    signals = build_automatic_drift_signals(records)
+    if not save_dataframe_and_automatic_drift_signals(dataframe, "paas_production_logs", signals):
+        return False
     if not _commit_batch_offset(consumer, records[-1]):
-        return False, last_triggered_counts
-    return True, check_threshold_and_trigger(last_triggered_counts, dataframe)
+        return False
+    return True
 
 
 def _partition_handle(key: tuple[str, int]) -> TopicPartition:
@@ -186,20 +144,19 @@ def flush_pending_batch(
     pending_batches: dict[tuple[str, int], list[KafkaRecord]],
     retries: dict[tuple[str, int], RetryState],
     key: tuple[str, int],
-    last_triggered_counts: dict,
-) -> tuple[bool, dict]:
+) -> bool:
     """Flush a retained partition batch and release it only after offset commit."""
     batch = pending_batches[key]
-    saved, last_triggered_counts = flush_batch(consumer, batch, last_triggered_counts)
+    saved = flush_batch(consumer, batch)
     if not saved:
         _schedule_retry(consumer, key, retries)
-        return False, last_triggered_counts
+        return False
 
     pending_batches.pop(key)
     was_paused = retries.pop(key, None)
     if was_paused:
         consumer.resume([_partition_handle(key)])
-    return True, last_triggered_counts
+    return True
 
 # Hàm main để chạy Consumer liên tục lắng nghe Redpanda và xử lý dữ liệu
 def main():
@@ -227,9 +184,6 @@ def main():
 
     pending_batches: dict[tuple[str, int], list[KafkaRecord]] = {}
     retries: dict[tuple[str, int], RetryState] = {}
-    last_triggered_counts = {} # Khởi tạo tracking số lượng theo từng model
-    print("Initial tracking dictionary initialized.")
-
     try:
         while RUNNING:
             # Retry failed partitions without blocking heartbeats for the rest
@@ -238,9 +192,7 @@ def main():
             now = time.monotonic()
             for key, retry in list(retries.items()):
                 if now >= retry.next_retry_at:
-                    _, last_triggered_counts = flush_pending_batch(
-                        consumer, pending_batches, retries, key, last_triggered_counts
-                    )
+                    flush_pending_batch(consumer, pending_batches, retries, key)
 
             # Liên tục lắng nghe (poll) với timeout 1 giây
             msg = consumer.poll(timeout=1.0)
@@ -251,9 +203,7 @@ def main():
                     if key in retries:
                         continue
                     batch_size = len(pending_batches[key])
-                    saved, last_triggered_counts = flush_pending_batch(
-                        consumer, pending_batches, retries, key, last_triggered_counts
-                    )
+                    saved = flush_pending_batch(consumer, pending_batches, retries, key)
                     if saved:
                         print(f"Flushed {batch_size} records to DB due to idle time.")
                 continue
@@ -289,9 +239,7 @@ def main():
                 # pauses that partition, so its later offsets cannot overtake it.
                 if key not in retries and len(current_batch) >= KAFKA_BATCH_SIZE:
                     batch_size = len(current_batch)
-                    saved, last_triggered_counts = flush_pending_batch(
-                        consumer, pending_batches, retries, key, last_triggered_counts
-                    )
+                    saved = flush_pending_batch(consumer, pending_batches, retries, key)
                     if saved:
                         print(f"Completed batch delivery: {batch_size} records to DB.")
                     
@@ -307,9 +255,7 @@ def main():
         # Try every remaining batch once. Failed batches are intentionally not
         # committed; they will be replayed after the local Compose restart.
         for key in list(pending_batches):
-            _, last_triggered_counts = flush_pending_batch(
-                consumer, pending_batches, retries, key, last_triggered_counts
-            )
+            flush_pending_batch(consumer, pending_batches, retries, key)
         consumer.close()
         print("Consumer cleaned up safely.")
 

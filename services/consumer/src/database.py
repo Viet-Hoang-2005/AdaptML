@@ -20,6 +20,8 @@ DB_NAME = os.environ.get("DB_NAME", "mlops_paas_db")
 DB_HOST_RW = os.environ.get("DB_HOST_RW", "postgres")
 DB_HOST_RO = os.environ.get("DB_HOST_RO", "postgres")
 
+AUTOMATIC_DRIFT_OUTBOX_TABLE = "paas_automatic_drift_outbox"
+
 def create_engine_safe(host: str, label: str):
     db_password_encoded = quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
     db_url = f"postgresql://{DB_USER}:{db_password_encoded}@{host}:{DB_PORT}/{DB_NAME}"
@@ -96,6 +98,26 @@ def init_db():
         "ON paas_production_logs(tenant_id, project_id, model_version_id);"
     )
     execute_safe("CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_timestamp ON paas_production_logs(timestamp);")
+
+    # A production-data batch and its automatic-drift notification must become
+    # visible together.  Kafka is acknowledged only after this transaction.
+    execute_safe(f"""
+        CREATE TABLE IF NOT EXISTS {AUTOMATIC_DRIFT_OUTBOX_TABLE} (
+            id BIGSERIAL PRIMARY KEY,
+            idempotency_key VARCHAR(255) UNIQUE NOT NULL,
+            model_version_id VARCHAR(255) NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            locked_until TIMESTAMPTZ,
+            published_at TIMESTAMPTZ,
+            last_error TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    execute_safe(
+        f"CREATE INDEX IF NOT EXISTS idx_paas_auto_drift_outbox_pending "
+        f"ON {AUTOMATIC_DRIFT_OUTBOX_TABLE}(published_at, available_at, created_at);"
+    )
     
     print("[RW] Initialized 'paas_production_logs' schema.")
 
@@ -113,33 +135,34 @@ def insert_on_conflict_do_nothing(table, conn, keys, data_iter):
     return result.rowcount
 
 
+def _save_dataframe(conn, df: pd.DataFrame, table_name: str) -> None:
+    dtypes = {}
+    for col in df.columns:
+        if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
+            # Let the JSONB dtype serialize dict/list once; json.dumps here would
+            # double-encode (JSONB then stores a JSON string instead of an object).
+            df[col] = df[col].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
+            dtypes[col] = JSONB
+
+    df.to_sql(
+        table_name,
+        conn,
+        if_exists='append',
+        index=False,
+        chunksize=1000,
+        dtype=dtypes,
+        method=insert_on_conflict_do_nothing,
+    )
+
+
 def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
     if engine_rw is None:
         print("[RW Engine] No database engine available for writing.")
         return False
 
     try:
-        dtypes = {}
-        for col in df.columns:
-            if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
-                # Let the JSONB dtype serialize dict/list once; json.dumps here would
-                # double-encode (JSONB then stores a JSON string instead of an object).
-                df[col] = df[col].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
-                dtypes[col] = JSONB
-
-        # Keep every batch in one PostgreSQL transaction. A consumer may crash
-        # after this commit but before its Kafka offset commit; replaying that
-        # batch then becomes a no-op for rows with the same event id.
         with engine_rw.begin() as conn:
-            df.to_sql(
-                table_name,
-                conn,
-                if_exists='append',
-                index=False,
-                chunksize=1000,
-                dtype=dtypes,
-                method=insert_on_conflict_do_nothing,
-            )
+            _save_dataframe(conn, df, table_name)
 
         record_count = len(df)
         if record_count == 1 and 'id' in df.columns:
@@ -152,54 +175,105 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
         print(f"[RW] Error saving to '{table_name}': {e}")
         return False
 
-def get_production_data_count() -> int:
-    engine = engine_ro if engine_ro else engine_rw
-    if engine is None:
-        return 0
+def save_dataframe_and_automatic_drift_signals(
+    df: pd.DataFrame, table_name: str, signals: list[dict[str, str]]
+) -> bool:
+    """Persist production data and one idempotent signal per affected model.
+
+    The caller may safely replay a Kafka batch: production events conflict on
+    their event id and signals conflict on their deterministic batch key.
+    """
+    if engine_rw is None:
+        print("[RW Engine] No database engine available for writing.")
+        return False
 
     try:
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT COUNT(*) FROM paas_production_logs"))
-            return result.scalar()
-    except Exception as e:
-        print(f"Error counting records: {e}")
-        return 0
+        with engine_rw.begin() as conn:
+            _save_dataframe(conn, df, table_name)
+            if signals:
+                conn.execute(
+                    text(
+                        f"""
+                        INSERT INTO {AUTOMATIC_DRIFT_OUTBOX_TABLE}
+                            (idempotency_key, model_version_id)
+                        VALUES (:idempotency_key, :model_version_id)
+                        ON CONFLICT (idempotency_key) DO NOTHING
+                        """
+                    ),
+                    signals,
+                )
+        return True
+    except Exception as exc:
+        print(f"[RW] Error saving production data and automatic drift signals: {exc}")
+        return False
 
-def get_production_data_count_by_model_version(model_version_id: str) -> int:
-    engine = engine_ro if engine_ro else engine_rw
-    if engine is None:
-        return 0
 
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(
-                text(
-                    "SELECT COUNT(*) FROM paas_production_logs "
-                    "WHERE model_version_id = :model_version_id"
-                ),
-                {"model_version_id": model_version_id}
-            )
-            return result.scalar()
-    except Exception as e:
-        if "relation \"paas_production_logs\" does not exist" not in str(e):
-            print(f"Error counting records for model: {e}")
-        return 0
+def claim_automatic_drift_signals(limit: int, lease_seconds: int) -> list[dict]:
+    """Lease pending signals so multiple workers do not send the same row."""
+    if engine_rw is None:
+        return []
 
-def get_model_drift_thresholds() -> dict:
-    engine = engine_ro if engine_ro else engine_rw
-    if engine is None:
-        return {}
+    with engine_rw.begin() as conn:
+        rows = conn.execute(
+            text(
+                f"""
+                WITH candidates AS (
+                    SELECT id
+                    FROM {AUTOMATIC_DRIFT_OUTBOX_TABLE}
+                    WHERE published_at IS NULL
+                      AND available_at <= NOW()
+                      AND (locked_until IS NULL OR locked_until < NOW())
+                    ORDER BY created_at, id
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT :limit
+                )
+                UPDATE {AUTOMATIC_DRIFT_OUTBOX_TABLE} AS event
+                SET attempts = event.attempts + 1,
+                    locked_until = NOW() + (:lease_seconds * INTERVAL '1 second')
+                FROM candidates
+                WHERE event.id = candidates.id
+                RETURNING event.id, event.idempotency_key, event.model_version_id, event.attempts
+                """
+            ),
+            {"limit": limit, "lease_seconds": lease_seconds},
+        ).mappings()
+        return [dict(row) for row in rows]
 
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT version.public_id, monitor.trigger_threshold
-                FROM drift_driftmonitor AS monitor
-                INNER JOIN registry_modelversion AS version ON version.id = monitor.version_id
-                WHERE monitor.is_active = TRUE
-            """))
-            return {str(row[0]): row[1] for row in result.fetchall()}
-    except Exception as e:
-        if "relation \"drift_driftmonitor\" does not exist" not in str(e):
-            print(f"Error getting drift thresholds: {e}")
-        return {}
+
+def mark_automatic_drift_signal_published(event_id: int) -> None:
+    if engine_rw is None:
+        return
+    with engine_rw.begin() as conn:
+        conn.execute(
+            text(
+                f"""
+                UPDATE {AUTOMATIC_DRIFT_OUTBOX_TABLE}
+                SET published_at = NOW(), locked_until = NULL, last_error = ''
+                WHERE id = :event_id AND published_at IS NULL
+                """
+            ),
+            {"event_id": event_id},
+        )
+
+
+def reschedule_automatic_drift_signal(event_id: int, attempts: int, error: str, delay_seconds: int) -> None:
+    if engine_rw is None:
+        return
+    with engine_rw.begin() as conn:
+        conn.execute(
+            text(
+                f"""
+                UPDATE {AUTOMATIC_DRIFT_OUTBOX_TABLE}
+                SET available_at = NOW() + (:delay_seconds * INTERVAL '1 second'),
+                    locked_until = NULL,
+                    last_error = :error
+                WHERE id = :event_id AND published_at IS NULL AND attempts = :attempts
+                """
+            ),
+            {
+                "event_id": event_id,
+                "attempts": attempts,
+                "delay_seconds": delay_seconds,
+                "error": error[:1000],
+            },
+        )

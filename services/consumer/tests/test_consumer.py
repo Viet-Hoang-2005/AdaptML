@@ -2,7 +2,6 @@ import json
 import pandas as pd
 import pytest
 
-from types import SimpleNamespace
 from unittest.mock import Mock
 from src import main
 
@@ -80,77 +79,42 @@ def test_build_batch_dataframe_converts_dates_to_utc():
     assert pd.isna(df.loc[0, "created_at"])
 
 
-def test_check_threshold_ignores_invalid_batches(monkeypatch):
-    state = {"m": 10}
-    assert main.check_threshold_and_trigger(state, None) is state
-    assert main.check_threshold_and_trigger(state, pd.DataFrame()) is state
-    assert main.check_threshold_and_trigger(state, pd.DataFrame({"x": [1]})) is state
-
-
-def test_check_threshold_triggers_models_independently(monkeypatch):
-    monkeypatch.setattr(main, "get_model_drift_thresholds", lambda: {"a": 5, "b": 10})
-    monkeypatch.setattr(
-        main,
-        "get_production_data_count_by_model_version",
-        lambda version_id: {"a": 8, "b": 9}[version_id],
-    )
-    trigger = Mock()
-    monkeypatch.setattr(main, "trigger_django_webhook", trigger)
-
-    state = main.check_threshold_and_trigger(
-        {"a": 2}, pd.DataFrame({"model_version_id": ["a", "b", None]})
+def test_build_automatic_drift_signals_is_deduplicated_and_replay_safe():
+    signals = main.build_automatic_drift_signals(
+        [
+            record({"model_version_id": "version-b"}, offset=7),
+            record({"model_version_id": "version-a"}, offset=8),
+            record({"model_version_id": "version-a"}, offset=9),
+            record({"model_version_id": None}, offset=10),
+        ]
     )
 
-    assert state == {"a": 8}
-    trigger.assert_called_once_with("a", 8)
-
-
-def test_trigger_webhook_disabled(monkeypatch):
-    monkeypatch.setattr(main, "CONTROL_PLANE_WEBHOOK_URL", "")
-    post = Mock()
-    monkeypatch.setattr(main.requests, "post", post)
-    main.trigger_django_webhook("m", 3)
-    post.assert_not_called()
-
-
-def test_trigger_webhook_sends_bearer_payload(monkeypatch):
-    monkeypatch.setattr(main, "CONTROL_PLANE_WEBHOOK_URL", "http://control/run")
-    monkeypatch.setattr(main, "WEBHOOK_SECRET", "secret")
-    post = Mock(return_value=SimpleNamespace(status_code=204, text=""))
-    monkeypatch.setattr(main.requests, "post", post)
-    main.trigger_django_webhook("model", 12)
-    post.assert_called_once_with(
-        "http://control/run",
-        headers={"Authorization": "Bearer secret", "Content-Type": "application/json"},
-        json={
-            "event_type": "trigger_drift_check",
-            "model_version_id": "model",
-            "current_data_count": 12,
+    assert signals == [
+        {
+            "model_version_id": "version-a",
+            "idempotency_key": "automatic-drift:events:0:7:10:version-a",
         },
-        timeout=10,
-    )
-
-
-def test_trigger_webhook_non_success_and_exception_are_nonfatal(monkeypatch, capsys):
-    monkeypatch.setattr(main, "CONTROL_PLANE_WEBHOOK_URL", "http://control/run")
-    monkeypatch.setattr(main.requests, "post", Mock(return_value=SimpleNamespace(status_code=500, text="no")))
-    main.trigger_django_webhook("m", 1)
-    assert "Webhook failed" in capsys.readouterr().out
-    monkeypatch.setattr(main.requests, "post", Mock(side_effect=RuntimeError("down")))
-    main.trigger_django_webhook("m", 1)
-    assert "Error sending webhook" in capsys.readouterr().out
+        {
+            "model_version_id": "version-b",
+            "idempotency_key": "automatic-drift:events:0:7:10:version-b",
+        },
+    ]
 
 
 def test_flush_batch_commits_only_after_success(monkeypatch):
     consumer = FakeConsumer([])
-    monkeypatch.setattr(main, "save_dataframe_to_db", Mock(return_value=False))
-    saved, state = main.flush_batch(consumer, [record(offset=41)], {})
-    assert not saved and state == {} and consumer.commits == 0
+    persist = Mock(return_value=False)
+    monkeypatch.setattr(main, "save_dataframe_and_automatic_drift_signals", persist)
+    assert not main.flush_batch(consumer, [record(offset=41)])
+    assert consumer.commits == 0
 
-    monkeypatch.setattr(main, "save_dataframe_to_db", Mock(return_value=True))
-    monkeypatch.setattr(main, "check_threshold_and_trigger", lambda state, df: {"m": len(df)})
-    saved, state = main.flush_batch(consumer, [record(offset=41)], {})
-    assert saved and state == {"m": 1} and consumer.commits == 1
+    persist.return_value = True
+    assert main.flush_batch(consumer, [record(offset=41)])
+    assert consumer.commits == 1
+    assert persist.call_args.args[1] == "paas_production_logs"
+    assert persist.call_args.args[2] == [
+        {"model_version_id": "m", "idempotency_key": "automatic-drift:events:0:41:41:m"}
+    ]
     offsets, asynchronous = consumer.commit_offsets[0]
     assert asynchronous is False
     assert offsets[0].topic == "events"
@@ -160,16 +124,15 @@ def test_flush_batch_commits_only_after_success(monkeypatch):
 
 def test_flush_empty_batch_is_noop():
     consumer = FakeConsumer([])
-    state = {"m": 1}
-    assert main.flush_batch(consumer, [], state) == (True, state)
+    assert main.flush_batch(consumer, [])
     assert consumer.commits == 0
 
 
 def test_flush_batch_rejects_mixed_partitions(monkeypatch):
     consumer = FakeConsumer([])
-    monkeypatch.setattr(main, "save_dataframe_to_db", Mock(return_value=True))
+    monkeypatch.setattr(main, "save_dataframe_and_automatic_drift_signals", Mock(return_value=True))
     with pytest.raises(ValueError, match="exactly one partition"):
-        main.flush_batch(consumer, [record(partition=0), record(partition=1)], {})
+        main.flush_batch(consumer, [record(partition=0), record(partition=1)])
 
 
 def test_failed_partition_batch_is_retained_paused_and_retried(monkeypatch):
@@ -177,15 +140,14 @@ def test_failed_partition_batch_is_retained_paused_and_retried(monkeypatch):
     key = ("events", 0)
     pending = {key: [record(offset=7)]}
     retries = {}
-    monkeypatch.setattr(main, "save_dataframe_to_db", Mock(side_effect=[False, True]))
-    monkeypatch.setattr(main, "check_threshold_and_trigger", lambda state, df: state)
+    monkeypatch.setattr(main, "save_dataframe_and_automatic_drift_signals", Mock(side_effect=[False, True]))
 
-    saved, state = main.flush_pending_batch(consumer, pending, retries, key, {})
+    saved = main.flush_pending_batch(consumer, pending, retries, key)
     assert not saved and key in pending and key in retries
     assert consumer.commits == 0
     assert [(item.topic, item.partition) for item in consumer.paused] == [key]
 
-    saved, state = main.flush_pending_batch(consumer, pending, retries, key, state)
+    saved = main.flush_pending_batch(consumer, pending, retries, key)
     assert saved and key not in pending and key not in retries
     assert consumer.commits == 1
     assert [(item.topic, item.partition) for item in consumer.resumed] == [key]
@@ -198,13 +160,12 @@ def test_commit_failure_retains_batch_for_idempotent_retry(monkeypatch):
     key = ("events", 0)
     pending = {key: [record(offset=12)]}
     retries = {}
-    trigger = Mock()
-    monkeypatch.setattr(main, "save_dataframe_to_db", Mock(return_value=True))
-    monkeypatch.setattr(main, "check_threshold_and_trigger", trigger)
+    persist = Mock(return_value=True)
+    monkeypatch.setattr(main, "save_dataframe_and_automatic_drift_signals", persist)
 
-    saved, _ = main.flush_pending_batch(consumer, pending, retries, key, {})
+    saved = main.flush_pending_batch(consumer, pending, retries, key)
     assert not saved and key in pending and key in retries
-    trigger.assert_not_called()
+    persist.assert_called_once()
 
 
 def test_main_flushes_valid_message_and_closes(monkeypatch):
@@ -214,8 +175,7 @@ def test_main_flushes_valid_message_and_closes(monkeypatch):
     monkeypatch.setattr(main, "Consumer", lambda conf: fake)
     monkeypatch.setattr(main.signal, "signal", lambda *args: None)
     monkeypatch.setattr(main, "init_db", Mock())
-    monkeypatch.setattr(main, "save_dataframe_to_db", Mock(return_value=True))
-    monkeypatch.setattr(main, "check_threshold_and_trigger", lambda state, df: state)
+    monkeypatch.setattr(main, "save_dataframe_and_automatic_drift_signals", Mock(return_value=True))
     main.RUNNING = True
     main.main()
     assert fake.topics == [main.KAFKA_TOPIC]

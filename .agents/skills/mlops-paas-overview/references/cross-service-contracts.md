@@ -37,3 +37,7 @@ Presigned URLs must be scoped to one object/prefix operation and expire quickly.
 ## Callback contract
 
 Callbacks bind the resource UUID in the path, authenticate the reporter, and use idempotency to tolerate retries. Common callbacks cover builds, deployments/deletion, training, cancellation, and drift runs. Never trust a tenant workload to assign its own terminal lifecycle state.
+
+## Automatic drift signal contract
+
+Consumer writes a deterministic automatic-drift signal into its PostgreSQL outbox in the same transaction as production-data persistence. A trusted outbox worker delivers only `model_version_id` to the authenticated Control Plane internal endpoint. The Control Plane owns monitor lookup, durable threshold watermark, `DriftRun` idempotency, and execution dispatch; Consumer must not read monitor tables or keep trigger state in memory.

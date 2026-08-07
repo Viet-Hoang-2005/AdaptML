@@ -3,5 +3,6 @@ kind: Kustomization
 
 resources:
   - deployment.yaml
+  - outbox-worker.yaml
   - scaledobject.yaml
   - configmap.yaml

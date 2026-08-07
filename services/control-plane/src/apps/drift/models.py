@@ -11,6 +11,7 @@ class DriftMonitor(models.Model):
     )
     name = models.CharField(max_length=160)
     trigger_threshold = models.PositiveIntegerField(default=1000)
+    last_automatic_trigger_count = models.PositiveBigIntegerField(default=0)
     backend = models.CharField(max_length=30, default="docker")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
