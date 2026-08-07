@@ -35,7 +35,6 @@ def test_save_dataframe_handles_no_engine(monkeypatch):
 
 def test_save_dataframe_marks_nested_columns_jsonb(monkeypatch):
     connection = Mock()
-    connection.execute.return_value.fetchone.return_value = ("pk",)
     engine = Mock()
     engine.begin.return_value = Context(connection)
     monkeypatch.setattr(database, "engine_rw", engine)
@@ -44,6 +43,7 @@ def test_save_dataframe_marks_nested_columns_jsonb(monkeypatch):
     monkeypatch.setattr(pd.DataFrame, "to_sql", to_sql)
     assert database.save_dataframe_to_db(df, "logs")
     assert to_sql.call_args.kwargs["dtype"]["features"] is database.JSONB
+    assert to_sql.call_args.kwargs["method"] is database.insert_on_conflict_do_nothing
     assert df.loc[0, "features"] == {"x": 1}
 
 
@@ -51,6 +51,23 @@ def test_save_dataframe_exception_returns_false(monkeypatch):
     monkeypatch.setattr(database, "engine_rw", Mock())
     monkeypatch.setattr(pd.DataFrame, "to_sql", Mock(side_effect=RuntimeError("db")))
     assert not database.save_dataframe_to_db(pd.DataFrame({"id": ["1"]}), "logs")
+
+
+def test_insert_on_conflict_do_nothing_uses_event_id(monkeypatch):
+    statement = Mock()
+    statement.values.return_value = statement
+    statement.on_conflict_do_nothing.return_value = statement
+    insert = Mock(return_value=statement)
+    monkeypatch.setattr(database, "postgresql_insert", insert)
+    result = Mock(rowcount=2)
+    connection = Mock()
+    connection.execute.return_value = result
+    table = type("PandasTable", (), {"table": "paas_production_logs"})()
+
+    assert database.insert_on_conflict_do_nothing(
+        table, connection, ["id", "prediction"], [("event-1", "ok"), ("event-2", "bad")]
+    ) == 2
+    statement.on_conflict_do_nothing.assert_called_once_with(index_elements=["id"])
 
 
 def test_count_queries_and_fallback(monkeypatch):

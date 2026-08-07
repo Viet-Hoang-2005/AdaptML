@@ -5,6 +5,7 @@ from urllib.parse import quote_plus
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -99,6 +100,19 @@ def init_db():
     print("[RW] Initialized 'paas_production_logs' schema.")
 
 
+def insert_on_conflict_do_nothing(table, conn, keys, data_iter):
+    """Pandas ``to_sql`` method that makes Kafka replay safe by event id."""
+    rows = [dict(zip(keys, row)) for row in data_iter]
+    if not rows:
+        return 0
+
+    statement = postgresql_insert(table.table).values(rows)
+    if "id" in keys:
+        statement = statement.on_conflict_do_nothing(index_elements=["id"])
+    result = conn.execute(statement)
+    return result.rowcount
+
+
 def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
     if engine_rw is None:
         print("[RW Engine] No database engine available for writing.")
@@ -113,22 +127,19 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
                 df[col] = df[col].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
                 dtypes[col] = JSONB
 
-        df.to_sql(table_name, engine_rw, if_exists='append', index=False, chunksize=1000, dtype=dtypes)
-
-        if 'id' in df.columns:
-            with engine_rw.begin() as conn:
-                result = conn.execute(text(f"""
-                    SELECT constraint_name
-                    FROM information_schema.table_constraints
-                    WHERE table_name = '{table_name}' AND constraint_type = 'PRIMARY KEY'
-                """)).fetchone()
-
-                if not result:
-                    try:
-                        conn.execute(text(f'ALTER TABLE "{table_name}" ADD PRIMARY KEY (id);'))
-                        print(f"Primary Key added to '{table_name}'")
-                    except Exception as pk_err:
-                        print(f"Could not set Primary Key (may already exist): {pk_err}")
+        # Keep every batch in one PostgreSQL transaction. A consumer may crash
+        # after this commit but before its Kafka offset commit; replaying that
+        # batch then becomes a no-op for rows with the same event id.
+        with engine_rw.begin() as conn:
+            df.to_sql(
+                table_name,
+                conn,
+                if_exists='append',
+                index=False,
+                chunksize=1000,
+                dtype=dtypes,
+                method=insert_on_conflict_do_nothing,
+            )
 
         record_count = len(df)
         if record_count == 1 and 'id' in df.columns:

@@ -6,6 +6,10 @@ metadata:
     app: mlops-paas-consumer
 data:
   KAFKA_TOPIC: "mlops_paas_production_data"
+  KAFKA_TOPIC_RETRY_SECONDS: "5"
+  KAFKA_BATCH_SIZE: "500"
+  KAFKA_DB_RETRY_INITIAL_SECONDS: "5"
+  KAFKA_DB_RETRY_MAX_SECONDS: "60"
   CONTROL_PLANE_WEBHOOK_URL: ""
   REDPANDA_BROKERS: "redpanda-service:9092"
   EVIDENTLY_TRIGGER_THRESHOLD: "100"
