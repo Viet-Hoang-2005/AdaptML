@@ -263,32 +263,32 @@ spec:
               dest: spec.arguments.parameters.7.value
             - src:
                 { dependencyName: drift-dep, dataKey: body.report_json_s3_uri }
-              dest: spec.arguments.parameters.7.value
+              dest: spec.arguments.parameters.8.value
             - src:
                 { dependencyName: drift-dep, dataKey: body.summary_json_s3_uri }
-              dest: spec.arguments.parameters.8.value
-            - src: { dependencyName: drift-dep, dataKey: body.html_public_url }
               dest: spec.arguments.parameters.9.value
-            - src: { dependencyName: drift-dep, dataKey: body.html_upload_url }
+            - src: { dependencyName: drift-dep, dataKey: body.html_public_url }
               dest: spec.arguments.parameters.10.value
+            - src: { dependencyName: drift-dep, dataKey: body.html_upload_url }
+              dest: spec.arguments.parameters.11.value
             - src:
                 {
                   dependencyName: drift-dep,
                   dataKey: body.report_json_upload_url,
                 }
-              dest: spec.arguments.parameters.11.value
+              dest: spec.arguments.parameters.12.value
             - src:
                 {
                   dependencyName: drift-dep,
                   dataKey: body.summary_json_upload_url,
                 }
-              dest: spec.arguments.parameters.12.value
+              dest: spec.arguments.parameters.13.value
             - src:
                 {
                   dependencyName: drift-dep,
                   dataKey: body.control_plane_webhook_url,
                 }
-              dest: spec.arguments.parameters.13.value
+              dest: spec.arguments.parameters.14.value
 
     - template:
         name: delete-workflow-trigger

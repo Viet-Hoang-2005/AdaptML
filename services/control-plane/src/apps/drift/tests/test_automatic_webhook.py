@@ -3,10 +3,11 @@ from unittest.mock import Mock
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import override_settings
+from infrastructure.execution.argo_backends import ArgoDriftBackend
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ModelProject, WorkspaceAsset
-from apps.drift.models import DriftMonitor
+from apps.drift.models import DriftMonitor, DriftRun
 from apps.registry.models import ModelVersion
 
 
@@ -93,3 +94,43 @@ def test_automatic_drift_webhook_requires_secret_and_uuid():
         HTTP_X_CONTROL_PLANE_SECRET="local-webhook-secret",
     )
     assert response.status_code == 400
+
+
+@pytest.mark.django_db
+@override_settings(
+    ARGO_DRIFT_WEBHOOK_URL="http://argo-events/drift",
+    CONTROL_PLANE_INTERNAL_URL="http://control-plane:8000",
+)
+def test_automatic_drift_run_dispatches_complete_argo_payload():
+    version, asset = _monitor_fixture()
+    monitor = DriftMonitor.objects.create(version=version, reference_asset=asset, name="default")
+    run = DriftRun.objects.create(monitor=monitor, idempotency_key="automatic-drift-argo")
+    captured = {}
+
+    class Storage:
+        bucket = "artifacts"
+
+        def presigned_get(self, uri, _expires_in):
+            return f"get:{uri}"
+
+        def presigned_put(self, uri, _expires_in, content_type):
+            return f"put:{content_type}:{uri}"
+
+    class Client:
+        def trigger(self, url, payload):
+            captured["url"] = url
+            captured["payload"] = payload
+            return {"accepted": True}
+
+    ArgoDriftBackend(client=Client(), storage=Storage()).run(run)
+
+    payload = captured["payload"]
+    assert captured["url"] == "http://argo-events/drift"
+    assert payload["job_id"] == str(run.public_id)
+    assert payload["model_version_id"] == str(version.public_id)
+    assert payload["reference_data_url"] == "get:s3://bucket/reference.csv"
+    assert payload["control_plane_webhook_url"] == (
+        f"http://control-plane:8000/internal/webhooks/drift-runs/{run.public_id}/"
+    )
+    assert payload["report_json_s3_uri"].endswith("/report.json")
+    assert payload["summary_json_upload_url"].endswith("/summary.json")

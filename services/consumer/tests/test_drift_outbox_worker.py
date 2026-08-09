@@ -5,7 +5,11 @@ from src import drift_outbox_worker as worker
 
 
 def test_deliver_posts_internal_idempotent_signal(monkeypatch):
-    monkeypatch.setattr(worker, "CONTROL_PLANE_WEBHOOK_URL", "http://control-plane/internal/webhooks/automatic-drift/")
+    monkeypatch.setattr(
+        worker,
+        "CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL",
+        "http://control-plane/internal/webhooks/automatic-drift/",
+    )
     monkeypatch.setattr(worker, "WEBHOOK_SECRET", "secret")
     post = Mock(return_value=SimpleNamespace(status_code=202))
     monkeypatch.setattr(worker.requests, "post", post)
@@ -24,10 +28,10 @@ def test_deliver_posts_internal_idempotent_signal(monkeypatch):
 
 
 def test_deliver_rejects_missing_configuration(monkeypatch):
-    monkeypatch.setattr(worker, "CONTROL_PLANE_WEBHOOK_URL", "")
+    monkeypatch.setattr(worker, "CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL", "")
     assert worker.deliver({"model_version_id": "version-1", "idempotency_key": "signal-1"}) == (
         False,
-        "CONTROL_PLANE_WEBHOOK_URL is not configured",
+        "CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL is not configured",
     )
 
 

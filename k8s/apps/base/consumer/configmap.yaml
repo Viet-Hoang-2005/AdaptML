@@ -10,7 +10,7 @@ data:
   KAFKA_BATCH_SIZE: "500"
   KAFKA_DB_RETRY_INITIAL_SECONDS: "5"
   KAFKA_DB_RETRY_MAX_SECONDS: "60"
-  CONTROL_PLANE_WEBHOOK_URL: "http://mlops-paas-control-plane:8000/internal/webhooks/automatic-drift/"
+  CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL: "http://mlops-paas-control-plane:8000/internal/webhooks/automatic-drift/"
   AUTOMATIC_DRIFT_OUTBOX_POLL_SECONDS: "5"
   AUTOMATIC_DRIFT_OUTBOX_BATCH_SIZE: "50"
   AUTOMATIC_DRIFT_OUTBOX_LEASE_SECONDS: "60"

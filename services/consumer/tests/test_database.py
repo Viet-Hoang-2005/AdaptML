@@ -112,3 +112,15 @@ def test_reschedule_signal_uses_claim_attempt_count(monkeypatch):
         "delay_seconds": 20,
         "error": "HTTP 503",
     }
+
+
+def test_init_db_creates_model_version_count_index(monkeypatch):
+    connection = Mock()
+    engine = Mock()
+    engine.begin.return_value = Context(connection)
+    monkeypatch.setattr(database, "engine_rw", engine)
+
+    database.init_db()
+
+    statements = [str(call.args[0]) for call in connection.execute.call_args_list]
+    assert any("idx_paas_prod_logs_model_version" in statement for statement in statements)

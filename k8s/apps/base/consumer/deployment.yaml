@@ -47,11 +47,6 @@ spec:
             - configMapRef:
                 name: mlops-paas-consumer-config
           env:
-            - name: CONTROL_PLANE_WEBHOOK_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: mlops-paas-secret
-                  key: CONTROL_PLANE_WEBHOOK_SECRET
             - name: DB_USER
               valueFrom:
                 secretKeyRef:

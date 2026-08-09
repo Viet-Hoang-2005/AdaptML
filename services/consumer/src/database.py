@@ -97,6 +97,10 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_tenant_model_version "
         "ON paas_production_logs(tenant_id, project_id, model_version_id);"
     )
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_model_version "
+        "ON paas_production_logs(model_version_id);"
+    )
     execute_safe("CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_timestamp ON paas_production_logs(timestamp);")
 
     # A production-data batch and its automatic-drift notification must become

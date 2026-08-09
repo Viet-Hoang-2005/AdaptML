@@ -71,7 +71,7 @@ src/
 | `KAFKA_BATCH_SIZE` | Số event tối đa trong một batch của một partition |
 | `KAFKA_DB_RETRY_INITIAL_SECONDS` | Backoff retry PostgreSQL/offset commit ban đầu |
 | `KAFKA_DB_RETRY_MAX_SECONDS` | Backoff retry tối đa; partition lỗi vẫn bị pause |
-| `CONTROL_PLANE_WEBHOOK_URL` | Internal Control Plane URL nhận automatic-drift signal |
+| `CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL` | Internal Control Plane URL nhận automatic-drift signal |
 | `CONTROL_PLANE_WEBHOOK_SECRET` | Secret header xác thực webhook |
 | `AUTOMATIC_DRIFT_OUTBOX_POLL_SECONDS` | Chu kỳ poll outbox (mặc định: `5`) |
 | `AUTOMATIC_DRIFT_OUTBOX_BATCH_SIZE` | Số signal claim mỗi vòng (mặc định: `50`) |

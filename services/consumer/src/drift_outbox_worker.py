@@ -14,7 +14,9 @@ from src.database import (
 )
 
 
-CONTROL_PLANE_WEBHOOK_URL = os.environ.get("CONTROL_PLANE_WEBHOOK_URL", "").strip()
+CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL = os.environ.get(
+    "CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL", ""
+).strip()
 WEBHOOK_SECRET = os.environ.get("CONTROL_PLANE_WEBHOOK_SECRET", "")
 OUTBOX_POLL_SECONDS = max(1, int(os.environ.get("AUTOMATIC_DRIFT_OUTBOX_POLL_SECONDS", "5")))
 OUTBOX_BATCH_SIZE = max(1, int(os.environ.get("AUTOMATIC_DRIFT_OUTBOX_BATCH_SIZE", "50")))
@@ -47,14 +49,14 @@ def retry_delay(attempts: int) -> int:
 
 def deliver(signal: dict) -> tuple[bool, str]:
     """Send one idempotent signal without exposing response payloads in logs."""
-    if not CONTROL_PLANE_WEBHOOK_URL:
-        return False, "CONTROL_PLANE_WEBHOOK_URL is not configured"
+    if not CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL:
+        return False, "CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL is not configured"
     if not WEBHOOK_SECRET:
         return False, "CONTROL_PLANE_WEBHOOK_SECRET is not configured"
 
     try:
         response = requests.post(
-            CONTROL_PLANE_WEBHOOK_URL,
+            CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL,
             headers={
                 "Authorization": f"Bearer {WEBHOOK_SECRET}",
                 "Content-Type": "application/json",
