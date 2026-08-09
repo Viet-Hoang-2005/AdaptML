@@ -100,10 +100,14 @@
     - enable_karpenter | bool
 
 - name: Wait for Karpenter after injecting runtime controller settings
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    -n karpenter rollout status deployment/karpenter --timeout=300s
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: karpenter
+    namespace: karpenter
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    wait_timeout: 300
   when:
     - enable_karpenter | bool
 
@@ -127,43 +131,53 @@
   when: not enable_karpenter | bool
 
 - name: Wait for the CPU EC2NodeClass to become ready
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait ec2nodeclass/training-cpu --for=condition=Ready --timeout=300s
-  register: training_cpu_nodeclass_ready
-  retries: 30
-  delay: 10
-  until: training_cpu_nodeclass_ready.rc == 0
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: karpenter.k8s.aws/v1
+    kind: EC2NodeClass
+    name: training-cpu
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    wait_timeout: 300
+    wait_condition:
+      type: Ready
+      status: "True"
   when:
     - enable_karpenter | bool
     - manage_karpenter_nodepools_with_ansible | bool
 
 - name: Wait for the CPU NodePool to become ready
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait nodepool/mlops-paas-training-cpu --for=condition=Ready --timeout=300s
-  register: training_cpu_nodepool_ready
-  retries: 30
-  delay: 10
-  until: training_cpu_nodepool_ready.rc == 0
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: karpenter.sh/v1
+    kind: NodePool
+    name: mlops-paas-training-cpu
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    wait_timeout: 300
+    wait_condition:
+      type: Ready
+      status: "True"
   when:
     - enable_karpenter | bool
     - manage_karpenter_nodepools_with_ansible | bool
 
 - name: Wait for the GPU EC2NodeClass and NodePool to become ready
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait {{ item }} --for=condition=Ready --timeout=300s
+  kubernetes.core.k8s_info:
+    api_version: "{{ item.api_version }}"
+    kind: "{{ item.kind }}"
+    name: "{{ item.name }}"
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    wait_timeout: 300
+    wait_condition:
+      type: Ready
+      status: "True"
   loop:
-    - ec2nodeclass/training-gpu
-    - nodepool/mlops-paas-training-gpu
-  register: training_gpu_capacity_ready
-  retries: 30
-  delay: 10
-  until: training_gpu_capacity_ready.rc == 0
-  changed_when: false
+    - api_version: karpenter.k8s.aws/v1
+      kind: EC2NodeClass
+      name: training-gpu
+    - api_version: karpenter.sh/v1
+      kind: NodePool
+      name: mlops-paas-training-gpu
   when:
     - enable_karpenter | bool
     - enable_gpu_nodepool | bool

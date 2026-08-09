@@ -93,26 +93,32 @@
 
 - name: Wait for Traefik to receive the trusted proxy configuration
   become: true
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    --namespace kube-system get deployment traefik
-    --output jsonpath={.spec.template.spec.containers[0].args}
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: traefik
+    namespace: kube-system
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
   register: traefik_deployment_arguments
   until: >-
+    traefik_deployment_arguments.resources | length == 1 and
     ('--entryPoints.web.forwardedHeaders.trustedIPs=' ~
     (traefik_forwarded_headers_trusted_ips | join(','))) in
-    traefik_deployment_arguments.stdout
+    (traefik_deployment_arguments.resources[0].spec.template.spec.containers[0].args | default([]))
   retries: 36
   delay: 5
   changed_when: false
 
 - name: Wait for Traefik to finish reconciling the runtime configuration
   become: true
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    --namespace kube-system rollout status deployment/traefik --timeout=180s
-  register: traefik_rollout
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: traefik
+    namespace: kube-system
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    wait_timeout: 180
 
 - name: Wait for the K3s node token
   become: true

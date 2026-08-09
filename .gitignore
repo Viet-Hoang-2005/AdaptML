@@ -98,5 +98,8 @@ ansible/.cache/
 *.zip
 *.pem
 
-# K3s Config
+# Ansible
+.ansible/
+
+# Kube config
 .kube/

@@ -35,3 +35,7 @@ gateway `/32` addresses for forwarded headers; never use
 or ServiceLB traffic policy changes.
 
 Prefer idempotent modules and handlers. Do not embed shell commands when a maintained Ansible module expresses the operation safely.
+Use `kubernetes.core.k8s_info` conditions for Kubernetes reads and readiness,
+and `kubernetes.core.k8s` check mode for server-side dry-runs. The bootstrap
+`GET /readyz` probe is the only intentional `k3s kubectl` command because it
+checks API-server readiness before normal Kubernetes discovery is dependable.

@@ -1,11 +1,16 @@
 ---
 - name: Wait for every static worker to be Ready
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait node/{{ hostvars[item].k3s_node_name | default(item) }}
-    --for=condition=Ready --timeout=300s
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+    name: "{{ hostvars[item].k3s_node_name | default(item) }}"
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    wait_timeout: 300
+    wait_condition:
+      type: Ready
+      status: "True"
   loop: "{{ groups['workers'] }}"
-  changed_when: false
 
 - name: Install Argo CD without exposing its initial admin password
   kubernetes.core.helm:
@@ -21,10 +26,16 @@
     release_values: "{{ lookup('ansible.builtin.file', playbook_dir + '/../k8s/argocd/values.yaml') | from_yaml }}"
 
 - name: Wait for the Argo CD Application CRD
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait crd/applications.argoproj.io --for=condition=Established --timeout=180s
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: applications.argoproj.io
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    wait_timeout: 180
+    wait_condition:
+      type: Established
+      status: "True"
 
 - name: Bootstrap the public root GitOps application
   kubernetes.core.k8s:

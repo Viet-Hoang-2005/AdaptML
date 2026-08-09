@@ -1,53 +1,73 @@
 ---
 - name: Read all K3s nodes
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    get nodes -o json
-  register: verified_k3s_nodes_raw
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: verified_k3s_nodes
   when: verify_scope == 'bootstrap'
 
 - name: Wait for every expected K3s node to be Ready
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait node/{{ item }} --for=condition=Ready --timeout=300s
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+    name: "{{ item }}"
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    wait_timeout: 300
+    wait_condition:
+      type: Ready
+      status: "True"
   loop: "{{ groups['master'] + groups['workers'] }}"
-  changed_when: false
   when: verify_scope == 'bootstrap'
 
 - name: Require every expected node and pinned K3s version
   ansible.builtin.assert:
     that:
-      - item in (verified_k3s_nodes_raw.stdout | from_json | json_query('items[*].metadata.name'))
-      - (verified_k3s_nodes_raw.stdout | from_json | json_query(kubelet_version_query)) == k3s_version
+      - item in (verified_k3s_nodes.resources | map(attribute='metadata.name') | list)
+      - >-
+        (verified_k3s_nodes.resources |
+        selectattr('metadata.name', 'equalto', item) |
+        map(attribute='status.nodeInfo.kubeletVersion') |
+        first) == k3s_version
   loop: "{{ groups['master'] + groups['workers'] }}"
   when: verify_scope == 'bootstrap'
-  vars:
-    kubelet_version_query: "items[?metadata.name=='{{ item }}'].status.nodeInfo.kubeletVersion | [0]"
 
 - name: Verify the control-plane taint
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    get node/{{ groups['master'][0] }}
-    -o json
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+    name: "{{ groups['master'][0] }}"
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
   register: verified_control_plane_taint
-  changed_when: false
   failed_when: >-
+    verified_control_plane_taint.resources | length != 1 or
     'NoSchedule' not in
-    (verified_control_plane_taint.stdout | from_json |
-    json_query("spec.taints[?key=='node-role.kubernetes.io/control-plane'].effect"))
+    (verified_control_plane_taint.resources[0].spec.taints | default([]) |
+    selectattr('key', 'equalto', 'node-role.kubernetes.io/control-plane') |
+    map(attribute='effect') | list)
   when: verify_scope == 'bootstrap'
 
 - name: Verify core Kubernetes components
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    -n kube-system wait pod
-    --for=condition=Ready
-    --selector={{ item }} --timeout=300s
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: kube-system
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    label_selectors:
+      - "{{ item }}"
+  register: verified_core_kubernetes_pods
+  until:
+    - verified_core_kubernetes_pods.resources | length > 0
+    - >-
+      (verified_core_kubernetes_pods.resources |
+      json_query("[?status.conditions[?type=='Ready' && status=='True']]") |
+      length) == verified_core_kubernetes_pods.resources | length
+  retries: 60
+  delay: 5
   loop:
     - k8s-app=kube-dns
     - app.kubernetes.io/name=traefik
-  changed_when: false
   when: verify_scope == 'platform'
 
 - name: Verify every core operator Application is reconciled
@@ -66,43 +86,79 @@
   when: verify_scope == 'platform'
 
 - name: Verify every core operator CRD is Established
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait crd/{{ item }} --for=condition=Established --timeout=300s
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: "{{ item }}"
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    wait: true
+    wait_timeout: 300
+    wait_condition:
+      type: Established
+      status: "True"
   loop: "{{ core_operator_crds }}"
-  changed_when: false
   when: verify_scope == 'platform'
 
 - name: Verify every core operator workload is Ready
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    -n {{ item.namespace }} wait pod
-    --selector=app.kubernetes.io/instance={{ item.release }}
-    --for=condition=Ready --timeout=600s
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ item.namespace }}"
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    label_selectors:
+      - "app.kubernetes.io/instance={{ item.release }}"
+  register: verified_core_operator_pods
+  until:
+    - verified_core_operator_pods.resources | length > 0
+    - >-
+      (verified_core_operator_pods.resources |
+      json_query("[?status.conditions[?type=='Ready' && status=='True']]") |
+      length) == verified_core_operator_pods.resources | length
+  retries: 120
+  delay: 5
   loop: "{{ core_operator_workloads }}"
-  changed_when: false
   when: verify_scope == 'platform'
 
 - name: Verify the AWS EBS CSI driver is registered
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    get csidriver/ebs.csi.aws.com
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: storage.k8s.io/v1
+    kind: CSIDriver
+    name: ebs.csi.aws.com
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: verified_ebs_csi_driver
+  failed_when: verified_ebs_csi_driver.resources | length != 1
   when: verify_scope == 'platform'
 
 - name: Verify every External Secrets store is Ready
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait clustersecretstore --all --for=condition=Ready --timeout=300s
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: external-secrets.io/v1
+    kind: ClusterSecretStore
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: verified_external_secret_stores
+  until:
+    - verified_external_secret_stores.resources | length > 0
+    - >-
+      (verified_external_secret_stores.resources |
+      json_query("[?status.conditions[?type=='Ready' && status=='True']]") |
+      length) == verified_external_secret_stores.resources | length
+  retries: 60
+  delay: 5
   when: verify_scope == 'platform'
 
 - name: Verify every ExternalSecret is Ready
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait externalsecret --all --all-namespaces
-    --for=condition=Ready --timeout=300s
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: external-secrets.io/v1
+    kind: ExternalSecret
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: verified_external_secrets
+  until:
+    - verified_external_secrets.resources | length > 0
+    - >-
+      (verified_external_secrets.resources |
+      json_query("[?status.conditions[?type=='Ready' && status=='True']]") |
+      length) == verified_external_secrets.resources | length
+  retries: 60
+  delay: 5
   when: verify_scope == 'platform'
 
 - name: Verify Argo CD reports the root application healthy
@@ -172,12 +228,11 @@
   when: verify_scope == 'platform'
 
 - name: Validate a build Workflow against the live API server
-  ansible.builtin.command:
-    cmd: >-
-      /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-      create --dry-run=server -f -
-    stdin: "{{ build_workflow_dry_run | to_nice_yaml }}"
-  register: verified_build_workflow_dry_run
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+    definition: "{{ build_workflow_dry_run }}"
+  check_mode: true
   changed_when: false
   when: verify_scope == 'platform'
   tags: [workflow-dry-run]
@@ -260,11 +315,14 @@
                   claimName: ebs-smoke
 
     - name: Wait for the EBS validation pod
-      ansible.builtin.command: >-
-        /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-        -n ansible-storage-validation wait pod/ebs-smoke
-        --for=condition=Ready --timeout=300s
-      changed_when: false
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        name: ebs-smoke
+        namespace: ansible-storage-validation
+        kubeconfig: "{{ k3s_remote_kubeconfig }}"
+        wait: true
+        wait_timeout: 300
   always:
     - name: Remove the storage validation namespace and volume
       kubernetes.core.k8s:
