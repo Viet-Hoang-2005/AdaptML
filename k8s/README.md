@@ -12,7 +12,7 @@ each child owns one independently observable service or domain.
 | Foundation and platform | `k8s/infra` | `mlops-platform` |
 | Argo execution | `k8s/argo` | `mlops-execution` |
 | Static workloads | `k8s/apps/overlays/production` | `mlops-workloads` |
-| Training operators | `k8s/operators` and pinned Helm charts | `platform-operators` |
+| Core and training operators | Pinned Git/Helm sources | `platform-operators` |
 
 Karpenter EC2NodeClass and NodePool resources remain Ansible-owned because they
 contain cluster-specific bootstrap, instance-profile and endpoint settings.
@@ -62,10 +62,13 @@ Traefik health endpoint. Public exposure changes require a security review.
 
 ## Operators
 
-The existing `platform-*` child names are retained for Kubeflow Training,
+Argo CD owns seven core Helm releases: AWS EBS CSI, External Secrets,
+CloudNativePG, KEDA, Argo Workflows, Argo Events and kube-prometheus-stack. It
+also retains the existing `platform-*` children for Kubeflow Training,
 Karpenter CRDs/controller, Node Feature Discovery and NVIDIA GPU Operator.
-Karpenter runtime endpoint/name/queue values are injected by Ansible and ignored
-only at the exact controller environment paths.
+Ansible owns only the Argo CD bootstrap plus Karpenter runtime and capacity
+values that are specific to one cluster. Those injected controller fields are
+ignored only at their exact environment paths.
 
 ## Deferred security resources
 
@@ -86,7 +89,7 @@ rendered source, events and owned resource health before inspecting the root.
 Rollback a manifest through Git; do not delete CRDs, stateful resources or
 runtime-created workloads to repair an Application status.
 
-Orphan warnings stay enabled. AppProjects ignore only the accepted resources
-created by CloudNativePG, Kubernetes, Argo Workflows and the bootstrap-managed
-`monitoring` Helm release. A new orphan name outside those exact identities or
-release prefixes remains visible as an `OrphanedResourceWarning`.
+Orphan warnings stay enabled. AppProjects ignore only accepted runtime resources
+created by CloudNativePG, Kubernetes and Argo Workflows. Monitoring resources
+are owned directly by `platform-monitoring`; a new orphan outside the accepted
+identities remains visible as an `OrphanedResourceWarning`.

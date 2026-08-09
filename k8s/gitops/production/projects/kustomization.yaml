@@ -6,3 +6,14 @@ resources:
   - execution.yaml
   - workloads.yaml
   - operators.yaml
+
+patches:
+  - target:
+      group: argoproj.io
+      version: v1alpha1
+      kind: AppProject
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          argocd.argoproj.io/sync-wave: "-100"

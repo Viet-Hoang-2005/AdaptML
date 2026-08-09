@@ -8,10 +8,16 @@ metadata:
     mlops-paas.io/environment: production
     mlops-paas.io/plane: operator
 spec:
-  description: Pinned training-platform operators for the in-cluster K3s environment.
+  description: Pinned core and training operators for the production K3s environment.
   sourceRepos:
     - https://github.com/Viet-Hoang-2005/MLOps-paas-system.git
     - https://github.com/kubeflow/trainer.git
+    - https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+    - https://charts.external-secrets.io
+    - https://cloudnative-pg.github.io/charts
+    - https://kedacore.github.io/charts
+    - https://argoproj.github.io/argo-helm
+    - https://prometheus-community.github.io/helm-charts
     - public.ecr.aws/karpenter
     - registry.k8s.io/nfd/charts
     - https://helm.ngc.nvidia.com/nvidia
@@ -23,6 +29,18 @@ spec:
     - namespace: kube-system
       server: https://kubernetes.default.svc
     - namespace: gpu-operator
+      server: https://kubernetes.default.svc
+    - namespace: external-secrets
+      server: https://kubernetes.default.svc
+    - namespace: cnpg-system
+      server: https://kubernetes.default.svc
+    - namespace: keda
+      server: https://kubernetes.default.svc
+    - namespace: argo
+      server: https://kubernetes.default.svc
+    - namespace: argo-events
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
       server: https://kubernetes.default.svc
   clusterResourceWhitelist:
     - group: '*'

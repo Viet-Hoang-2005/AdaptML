@@ -3,3 +3,13 @@ kind: Kustomization
 
 resources:
   - operators.yaml
+
+patches:
+  - target:
+      version: v1
+      kind: Secret
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          argocd.argoproj.io/sync-wave: "-100"

@@ -42,7 +42,7 @@
       verify_scope: bootstrap
       when: bootstrap_k3s_cluster | bool
 
-- name: Install core platform operators and bootstrap GitOps
+- name: Bootstrap Argo CD and reconcile the core platform through GitOps
   hosts: master
   become: true
   gather_facts: true

@@ -6,6 +6,21 @@ global:
 configs:
   cm:
     kustomize.buildOptions: --enable-helm
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = "Waiting for child Application reconciliation"
+      if obj.status ~= nil then
+        if obj.status.health ~= nil and obj.status.health.status ~= nil then
+          hs.status = obj.status.health.status
+          hs.message = obj.status.health.message or hs.message
+        end
+        if obj.status.sync ~= nil and obj.status.sync.status ~= "Synced" then
+          hs.status = "Progressing"
+          hs.message = "Child Application is " .. (obj.status.sync.status or "Unknown")
+        end
+      end
+      return hs
     accounts.github-actions: apiKey
   rbac:
     policy.csv: |

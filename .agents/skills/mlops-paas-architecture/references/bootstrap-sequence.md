@@ -6,10 +6,9 @@
 4. Run host preparation.
 5. Initialize the K3s server; securely distribute the join token.
 6. Join worker nodes and verify node readiness.
-7. Install pinned core operators on static workers.
-8. Apply the ClusterSecretStore, wait for it, then materialize Argo repository credentials through External Secrets.
-9. Bootstrap Argo CD and reconcile the root/production Kustomize application.
-10. Validate storage, database, messaging, control workloads, ingress, and monitoring.
-11. Only after core stability, opt into Kubeflow, CPU Karpenter capacity, and finally validated GPU capacity.
+7. Install pinned Argo CD on static workers and create the public root Application.
+8. Let the root reconcile foundation, pinned core operators, secrets, data, execution, workloads and edge in sync-wave order.
+9. Validate storage, database, messaging, control workloads, ingress, and monitoring.
+10. Only after core stability, inject Karpenter runtime settings and opt into CPU capacity, then validated GPU capacity.
 
-Maintain a single owner for each operator/resource. Terraform provisions cloud primitives; Ansible bootstraps hosts/operators; GitOps owns application state after bootstrap.
+Maintain a single owner for each operator/resource. Terraform provisions cloud primitives; Ansible bootstraps hosts and Argo CD; GitOps owns operators and application state after bootstrap.

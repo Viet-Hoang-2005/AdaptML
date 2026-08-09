@@ -1,6 +1,6 @@
 # GitOps and Kustomize
 
-- Ansible bootstraps repository credentials and the `mlops-paas-system` root Application.
+- Ansible installs Argo CD and bootstraps the public `mlops-paas-system` root Application; no Git credential is required while the repository remains public.
 - Root `k8s/kustomization.yaml` renders only the production GitOps control tree after migration.
 - Explicit child Applications under `k8s/gitops/production` own service/domain Kustomizations.
 - Static workload manifests live under `k8s/apps/base`; Argo CD reconciles only environment overlays such as `k8s/apps/overlays/production`. Infrastructure, Argo execution and operator resources have separate ownership paths.
@@ -8,7 +8,7 @@
 ## Current topology caveats
 
 - `k8s/security/` contains inactive policies and is intentionally outside every Application source.
-- Training operators are child Applications of the unified production root and retain the `platform-*` names.
+- Core and training operators are pinned Helm/Git child Applications of the unified production root and retain `platform-*` names.
 - Karpenter NodeClass and NodePool are rendered by Ansible and intentionally
   excluded from GitOps because endpoint, instance profile, token, and user data
   are cluster-specific. Argo ignores only the Karpenter controller runtime

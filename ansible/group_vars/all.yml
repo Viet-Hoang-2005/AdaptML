@@ -21,8 +21,32 @@ deploy_training_platform: true
 enable_karpenter: true
 enable_gpu_nodepool: true
 
-# Training operators are child Applications of the unified production root.
-# Ansible owns only cluster-specific Karpenter runtime and capacity settings.
+# Core and training operators are child Applications of the unified production
+# root. Ansible owns only Argo CD bootstrap and cluster-specific Karpenter
+# runtime and capacity settings.
+core_operator_application_names:
+  - platform-aws-ebs-csi
+  - platform-external-secrets
+  - platform-cloudnative-pg
+  - platform-keda
+  - platform-argo-workflows
+  - platform-argo-events
+  - platform-monitoring
+core_operator_workloads:
+  - {namespace: kube-system, release: aws-ebs-csi-driver}
+  - {namespace: external-secrets, release: external-secrets}
+  - {namespace: cnpg-system, release: cloudnative-pg}
+  - {namespace: keda, release: keda}
+  - {namespace: argo, release: argo-workflows}
+  - {namespace: argo-events, release: argo-events}
+  - {namespace: monitoring, release: monitoring}
+core_operator_crds:
+  - externalsecrets.external-secrets.io
+  - clusters.postgresql.cnpg.io
+  - scaledobjects.keda.sh
+  - workflows.argoproj.io
+  - eventsources.argoproj.io
+  - prometheuses.monitoring.coreos.com
 platform_operator_application_names:
   - platform-kubeflow-training
   - platform-karpenter-crds
@@ -60,13 +84,6 @@ training_smoke_image: "nvidia/cuda@sha256:001469ea0f3dec85a1ca929aeea3b58ae369d4
 # effective. The CPU smoke test remains part of every training verification.
 training_gpu_smoke_enabled: false
 
-aws_ebs_csi_driver_chart_version: "2.40.1"
-external_secrets_chart_version: "2.6.0"
-cnpg_operator_chart_version: "0.24.0"
-keda_chart_version: "2.17.2"
-argo_workflows_chart_version: "0.45.11"
-argo_events_chart_version: "2.4.16"
-monitoring_chart_version: "69.8.2"
 argocd_chart_version: "7.8.23"
 
 ansible_artifacts_directory: "{{ playbook_dir }}/artifacts"

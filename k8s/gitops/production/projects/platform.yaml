@@ -53,16 +53,3 @@ spec:
       - group: rbac.authorization.k8s.io
         kind: RoleBinding
         name: argo-workflows-workflow
-      # The kube-prometheus-stack release remains a bootstrap prerequisite.
-      - group: "*"
-        kind: "*"
-        name: monitoring-*
-      - group: "*"
-        kind: "*"
-        name: alertmanager-*
-      - group: "*"
-        kind: "*"
-        name: prometheus-*
-      - group: ""
-        kind: Secret
-        name: sh.helm.release.v1.monitoring.v*

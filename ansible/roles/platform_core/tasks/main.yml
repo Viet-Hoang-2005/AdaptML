@@ -7,201 +7,6 @@
   loop: "{{ groups['workers'] }}"
   changed_when: false
 
-- name: Install the AWS EBS CSI driver
-  kubernetes.core.helm:
-    name: aws-ebs-csi-driver
-    chart_ref: aws-ebs-csi-driver
-    chart_repo_url: https://kubernetes-sigs.github.io/aws-ebs-csi-driver
-    chart_version: "{{ aws_ebs_csi_driver_chart_version }}"
-    release_namespace: kube-system
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    wait: true
-    timeout: 10m0s
-    release_values:
-      controller:
-        replicaCount: 1
-        nodeSelector:
-          workload-type: worker
-      node:
-        nodeSelector:
-          workload-type: worker
-      storageClasses:
-        - name: ebs-gp3
-          annotations:
-            storageclass.kubernetes.io/is-default-class: "false"
-          volumeBindingMode: WaitForFirstConsumer
-          reclaimPolicy: Delete
-          allowVolumeExpansion: true
-          parameters:
-            type: gp3
-            fsType: ext4
-
-- name: Install External Secrets Operator
-  kubernetes.core.helm:
-    name: external-secrets
-    chart_ref: external-secrets
-    chart_repo_url: https://charts.external-secrets.io
-    chart_version: "{{ external_secrets_chart_version }}"
-    release_namespace: external-secrets
-    create_namespace: true
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    wait: true
-    timeout: 10m0s
-    release_values:
-      installCRDs: true
-      nodeSelector:
-        workload-type: worker
-      webhook:
-        nodeSelector:
-          workload-type: worker
-      certController:
-        nodeSelector:
-          workload-type: worker
-
-- name: Install CloudNativePG operator
-  kubernetes.core.helm:
-    name: cloudnative-pg
-    chart_ref: cloudnative-pg
-    chart_repo_url: https://cloudnative-pg.github.io/charts
-    chart_version: "{{ cnpg_operator_chart_version }}"
-    release_namespace: cnpg-system
-    create_namespace: true
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    wait: true
-    timeout: 10m0s
-    release_values:
-      nodeSelector:
-        workload-type: worker
-
-- name: Install KEDA
-  kubernetes.core.helm:
-    name: keda
-    chart_ref: keda
-    chart_repo_url: https://kedacore.github.io/charts
-    chart_version: "{{ keda_chart_version }}"
-    release_namespace: keda
-    create_namespace: true
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    wait: true
-    timeout: 10m0s
-    release_values:
-      nodeSelector:
-        workload-type: worker
-      metricsServer:
-        nodeSelector:
-          workload-type: worker
-      webhooks:
-        nodeSelector:
-          workload-type: worker
-
-- name: Install Argo Workflows
-  kubernetes.core.helm:
-    name: argo-workflows
-    chart_ref: argo-workflows
-    chart_repo_url: https://argoproj.github.io/argo-helm
-    chart_version: "{{ argo_workflows_chart_version }}"
-    release_namespace: argo
-    create_namespace: true
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    wait: true
-    timeout: 10m0s
-    release_values:
-      crds:
-        install: true
-      controller:
-        workflowNamespaces:
-          - default
-          - argo
-        nodeSelector:
-          workload-type: worker
-      server:
-        nodeSelector:
-          workload-type: worker
-
-- name: Install Argo Events
-  kubernetes.core.helm:
-    name: argo-events
-    chart_ref: argo-events
-    chart_repo_url: https://argoproj.github.io/argo-helm
-    chart_version: "{{ argo_events_chart_version }}"
-    release_namespace: argo-events
-    create_namespace: true
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    wait: true
-    timeout: 10m0s
-    release_values:
-      crds:
-        install: true
-      controller:
-        nodeSelector:
-          workload-type: worker
-
-- name: Install the monitoring stack
-  kubernetes.core.helm:
-    name: monitoring
-    chart_ref: kube-prometheus-stack
-    chart_repo_url: https://prometheus-community.github.io/helm-charts
-    chart_version: "{{ monitoring_chart_version }}"
-    release_namespace: monitoring
-    create_namespace: true
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    wait: true
-    timeout: 15m0s
-    release_values:
-      prometheus:
-        prometheusSpec:
-          retention: 3d
-          scrapeInterval: 30s
-          nodeSelector:
-            workload-type: worker
-          resources:
-            limits:
-              memory: 1500Mi
-          storageSpec:
-            volumeClaimTemplate:
-              spec:
-                storageClassName: local-path
-                resources:
-                  requests:
-                    storage: 10Gi
-          podMonitorSelectorNilUsesHelmValues: false
-          serviceMonitorSelectorNilUsesHelmValues: false
-          ruleSelectorNilUsesHelmValues: false
-      grafana:
-        nodeSelector:
-          workload-type: worker
-        persistence:
-          enabled: true
-          storageClassName: local-path
-          size: 5Gi
-        service:
-          type: ClusterIP
-        grafana.ini:
-          server:
-            root_url: "https://grafana.{{ domain_name }}"
-            serve_from_sub_path: false
-      alertmanager:
-        alertmanagerSpec:
-          nodeSelector:
-            workload-type: worker
-          storage:
-            volumeClaimTemplate:
-              spec:
-                storageClassName: local-path
-                resources:
-                  requests:
-                    storage: 2Gi
-      prometheusOperator:
-        nodeSelector:
-          workload-type: worker
-        admissionWebhooks:
-          enabled: false
-        tls:
-          enabled: false
-      kube-state-metrics:
-        nodeSelector:
-          workload-type: worker
-
 - name: Install Argo CD without exposing its initial admin password
   kubernetes.core.helm:
     name: argocd
@@ -215,43 +20,34 @@
     timeout: 15m0s
     release_values: "{{ lookup('ansible.builtin.file', playbook_dir + '/../k8s/argocd/values.yaml') | from_yaml }}"
 
-- name: Wait for the Argo CD application CRD
+- name: Wait for the Argo CD Application CRD
   ansible.builtin.command: >-
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
     wait crd/applications.argoproj.io --for=condition=Established --timeout=180s
   changed_when: false
 
-- name: Bootstrap the AWS Secrets Manager ClusterSecretStore
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    definition: "{{ lookup('ansible.builtin.template', role_path + '/templates/cluster-secret-store.yaml.j2') | from_yaml }}"
-
-- name: Wait for the ClusterSecretStore to become Ready
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    wait clustersecretstore/aws-secrets-manager
-    --for=condition=Ready --timeout=180s
-  changed_when: false
-
-- name: Bootstrap Argo CD repository credentials from External Secrets
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: "{{ k3s_remote_kubeconfig }}"
-    definition: "{{ lookup('ansible.builtin.file', playbook_dir + '/../k8s/argocd/repo-sync.yaml') | from_yaml }}"
-
-- name: Wait for the Argo CD repository ExternalSecret
-  ansible.builtin.command: >-
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s_remote_kubeconfig }}
-    -n argocd wait externalsecret/argocd-github-repo-sync
-    --for=condition=Ready --timeout=180s
-  changed_when: false
-
-- name: Bootstrap the root GitOps application
+- name: Bootstrap the public root GitOps application
   kubernetes.core.k8s:
     state: present
     kubeconfig: "{{ k3s_remote_kubeconfig }}"
     definition: "{{ lookup('ansible.builtin.file', playbook_dir + '/../k8s/argocd/application.yaml') | from_yaml }}"
+
+- name: Wait for Argo CD to reconcile every core operator Application
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ item }}"
+    namespace: argocd
+    kubeconfig: "{{ k3s_remote_kubeconfig }}"
+  register: reconciled_core_operator_application
+  until:
+    - reconciled_core_operator_application.resources | length == 1
+    - reconciled_core_operator_application.resources[0].status.sync.status | default('') == 'Synced'
+    - reconciled_core_operator_application.resources[0].status.health.status | default('') == 'Healthy'
+  retries: 90
+  delay: 10
+  changed_when: false
+  loop: "{{ core_operator_application_names }}"
 
 - name: Wait for the root GitOps application to synchronize
   kubernetes.core.k8s_info:
@@ -265,5 +61,6 @@
     - root_gitops_application.resources | length == 1
     - root_gitops_application.resources[0].status.sync.status | default('') == 'Synced'
     - root_gitops_application.resources[0].status.health.status | default('') == 'Healthy'
-  retries: 60
+  retries: 90
   delay: 20
+  changed_when: false

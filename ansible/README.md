@@ -39,7 +39,7 @@ Terraform apply on your behalf.
 |---|---|---|
 | `preflight` | Validate Linux, Terraform inventory, SSH key and rollout flags | Always |
 | `bootstrap` | Prepare Ubuntu, install K3s `v1.34.9+k3s1`, join static workers | Enabled |
-| `platform-core` | Install pinned operators, bootstrap External Secrets and Argo CD | Enabled |
+| `platform-core` | Install Argo CD and bootstrap the public GitOps root | Enabled |
 | `platform-training` | Verify Argo CD training operators, configure Karpenter capacity resources and smoke tests | Explicit |
 | `verify` | Validate nodes, bundled components and root GitOps health | Explicit/final |
 
@@ -61,20 +61,13 @@ to honor the ALB's `X-Forwarded-Proto: https` without enabling Traefik's unsafe
 `forwardedHeaders.insecure` mode. Revalidate these addresses after changing the
 static worker topology or cluster PodCIDR allocation.
 
-Core operators are pinned and installed with Ansible modules in this order:
-
-1. AWS EBS CSI
-2. External Secrets Operator
-3. CloudNativePG
-4. KEDA
-5. Argo Workflows and Argo Events
-6. kube-prometheus-stack
-7. Argo CD
-
-Operator controllers are scheduled on static workers, whose EC2 instance
-profile provides AWS access where required. Ansible applies the
-`ClusterSecretStore`, waits for it, creates the Argo repository credential via
-an `ExternalSecret`, then creates and waits for the root Application.
+Ansible installs only the pinned Argo CD chart, then creates the public
+`mlops-paas-system` root Application. Argo CD installs AWS EBS CSI, External
+Secrets, CloudNativePG, KEDA, Argo Workflows, Argo Events and
+kube-prometheus-stack from pinned Helm charts. Operator controllers stay on
+static workers, whose EC2 instance profile provides AWS access where required.
+The public Git repository does not require a bootstrap repository credential;
+`mlops-prod-secrets` owns the ClusterSecretStore and all ExternalSecrets.
 
 ## Commands
 
