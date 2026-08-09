@@ -114,6 +114,23 @@ def test_reschedule_signal_uses_claim_attempt_count(monkeypatch):
     }
 
 
+def test_claim_signal_uses_skip_locked_and_expiring_lease(monkeypatch):
+    result = Mock()
+    result.mappings.return_value = []
+    connection = Mock()
+    connection.execute.return_value = result
+    engine = Mock()
+    engine.begin.return_value = Context(connection)
+    monkeypatch.setattr(database, "engine_rw", engine)
+
+    assert database.claim_automatic_drift_signals(25, 90) == []
+
+    statement = str(connection.execute.call_args.args[0])
+    assert "FOR UPDATE SKIP LOCKED" in statement
+    assert "locked_until = NOW() + (:lease_seconds * INTERVAL '1 second')" in statement
+    assert connection.execute.call_args.args[1] == {"limit": 25, "lease_seconds": 90}
+
+
 def test_init_db_creates_model_version_count_index(monkeypatch):
     connection = Mock()
     engine = Mock()

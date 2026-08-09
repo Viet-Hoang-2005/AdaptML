@@ -2,6 +2,7 @@ import os
 import json
 import time
 import signal
+import threading
 from dataclasses import dataclass
 from typing import Any
 import pandas as pd
@@ -10,6 +11,7 @@ from src.database import (
     init_db,
     save_dataframe_and_automatic_drift_signals,
 )
+from src.drift_outbox import OUTBOX_POLL_SECONDS, REQUEST_TIMEOUT_SECONDS, run_dispatcher
 
 # Lấy biến môi trường
 REDPANDA_BROKERS = os.environ.get('REDPANDA_BROKERS', 'localhost:19092')
@@ -25,6 +27,7 @@ KAFKA_DB_RETRY_MAX_SECONDS = max(
 )
 # Cờ báo hiệu trạng thái hoạt động
 RUNNING = True
+DISPATCHER_JOIN_TIMEOUT_SECONDS = REQUEST_TIMEOUT_SECONDS + OUTBOX_POLL_SECONDS + 1
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,23 @@ def handle_sigterm(*args):
     global RUNNING
     print("Received SIGTERM. Shutting down gracefully...")
     RUNNING = False
+
+
+def start_outbox_dispatcher() -> tuple[threading.Event, threading.Thread]:
+    stop_event = threading.Event()
+    dispatcher = threading.Thread(
+        target=run_dispatcher,
+        args=(stop_event,),
+        name="automatic-drift-outbox",
+        daemon=True,
+    )
+    dispatcher.start()
+    return stop_event, dispatcher
+
+
+def ensure_outbox_dispatcher_running(dispatcher: threading.Thread) -> None:
+    if not dispatcher.is_alive():
+        raise RuntimeError("Automatic drift outbox dispatcher stopped unexpectedly.")
 
 def build_batch_dataframe(records: list[KafkaRecord]) -> pd.DataFrame:
     df = pd.DataFrame([record.payload for record in records])
@@ -175,17 +195,18 @@ def main():
     }
 
     init_db()
-
-    # Khởi tạo Consumer và subscribe vào topic
-    consumer = Consumer(conf)
-    consumer.subscribe([KAFKA_TOPIC])
-
-    print(f"Consumer listening to the topic '{KAFKA_TOPIC}' at {REDPANDA_BROKERS}")
-
+    dispatcher_stop, dispatcher = start_outbox_dispatcher()
+    consumer = None
     pending_batches: dict[tuple[str, int], list[KafkaRecord]] = {}
     retries: dict[tuple[str, int], RetryState] = {}
     try:
+        # Khởi tạo Consumer và subscribe vào topic
+        consumer = Consumer(conf)
+        consumer.subscribe([KAFKA_TOPIC])
+        print(f"Consumer listening to the topic '{KAFKA_TOPIC}' at {REDPANDA_BROKERS}")
+
         while RUNNING:
+            ensure_outbox_dispatcher_running(dispatcher)
             # Retry failed partitions without blocking heartbeats for the rest
             # of the consumer group. A partition remains paused until its
             # retained batch has both persisted and committed its exact offset.
@@ -252,11 +273,22 @@ def main():
     except KeyboardInterrupt:
         print("Received shutdown command...")
     finally:
-        # Try every remaining batch once. Failed batches are intentionally not
-        # committed; they will be replayed after the local Compose restart.
-        for key in list(pending_batches):
-            flush_pending_batch(consumer, pending_batches, retries, key)
-        consumer.close()
+        try:
+            if consumer is not None:
+                # Try every remaining batch once. Failed batches are intentionally not
+                # committed; they will be replayed after the local Compose restart.
+                for key in list(pending_batches):
+                    flush_pending_batch(consumer, pending_batches, retries, key)
+        finally:
+            dispatcher_stop.set()
+            dispatcher.join(timeout=DISPATCHER_JOIN_TIMEOUT_SECONDS)
+            if dispatcher.is_alive():
+                print(
+                    "Automatic drift outbox dispatcher did not stop before the shutdown timeout; "
+                    "leased rows will be retried after their lease expires."
+                )
+            if consumer is not None:
+                consumer.close()
         print("Consumer cleaned up safely.")
 
 if __name__ == '__main__':

@@ -1,14 +1,13 @@
-"""Deliver durable automatic-drift signals to the Control Plane."""
+"""Deliver durable automatic-drift signals without blocking Kafka ingestion."""
 
 import os
-import signal
-import time
+import threading
 
 import requests
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.database import (
     claim_automatic_drift_signals,
-    init_db,
     mark_automatic_drift_signal_published,
     reschedule_automatic_drift_signal,
 )
@@ -31,13 +30,6 @@ OUTBOX_RETRY_MAX_SECONDS = max(
 REQUEST_TIMEOUT_SECONDS = max(
     1, int(os.environ.get("AUTOMATIC_DRIFT_OUTBOX_REQUEST_TIMEOUT_SECONDS", "10"))
 )
-
-RUNNING = True
-
-
-def handle_sigterm(*_args):
-    global RUNNING
-    RUNNING = False
 
 
 def retry_delay(attempts: int) -> int:
@@ -91,18 +83,21 @@ def drain_once() -> int:
     return delivered
 
 
-def main():
-    signal.signal(signal.SIGTERM, handle_sigterm)
-    signal.signal(signal.SIGINT, handle_sigterm)
-    init_db()
-    print("Automatic drift outbox worker started.")
-    while RUNNING:
-        delivered = drain_once()
+def run_dispatcher(stop_event: threading.Event) -> None:
+    """Drain the outbox until shutdown; unexpected errors terminate supervision."""
+    print("Automatic drift outbox dispatcher started.")
+    while not stop_event.is_set():
+        try:
+            delivered = drain_once()
+        except SQLAlchemyError as exc:
+            print(
+                "Automatic drift outbox database operation failed; "
+                f"retrying in {OUTBOX_POLL_SECONDS}s ({exc.__class__.__name__})."
+            )
+            stop_event.wait(OUTBOX_POLL_SECONDS)
+            continue
+
         if delivered:
             print(f"Delivered {delivered} automatic drift signal(s).")
             continue
-        time.sleep(OUTBOX_POLL_SECONDS)
-
-
-if __name__ == "__main__":
-    main()
+        stop_event.wait(OUTBOX_POLL_SECONDS)

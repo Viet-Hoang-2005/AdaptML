@@ -40,4 +40,4 @@ Callbacks bind the resource UUID in the path, authenticate the reporter, and use
 
 ## Automatic drift signal contract
 
-Consumer writes a deterministic automatic-drift signal into its PostgreSQL outbox in the same transaction as production-data persistence. A trusted outbox worker uses `CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL` to deliver only `model_version_id` to the authenticated Control Plane internal endpoint. The Control Plane owns monitor lookup, durable threshold watermark, `DriftRun` idempotency, and execution dispatch; Consumer must not read monitor tables or keep trigger state in memory.
+Consumer writes a deterministic automatic-drift signal into its PostgreSQL outbox in the same transaction as production-data persistence. A supervised dispatcher thread in every Consumer replica uses `CONTROL_PLANE_AUTOMATIC_DRIFT_WEBHOOK_URL` to deliver only `model_version_id` to the authenticated Control Plane internal endpoint. PostgreSQL leases coordinate replicas. The Control Plane owns monitor lookup, durable threshold watermark, `DriftRun` idempotency, and execution dispatch; Consumer must not read monitor tables or keep trigger state in memory.

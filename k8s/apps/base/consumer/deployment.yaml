@@ -47,6 +47,11 @@ spec:
             - configMapRef:
                 name: mlops-paas-consumer-config
           env:
+            - name: CONTROL_PLANE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-paas-secret
+                  key: CONTROL_PLANE_WEBHOOK_SECRET
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
@@ -60,8 +65,8 @@ spec:
           # Cấu hình tài nguyên cho Consumer
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: 150m
+              memory: 384Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 750m
+              memory: 768Mi

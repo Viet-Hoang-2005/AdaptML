@@ -213,7 +213,7 @@ def save_dataframe_and_automatic_drift_signals(
 
 
 def claim_automatic_drift_signals(limit: int, lease_seconds: int) -> list[dict]:
-    """Lease pending signals so multiple workers do not send the same row."""
+    """Lease pending signals so multiple Consumer replicas do not send the same row."""
     if engine_rw is None:
         return []
 

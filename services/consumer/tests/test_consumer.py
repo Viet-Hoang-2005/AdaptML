@@ -1,4 +1,5 @@
 import json
+import threading
 import pandas as pd
 import pytest
 
@@ -65,6 +66,33 @@ class FakeConsumer:
 
     def close(self):
         self.closed = True
+
+
+class FakeStopEvent:
+    def __init__(self):
+        self.was_set = False
+
+    def set(self):
+        self.was_set = True
+
+
+class FakeDispatcher:
+    def __init__(self, alive=True):
+        self.alive = alive
+        self.join_timeouts = []
+
+    def is_alive(self):
+        return self.alive
+
+    def join(self, timeout=None):
+        self.join_timeouts.append(timeout)
+
+
+def install_fake_dispatcher(monkeypatch, *, alive=True):
+    stop_event = FakeStopEvent()
+    dispatcher = FakeDispatcher(alive=alive)
+    monkeypatch.setattr(main, "start_outbox_dispatcher", lambda: (stop_event, dispatcher))
+    return stop_event, dispatcher
 
 
 def record(payload=None, topic="events", partition=0, offset=0):
@@ -176,12 +204,15 @@ def test_main_flushes_valid_message_and_closes(monkeypatch):
     monkeypatch.setattr(main.signal, "signal", lambda *args: None)
     monkeypatch.setattr(main, "init_db", Mock())
     monkeypatch.setattr(main, "save_dataframe_and_automatic_drift_signals", Mock(return_value=True))
+    stop_event, dispatcher = install_fake_dispatcher(monkeypatch)
     main.RUNNING = True
     main.main()
     assert fake.topics == [main.KAFKA_TOPIC]
     assert fake.commits == 1
     assert fake.commit_offsets[0][0][0].offset == 1
     assert fake.closed
+    assert stop_event.was_set
+    assert dispatcher.join_timeouts == [main.DISPATCHER_JOIN_TIMEOUT_SECONDS]
 
 
 def test_main_disables_automatic_offset_storage(monkeypatch):
@@ -195,6 +226,7 @@ def test_main_disables_automatic_offset_storage(monkeypatch):
     monkeypatch.setattr(main, "Consumer", create_consumer)
     monkeypatch.setattr(main.signal, "signal", lambda *args: None)
     monkeypatch.setattr(main, "init_db", Mock())
+    install_fake_dispatcher(monkeypatch)
     main.RUNNING = True
     main.main()
 
@@ -209,6 +241,7 @@ def test_main_ignores_malformed_message(monkeypatch):
     monkeypatch.setattr(main, "Consumer", lambda conf: fake)
     monkeypatch.setattr(main.signal, "signal", lambda *args: None)
     monkeypatch.setattr(main, "init_db", Mock())
+    install_fake_dispatcher(monkeypatch)
     main.RUNNING = True
     with pytest.raises(RuntimeError, match="Error parsing Kafka payload"):
         main.main()
@@ -219,3 +252,70 @@ def test_handle_sigterm_stops_loop():
     main.RUNNING = True
     main.handle_sigterm()
     assert main.RUNNING is False
+
+
+def test_start_outbox_dispatcher_uses_supervised_daemon_thread(monkeypatch):
+    started = threading.Event()
+
+    def run(stop_event):
+        started.set()
+        stop_event.wait()
+
+    monkeypatch.setattr(main, "run_dispatcher", run)
+
+    stop_event, dispatcher = main.start_outbox_dispatcher()
+    assert started.wait(timeout=1)
+    assert dispatcher.name == "automatic-drift-outbox"
+    assert dispatcher.daemon is True
+    stop_event.set()
+    dispatcher.join(timeout=1)
+    assert not dispatcher.is_alive()
+
+
+def test_dispatcher_delivery_wait_does_not_block_kafka_polling(monkeypatch):
+    delivery_started = threading.Event()
+    release_delivery = threading.Event()
+
+    def blocked_delivery(_stop_event):
+        delivery_started.set()
+        release_delivery.wait(timeout=1)
+
+    class PollingConsumer(FakeConsumer):
+        def __init__(self):
+            super().__init__([])
+            self.was_polled = False
+
+        def poll(self, timeout):
+            assert delivery_started.wait(timeout=1)
+            self.was_polled = True
+            main.RUNNING = False
+            release_delivery.set()
+            return None
+
+    consumer = PollingConsumer()
+    monkeypatch.setattr(main, "run_dispatcher", blocked_delivery)
+    monkeypatch.setattr(main, "Consumer", lambda _conf: consumer)
+    monkeypatch.setattr(main.signal, "signal", lambda *args: None)
+    monkeypatch.setattr(main, "init_db", Mock())
+    main.RUNNING = True
+
+    main.main()
+
+    assert consumer.was_polled
+    assert consumer.closed
+
+
+def test_main_exits_when_dispatcher_stops_unexpectedly(monkeypatch):
+    consumer = FakeConsumer([])
+    monkeypatch.setattr(main, "Consumer", lambda _conf: consumer)
+    monkeypatch.setattr(main.signal, "signal", lambda *args: None)
+    monkeypatch.setattr(main, "init_db", Mock())
+    stop_event, dispatcher = install_fake_dispatcher(monkeypatch, alive=False)
+    main.RUNNING = True
+
+    with pytest.raises(RuntimeError, match="dispatcher stopped unexpectedly"):
+        main.main()
+
+    assert stop_event.was_set
+    assert dispatcher.join_timeouts == [main.DISPATCHER_JOIN_TIMEOUT_SECONDS]
+    assert consumer.closed
