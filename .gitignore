@@ -103,3 +103,6 @@ ansible/.cache/
 
 # Kube config
 .kube/
+
+# Kustomize Helm chart cache
+k8s/platform/harbor/charts/
