@@ -11,6 +11,7 @@ def test_production_settings_exempt_health_endpoints_from_ssl_redirect(monkeypat
     monkeypatch.setenv("JWT_PRIVATE_KEY", "test-private-key")
     monkeypatch.setenv("JWT_PUBLIC_KEY", "test-public-key")
     monkeypatch.setenv("CONTROL_PLANE_WEBHOOK_SECRET", "test-webhook-secret-with-at-least-32-characters")
+    monkeypatch.setenv("ARGO_EVENTS_WEBHOOK_TOKEN", "x" * 32)
     monkeypatch.setenv("POD_IP", "10.42.2.44")
 
     production_settings = importlib.import_module("config.settings.production")

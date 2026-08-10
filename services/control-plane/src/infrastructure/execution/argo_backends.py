@@ -101,7 +101,6 @@ class ArgoTrainingBackend(_ArgoBackend):
                 "project_id": str(job.project.public_id),
                 "tenant_id": job.project.owner.tenant_id,
                 "job_name": runtime_name,
-                "namespace": "user-jobs",
                 "vcpu": job.vcpu,
                 "memory": job.memory_mb,
                 "accelerator_type": job.accelerator_type,
@@ -138,7 +137,6 @@ class ArgoTrainingBackend(_ArgoBackend):
                 {
                     "job_id": str(job.public_id),
                     "job_name": job.external_job_id or f"training-{str(job.public_id).lower()}",
-                    "namespace": "user-jobs",
                     "control_plane_callback_url": (
                         f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/webhooks/"
                         f"training-jobs/{job.public_id}/cancellation/"

@@ -1,3 +1,4 @@
+from common.api.exceptions import ServiceUnavailable
 from django.conf import settings
 from django.db.models import Prefetch
 from rest_framework import generics, status
@@ -16,7 +17,6 @@ from apps.training.services.jobs import (
     submit_job,
 )
 from apps.training.services.logs import training_logs
-from common.api.exceptions import ServiceUnavailable
 
 from .serializers import TrainingBuildSerializer, TrainingJobEventSerializer, TrainingJobSerializer
 

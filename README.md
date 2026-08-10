@@ -290,11 +290,11 @@ Production được triển khai theo ba lớp ownership rõ ràng:
 - **Ansible** chuẩn bị Ubuntu, cài K3s, publish K3s agent token và bootstrap Argo CD.
 - **Argo CD** cài core/training operators và quản lý toàn bộ Kubernetes resource của Karpenter, gồm `EC2NodeClass` và `NodePool`.
 
-Core platform dùng một K3s server và hai static worker. Server chạy embedded etcd, secrets encryption và snapshot định kỳ; đây vẫn là **single control-plane**, chưa phải HA. `k8s/security` (NetworkPolicy và custom PodDisruptionBudget) hiện được chủ động hoãn trong giai đoạn ổn định.
+Core platform dùng một K3s server và hai static worker. Server chạy embedded etcd, secrets encryption và snapshot định kỳ; đây vẫn là **single control-plane**, chưa phải HA. Bộ policy tổng quát trong `k8s/security` vẫn được chủ động hoãn, nhưng các NetworkPolicy tối thiểu bảo vệ Argo EventSource/EventBus nằm trong `k8s/argo` và được production GitOps reconcile.
 
 Sau `platform-core`, root Application để Argo CD reconcile AWS EBS CSI, External Secrets, CloudNativePG, KEDA, Argo Workflows/Events, monitoring, training operators và Karpenter capacity. Ansible chỉ chạy smoke verification trong phase `platform-training`. Dù các operator được cài, tenant training vẫn đóng: `TRAINING_ENABLED=false`, API submit trả HTTP 503 và UI không hiển thị thao tác submit/GPU.
 
-Ở production, Celery giữ lifecycle state trong PostgreSQL và dispatch side effect sau transaction commit. Build, deployment và drift đi qua Argo Events/Workflows. Training controllers có thể được cài nhưng tenant training vẫn chỉ được mở sau một rollout bảo mật riêng.
+Ở production, Celery giữ lifecycle state trong PostgreSQL và dispatch side effect sau transaction commit. Build, deployment và drift đi qua Argo Events/Workflows. Sáu webhook nội bộ dùng bearer token riêng, EventBus dùng token authentication, NetworkPolicy chỉ cho Control Plane worker gọi EventSource và mỗi Workflow chạy bằng service account tối thiểu theo chức năng. Training controllers có thể được cài nhưng tenant training vẫn chỉ được mở sau một rollout cô lập workload riêng.
 
 #### Bước 1: Khởi tạo hạ tầng AWS bằng Terraform
 
@@ -360,7 +360,7 @@ cp .env.example .env
 - **Harbor Registry**: `HARBOR_USERNAME`, `HARBOR_PASSWORD`, `HARBOR_GITHUB_USERNAME`, `HARBOR_GITHUB_PASSWORD`
 - **GitHub & CI/CD**: `GITHUB_REPO`, `GITHUB_TOKEN`
 - **Bảo mật & Ký image (Cosign)**: `COSIGN_PASSWORD`, `COSIGN_PRIVATE_KEY`
-- **Django & JWT**: `DJANGO_SECRET_KEY`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `CONTROL_PLANE_WEBHOOK_SECRET`
+- **Django, JWT & internal execution**: `DJANGO_SECRET_KEY`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `CONTROL_PLANE_WEBHOOK_SECRET`, `ARGO_EVENTS_WEBHOOK_TOKEN`
 - **OAuth & Cloudflare Tunnel**: `GOOGLE_OAUTH2_CLIENT_ID`, `GITHUB_OAUTH2_CLIENT_ID`, `GITHUB_OAUTH2_CLIENT_SECRET`, `TUNNEL_TOKEN`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`
 
 **3. Chạy script đồng bộ lên AWS Secrets Manager:**
@@ -383,6 +383,13 @@ deactivate
 - **`mlops/aws-secrets`**: Lưu thông tin xác thực AWS S3.
 - **`mlops/github-actions-secrets`**: Lưu thông tin cho CI/CD GitOps và ký Cosign.
 - **`mlops/production-secrets`**: Lưu toàn bộ cấu hình bảo mật cho cụm K3s (DB, Harbor, JWT, OAuth, Webhook...).
+
+`ARGO_EVENTS_WEBHOOK_TOKEN` phải là token ngẫu nhiên tối thiểu 32 ký tự và
+không được tái sử dụng `CONTROL_PLANE_WEBHOOK_SECRET`. Khi rotate, cập nhật
+`mlops/production-secrets`, chờ cả `argo-events-webhook-client-sync` và
+`argo-events-webhook-server-sync` Ready, rồi rolling restart Control Plane
+API/worker và EventSource; xác minh token mới hoạt động trước khi kết thúc cửa
+sổ rotation.
 
 #### Bước 3: Chuẩn bị Ansible control host trong WSL
 

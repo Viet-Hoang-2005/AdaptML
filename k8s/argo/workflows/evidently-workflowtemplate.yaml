@@ -4,7 +4,7 @@ metadata:
   name: mlops-paas-evidently-template
   namespace: default
 spec:
-  serviceAccountName: argo-workflow-sa
+  serviceAccountName: argo-workflow-basic-sa
   entrypoint: run-evidently
   templates:
     - name: run-evidently

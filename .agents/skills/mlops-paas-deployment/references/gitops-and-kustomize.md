@@ -7,13 +7,14 @@
 
 ## Current topology caveats
 
-- `k8s/security/` contains inactive policies and is intentionally outside every Application source.
+- `k8s/security/` contains inactive broad policies and is intentionally outside every Application source. The targeted EventSource/EventBus NetworkPolicies in `k8s/argo` are active execution resources.
 - Core and training operators are pinned Helm/Git child Applications of the unified production root and retain `platform-*` names.
 - `platform-karpenter-capacity` owns CPU/GPU EC2NodeClasses and NodePools. Git
   contains stable non-secret identifiers and the private K3s API DNS name;
   Terraform owns AWS primitives and Ansible publishes only the token value.
 - `k8s/security/` remains intentionally excluded during the current stability
-  phase; do not describe its NetworkPolicies or custom PDBs as active.
+  phase; do not describe its NetworkPolicies or custom PDBs as active. Do not
+  extend that statement to the reconciled policies under `k8s/argo`.
 
 Do not silently claim an unreferenced manifest is active. Fix ownership/reconciliation explicitly and validate rendered output.
 

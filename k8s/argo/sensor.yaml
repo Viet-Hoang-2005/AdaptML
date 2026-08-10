@@ -2,30 +2,186 @@ apiVersion: argoproj.io/v1alpha1
 kind: Sensor
 metadata:
   name: model-sensor
-  namespace: default
+  namespace: argo-events
 spec:
-  serviceAccountName: argo-events-sa
   template:
-    serviceAccountName: argo-events-sa
+    serviceAccountName: argo-sensor-sa
   dependencies:
     - name: build-dep
       eventSourceName: webhook-eventsource
       eventName: build
+      filters:
+        data:
+          - path: body.build_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.project_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.tenant_id
+            type: string
+            value: ['^T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.image_repository
+            type: string
+            value: ['^registry\.mlops-nids-nt114\.id\.vn/user-images/image-[0-9a-f-]{36}$']
+          - path: body.image_tag
+            type: string
+            value: ['^build-[0-9a-f-]{36}$']
+          - path: body.task_type
+            type: string
+            value: ['^(BUILD|TEST_ZIP)$']
+          - path: body.source_type
+            type: string
+            value: ['^(manual_upload|training_job)$']
+          - path: body.control_plane_webhook_url
+            type: string
+            value: ['^http://mlops-paas-control-plane(:8000|\.default\.svc\.cluster\.local:8000)/internal/webhooks/builds/[0-9a-f-]{36}/$']
+        exprs:
+          - expr: callback =~ build_id && image_repository =~ project_id && image_tag =~ build_id
+            fields:
+              - {name: callback, path: body.control_plane_webhook_url}
+              - {name: build_id, path: body.build_id}
+              - {name: project_id, path: body.project_id}
+              - {name: image_repository, path: body.image_repository}
+              - {name: image_tag, path: body.image_tag}
     - name: deploy-dep
       eventSourceName: webhook-eventsource
       eventName: deploy
+      filters:
+        data:
+          - path: body.project_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.model_version_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.tenant_id
+            type: string
+            value: ['^T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.image_name
+            type: string
+            value: ['^registry\.mlops-nids-nt114\.id\.vn/user-images/image-[0-9a-f-]{36}@sha256:[0-9a-f]{64}$']
+          - path: body.container_name
+            type: string
+            value: ['^deploy-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.model_type
+            type: string
+            value: ['^(ml|dl)$']
+          - path: body.target_port
+            type: string
+            value: ['^(3000|5001)$']
+        exprs:
+          - expr: image_name =~ project_id
+            fields:
+              - {name: image_name, path: body.image_name}
+              - {name: project_id, path: body.project_id}
     - name: drift-dep
       eventSourceName: webhook-eventsource
       eventName: drift
+      filters:
+        data:
+          - path: body.job_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.project_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.model_version_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.tenant_id
+            type: string
+            value: ['^T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.control_plane_webhook_url
+            type: string
+            value: ['^http://mlops-paas-control-plane(:8000|\.default\.svc\.cluster\.local:8000)/internal/webhooks/drift-runs/[0-9a-f-]{36}/$']
+        exprs:
+          - expr: callback =~ job_id
+            fields:
+              - {name: callback, path: body.control_plane_webhook_url}
+              - {name: job_id, path: body.job_id}
     - name: delete-dep
       eventSourceName: webhook-eventsource
       eventName: delete
+      filters:
+        data:
+          - path: body.project_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.control_plane_webhook_url
+            type: string
+            value: ['^http://mlops-paas-control-plane(:8000|\.default\.svc\.cluster\.local:8000)/internal/webhooks/project-deletions/[0-9a-f-]{36}/$']
+        exprs:
+          - expr: callback =~ project_id
+            fields:
+              - {name: callback, path: body.control_plane_webhook_url}
+              - {name: project_id, path: body.project_id}
     - name: train-dep
       eventSourceName: webhook-eventsource
       eventName: train
+      filters:
+        data:
+          - path: body.job_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.project_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.tenant_id
+            type: string
+            value: ['^T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.job_name
+            type: string
+            value: ['^training-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.accelerator_type
+            type: string
+            value: ['^(none|gpu)$']
+          - path: body.control_plane_webhook_url
+            type: string
+            value: ['^http://mlops-paas-control-plane(:8000|\.default\.svc\.cluster\.local:8000)/internal/webhooks/training-jobs/[0-9a-f-]{36}/$']
+        exprs:
+          - expr: callback =~ job_id && job_name =~ job_id
+            fields:
+              - {name: callback, path: body.control_plane_webhook_url}
+              - {name: job_name, path: body.job_name}
+              - {name: job_id, path: body.job_id}
+          - expr: >-
+              (vcpu == 1 && memory == 2048) ||
+              (vcpu == 2 && memory == 4096) ||
+              (vcpu == 4 && memory == 8192)
+            fields:
+              - name: vcpu
+                path: body.vcpu
+              - name: memory
+                path: body.memory
+          - expr: >-
+              (accelerator_type == "none" && accelerator_count == 0) ||
+              (accelerator_type == "gpu" && accelerator_count == 1)
+            fields:
+              - name: accelerator_type
+                path: body.accelerator_type
+              - name: accelerator_count
+                path: body.accelerator_count
     - name: cancel-train-dep
       eventSourceName: webhook-eventsource
       eventName: cancel-train
+      filters:
+        data:
+          - path: body.job_id
+            type: string
+            value: ['^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.job_name
+            type: string
+            value: ['^training-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$']
+          - path: body.control_plane_callback_url
+            type: string
+            value: ['^http://mlops-paas-control-plane(:8000|\.default\.svc\.cluster\.local:8000)/internal/webhooks/training-jobs/[0-9a-f-]{36}/cancellation/$']
+        exprs:
+          - expr: callback =~ job_id && job_name =~ job_id
+            fields:
+              - {name: callback, path: body.control_plane_callback_url}
+              - {name: job_name, path: body.job_name}
+              - {name: job_id, path: body.job_id}
   triggers:
     - template:
         name: build-workflow-trigger
@@ -359,8 +515,6 @@ spec:
                       value: ""
                     - name: job_name
                       value: ""
-                    - name: namespace
-                      value: ""
                     - name: vcpu
                       value: ""
                     - name: memory
@@ -403,55 +557,53 @@ spec:
               dest: spec.arguments.parameters.2.value
             - src: { dependencyName: train-dep, dataKey: body.job_name }
               dest: spec.arguments.parameters.3.value
-            - src: { dependencyName: train-dep, dataKey: body.namespace }
-              dest: spec.arguments.parameters.4.value
             - src: { dependencyName: train-dep, dataKey: body.vcpu }
-              dest: spec.arguments.parameters.5.value
+              dest: spec.arguments.parameters.4.value
             - src: { dependencyName: train-dep, dataKey: body.memory }
-              dest: spec.arguments.parameters.6.value
+              dest: spec.arguments.parameters.5.value
             - src: { dependencyName: train-dep, dataKey: body.accelerator_type }
-              dest: spec.arguments.parameters.8.value
+              dest: spec.arguments.parameters.6.value
             - src:
                 { dependencyName: train-dep, dataKey: body.accelerator_count }
-              dest: spec.arguments.parameters.9.value
+              dest: spec.arguments.parameters.7.value
             - src: { dependencyName: train-dep, dataKey: body.s3_source_uri }
-              dest: spec.arguments.parameters.10.value
+              dest: spec.arguments.parameters.8.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.s3_training_data_uri,
                 }
-              dest: spec.arguments.parameters.11.value
+              dest: spec.arguments.parameters.9.value
             - src: { dependencyName: train-dep, dataKey: body.output_upload_url }
-              dest: spec.arguments.parameters.12.value
+              dest: spec.arguments.parameters.10.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.output_upload_capability,
                 }
-              dest: spec.arguments.parameters.13.value
+              dest: spec.arguments.parameters.11.value
             - src: { dependencyName: train-dep, dataKey: body.entry_point }
-              dest: spec.arguments.parameters.14.value
+              dest: spec.arguments.parameters.12.value
             - src: { dependencyName: train-dep, dataKey: body.model_version }
-              dest: spec.arguments.parameters.14.value
+              dest: spec.arguments.parameters.13.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.control_plane_webhook_url,
                 }
-              dest: spec.arguments.parameters.15.value
+              dest: spec.arguments.parameters.14.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.reporter_capability,
                 }
-              dest: spec.arguments.parameters.16.value
+              dest: spec.arguments.parameters.15.value
             - src:
                 {
                   dependencyName: train-dep,
                   dataKey: body.requirements_text,
                 }
-              dest: spec.arguments.parameters.17.value
+              dest: spec.arguments.parameters.16.value
 
     - template:
         name: cancel-train-workflow-trigger
@@ -474,8 +626,6 @@ spec:
                       value: ""
                     - name: job_name
                       value: ""
-                    - name: namespace
-                      value: ""
                     - name: control_plane_callback_url
                       value: ""
                     - name: cancel_reporter_capability
@@ -485,17 +635,15 @@ spec:
               dest: spec.arguments.parameters.0.value
             - src: { dependencyName: cancel-train-dep, dataKey: body.job_name }
               dest: spec.arguments.parameters.1.value
-            - src: { dependencyName: cancel-train-dep, dataKey: body.namespace }
-              dest: spec.arguments.parameters.2.value
             - src:
                 {
                   dependencyName: cancel-train-dep,
                   dataKey: body.control_plane_callback_url,
                 }
-              dest: spec.arguments.parameters.3.value
+              dest: spec.arguments.parameters.2.value
             - src:
                 {
                   dependencyName: cancel-train-dep,
                   dataKey: body.cancel_reporter_capability,
                 }
-              dest: spec.arguments.parameters.4.value
+              dest: spec.arguments.parameters.3.value

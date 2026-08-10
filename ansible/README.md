@@ -121,9 +121,10 @@ Ansible waits for the temporary Karpenter nodes to consolidate. It never uses
 
 `TRAINING_ENABLED=false` remains in the Control Plane ConfigMap. The API returns
 HTTP 503 for training submission and the UI hides training execution controls,
-even while the platform components are installed. Do not set an Argo training
-webhook URL or enable the feature until Sensor mapping, EventSource
-authentication, and workload-isolation controls have been reviewed.
+even while the platform components are installed. EventSource authentication
+and Sensor field mapping are enforced by GitOps, but do not set an Argo
+training webhook URL or enable the feature until tenant workload isolation,
+admission and egress controls have been reviewed.
 
 For rollback or Terraform destroy, first delete smoke resources and wait until
 no `PyTorchJob` is running. Suspend the capacity Application, remove NodePools
@@ -149,9 +150,11 @@ publishing port 6443.
   Karpenter controller, EC2NodeClasses and NodePools.
 
 `k8s/security` is intentionally not referenced by root GitOps in this rollout.
-Custom NetworkPolicies and PodDisruptionBudgets are deferred until the platform
-is stable. This is a temporary operational decision, not a production security
-guarantee.
+Its broad NetworkPolicies and PodDisruptionBudgets are deferred until the
+platform is stable. The narrowly scoped EventSource/EventBus policies under
+`k8s/argo` are active and owned by the execution Application. Deferring the
+remaining policy set is a temporary operational decision, not a production
+security guarantee.
 
 One K3s server is still a control-plane single point of failure. Local etcd
 snapshots improve recovery but do not provide HA; that requires three servers.

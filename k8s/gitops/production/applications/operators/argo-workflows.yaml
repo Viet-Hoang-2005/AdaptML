@@ -30,6 +30,8 @@ spec:
           workflowNamespaces:
             - default
             - argo
+          workflowRestrictions:
+            templateReferencing: Secure
           nodeSelector:
             workload-type: worker
         server:

@@ -93,7 +93,12 @@ def test_training_creation_and_submission_are_disabled_during_platform_validatio
     submit = client.post(f"/api/training-jobs/{job.public_id}/submit/")
 
     assert capabilities.status_code == 200
-    assert capabilities.data == {"enabled": False, "backend": settings.TRAINING_BACKEND, "cpu_profiles": [], "accelerators": []}
+    assert capabilities.data == {
+        "enabled": False,
+        "backend": settings.TRAINING_BACKEND,
+        "cpu_profiles": [],
+        "accelerators": [],
+    }
     assert create.status_code == 503
     assert submit.status_code == 503
     assert TrainingJob.objects.filter(public_id=job.public_id, status="pending").exists()

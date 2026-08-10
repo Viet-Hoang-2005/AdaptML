@@ -9,6 +9,9 @@ JWT_PUBLIC_KEY = env("JWT_PUBLIC_KEY", required=True)
 CONTROL_PLANE_WEBHOOK_SECRET = env("CONTROL_PLANE_WEBHOOK_SECRET", required=True)
 if len(CONTROL_PLANE_WEBHOOK_SECRET) < 32:
     raise ImproperlyConfigured("CONTROL_PLANE_WEBHOOK_SECRET must contain at least 32 characters")
+ARGO_EVENTS_WEBHOOK_TOKEN = env("ARGO_EVENTS_WEBHOOK_TOKEN", required=True)
+if len(ARGO_EVENTS_WEBHOOK_TOKEN) < 32:
+    raise ImproperlyConfigured("ARGO_EVENTS_WEBHOOK_TOKEN must contain at least 32 characters")
 
 POD_IP = str(env("POD_IP", "")).strip()
 if POD_IP and POD_IP not in ALLOWED_HOSTS:

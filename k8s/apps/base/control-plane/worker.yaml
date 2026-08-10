@@ -14,7 +14,7 @@ spec:
       labels:
         app: mlops-paas-control-plane-worker
     spec:
-      serviceAccountName: argo-workflow-sa
+      automountServiceAccountToken: false
       nodeSelector:
         workload-type: worker
       containers:
@@ -54,6 +54,11 @@ spec:
                 secretKeyRef:
                   name: mlops-paas-secret
                   key: CONTROL_PLANE_WEBHOOK_SECRET
+            - name: ARGO_EVENTS_WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: argo-events-webhook-client
+                  key: token
             - name: HARBOR_USERNAME
               valueFrom:
                 secretKeyRef:

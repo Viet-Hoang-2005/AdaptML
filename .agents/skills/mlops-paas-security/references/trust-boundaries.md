@@ -23,6 +23,14 @@ state; workload containers must not receive the node IAM credentials or token.
 
 PostgreSQL terminal state is updated only by trusted orchestration/reporters. A tenant callback may report bounded progress but cannot authoritatively complete another resource.
 
+Argo Events accepts execution requests only from the trusted Control Plane
+worker using the dedicated `ARGO_EVENTS_WEBHOOK_TOKEN`; never reuse an
+application callback secret. EventBus transport uses token authentication, and
+execution NetworkPolicies restrict the EventSource and EventBus peer set.
+Control Plane API/worker Pods do not mount Kubernetes API credentials. Sensor
+and Workflow service accounts must retain function-specific minimum RBAC and
+must never gain Secret CRUD or `pods/exec`.
+
 When TLS terminates before Traefik, forwarded scheme and client headers are
 trusted only from the explicit immediate proxy addresses observed at Traefik.
 Do not trust an entire pod/VPC CIDR when narrower `/32` proxy hops are stable,

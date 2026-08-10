@@ -60,7 +60,7 @@ def test_argo_training_backend_records_runtime_selectors():
         "pod_selector": expected_selector,
     }
     assert client.calls[0][1]["project_id"] == str(project.public_id)
-    assert client.calls[0][1]["namespace"] == "user-jobs"
+    assert "namespace" not in client.calls[0][1]
     assert "expires=900" in client.calls[0][1]["s3_source_uri"]
     assert "expires=900" in client.calls[0][1]["s3_training_data_uri"]
     assert "mlflow_tracking_uri" not in client.calls[0][1]
@@ -89,7 +89,7 @@ def test_argo_cancel_uses_job_bound_callback_capability(settings):
     assert result["dispatched"] is True
     assert payload["job_id"] == str(job.public_id)
     assert payload["job_name"] == f"training-{job.public_id}"
-    assert payload["namespace"] == "user-jobs"
+    assert "namespace" not in payload
     assert payload["control_plane_callback_url"].endswith(
         f"/internal/webhooks/training-jobs/{job.public_id}/cancellation/"
     )

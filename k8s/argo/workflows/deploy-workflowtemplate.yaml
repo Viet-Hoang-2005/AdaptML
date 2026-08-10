@@ -4,7 +4,7 @@ metadata:
   name: mlops-paas-model-server-deploy-template
   namespace: default
 spec:
-  serviceAccountName: argo-workflow-sa
+  serviceAccountName: argo-workflow-deploy-sa
   entrypoint: deploy-model
   templates:
     - name: deploy-model
@@ -60,37 +60,37 @@ spec:
           apiVersion: apps/v1
           kind: Deployment
           metadata:
-            name: {{inputs.parameters.container_name}}
+            name: {{=toJson(inputs.parameters.container_name)}}
             namespace: default
             labels:
               app: model-endpoint
-              tenant: {{inputs.parameters.tenant_id}}
-              project: "{{inputs.parameters.project_id}}"
-              model-version: "{{inputs.parameters.model_version_id}}"
+              tenant: {{=toJson(inputs.parameters.tenant_id)}}
+              project: {{=toJson(inputs.parameters.project_id)}}
+              model-version: {{=toJson(inputs.parameters.model_version_id)}}
           spec:
             replicas: 1
             selector:
               matchLabels:
-                app: {{inputs.parameters.container_name}}
+                app: {{=toJson(inputs.parameters.container_name)}}
             template:
               metadata:
                 labels:
-                  app: {{inputs.parameters.container_name}}
+                  app: {{=toJson(inputs.parameters.container_name)}}
               spec:
                 automountServiceAccountToken: false
                 nodeSelector:
                   workload-type: worker
                 containers:
                   - name: model-server
-                    image: {{inputs.parameters.image_name}}
+                    image: {{=toJson(inputs.parameters.image_name)}}
                     imagePullPolicy: Always
                     ports:
                       - containerPort: {{inputs.parameters.target_port}}
                     env:
-                      - {name: PROJECT_ID, value: "{{inputs.parameters.project_id}}"}
-                      - {name: MODEL_VERSION_ID, value: "{{inputs.parameters.model_version_id}}"}
-                      - {name: MODEL_VERSION, value: "{{inputs.parameters.version}}"}
-                      - {name: MODEL_URI, value: "{{inputs.parameters.model_uri}}"}
+                      - {name: PROJECT_ID, value: {{=toJson(inputs.parameters.project_id)}}}
+                      - {name: MODEL_VERSION_ID, value: {{=toJson(inputs.parameters.model_version_id)}}}
+                      - {name: MODEL_VERSION, value: {{=toJson(inputs.parameters.version)}}}
+                      - {name: MODEL_URI, value: {{=toJson(inputs.parameters.model_uri)}}}
                       - {name: PYTHONPATH, value: "/app/libs:/app"}
                     volumeMounts:
                       - {name: dynamic-libs, mountPath: /app/libs}
@@ -114,14 +114,14 @@ spec:
           apiVersion: v1
           kind: Service
           metadata:
-            name: {{inputs.parameters.container_name}}-svc
+            name: {{=toJson(sprig.printf("%s-svc", inputs.parameters.container_name))}}
             namespace: default
             labels:
               component: model-server
-              serving-engine: {{inputs.parameters.model_type}}
+              serving-engine: {{=toJson(inputs.parameters.model_type)}}
           spec:
             selector:
-              app: {{inputs.parameters.container_name}}
+              app: {{=toJson(inputs.parameters.container_name)}}
             ports:
               - name: http
                 protocol: TCP

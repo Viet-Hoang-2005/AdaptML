@@ -9,7 +9,7 @@ Usage::
     python scripts/generate_control_plane_secrets.py
     python scripts/generate_control_plane_secrets.py --force
 
-Use ``--force`` only for intentional rotation. It replaces all four secrets and
+Use ``--force`` only for intentional rotation. It replaces all five secrets and
 therefore invalidates JWTs signed by the previous key pair.
 """
 
@@ -38,6 +38,7 @@ SECRET_KEYS = (
     "JWT_PRIVATE_KEY",
     "JWT_PUBLIC_KEY",
     "CONTROL_PLANE_WEBHOOK_SECRET",
+    "ARGO_EVENTS_WEBHOOK_TOKEN",
 )
 
 
@@ -207,6 +208,7 @@ def main() -> int:
         "JWT_PRIVATE_KEY": private_key,
         "JWT_PUBLIC_KEY": public_key,
         "CONTROL_PLANE_WEBHOOK_SECRET": secrets.token_urlsafe(48),
+        "ARGO_EVENTS_WEBHOOK_TOKEN": secrets.token_urlsafe(48),
     }
     updated, written, preserved = update_env_content(
         original,

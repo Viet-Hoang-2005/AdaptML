@@ -4,7 +4,7 @@ metadata:
   name: mlops-paas-model-packager-template
   namespace: default
 spec:
-  serviceAccountName: argo-workflow-sa
+  serviceAccountName: argo-workflow-basic-sa
   entrypoint: build-model
   onExit: notify-build-exit
   arguments:

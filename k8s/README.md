@@ -40,9 +40,18 @@ owns the affected resource.
 
 ## Execution
 
-`mlops-prod-execution` owns Argo EventBus, EventSource, Sensor,
-WorkflowTemplates and their least-privilege RBAC. Resources created by a
-Workflow remain runtime-owned.
+`mlops-prod-execution` owns the EventBus, EventSource, Sensor and their stable
+webhook Service in `argo-events`; WorkflowTemplates remain in `default` and
+training runtime resources remain in `user-jobs`. The six webhook routes use a
+dedicated bearer token synchronized to separate client/server Secrets. Native
+NATS uses token authentication, and reconciled NetworkPolicies permit only the
+Control Plane worker to reach the EventSource and only Argo Events components
+to reach the EventBus.
+
+The Sensor can only create/list Git-managed-template Workflows. Build/drift,
+deploy, delete and training use separate least-privilege Workflow service
+accounts; Control Plane API/worker Pods do not mount Kubernetes API tokens.
+Resources created by a Workflow remain runtime-owned.
 
 ## Workloads
 
@@ -73,7 +82,9 @@ there are no ignored or runtime-patched Karpenter controller fields.
 ## Deferred security resources
 
 `k8s/security` is intentionally outside every reconciled
-Kustomization. Its NetworkPolicies and PDBs are not active controls.
+Kustomization. Its broad NetworkPolicies and PDBs are not active controls. This
+does not include the execution-plane NetworkPolicies in `k8s/argo`, which are
+active production resources owned by `mlops-prod-execution`.
 
 ## Validation and debugging
 

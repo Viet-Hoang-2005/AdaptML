@@ -4,14 +4,13 @@ metadata:
   name: mlops-paas-training-cancel-template
   namespace: default
 spec:
-  serviceAccountName: argo-workflow-sa
+  serviceAccountName: argo-workflow-training-sa
   entrypoint: cancel-training
   onExit: report-cancellation
   arguments:
     parameters:
       - name: job_id
       - name: job_name
-      - name: namespace
       - name: control_plane_callback_url
       - name: cancel_reporter_capability
   templates:
@@ -23,7 +22,7 @@ spec:
           - delete
           - pytorchjob.kubeflow.org
           - "{{workflow.parameters.job_name}}"
-          - "--namespace={{workflow.parameters.namespace}}"
+          - "--namespace=user-jobs"
           - "--ignore-not-found=true"
           - "--wait=true"
           - "--timeout=120s"

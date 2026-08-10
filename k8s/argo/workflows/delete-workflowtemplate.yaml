@@ -4,7 +4,7 @@ metadata:
   name: mlops-paas-model-server-delete-template
   namespace: default
 spec:
-  serviceAccountName: argo-workflow-sa
+  serviceAccountName: argo-workflow-delete-sa
   entrypoint: delete-model-project
   onExit: notify-delete-exit
   arguments:
@@ -53,7 +53,7 @@ spec:
           apiVersion: apps/v1
           kind: Deployment
           metadata:
-            name: {{inputs.parameters.container_name}}
+            name: {{=toJson(inputs.parameters.container_name)}}
             namespace: default
 
     - name: delete-service
@@ -67,7 +67,7 @@ spec:
           apiVersion: v1
           kind: Service
           metadata:
-            name: {{inputs.parameters.container_name}}-svc
+            name: {{=toJson(sprig.printf("%s-svc", inputs.parameters.container_name))}}
             namespace: default
 
     - name: notify-delete-exit

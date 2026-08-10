@@ -7,6 +7,7 @@ resources:
   - eventbus.yaml
   - eventsource.yaml
   - webhook-service.yaml
+  - network-policies.yaml
   - workflows/build-workflowtemplate.yaml
   - workflows/deploy-workflowtemplate.yaml
   - workflows/delete-workflowtemplate.yaml

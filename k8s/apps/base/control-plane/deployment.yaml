@@ -19,6 +19,7 @@ spec:
       labels:
         app: mlops-paas-control-plane
     spec:
+      automountServiceAccountToken: false
       nodeSelector:
         workload-type: worker
       affinity:
@@ -74,6 +75,11 @@ spec:
                 secretKeyRef:
                   name: mlops-paas-secret
                   key: CONTROL_PLANE_WEBHOOK_SECRET
+            - name: ARGO_EVENTS_WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: argo-events-webhook-client
+                  key: token
           envFrom:
             - configMapRef:
                 name: mlops-paas-control-plane-config
@@ -124,6 +130,11 @@ spec:
                 secretKeyRef:
                   name: mlops-paas-secret
                   key: CONTROL_PLANE_WEBHOOK_SECRET
+            - name: ARGO_EVENTS_WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: argo-events-webhook-client
+                  key: token
             - name: GOOGLE_OAUTH2_CLIENT_ID
               valueFrom:
                 secretKeyRef:

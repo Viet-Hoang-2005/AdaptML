@@ -5,8 +5,8 @@ metadata:
   namespace: user-jobs
 rules:
   - apiGroups: ["kubeflow.org"]
-    resources: ["pytorchjobs", "pytorchjobs/status"]
-    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+    resources: ["pytorchjobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
   - apiGroups: [""]
     resources: ["pods", "pods/log", "events"]
     verbs: ["get", "list", "watch"]
@@ -22,5 +22,5 @@ roleRef:
   name: argo-training-job-role
 subjects:
   - kind: ServiceAccount
-    name: argo-workflow-sa
+    name: argo-workflow-training-sa
     namespace: default

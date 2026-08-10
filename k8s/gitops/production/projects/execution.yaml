@@ -11,6 +11,8 @@ spec:
   sourceRepos:
     - https://github.com/Viet-Hoang-2005/MLOps-paas-system.git
   destinations:
+    - namespace: argo-events
+      server: https://kubernetes.default.svc
     - namespace: default
       server: https://kubernetes.default.svc
     - namespace: user-jobs
@@ -24,6 +26,8 @@ spec:
       kind: Role
     - group: rbac.authorization.k8s.io
       kind: RoleBinding
+    - group: networking.k8s.io
+      kind: NetworkPolicy
     - group: argoproj.io
       kind: EventBus
     - group: argoproj.io

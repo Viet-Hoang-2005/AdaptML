@@ -4,7 +4,7 @@ metadata:
   name: mlops-paas-training-pipeline-template
   namespace: default
 spec:
-  serviceAccountName: argo-workflow-sa
+  serviceAccountName: argo-workflow-training-sa
   entrypoint: training-pipeline
   onExit: report-status
   templates:
@@ -15,7 +15,6 @@ spec:
           - {name: project_id}
           - {name: tenant_id}
           - {name: job_name}
-          - {name: namespace}
           - {name: vcpu}
           - {name: memory}
           - {name: accelerator_type}
@@ -39,7 +38,6 @@ spec:
                 - {name: project_id, value: "{{inputs.parameters.project_id}}"}
                 - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
                 - {name: job_name, value: "{{inputs.parameters.job_name}}"}
-                - {name: namespace, value: "{{inputs.parameters.namespace}}"}
                 - {name: vcpu, value: "{{inputs.parameters.vcpu}}"}
                 - {name: memory, value: "{{inputs.parameters.memory}}"}
                 - {name: s3_source_uri, value: "{{inputs.parameters.s3_source_uri}}"}
@@ -58,7 +56,6 @@ spec:
                 - {name: project_id, value: "{{inputs.parameters.project_id}}"}
                 - {name: tenant_id, value: "{{inputs.parameters.tenant_id}}"}
                 - {name: job_name, value: "{{inputs.parameters.job_name}}"}
-                - {name: namespace, value: "{{inputs.parameters.namespace}}"}
                 - {name: vcpu, value: "{{inputs.parameters.vcpu}}"}
                 - {name: memory, value: "{{inputs.parameters.memory}}"}
                 - {name: accelerator_count, value: "{{inputs.parameters.accelerator_count}}"}
@@ -76,7 +73,6 @@ spec:
           - {name: project_id}
           - {name: tenant_id}
           - {name: job_name}
-          - {name: namespace}
           - {name: vcpu}
           - {name: memory}
           - {name: s3_source_uri}
@@ -94,15 +90,15 @@ spec:
           apiVersion: kubeflow.org/v1
           kind: PyTorchJob
           metadata:
-            name: {{inputs.parameters.job_name}}
-            namespace: {{inputs.parameters.namespace}}
+            name: {{=toJson(inputs.parameters.job_name)}}
+            namespace: user-jobs
             labels:
               app.kubernetes.io/part-of: mlops-paas
               app.kubernetes.io/component: training
               app.kubernetes.io/managed-by: argo-workflows
-              mlops.io/training-job-id: "{{inputs.parameters.job_id}}"
-              mlops.io/project-id: "{{inputs.parameters.project_id}}"
-              mlops.io/tenant-id: "{{inputs.parameters.tenant_id}}"
+              mlops.io/training-job-id: {{=toJson(inputs.parameters.job_id)}}
+              mlops.io/project-id: {{=toJson(inputs.parameters.project_id)}}
+              mlops.io/tenant-id: {{=toJson(inputs.parameters.tenant_id)}}
           spec:
             pytorchReplicaSpecs:
               Master:
@@ -114,9 +110,9 @@ spec:
                       app.kubernetes.io/part-of: mlops-paas
                       app.kubernetes.io/component: training
                       app.kubernetes.io/managed-by: argo-workflows
-                      mlops.io/training-job-id: "{{inputs.parameters.job_id}}"
-                      mlops.io/project-id: "{{inputs.parameters.project_id}}"
-                      mlops.io/tenant-id: "{{inputs.parameters.tenant_id}}"
+                      mlops.io/training-job-id: {{=toJson(inputs.parameters.job_id)}}
+                      mlops.io/project-id: {{=toJson(inputs.parameters.project_id)}}
+                      mlops.io/tenant-id: {{=toJson(inputs.parameters.tenant_id)}}
                   spec:
                     automountServiceAccountToken: false
                     nodeSelector:
@@ -134,15 +130,15 @@ spec:
                             cpu: "{{inputs.parameters.vcpu}}"
                             memory: "{{inputs.parameters.memory}}Mi"
                         env:
-                          - {name: S3_SOURCE_URI, value: "{{inputs.parameters.s3_source_uri}}"}
-                          - {name: S3_TRAINING_DATA_URI, value: "{{inputs.parameters.s3_training_data_uri}}"}
-                          - {name: S3_OUTPUT_UPLOAD_URL, value: "{{inputs.parameters.output_upload_url}}"}
-                          - {name: S3_OUTPUT_UPLOAD_CAPABILITY, value: "{{inputs.parameters.output_upload_capability}}"}
-                          - {name: REQUIREMENTS_TEXT, value: "{{inputs.parameters.requirements_text}}"}
-                          - {name: TRAINING_JOB_ID, value: "{{inputs.parameters.job_id}}"}
-                          - {name: TENANT_ID, value: "{{inputs.parameters.tenant_id}}"}
-                          - {name: ENTRY_POINT, value: "{{inputs.parameters.entry_point}}"}
-                          - {name: MODEL_VERSION, value: "{{inputs.parameters.model_version}}"}
+                          - {name: S3_SOURCE_URI, value: {{=toJson(inputs.parameters.s3_source_uri)}}}
+                          - {name: S3_TRAINING_DATA_URI, value: {{=toJson(inputs.parameters.s3_training_data_uri)}}}
+                          - {name: S3_OUTPUT_UPLOAD_URL, value: {{=toJson(inputs.parameters.output_upload_url)}}}
+                          - {name: S3_OUTPUT_UPLOAD_CAPABILITY, value: {{=toJson(inputs.parameters.output_upload_capability)}}}
+                          - {name: REQUIREMENTS_TEXT, value: {{=toJson(inputs.parameters.requirements_text)}}}
+                          - {name: TRAINING_JOB_ID, value: {{=toJson(inputs.parameters.job_id)}}}
+                          - {name: TENANT_ID, value: {{=toJson(inputs.parameters.tenant_id)}}}
+                          - {name: ENTRY_POINT, value: {{=toJson(inputs.parameters.entry_point)}}}
+                          - {name: MODEL_VERSION, value: {{=toJson(inputs.parameters.model_version)}}}
     - name: gpu-pytorch-job
       inputs:
         parameters:
@@ -150,7 +146,6 @@ spec:
           - {name: project_id}
           - {name: tenant_id}
           - {name: job_name}
-          - {name: namespace}
           - {name: vcpu}
           - {name: memory}
           - {name: accelerator_count}
@@ -169,15 +164,15 @@ spec:
           apiVersion: kubeflow.org/v1
           kind: PyTorchJob
           metadata:
-            name: {{inputs.parameters.job_name}}
-            namespace: {{inputs.parameters.namespace}}
+            name: {{=toJson(inputs.parameters.job_name)}}
+            namespace: user-jobs
             labels:
               app.kubernetes.io/part-of: mlops-paas
               app.kubernetes.io/component: training
               app.kubernetes.io/managed-by: argo-workflows
-              mlops.io/training-job-id: "{{inputs.parameters.job_id}}"
-              mlops.io/project-id: "{{inputs.parameters.project_id}}"
-              mlops.io/tenant-id: "{{inputs.parameters.tenant_id}}"
+              mlops.io/training-job-id: {{=toJson(inputs.parameters.job_id)}}
+              mlops.io/project-id: {{=toJson(inputs.parameters.project_id)}}
+              mlops.io/tenant-id: {{=toJson(inputs.parameters.tenant_id)}}
           spec:
             pytorchReplicaSpecs:
               Master:
@@ -189,9 +184,9 @@ spec:
                       app.kubernetes.io/part-of: mlops-paas
                       app.kubernetes.io/component: training
                       app.kubernetes.io/managed-by: argo-workflows
-                      mlops.io/training-job-id: "{{inputs.parameters.job_id}}"
-                      mlops.io/project-id: "{{inputs.parameters.project_id}}"
-                      mlops.io/tenant-id: "{{inputs.parameters.tenant_id}}"
+                      mlops.io/training-job-id: {{=toJson(inputs.parameters.job_id)}}
+                      mlops.io/project-id: {{=toJson(inputs.parameters.project_id)}}
+                      mlops.io/tenant-id: {{=toJson(inputs.parameters.tenant_id)}}
                   spec:
                     automountServiceAccountToken: false
                     nodeSelector:
@@ -217,15 +212,15 @@ spec:
                             memory: "{{inputs.parameters.memory}}Mi"
                             nvidia.com/gpu: "{{inputs.parameters.accelerator_count}}"
                         env:
-                          - {name: S3_SOURCE_URI, value: "{{inputs.parameters.s3_source_uri}}"}
-                          - {name: S3_TRAINING_DATA_URI, value: "{{inputs.parameters.s3_training_data_uri}}"}
-                          - {name: S3_OUTPUT_UPLOAD_URL, value: "{{inputs.parameters.output_upload_url}}"}
-                          - {name: S3_OUTPUT_UPLOAD_CAPABILITY, value: "{{inputs.parameters.output_upload_capability}}"}
-                          - {name: REQUIREMENTS_TEXT, value: "{{inputs.parameters.requirements_text}}"}
-                          - {name: TRAINING_JOB_ID, value: "{{inputs.parameters.job_id}}"}
-                          - {name: TENANT_ID, value: "{{inputs.parameters.tenant_id}}"}
-                          - {name: ENTRY_POINT, value: "{{inputs.parameters.entry_point}}"}
-                          - {name: MODEL_VERSION, value: "{{inputs.parameters.model_version}}"}
+                          - {name: S3_SOURCE_URI, value: {{=toJson(inputs.parameters.s3_source_uri)}}}
+                          - {name: S3_TRAINING_DATA_URI, value: {{=toJson(inputs.parameters.s3_training_data_uri)}}}
+                          - {name: S3_OUTPUT_UPLOAD_URL, value: {{=toJson(inputs.parameters.output_upload_url)}}}
+                          - {name: S3_OUTPUT_UPLOAD_CAPABILITY, value: {{=toJson(inputs.parameters.output_upload_capability)}}}
+                          - {name: REQUIREMENTS_TEXT, value: {{=toJson(inputs.parameters.requirements_text)}}}
+                          - {name: TRAINING_JOB_ID, value: {{=toJson(inputs.parameters.job_id)}}}
+                          - {name: TENANT_ID, value: {{=toJson(inputs.parameters.tenant_id)}}}
+                          - {name: ENTRY_POINT, value: {{=toJson(inputs.parameters.entry_point)}}}
+                          - {name: MODEL_VERSION, value: {{=toJson(inputs.parameters.model_version)}}}
     - name: report-status
       container:
         image: curlimages/curl:latest
