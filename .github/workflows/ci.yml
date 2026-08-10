@@ -23,7 +23,9 @@ jobs:
       machine_learning_serving: ${{ steps.filter.outputs.machine_learning_serving == 'true' || steps.filter.outputs.ci_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
       deep_learning_serving: ${{ steps.filter.outputs.deep_learning_serving == 'true' || steps.filter.outputs.ci_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
       training_runner: ${{ steps.filter.outputs.training_runner == 'true' || steps.filter.outputs.ci_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
-      infra: ${{ steps.filter.outputs.infra == 'true' || steps.filter.outputs.ci_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
+      k8s: ${{ steps.filter.outputs.k8s == 'true' || steps.filter.outputs.ci_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
+      ansible: ${{ steps.filter.outputs.ansible == 'true' || steps.filter.outputs.ci_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
+      terraform: ${{ steps.filter.outputs.terraform == 'true' || steps.filter.outputs.ci_workflow == 'true' || github.event_name == 'workflow_dispatch' }}
       matrix_targets: ${{ steps.matrix.outputs.targets }}
       unit_test_targets: ${{ steps.matrix.outputs.unit_test_targets }}
     steps:
@@ -55,9 +57,13 @@ jobs:
               - '.github/workflows/ci.yml'
             service_test_shared:
               - 'services/requirements-test.txt'
-            infra:
+            k8s:
               - 'k8s/**'
+              - 'scripts/validate_gitops_layout.py'
+            ansible:
               - 'ansible/**'
+            terraform:
+              - 'infra/**'
 
       - name: Generate Dynamic Matrix
         id: matrix
@@ -331,28 +337,25 @@ jobs:
             exit 1
           fi
 
-  lint-infra:
-    name: "Infrastructure Validation (Kustomize & Kubeconform)"
+  validate-k8s:
+    name: "Kubernetes Validation (Kustomize & Kubeconform)"
     needs: detect-changes
-    if: needs.detect-changes.outputs.infra == 'true'
+    if: needs.detect-changes.outputs.k8s == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Python for Ansible validation
+      - name: Setup Python for GitOps validation
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install GitOps validation dependencies
+        run: pip install PyYAML==6.0.2
       - name: Setup Kustomize
         uses: imranismail/setup-kustomize@v2
-      - name: Validate Ansible syntax
+      - name: Install Kubeconform v0.7.0
         run: |
-          pip install -r ansible/requirements.txt
-          ansible-galaxy collection install -r ansible/requirements.yml
-          ansible-playbook -i 'localhost,' ansible/site.yml --syntax-check
-      - name: Install Kubeconform
-        run: |
-          wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
-          tar -xf kubeconform-linux-amd64.tar.gz
+          wget -q https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+          tar -xzf kubeconform-linux-amd64.tar.gz
           sudo mv kubeconform /usr/local/bin/
       - name: Validate K8s Manifests
         run: |
@@ -372,9 +375,50 @@ jobs:
           done
           python scripts/validate_gitops_layout.py
 
+  validate-ansible:
+    name: "Ansible Validation (Syntax & Lint)"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ansible == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Ansible dependencies and collections
+        run: |
+          pip install -r ansible/requirements.txt
+          ansible-galaxy collection install -r ansible/requirements.yml
+      - name: Validate Ansible syntax
+        run: ansible-playbook -i 'localhost,' ansible/site.yml --syntax-check
+      - name: Lint Ansible
+        run: ansible-lint ansible/
+
+  validate-terraform:
+    name: "Terraform Validation (Fmt, Init & Validate)"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.5.7'
+      - name: Format check
+        run: terraform fmt -check -recursive
+      - name: Initialize providers without backend
+        run: terraform init -backend=false -input=false
+      - name: Validate configuration
+        run: terraform validate
+
   build-and-scan:
     name: "Build & Scan (${{ matrix.target.name }})"
-    needs: [detect-changes, lint-frontend, lint-backend, service-unit-tests, frontend-build, lint-infra, secret-scan]
+    needs: [detect-changes, lint-frontend, lint-backend, service-unit-tests, frontend-build, validate-k8s, validate-ansible, validate-terraform, secret-scan]
     if: always() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.matrix_targets != '[]'
     runs-on: ubuntu-latest
     strategy:
@@ -442,7 +486,7 @@ jobs:
 
   ci-summary:
     name: "CI Pipeline Summary Table"
-    needs: [detect-changes, secret-scan, lint-frontend, lint-backend, service-unit-tests, frontend-build, lint-infra, build-and-scan]
+    needs: [detect-changes, secret-scan, lint-frontend, lint-backend, service-unit-tests, frontend-build, validate-k8s, validate-ansible, validate-terraform, build-and-scan]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -465,7 +509,9 @@ jobs:
           cs_changed = "${{ needs.detect-changes.outputs.consumer }}" == "true"
           pk_changed = "${{ needs.detect-changes.outputs.packager }}" == "true"
           ev_changed = "${{ needs.detect-changes.outputs.evidently }}" == "true"
-          inf_changed = "${{ needs.detect-changes.outputs.infra }}" == "true"
+          k8s_changed = "${{ needs.detect-changes.outputs.k8s }}" == "true"
+          ansible_changed = "${{ needs.detect-changes.outputs.ansible }}" == "true"
+          terraform_changed = "${{ needs.detect-changes.outputs.terraform }}" == "true"
 
           md_changed = "${{ needs.detect-changes.outputs.model_server }}" == "true"
           ml_serving_changed = "${{ needs.detect-changes.outputs.machine_learning_serving }}" == "true"
@@ -476,9 +522,20 @@ jobs:
           eslint_res = "${{ needs.lint-frontend.result }}" == "success"
           eslint_errs = "${{ needs.lint-frontend.outputs.errors }}"
           eslint_warnings = "${{ needs.lint-frontend.outputs.warnings }}"
-          infra_res = "${{ needs.lint-infra.result }}" == "success"
+          k8s_result = "${{ needs.validate-k8s.result }}"
+          ansible_result = "${{ needs.validate-ansible.result }}"
+          terraform_result = "${{ needs.validate-terraform.result }}"
 
           fmt = lambda ok: "Passed" if ok else "Failed"
+          def infrastructure_result(changed, result):
+              if not changed:
+                  return "Skipped (no changes)"
+              return {
+                  "success": "Passed",
+                  "failure": "Failed",
+                  "cancelled": "Cancelled",
+                  "skipped": "Skipped",
+              }.get(result, f"Failed ({result or 'unknown'} job result)")
           eslint_errs = int(eslint_errs or 0)
           eslint_warnings = int(eslint_warnings or 0)
           eslint_status = "Failed" if not eslint_res or eslint_errs else "Warning" if eslint_warnings else "Passed"
@@ -521,15 +578,16 @@ jobs:
               summary.extend(rows)
               summary.append("\n")
 
-          if inf_changed:
-              summary.append("#### Kubernetes Infrastructure")
-              summary.append("| Services | Validation Status |")
-              summary.append("| :--- | :--- |")
-              summary.append(f"| **K8s Manifests (Kustomize & Kubeconform)** | {fmt(infra_res)} |")
-              summary.append("\n")
+          summary.append("#### Infrastructure")
+          summary.append("| Component | Result |")
+          summary.append("| :--- | :--- |")
+          summary.append(f"| **Kubernetes (Kustomize, Kubeconform, GitOps)** | {infrastructure_result(k8s_changed, k8s_result)} |")
+          summary.append(f"| **Ansible (Syntax, Lint)** | {infrastructure_result(ansible_changed, ansible_result)} |")
+          summary.append(f"| **Terraform (Fmt, Init, Validate)** | {infrastructure_result(terraform_changed, terraform_result)} |")
+          summary.append("\n")
 
-          if not rows and not inf_changed:
-              summary.append("*No application or K8s components changed in this run.*")
+          if not rows and not (k8s_changed or ansible_changed or terraform_changed):
+              summary.append("*No application components changed in this run.*")
 
           content = "\n".join(summary)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
