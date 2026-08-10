@@ -75,10 +75,11 @@ The base image references contain only logical image names and are not deployabl
 targets. Add future `dev` or `staging` overlays beside `production` rather than
 putting environment-specific registry names, tags, ConfigMaps or patches in base.
 
-## Edge
+## Cloudflare and routing
 
-`mlops-prod-platform-edge` owns Cloudflare Tunnel configuration, Traefik routes and the
-Traefik health endpoint. Public exposure changes require a security review.
+`mlops-prod-platform-cloudflare` owns the Cloudflare Tunnel and its scoped
+credential. `mlops-prod-platform-routing` owns Traefik routes and the Traefik
+health endpoint. Public exposure changes require a security review.
 
 ## Cluster add-ons
 

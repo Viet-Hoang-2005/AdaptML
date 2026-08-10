@@ -8,4 +8,5 @@ resources:
   - harbor.yaml
   - mlflow.yaml
   - observability.yaml
-  - edge.yaml
+  - cloudflare.yaml
+  - routing.yaml

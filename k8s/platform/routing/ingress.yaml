@@ -1,0 +1,62 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: model-gateway-rewrite
+  namespace: default
+spec:
+  replacePathRegex:
+    regex: "^/[^/]+/models/[^/]+/([^/]+)/(predict|health)$"
+    replacement: "/models/${1}/${2}"
+---
+# Cấu hình IngressRoute cho Control Plane (Django Control Plane)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: control-plane-ingressroute
+  namespace: default
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`api.mlops-nids-nt114.id.vn`) && (PathPrefix(`/api`) || PathPrefix(`/admin`))
+      kind: Rule
+      services:
+        - name: mlops-paas-control-plane
+          port: 8000
+    - match: Host(`mlops-nids-nt114.id.vn`) && PathRegexp(`^/[A-Za-z0-9-]+/models/[0-9A-Fa-f-]{36}/[0-9A-Fa-f-]{36}/(predict|health)$`)
+      kind: Rule
+      middlewares:
+        - name: model-gateway-rewrite
+      services:
+        - name: mlops-paas-model-server
+          port: 5000
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-ping-expose
+  namespace: kube-system
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: PathPrefix(`/ping`)
+      kind: Rule
+      services:
+        - name: ping@internal
+          kind: TraefikService
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: harbor-registry-ingressroute
+  namespace: harbor
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`registry.mlops-nids-nt114.id.vn`)
+      kind: Rule
+      services:
+        - name: harbor
+          port: 80

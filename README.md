@@ -160,7 +160,7 @@ MLOps-paas-system/
 │   │   └── repositories/                     # Public Helm/OCI repository descriptors
 │   ├── cluster/                              # Namespace, StorageClass, SecretStore, policy và capacity
 │   ├── addons/                               # Upstream controller/CRD/driver adapter
-│   ├── platform/                             # Data, registry, MLflow, observability và edge dùng chung
+  │   ├── platform/                             # Data, registry, MLflow, observability, Cloudflare và routing dùng chung
 │   ├── argo/                                 # Argo Events/Workflows, templates và RBAC
 │   ├── apps/
 │   │   ├── base/                             # Manifest dùng chung cho bốn workload

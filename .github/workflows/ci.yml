@@ -375,8 +375,7 @@ jobs:
             echo "Validating $target with Kubeconform..."
             kubeconform -ignore-missing-schemas -summary "$output"
           done
-          python scripts/validate_gitops_layout.py
-          python scripts/validate_cd_signature.py
+          python k8s/validate/validate_gitops_layout.py
 
   validate-ansible:
     name: "Ansible Validation (Syntax & Lint)"

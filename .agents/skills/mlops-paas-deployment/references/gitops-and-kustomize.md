@@ -17,6 +17,9 @@
 - `mlops-prod-cluster-karpenter-capacity` owns CPU/GPU EC2NodeClasses and NodePools. Git
   contains stable non-secret identifiers and the private K3s API DNS name;
   Terraform owns AWS primitives and Ansible publishes only the token value.
+- `mlops-prod-platform-cloudflare` owns the Cloudflare Tunnel and its scoped
+  credential. `mlops-prod-platform-routing` separately owns the Traefik routes
+  and health endpoint; keep these boundaries separate when changing public exposure.
 - `k8s/security/` remains intentionally excluded during the current stability
   phase; do not describe its NetworkPolicies or custom PDBs as active. Do not
   extend that statement to the reconciled policies under `k8s/argo`.
@@ -24,3 +27,7 @@
 Do not silently claim an unreferenced manifest is active. Fix ownership/reconciliation explicitly and validate rendered output.
 
 GitOps promotion changes image references/manifests in Git; Argo CD reconciles them. Avoid manual drift except authorized emergency operations with a documented rollback.
+`mlops-prod-platform-cloudflare` owns the Cloudflare Tunnel and its scoped
+credential, while `mlops-prod-platform-routing` owns the Traefik routes and
+health endpoint. Keep these Application boundaries separate when changing
+public exposure.
