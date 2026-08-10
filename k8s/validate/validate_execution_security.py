@@ -53,6 +53,8 @@ def validate(context: ValidationContext) -> list[str]:
     for trigger in (sensor.get("spec") or {}).get("triggers") or []:
         workflow = (((((trigger.get("template") or {}).get("k8s") or {}).get("source") or {}).get("resource")) or {})
         workflow_spec = workflow.get("spec") or {}
+        if resource_namespace(workflow) != "mlops-execution":
+            errors.append("Sensor triggers must create Workflows in mlops-execution")
         if not workflow_spec.get("workflowTemplateRef"):
             errors.append("every Sensor trigger must reference a Git-managed WorkflowTemplate")
         if workflow_spec.get("serviceAccountName"):
@@ -63,10 +65,10 @@ def validate(context: ValidationContext) -> list[str]:
         errors.append("execution Application must render EventSource and EventBus NetworkPolicies")
     webhook_policy = find_resource(execution, "NetworkPolicy", "allow-control-plane-worker-to-argo-events-webhook")
     if ((webhook_policy.get("spec") or {}).get("ingress") or []) != [{
-        "from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "default"}}, "podSelector": {"matchLabels": {"app": "mlops-paas-control-plane-worker"}}}],
+        "from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "mlops-control-plane"}}, "podSelector": {"matchLabels": {"app": "mlops-paas-control-plane-worker"}}}],
         "ports": [{"protocol": "TCP", "port": 12000}],
     }]:
-        errors.append("EventSource NetworkPolicy must allow only the default Control Plane worker on TCP 12000")
+        errors.append("EventSource NetworkPolicy must allow only the mlops-control-plane worker on TCP 12000")
     targets = {
         (resource_namespace(resource), ((resource.get("spec") or {}).get("target") or {}).get("name"))
         for resource in execution if resource.get("kind") == "ExternalSecret"
@@ -89,6 +91,16 @@ def validate(context: ValidationContext) -> list[str]:
     restrictions = ((yaml.safe_load(values) or {}).get("controller") or {}).get("workflowRestrictions")
     if restrictions != {"templateReferencing": "Secure"}:
         errors.append("Argo Workflows must enforce Secure WorkflowTemplate referencing")
+    workflow_namespaces = {
+        resource_namespace(resource)
+        for resource in execution
+        if resource.get("kind") == "WorkflowTemplate"
+    }
+    if workflow_namespaces != {"mlops-execution"}:
+        errors.append("all Git-managed WorkflowTemplates must run in mlops-execution")
+    workflow_namespaces = ((yaml.safe_load(values) or {}).get("controller") or {}).get("workflowNamespaces")
+    if workflow_namespaces != ["mlops-execution", "argo"]:
+        errors.append("Argo Workflows must watch only mlops-execution and argo")
     return errors
 
 

@@ -152,7 +152,7 @@ def test_resolve_worker_url_local_and_kubernetes(monkeypatch):
     assert index.resolve_worker_url({"flavor": "xgboost"}, "/predict") == "http://machine-learning-serving:5001/predict"
     assert index.resolve_worker_url({"flavor": "pytorch"}, "/health") == "http://deep-learning-serving:5002/health"
     monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "yes")
-    assert index.resolve_worker_url({"flavor": "tensorflow", "endpoint_container_name": "worker"}, "/predict") == "http://worker-svc:5002/predict"
+    assert index.resolve_worker_url({"flavor": "tensorflow", "endpoint_container_name": "worker"}, "/predict") == "http://worker-svc.mlops-model-runtimes.svc.cluster.local:5002/predict"
     with pytest.raises(HTTPException) as exc:
         index.resolve_worker_url({"flavor": "sklearn"}, "/predict")
     assert exc.value.status_code == 503

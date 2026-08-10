@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: mlops-paas-model-server-deploy-template
-  namespace: default
+  namespace: mlops-execution
 spec:
   serviceAccountName: argo-workflow-deploy-sa
   entrypoint: deploy-model
@@ -61,7 +61,7 @@ spec:
           kind: Deployment
           metadata:
             name: {{=toJson(inputs.parameters.container_name)}}
-            namespace: default
+            namespace: mlops-model-runtimes
             labels:
               app: model-endpoint
               tenant: {{=toJson(inputs.parameters.tenant_id)}}
@@ -115,7 +115,7 @@ spec:
           kind: Service
           metadata:
             name: {{=toJson(sprig.printf("%s-svc", inputs.parameters.container_name))}}
-            namespace: default
+            namespace: mlops-model-runtimes
             labels:
               component: model-server
               serving-engine: {{=toJson(inputs.parameters.model_type)}}

@@ -23,7 +23,7 @@ spec:
     path: k8s/apps/overlays/production/consumer
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: mlops-consumer
   ignoreDifferences:
     - group: external-secrets.io
       kind: ExternalSecret

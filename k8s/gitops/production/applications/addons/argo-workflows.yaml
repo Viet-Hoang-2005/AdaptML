@@ -28,7 +28,7 @@ spec:
           install: true
         controller:
           workflowNamespaces:
-            - default
+            - mlops-execution
             - argo
           workflowRestrictions:
             templateReferencing: Secure

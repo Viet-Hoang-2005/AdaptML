@@ -14,7 +14,9 @@ spec:
   destinations:
     - namespace: argo-events
       server: https://kubernetes.default.svc
-    - namespace: default
+    - namespace: mlops-execution
+      server: https://kubernetes.default.svc
+    - namespace: mlops-model-runtimes
       server: https://kubernetes.default.svc
     - namespace: user-jobs
       server: https://kubernetes.default.svc

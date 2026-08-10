@@ -18,7 +18,8 @@ spec:
           - model-gateway
   namespaceSelector:
     matchNames:
-      - default # Argo Workflow tạo model-server ở namespace default
+      - mlops-model-server
+      - mlops-model-runtimes
   endpoints:
     - port: http # Phải khớp với name: http ở dòng 83 của file deploy-workflowtemplate.yaml
       path: /metrics

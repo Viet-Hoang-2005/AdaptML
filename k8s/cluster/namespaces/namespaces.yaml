@@ -1,6 +1,61 @@
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: mlops-cluster-config
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-control-plane
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-consumer
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-model-server
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-web
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-postgres
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-redis
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-redpanda
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-execution
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-model-runtimes
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-routing
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: cloudflare
 ---
 apiVersion: v1

@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: mlops-paas-model-server-delete-template
-  namespace: default
+  namespace: mlops-execution
 spec:
   serviceAccountName: argo-workflow-delete-sa
   entrypoint: delete-model-project
@@ -54,7 +54,7 @@ spec:
           kind: Deployment
           metadata:
             name: {{=toJson(inputs.parameters.container_name)}}
-            namespace: default
+            namespace: mlops-model-runtimes
 
     - name: delete-service
       inputs:
@@ -68,7 +68,7 @@ spec:
           kind: Service
           metadata:
             name: {{=toJson(sprig.printf("%s-svc", inputs.parameters.container_name))}}
-            namespace: default
+            namespace: mlops-model-runtimes
 
     - name: notify-delete-exit
       nodeSelector: {workload-type: worker}

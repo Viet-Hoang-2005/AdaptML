@@ -23,12 +23,12 @@ spec:
     path: k8s/platform/redpanda
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: mlops-redpanda
   ignoreDifferences:
     - group: apps
       kind: StatefulSet
       name: redpanda
-      namespace: default
+      namespace: mlops-redpanda
       jsonPointers:
         - /spec/persistentVolumeClaimRetentionPolicy
         - /spec/podManagementPolicy

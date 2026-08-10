@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from k8s.validate.common import ValidationContext, identity, repository_root
-from k8s.validate.validate_application_contract import validate_lifecycle
+from k8s.validate.validate_application_contract import validate_lifecycle, validate_no_default_namespace
 from k8s.validate.validate_cluster_capacity import validate_pool
 from k8s.validate.validate_execution_security import validate as validate_execution_security
 from k8s.validate.validate_helm_sources import validate as validate_helm_sources
@@ -53,6 +53,11 @@ class CommonTests(unittest.TestCase):
 class ValidatorNegativeTests(unittest.TestCase):
     def test_application_contract_rejects_missing_child_applications(self):
         self.assertTrue(any("exactly 31" in error for error in validate_lifecycle(FakeContext())))
+
+    def test_application_contract_rejects_default_destination(self):
+        application = {"metadata": {"name": "default-target"}, "spec": {"destination": {"namespace": "default"}}}
+        errors = validate_no_default_namespace(FakeContext(applications=[application]))
+        self.assertTrue(any("must not target" in error for error in errors))
 
     def test_resource_ownership_rejects_duplicate_identity(self):
         application = lambda name, path: {"metadata": {"name": name}, "spec": {"source": {"repoURL": "https://github.com/Viet-Hoang-2005/MLOps-paas-system.git", "path": path}}}

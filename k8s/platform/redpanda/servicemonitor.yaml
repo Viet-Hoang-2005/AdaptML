@@ -11,7 +11,7 @@ metadata:
 spec:
   namespaceSelector:
     matchNames:
-      - default
+      - mlops-redpanda
   selector:
     matchLabels:
       app: redpanda

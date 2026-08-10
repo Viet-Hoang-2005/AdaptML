@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: mlops-paas-evidently-template
-  namespace: default
+  namespace: mlops-execution
 spec:
   serviceAccountName: argo-workflow-basic-sa
   entrypoint: run-evidently
@@ -34,7 +34,7 @@ spec:
           - secretRef:
               name: argo-evidently-secret
           - configMapRef:
-              name: mlops-paas-control-plane-config
+              name: mlops-paas-execution-config
         env:
           - name: JOB_ID
             value: "{{inputs.parameters.job_id}}"
@@ -70,8 +70,6 @@ spec:
             value: "{{inputs.parameters.control_plane_webhook_url}}"
           - name: DRIFT_REPORTS_S3_PREFIX
             value: "drift-reports"
-          - name: DB_HOST_RO
-            value: "mlops-paas-postgres-ro"
         resources:
           requests:
             cpu: 250m

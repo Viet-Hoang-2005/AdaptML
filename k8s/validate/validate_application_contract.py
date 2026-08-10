@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from .common import (
     PRODUCTION_NAMESPACES,
     REPOSITORY_URL,
@@ -10,6 +12,7 @@ from .common import (
     application_name,
     application_sources,
     run_standalone,
+    yaml_documents,
 )
 
 
@@ -180,11 +183,46 @@ def validate_projects_and_cluster_configuration(context: ValidationContext) -> l
     return errors
 
 
+def _walk_values(value: object):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield key, child
+            yield from _walk_values(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_values(child)
+
+
+def validate_no_default_namespace(context: ValidationContext) -> list[str]:
+    errors: list[str] = []
+    for application in context.applications:
+        name = application_name(application)
+        destination = ((application.get("spec") or {}).get("destination") or {})
+        if destination.get("namespace") == "default":
+            errors.append(f"{name} must not target the Kubernetes default namespace")
+
+    k8s_root = context.source_root / "k8s"
+    for manifest_path in sorted([*k8s_root.rglob("*.yaml"), *k8s_root.rglob("*.yml")]):
+        if "charts" in manifest_path.parts:
+            continue
+        relative_path = manifest_path.relative_to(context.source_root).as_posix()
+        content = manifest_path.read_text(encoding="utf-8")
+        if ".default.svc.cluster.local" in content:
+            errors.append(f"{relative_path} must not reference a Service in default.svc.cluster.local")
+        for document in yaml_documents(content):
+            for key, value in _walk_values(document):
+                if key == "namespace" and value == "default":
+                    errors.append(f"{relative_path} must not declare namespace: default")
+                    break
+    return errors
+
+
 def validate(context: ValidationContext) -> list[str]:
     return [
         *validate_workload_layout(context),
         *validate_lifecycle(context),
         *validate_projects_and_cluster_configuration(context),
+        *validate_no_default_namespace(context),
     ]
 
 

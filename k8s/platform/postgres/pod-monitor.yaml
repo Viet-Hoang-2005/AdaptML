@@ -11,7 +11,7 @@ spec:
   # Chỉ định namespace đang chạy Database
   namespaceSelector:
     matchNames:
-      - default
+      - mlops-postgres
   
   # Bộ lọc nhận diện chính xác các Pod thuộc cụm DB
   selector:

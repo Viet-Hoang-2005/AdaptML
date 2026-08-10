@@ -23,7 +23,7 @@ spec:
     path: k8s/platform/postgres
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: mlops-postgres
   ignoreDifferences:
     - group: external-secrets.io
       kind: ExternalSecret
@@ -37,7 +37,7 @@ spec:
     - group: postgresql.cnpg.io
       kind: Cluster
       name: mlops-paas-postgres
-      namespace: default
+      namespace: mlops-postgres
       jsonPointers:
         - /spec/bootstrap/initdb/encoding
         - /spec/bootstrap/initdb/localeCType

@@ -10,7 +10,7 @@ WorkflowTemplates and Argo Events cover:
 - Training cancellation.
 
 EventBus, EventSource and Sensor run in `argo-events`; Git-managed
-WorkflowTemplates and their Workflows run in `default`, while PyTorchJobs are
+WorkflowTemplates and their Workflows run in `mlops-execution`, while PyTorchJobs are
 fixed to `user-jobs`. The EventSource accepts only bearer-authenticated requests
 from the Control Plane worker, native NATS uses token authentication, and
 execution NetworkPolicies enforce those peer boundaries.

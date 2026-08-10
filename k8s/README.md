@@ -21,6 +21,15 @@ are declared in Git; the K3s join-token value remains in Secrets Manager.
 Dynamic model Deployments and PyTorchJobs remain lifecycle-owned resources and
 are not adopted by Argo CD.
 
+## Namespace ownership
+
+No GitOps workload or runtime is reconciled into Kubernetes `default`.
+Production uses dedicated namespaces: `mlops-control-plane`, `mlops-consumer`,
+`mlops-model-server`, `mlops-web`, `mlops-postgres`, `mlops-redis`,
+`mlops-redpanda`, `mlops-execution`, `mlops-model-runtimes`, `mlops-routing`
+and `mlops-cluster-config`. Cross-owner service calls use fully qualified
+cluster DNS names. `user-jobs` remains the fixed namespace for tenant training.
+
 ## Cluster configuration
 
 `mlops-prod-cluster-namespaces` owns production Namespace resources from
@@ -50,8 +59,9 @@ owns the affected resource.
 ## Execution
 
 `mlops-prod-execution-argo` owns the EventBus, EventSource, Sensor and their stable
-webhook Service in `argo-events`; WorkflowTemplates remain in `default` and
-training runtime resources remain in `user-jobs`. The six webhook routes use a
+webhook Service in `argo-events`; WorkflowTemplates and Workflow Pods run in
+`mlops-execution`, dynamic model Deployments/Services run in `mlops-model-runtimes`,
+and training runtime resources remain in `user-jobs`. The six webhook routes use a
 dedicated bearer token synchronized into the Control Plane API/worker target
 Secrets and the EventSource target Secret. Native NATS uses token authentication,
 and reconciled NetworkPolicies permit only the
@@ -79,7 +89,9 @@ putting environment-specific registry names, tags, ConfigMaps or patches in base
 
 `mlops-prod-platform-cloudflare` owns the Cloudflare Tunnel and its scoped
 credential. `mlops-prod-platform-routing` owns Traefik routes and the Traefik
-health endpoint. Public exposure changes require a security review.
+health endpoint in `mlops-routing`. Routes declare backend namespaces explicitly;
+the Ansible-owned Traefik configuration enables this controlled cross-namespace
+reference. Public exposure changes require a security review.
 
 ## Cluster add-ons
 

@@ -36,6 +36,10 @@ gateway `/32` addresses for forwarded headers; never use
 `forwardedHeaders.insecure`. Revalidate the addresses whenever worker PodCIDRs
 or ServiceLB traffic policy changes.
 
+Traefik permits Kubernetes CRD cross-namespace references because the
+Git-managed `mlops-routing` namespace centralizes routes and names every backend
+namespace explicitly. Do not use this capability to route directly to tenant workloads.
+
 Prefer idempotent modules and handlers. Do not embed shell commands when a maintained Ansible module expresses the operation safely.
 Use `kubernetes.core.k8s_info` conditions for Kubernetes reads and readiness,
 and `kubernetes.core.k8s` check mode for server-side dry-runs. The bootstrap

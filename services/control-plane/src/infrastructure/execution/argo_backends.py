@@ -198,9 +198,12 @@ class ArgoDeploymentBackend(_ArgoBackend):
             deployment=deployment,
             defaults={
                 "public_url": public_url,
-                "internal_url": f"http://{container_name}-svc:{target_port}",
+                "internal_url": (
+                    f"http://{container_name}-svc.{settings.MODEL_RUNTIME_NAMESPACE}.svc.cluster.local:"
+                    f"{target_port}"
+                ),
                 "runtime_name": container_name,
-                "runtime_namespace": "default",
+                "runtime_namespace": settings.MODEL_RUNTIME_NAMESPACE,
                 "health_status": "unknown",
             },
         )[0]

@@ -23,7 +23,7 @@ spec:
     path: k8s/argo
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: mlops-execution
   ignoreDifferences:
     - group: external-secrets.io
       kind: ExternalSecret

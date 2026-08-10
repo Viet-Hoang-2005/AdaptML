@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: mlops-paas-training-cancel-template
-  namespace: default
+  namespace: mlops-execution
 spec:
   serviceAccountName: argo-workflow-training-sa
   entrypoint: cancel-training

@@ -23,7 +23,7 @@ spec:
     path: k8s/apps/overlays/production/control-plane
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: mlops-control-plane
   ignoreDifferences:
     - group: external-secrets.io
       kind: ExternalSecret

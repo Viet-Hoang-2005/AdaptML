@@ -229,7 +229,9 @@ def resolve_worker_url(model_record: Dict[str, Any], endpoint_path: str) -> str:
         return f"http://{fallback_host}:{target_port}{endpoint_path}"
 
     if os.environ.get("KUBERNETES_SERVICE_HOST"):
-        host = f"{container_name}-svc" if not container_name.endswith("-svc") else container_name
+        service_name = f"{container_name}-svc" if not container_name.endswith("-svc") else container_name
+        runtime_namespace = os.environ.get("MODEL_RUNTIME_NAMESPACE", "mlops-model-runtimes").strip()
+        host = f"{service_name}.{runtime_namespace}.svc.cluster.local"
     else:
         host = container_name
     return f"http://{host}:{target_port}{endpoint_path}"

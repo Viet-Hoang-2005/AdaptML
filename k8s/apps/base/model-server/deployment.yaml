@@ -38,7 +38,7 @@ spec:
                   key: DB_PASSWORD
           envFrom:
             - configMapRef:
-                name: mlops-paas-control-plane-config
+                name: mlops-paas-model-server-config
           resources:
             requests:
               cpu: 150m

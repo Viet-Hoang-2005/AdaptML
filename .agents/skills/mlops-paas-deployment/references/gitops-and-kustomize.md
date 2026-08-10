@@ -19,7 +19,11 @@
   Terraform owns AWS primitives and Ansible publishes only the token value.
 - `mlops-prod-platform-cloudflare` owns the Cloudflare Tunnel and its scoped
   credential. `mlops-prod-platform-routing` separately owns the Traefik routes
-  and health endpoint; keep these boundaries separate when changing public exposure.
+  and health endpoint in `mlops-routing`; routes name backend namespaces
+  explicitly. Keep these boundaries separate when changing public exposure.
+- Production owners never reconcile into `default`: static services, data,
+  execution workflows and dynamic model runtimes use their dedicated
+  `mlops-*` namespaces. Cross-owner service calls use FQDNs.
 - `k8s/security/` remains intentionally excluded during the current stability
   phase; do not describe its NetworkPolicies or custom PDBs as active. Do not
   extend that statement to the reconciled policies under `k8s/argo`.

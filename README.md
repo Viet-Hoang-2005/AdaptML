@@ -215,6 +215,9 @@ MLOps-paas-system/
 └── .env.example                              # Template biến môi trường chuẩn
 ```
 
+Production không dùng Kubernetes `default` cho workload hay runtime: mỗi owner
+chạy trong namespace `mlops-*`; `user-jobs` vẫn chỉ dành cho PyTorchJob tenant.
+
 ---
 
 ## 6. Hướng dẫn Cài đặt & Vận hành 🛠️
