@@ -14,8 +14,9 @@ each child owns one independently observable service or domain.
 | Static workloads | `k8s/apps/overlays/production` | `mlops-workloads` |
 | Core and training operators | Pinned Git/Helm sources | `platform-operators` |
 
-Karpenter EC2NodeClass and NodePool resources remain Ansible-owned because they
-contain cluster-specific bootstrap, instance-profile and endpoint settings.
+`platform-karpenter-capacity` owns the production CPU/GPU EC2NodeClasses and
+NodePools. Their non-secret cluster identifiers and stable private K3s API DNS
+are declared in Git; the K3s join-token value remains in Secrets Manager.
 Dynamic model Deployments and PyTorchJobs remain lifecycle-owned resources and
 are not adopted by Argo CD.
 
@@ -65,10 +66,9 @@ Traefik health endpoint. Public exposure changes require a security review.
 Argo CD owns seven core Helm releases: AWS EBS CSI, External Secrets,
 CloudNativePG, KEDA, Argo Workflows, Argo Events and kube-prometheus-stack. It
 also retains the existing `platform-*` children for Kubeflow Training,
-Karpenter CRDs/controller, Node Feature Discovery and NVIDIA GPU Operator.
-Ansible owns only the Argo CD bootstrap plus Karpenter runtime and capacity
-values that are specific to one cluster. Those injected controller fields are
-ignored only at their exact environment paths.
+Karpenter CRDs/controller/capacity, Node Feature Discovery and NVIDIA GPU
+Operator. Ansible owns only K3s, token publication and the Argo CD bootstrap;
+there are no ignored or runtime-patched Karpenter controller fields.
 
 ## Deferred security resources
 

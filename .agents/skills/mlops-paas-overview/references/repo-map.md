@@ -11,7 +11,7 @@
 | `services/evidently/` | Drift report execution |
 | `services/training-runner/` | Untrusted training job runtime |
 | `infra/` | Terraform AWS infrastructure |
-| `ansible/` | VM/K3s and Argo CD bootstrap plus cluster-specific Karpenter capacity |
+| `ansible/` | VM/K3s, K3s token/TLS bootstrap, Argo CD bootstrap and verification |
 | `k8s/` | Kustomize, GitOps applications, workflows, operators, and platform manifests |
 | `.github/workflows/` | CI/CD orchestration |
 | `docs/` | Supporting explanations; verify against live implementation |

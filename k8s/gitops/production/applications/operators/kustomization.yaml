@@ -12,5 +12,6 @@ resources:
   - kubeflow-training.yaml
   - karpenter-crds.yaml
   - karpenter.yaml
+  - karpenter-capacity.yaml
   - node-feature-discovery.yaml
   - gpu-operator.yaml

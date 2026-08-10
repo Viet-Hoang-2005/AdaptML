@@ -139,6 +139,21 @@
     k3s_node_token: "{{ node_token_b64.content | b64decode | trim }}"
   no_log: true
 
+- name: Publish the K3s agent token version for elastic nodes
+  delegate_to: localhost
+  become: false
+  community.aws.secretsmanager_secret:
+    name: "{{ karpenter_k3s_token_secret_name }}"
+    description: K3s agent token for self-managed Karpenter nodes
+    state: present
+    secret_type: string
+    json_secret:
+      token: "{{ k3s_node_token }}"
+    overwrite: true
+    region: "{{ aws_region }}"
+  no_log: true
+  when: enable_karpenter | bool
+
 - name: Fetch the root-only kubeconfig into the ignored artifacts directory
   become: true
   ansible.builtin.fetch:

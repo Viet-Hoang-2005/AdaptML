@@ -286,13 +286,13 @@ pnpm dev
 
 Production được triển khai theo ba lớp ownership rõ ràng:
 
-- **Terraform** quản lý VPC, EC2, ALB, IAM, ACM, S3 và Secrets Manager.
-- **Ansible** chuẩn bị Ubuntu, cài K3s, bootstrap Argo CD và cấu hình Karpenter đặc thù theo cluster.
-- **Argo CD** cài core/training operators và reconcile các resource được tham chiếu bởi root [`k8s/kustomization.yaml`](k8s/kustomization.yaml).
+- **Terraform** quản lý VPC, EC2, ALB, IAM, ACM, S3, Secrets Manager và private DNS cho K3s API.
+- **Ansible** chuẩn bị Ubuntu, cài K3s, publish K3s agent token và bootstrap Argo CD.
+- **Argo CD** cài core/training operators và quản lý toàn bộ Kubernetes resource của Karpenter, gồm `EC2NodeClass` và `NodePool`.
 
 Core platform dùng một K3s server và hai static worker. Server chạy embedded etcd, secrets encryption và snapshot định kỳ; đây vẫn là **single control-plane**, chưa phải HA. `k8s/security` (NetworkPolicy và custom PodDisruptionBudget) hiện được chủ động hoãn trong giai đoạn ổn định.
 
-Sau `platform-core`, root Application để Argo CD reconcile AWS EBS CSI, External Secrets, CloudNativePG, KEDA, Argo Workflows/Events, monitoring và các training operator. Capacity cluster-specific của Karpenter (EC2NodeClass/NodePool) và smoke test chỉ được Ansible cấu hình trong phase `platform-training`. Dù các operator được cài, tenant training vẫn đóng: `TRAINING_ENABLED=false`, API submit trả HTTP 503 và UI không hiển thị thao tác submit/GPU.
+Sau `platform-core`, root Application để Argo CD reconcile AWS EBS CSI, External Secrets, CloudNativePG, KEDA, Argo Workflows/Events, monitoring, training operators và Karpenter capacity. Ansible chỉ chạy smoke verification trong phase `platform-training`. Dù các operator được cài, tenant training vẫn đóng: `TRAINING_ENABLED=false`, API submit trả HTTP 503 và UI không hiển thị thao tác submit/GPU.
 
 Ở production, Celery giữ lifecycle state trong PostgreSQL và dispatch side effect sau transaction commit. Build, deployment và drift đi qua Argo Events/Workflows. Training controllers có thể được cài nhưng tenant training vẫn chỉ được mở sau một rollout bảo mật riêng.
 
@@ -300,7 +300,7 @@ Sau `platform-core`, root Application để Argo CD reconcile AWS EBS CSI, Exter
 
 Sau khi destroy **toàn bộ** AWS, chuẩn bị trước khi apply:
 
-- Khôi phục `.env` từ kho bí mật an toàn. Terraform destroy xóa ba Secrets Manager container với recovery window bằng `0`, nên secret cũ không thể phục hồi từ AWS.
+- Khôi phục `.env` từ kho bí mật an toàn. Terraform destroy xóa bốn Secrets Manager container với recovery window bằng `0`, nên secret cũ không thể phục hồi từ AWS. Ba application secret được nạp lại từ `.env`; K3s agent token được Ansible publish lại sau bootstrap.
 - Giữ private key ở ngoài repository và bảo đảm public key tương ứng đã tồn tại trong EC2 Key Pairs với đúng tên `key_name` (mặc định `mlops-keypair`). Terraform chỉ tham chiếu key pair, không tạo nó. Ví dụ từ WSL:
 
   ```bash
@@ -425,13 +425,12 @@ ansible-playbook site.yml --tags platform-core
 ansible-playbook site.yml --tags preflight,platform-training,verify
 ```
 
-Với group vars hiện tại, training platform, Karpenter và GPU NodePool đều được bật. Vì vậy không chạy `--tags verify` độc lập ngay sau `platform-core`: verification training sẽ cần NodePool mà phase `platform-training` chưa render. Nếu chủ đích chỉ xác minh core, tắt rõ ràng training capacity trong lần chạy đó:
+Nếu chủ đích chỉ xác minh core mà không chạy training smoke, tắt rõ ràng training verification trong lần chạy đó:
 
 ```bash
 ansible-playbook site.yml --tags verify \
   -e deploy_training_platform=false \
-  -e enable_karpenter=false \
-  -e enable_gpu_nodepool=false
+  -e enable_karpenter=false
 ```
 
 Các phase hiện có:
@@ -441,7 +440,7 @@ Các phase hiện có:
 | `preflight` | Kiểm tra WSL, Terraform inventory, SSH và rollout flags | Luôn chạy |
 | `bootstrap` | Cài K3s `v1.34.9+k3s1`, một server và hai worker | Bật |
 | `platform-core` | Cài Argo CD, bootstrap root và chờ các core operator Application | Bật |
-| `platform-training` | Verify 5 training-operator Application, inject Karpenter runtime/capacity resources và chạy smoke tests | Bật trong group vars hiện tại |
+| `platform-training` | Chờ 6 training/capacity Application do Argo CD quản lý và chạy smoke tests | Bật trong group vars hiện tại |
 | `verify` | Xác minh node, operator và root Application | Chạy cuối |
 
 Ansible chỉ cài Argo CD rồi tạo root Application `mlops-paas-system`. Repository GitHub hiện public nên không cần repository credential bootstrap. Foundation, core operators, `ClusterSecretStore`, ExternalSecrets và workload đều được Argo CD reconcile theo sync wave; không cần `kubectl apply` thủ công sau khi `platform-core` hoàn tất.
@@ -478,11 +477,10 @@ Không ghi mật khẩu Argo CD, token K3s, kubeconfig hoặc secret value vào 
 ```bash
 ansible-playbook site.yml --tags platform-training \
   -e deploy_training_platform=true \
-  -e enable_karpenter=true \
-  -e enable_gpu_nodepool=true
+  -e enable_karpenter=true
 ```
 
-Ngoài bảy core operator Application, root trực tiếp quản lý 5 training operator Application: Kubeflow Training Operator, Karpenter CRD, Karpenter controller, NFD và NVIDIA GPU Operator. Karpenter NodeClass/NodePool vẫn thuộc Ansible vì chứa endpoint, instance profile và bootstrap token theo từng cluster; không thêm chúng trở lại root GitOps. CPU smoke phải hoàn tất và tự cleanup. GPU smoke chỉ bật sau khi quota G/VT AWS đã effective; `training_gpu_smoke_enabled=false` là kết quả mong đợi khi quota chưa sẵn sàng.
+Ngoài bảy core operator Application, root trực tiếp quản lý 6 training/capacity Application: Kubeflow Training Operator, Karpenter CRD, Karpenter controller, Karpenter capacity, NFD và NVIDIA GPU Operator. Terraform tạo private DNS `k3s-api.internal.mlops-nids-nt114.id.vn` và secret container; Ansible chỉ publish token runtime; Argo CD sở hữu hai `EC2NodeClass` và hai `NodePool`. CPU smoke phải hoàn tất và tự cleanup. GPU smoke chỉ bật sau khi quota G/VT AWS đã effective; `training_gpu_smoke_enabled=false` là kết quả mong đợi khi quota chưa sẵn sàng.
 
 ---
 

@@ -21,6 +21,42 @@ configs:
         end
       end
       return hs
+    resource.customizations.health.karpenter.sh_NodePool: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = "Waiting for Karpenter NodePool readiness"
+      if obj.status ~= nil and obj.status.conditions ~= nil then
+        for _, condition in ipairs(obj.status.conditions) do
+          if condition.type == "Ready" then
+            hs.message = condition.message or condition.reason or hs.message
+            if condition.status == "True" then
+              hs.status = "Healthy"
+            elseif condition.status == "False" then
+              hs.status = "Degraded"
+            end
+            return hs
+          end
+        end
+      end
+      return hs
+    resource.customizations.health.karpenter.k8s.aws_EC2NodeClass: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = "Waiting for Karpenter EC2NodeClass readiness"
+      if obj.status ~= nil and obj.status.conditions ~= nil then
+        for _, condition in ipairs(obj.status.conditions) do
+          if condition.type == "Ready" then
+            hs.message = condition.message or condition.reason or hs.message
+            if condition.status == "True" then
+              hs.status = "Healthy"
+            elseif condition.status == "False" then
+              hs.status = "Degraded"
+            end
+            return hs
+          end
+        end
+      end
+      return hs
     accounts.github-actions: apiKey
   rbac:
     policy.csv: |

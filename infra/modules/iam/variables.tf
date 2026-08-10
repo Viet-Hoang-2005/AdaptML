@@ -36,3 +36,9 @@ variable "karpenter_cluster_name" {
   type        = string
   default     = "mlops-paas-cluster"
 }
+
+variable "karpenter_k3s_token_secret_arn" {
+  description = "ARN of the only Secrets Manager secret Karpenter nodes may read during K3s bootstrap"
+  type        = string
+  default     = ""
+}

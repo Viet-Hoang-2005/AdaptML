@@ -49,8 +49,9 @@ module "storage" {
 }
 
 module "secrets" {
-  count  = var.enable_secrets_manager ? 1 : 0
-  source = "./modules/secrets"
+  count            = var.enable_secrets_manager ? 1 : 0
+  source           = "./modules/secrets"
+  enable_karpenter = local.enable_karpenter_stack
 }
 
 module "iam" {
@@ -64,6 +65,9 @@ module "iam" {
   enable_github_oidc     = var.enable_github_oidc
   enable_karpenter       = local.enable_karpenter_stack
   karpenter_cluster_name = var.karpenter_cluster_name
+  karpenter_k3s_token_secret_arn = (
+    local.enable_karpenter_stack ? module.secrets[0].karpenter_k3s_token_secret_arn : ""
+  )
 }
 
 module "compute" {
@@ -84,9 +88,14 @@ module "compute" {
 }
 
 module "dns" {
-  count       = var.enable_acm_certificate ? 1 : 0
-  source      = "./modules/dns"
-  domain_name = var.domain_name
+  count                        = (var.enable_acm_certificate || local.enable_karpenter_stack) ? 1 : 0
+  source                       = "./modules/dns"
+  domain_name                  = var.domain_name
+  enable_acm_certificate       = var.enable_acm_certificate
+  enable_karpenter_private_dns = local.enable_karpenter_stack
+  vpc_id                       = local.enable_karpenter_stack ? module.network[0].vpc_id : ""
+  master_private_ip            = local.enable_karpenter_stack ? module.compute[0].master_private_ip : ""
+  karpenter_private_zone_name  = "internal.${var.domain_name}"
 }
 
 module "alb" {

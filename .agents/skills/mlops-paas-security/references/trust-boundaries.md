@@ -17,6 +17,10 @@
 
 Untrusted workloads must not receive shared application secrets, JWT private keys, OAuth secrets, AWS credentials, production Redis, broad MLflow access, or node metadata access.
 
+Karpenter-created training nodes may read only the dedicated K3s agent-token
+secret during host bootstrap. The token value stays out of Git and Terraform
+state; workload containers must not receive the node IAM credentials or token.
+
 PostgreSQL terminal state is updated only by trusted orchestration/reporters. A tenant callback may report bounded progress but cannot authoritatively complete another resource.
 
 When TLS terminates before Traefik, forwarded scheme and client headers are

@@ -114,10 +114,31 @@ resource "aws_iam_role_policy_attachment" "karpenter_node_s3_attach" {
   policy_arn = aws_iam_policy.worker_s3_policy.arn
 }
 
-resource "aws_iam_role_policy_attachment" "karpenter_node_secrets_attach" {
+data "aws_iam_policy_document" "karpenter_node_token_secret_policy_doc" {
+  count = var.enable_karpenter ? 1 : 0
+
+  statement {
+    sid    = "ReadK3sAgentToken"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret"
+    ]
+    resources = [var.karpenter_k3s_token_secret_arn]
+  }
+}
+
+resource "aws_iam_policy" "karpenter_node_token_secret_policy" {
+  count       = var.enable_karpenter ? 1 : 0
+  name        = "mlops-karpenter-node-token-secret-policy"
+  description = "Allow Karpenter nodes to read only the K3s agent join token"
+  policy      = data.aws_iam_policy_document.karpenter_node_token_secret_policy_doc[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "karpenter_node_token_secret_attach" {
   count      = var.enable_karpenter ? 1 : 0
   role       = aws_iam_role.karpenter_node_role[0].name
-  policy_arn = aws_iam_policy.worker_secrets_policy.arn
+  policy_arn = aws_iam_policy.karpenter_node_token_secret_policy[0].arn
 }
 
 resource "aws_iam_role_policy_attachment" "karpenter_node_ebs_csi_attach" {

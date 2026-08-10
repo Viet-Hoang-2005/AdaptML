@@ -73,6 +73,21 @@ output "karpenter_interruption_queue_name" {
   value       = local.enable_karpenter_stack ? module.iam[0].karpenter_interruption_queue_name : null
 }
 
+output "karpenter_k3s_api_hostname" {
+  description = "Stable private DNS hostname used by Karpenter-created K3s agents"
+  value       = local.enable_karpenter_stack ? module.dns[0].karpenter_k3s_api_hostname : null
+}
+
+output "karpenter_k3s_api_endpoint" {
+  description = "Stable private API endpoint used by Karpenter-created K3s agents"
+  value       = local.enable_karpenter_stack ? module.dns[0].karpenter_k3s_api_endpoint : null
+}
+
+output "karpenter_k3s_token_secret_arn" {
+  description = "ARN of the K3s agent-token secret container; the token value is published by Ansible"
+  value       = local.enable_karpenter_stack ? module.secrets[0].karpenter_k3s_token_secret_arn : null
+}
+
 output "acm_ssl_validation_records" {
   description = "CNAME records to copy to Cloudflare DNS table to validate ACM SSL Certificate"
   value       = var.enable_acm_certificate ? module.dns[0].acm_domain_validation_options : null

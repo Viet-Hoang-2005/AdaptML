@@ -7,8 +7,8 @@ Ansible owns host and cluster bootstrap through roles:
 - `k3s_worker`: additional nodes joining the cluster.
 - `helm`: pinned Helm client.
 - `platform_core`: install pinned Argo CD and bootstrap the public root Application.
-- `platform_training`: wait for root-owned training operator child Applications,
-  maintain cluster-specific Karpenter runtime settings and render capacity resources.
+- `platform_training`: wait for root-owned training/capacity child Applications
+  and run disposable smoke verification.
 - `verify`: bootstrap and reconciled-platform assertions.
 
 Use the rollout tags `preflight`, `bootstrap`, `platform-core`,
@@ -20,12 +20,12 @@ Dynamic inventory requires Terraform outputs for the server, workers, VPC and
 EC2 key pair. Workers use ProxyJump through the server. Keep SSH keys outside
 committed source; the WSL key must be `~/.ssh/aws_key` with mode `0600`.
 
-Terraform owns AWS primitives; Ansible owns host/Argo CD bootstrap, the K3s
-agent-token secret, Karpenter runtime endpoint settings and cluster-specific
-capacity resources. Argo CD owns AWS EBS CSI, External Secrets, CloudNativePG,
+Terraform owns AWS primitives, private K3s API DNS and agent-token secret
+metadata. Ansible owns host/Argo CD bootstrap, adds the private DNS TLS SAN and
+publishes the runtime token version. Argo CD owns Karpenter CRDs, controller,
+EC2NodeClasses and NodePools together with AWS EBS CSI, External Secrets, CloudNativePG,
 KEDA, Argo Workflows, Argo Events, kube-prometheus-stack and the training
-operators through the unified `mlops-paas-system` app-of-apps root. Do not add
-Karpenter NodeClass/NodePool back to GitOps.
+operators through the unified `mlops-paas-system` app-of-apps root.
 
 Ansible also owns the bundled Traefik `HelmChartConfig`. Public TLS terminates
 at the ALB, while K3s ServiceLB with `externalTrafficPolicy: Cluster` presents

@@ -1,89 +1,10 @@
-apiVersion: karpenter.sh/v1
-kind: NodePool
-metadata:
-  name: mlops-paas-training-cpu
-spec:
-  limits:
-    nodes: {{ karpenter_cpu_node_limit }}
-  template:
-    metadata:
-      labels:
-        mlops-paas/nodepool: training-cpu
-        workload-type: training
-    spec:
-      requirements:
-        - key: kubernetes.io/arch
-          operator: In
-          values: ["amd64"]
-        - key: kubernetes.io/os
-          operator: In
-          values: ["linux"]
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: ["spot", "on-demand"]
-        - key: node.kubernetes.io/instance-type
-          operator: In
-          values:
-{% for instance_type in karpenter_cpu_instance_types %}
-            - "{{ instance_type }}"
-{% endfor %}
-      expireAfter: {{ karpenter_node_expire_after | quote }}
-      nodeClassRef:
-        group: karpenter.k8s.aws
-        kind: EC2NodeClass
-        name: training-cpu
-  disruption:
-    consolidationPolicy: WhenEmpty
-    consolidateAfter: {{ karpenter_consolidate_after | quote }}
-{% if enable_gpu_nodepool | bool %}
----
-apiVersion: karpenter.sh/v1
-kind: NodePool
-metadata:
-  name: mlops-paas-training-gpu
-spec:
-  limits:
-    nodes: {{ karpenter_gpu_node_limit }}
-  template:
-    metadata:
-      labels:
-        mlops-paas/nodepool: training-gpu
-        workload-type: training
-    spec:
-      requirements:
-        - key: kubernetes.io/arch
-          operator: In
-          values: ["amd64"]
-        - key: kubernetes.io/os
-          operator: In
-          values: ["linux"]
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: ["spot", "on-demand"]
-        - key: node.kubernetes.io/instance-type
-          operator: In
-          values:
-{% for instance_type in karpenter_gpu_instance_types %}
-            - "{{ instance_type }}"
-{% endfor %}
-      nodeClassRef:
-        group: karpenter.k8s.aws
-        kind: EC2NodeClass
-        name: training-gpu
-      taints:
-        - key: nvidia.com/gpu
-          value: "true"
-          effect: NoSchedule
-      expireAfter: {{ karpenter_node_expire_after | quote }}
-  disruption:
-    consolidationPolicy: WhenEmpty
-    consolidateAfter: {{ karpenter_consolidate_after | quote }}
-{% endif %}
----
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: training-cpu
+  labels:
+    app.kubernetes.io/part-of: mlops-paas
+    mlops-paas.io/environment: production
 spec:
   amiFamily: Custom
   amiSelectorTerms:
@@ -94,13 +15,13 @@ spec:
     httpProtocolIPv6: disabled
     httpPutResponseHopLimit: 1
     httpTokens: required
-  instanceProfile: "{{ karpenter_node_instance_profile_name }}"
+  instanceProfile: mlops-karpenter-node-profile
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "{{ karpenter_cluster_name }}"
+        karpenter.sh/discovery: mlops-paas-cluster
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "{{ karpenter_cluster_name }}"
+        karpenter.sh/discovery: mlops-paas-cluster
   blockDeviceMappings:
     - deviceName: /dev/xvda
       ebs:
@@ -109,7 +30,7 @@ spec:
         deleteOnTermination: true
   userData: |
     #!/bin/bash
-    set -euxo pipefail
+    set -euo pipefail
     exec > >(tee /var/log/mlops-k3s-agent-bootstrap.log | logger -t mlops-k3s-agent-bootstrap -s 2>/dev/console) 2>&1
 
     metadata_token="$(curl -fsSL -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" http://169.254.169.254/latest/api/token)"
@@ -127,18 +48,19 @@ spec:
     apt-get update
     apt-get install -y awscli ca-certificates curl jq
 
-    secret_value="$(aws secretsmanager get-secret-value --region "${region}" --secret-id {{ karpenter_k3s_token_secret_name | quote }} --query SecretString --output text)"
+    secret_value="$(aws secretsmanager get-secret-value --region "${region}" --secret-id mlops/k3s-agent-token --query SecretString --output text)"
     if echo "${secret_value}" | jq -e . >/dev/null 2>&1; then
       k3s_token="$(echo "${secret_value}" | jq -r '.token // .K3S_TOKEN // .k3s_token // .value')"
     else
       k3s_token="${secret_value}"
     fi
+    test -n "${k3s_token}" && test "${k3s_token}" != "null"
 
     curl -fsSL https://get.k3s.io -o /tmp/install-k3s.sh
     chmod 0700 /tmp/install-k3s.sh
-      K3S_URL="{{ k3s_cluster_endpoint }}" \
+    K3S_URL="https://k3s-api.internal.mlops-nids-nt114.id.vn:6443" \
       K3S_TOKEN="${k3s_token}" \
-      INSTALL_K3S_VERSION="{{ k3s_version }}" \
+      INSTALL_K3S_VERSION="v1.34.9+k3s1" \
       INSTALL_K3S_EXEC="agent \
         --node-label=karpenter.sh/nodepool=mlops-paas-training-cpu \
         --node-label=karpenter.k8s.aws/ec2nodeclass=training-cpu \
@@ -149,12 +71,15 @@ spec:
         --node-label=topology.kubernetes.io/zone=${availability_zone} \
         --kubelet-arg=provider-id=${provider_id}" \
       /tmp/install-k3s.sh
-{% if enable_gpu_nodepool | bool %}
+    unset k3s_token secret_value
 ---
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: training-gpu
+  labels:
+    app.kubernetes.io/part-of: mlops-paas
+    mlops-paas.io/environment: production
 spec:
   amiFamily: Custom
   amiSelectorTerms:
@@ -165,13 +90,13 @@ spec:
     httpProtocolIPv6: disabled
     httpPutResponseHopLimit: 1
     httpTokens: required
-  instanceProfile: "{{ karpenter_node_instance_profile_name }}"
+  instanceProfile: mlops-karpenter-node-profile
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "{{ karpenter_cluster_name }}"
+        karpenter.sh/discovery: mlops-paas-cluster
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "{{ karpenter_cluster_name }}"
+        karpenter.sh/discovery: mlops-paas-cluster
   blockDeviceMappings:
     - deviceName: /dev/xvda
       ebs:
@@ -180,7 +105,7 @@ spec:
         deleteOnTermination: true
   userData: |
     #!/bin/bash
-    set -euxo pipefail
+    set -euo pipefail
     exec > >(tee /var/log/mlops-k3s-agent-bootstrap.log | logger -t mlops-k3s-agent-bootstrap -s 2>/dev/console) 2>&1
 
     metadata_token="$(curl -fsSL -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" http://169.254.169.254/latest/api/token)"
@@ -198,18 +123,19 @@ spec:
     apt-get update
     apt-get install -y awscli ca-certificates curl jq
 
-    secret_value="$(aws secretsmanager get-secret-value --region "${region}" --secret-id {{ karpenter_k3s_token_secret_name | quote }} --query SecretString --output text)"
+    secret_value="$(aws secretsmanager get-secret-value --region "${region}" --secret-id mlops/k3s-agent-token --query SecretString --output text)"
     if echo "${secret_value}" | jq -e . >/dev/null 2>&1; then
       k3s_token="$(echo "${secret_value}" | jq -r '.token // .K3S_TOKEN // .k3s_token // .value')"
     else
       k3s_token="${secret_value}"
     fi
+    test -n "${k3s_token}" && test "${k3s_token}" != "null"
 
     curl -fsSL https://get.k3s.io -o /tmp/install-k3s.sh
     chmod 0700 /tmp/install-k3s.sh
-      K3S_URL="{{ k3s_cluster_endpoint }}" \
+    K3S_URL="https://k3s-api.internal.mlops-nids-nt114.id.vn:6443" \
       K3S_TOKEN="${k3s_token}" \
-      INSTALL_K3S_VERSION="{{ k3s_version }}" \
+      INSTALL_K3S_VERSION="v1.34.9+k3s1" \
       INSTALL_K3S_EXEC="agent \
         --node-label=karpenter.sh/nodepool=mlops-paas-training-gpu \
         --node-label=karpenter.k8s.aws/ec2nodeclass=training-gpu \
@@ -221,4 +147,4 @@ spec:
         --node-taint=nvidia.com/gpu=true:NoSchedule \
         --kubelet-arg=provider-id=${provider_id}" \
       /tmp/install-k3s.sh
-{% endif %}
+    unset k3s_token secret_value

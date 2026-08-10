@@ -19,8 +19,8 @@ infra/
     ├── iam/         # IAM Roles + Policies: EC2 Instance Profile, Karpenter, GitHub Actions OIDC
     ├── storage/     # S3 Buckets: mlops-paas-artifacts (model artifacts, training data, drift reports)
     ├── alb/         # Application Load Balancer, Listener, Target Group
-    ├── dns/         # Route53 Hosted Zone, A Record, ACM Certificate (HTTPS)
-    └── secrets/     # AWS Secrets Manager: 3 secret resources
+    ├── dns/         # Private Route53 K3s API DNS + ACM Certificate (HTTPS)
+    └── secrets/     # AWS Secrets Manager metadata, including K3s join-token container
 ```
 
 ---
@@ -67,7 +67,7 @@ Các nhóm tài nguyên có thể bật/tắt qua `terraform.tfvars`. Terraform 
 ### IAM (`modules/iam/`)
 - **EC2 Instance Profile** (`mlops-ec2-node-profile`): Quyền S3 full access, Secrets Manager read
 - **Karpenter Controller Role**: Quyền tạo/xóa EC2 instances, describe launch templates
-- **Karpenter Node Profile** (`mlops-karpenter-node-profile`): Profile cho EC2 nodes do Karpenter tạo; quyền read `mlops/k3s-agent-token` để tự động join K3s cluster
+- **Karpenter Node Profile** (`mlops-karpenter-node-profile`): Chỉ được đọc `mlops/k3s-agent-token` trong Secrets Manager để tự động join K3s cluster
 - **GitHub Actions OIDC**: Cho phép GitHub Actions Assume Role → deploy secrets, không cần Access Key tĩnh
 - **SQS + EventBridge**: Interruption queue để Karpenter nhận Spot termination events
 
@@ -86,17 +86,19 @@ mlops-paas-artifacts/
 - ALB `mlops-api-lb` → Target Group → Worker Port 80 (Traefik Ingress)
 
 ### DNS (`modules/dns/`)
-- Route53 Hosted Zone cho domain `mlops-nids-nt114.id.vn`
-- ACM Certificate (HTTPS) + DNS validation
+- Private Route53 zone `internal.mlops-nids-nt114.id.vn` liên kết với VPC
+- `k3s-api.internal.mlops-nids-nt114.id.vn` trỏ tới private IP hiện tại của K3s server
+- ACM Certificate (HTTPS) + DNS validation cho public ALB
 
 ### Secrets Manager (`modules/secrets/`)
-Ba kho secret (trống khi tạo, được điền bởi `scripts/push_secrets_to_aws.py`):
+Các secret container do Terraform quản lý metadata; Terraform không lưu secret value:
 
 | Secret Name | Dùng cho |
 |---|---|
 | `mlops/aws-secrets` | AWS Credentials (local dev) |
 | `mlops/github-actions-secrets` | Harbor Robot Account, Cosign Keys |
 | `mlops/production-secrets` | DB, JWT, OAuth, Harbor, Webhook, HARBOR_DOCKERCONFIG |
+| `mlops/k3s-agent-token` | Token do Ansible publish sau khi K3s server khởi tạo |
 
 ---
 

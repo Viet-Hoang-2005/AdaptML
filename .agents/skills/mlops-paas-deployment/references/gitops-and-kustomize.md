@@ -9,10 +9,9 @@
 
 - `k8s/security/` contains inactive policies and is intentionally outside every Application source.
 - Core and training operators are pinned Helm/Git child Applications of the unified production root and retain `platform-*` names.
-- Karpenter NodeClass and NodePool are rendered by Ansible and intentionally
-  excluded from GitOps because endpoint, instance profile, token, and user data
-  are cluster-specific. Argo ignores only the Karpenter controller runtime
-  endpoint/name/queue fields that Ansible injects.
+- `platform-karpenter-capacity` owns CPU/GPU EC2NodeClasses and NodePools. Git
+  contains stable non-secret identifiers and the private K3s API DNS name;
+  Terraform owns AWS primitives and Ansible publishes only the token value.
 - `k8s/security/` remains intentionally excluded during the current stability
   phase; do not describe its NetworkPolicies or custom PDBs as active.
 

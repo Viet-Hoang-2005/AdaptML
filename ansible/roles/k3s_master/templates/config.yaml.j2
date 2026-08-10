@@ -4,6 +4,9 @@ secrets-encryption: true
 write-kubeconfig-mode: "0600"
 tls-san:
   - "{{ private_ip }}"
+{% if enable_karpenter | bool %}
+  - "{{ terraform_karpenter_k3s_api_hostname }}"
+{% endif %}
 node-label:
 {% for label in k3s_node_labels %}
   - "{{ label }}"

@@ -19,11 +19,9 @@ bootstrap_k3s_cluster: true
 deploy_core_platform: true
 deploy_training_platform: true
 enable_karpenter: true
-enable_gpu_nodepool: true
 
-# Core and training operators are child Applications of the unified production
-# root. Ansible owns only Argo CD bootstrap and cluster-specific Karpenter
-# runtime and capacity settings.
+# Core and training operators are child Applications of the unified production root.
+# Ansible owns only Argo CD bootstrap
 core_operator_application_names:
   - platform-aws-ebs-csi
   - platform-external-secrets
@@ -51,28 +49,13 @@ platform_operator_application_names:
   - platform-kubeflow-training
   - platform-karpenter-crds
   - platform-karpenter
+  - platform-karpenter-capacity
   - platform-node-feature-discovery
   - platform-gpu-operator
 
-# Karpenter/K3s self-managed bootstrap defaults. These values match the
-# Terraform defaults and can be overridden from inventory/group_vars.
-karpenter_cluster_name: "mlops-paas-cluster"
-karpenter_node_instance_profile_name: "mlops-karpenter-node-profile"
-karpenter_interruption_queue_name: "{{ karpenter_cluster_name }}"
+# Ansible publishes only the runtime K3s token value. Terraform owns the
+# secret container and Argo CD owns all Karpenter Kubernetes resources.
 karpenter_k3s_token_secret_name: "mlops/k3s-agent-token"
-k3s_node_token_override: ""
-karpenter_controller_role_arn: ""
-manage_karpenter_nodepools_with_ansible: true
-karpenter_cpu_instance_types:
-  - c6i.2xlarge
-  - c6i.4xlarge
-karpenter_gpu_instance_types:
-  - g4dn.xlarge
-  - g5.xlarge
-karpenter_cpu_node_limit: 1
-karpenter_gpu_node_limit: 1
-karpenter_consolidate_after: "5m"
-karpenter_node_expire_after: "24h"
 
 # The smoke jobs use a pinned public CUDA image. They never receive tenant
 # credentials, application Secrets, or run in the tenant workload namespace.

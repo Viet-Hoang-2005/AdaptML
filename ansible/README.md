@@ -40,7 +40,7 @@ Terraform apply on your behalf.
 | `preflight` | Validate Linux, Terraform inventory, SSH key and rollout flags | Always |
 | `bootstrap` | Prepare Ubuntu, install K3s `v1.34.9+k3s1`, join static workers | Enabled |
 | `platform-core` | Install Argo CD and bootstrap the public GitOps root | Enabled |
-| `platform-training` | Verify Argo CD training operators, configure Karpenter capacity resources and smoke tests | Explicit |
+| `platform-training` | Wait for Argo CD training/capacity Applications and run smoke tests | Explicit |
 | `verify` | Validate nodes, bundled components and root GitOps health | Explicit/final |
 
 K3s keeps its bundled Traefik, ServiceLB and local-path provisioner during this
@@ -94,11 +94,11 @@ ansible-playbook site.yml --tags verify
 After the core platform is stable, enable training explicitly:
 
 Argo CD deploys the Kubeflow Training Operator (PyTorchJob V1), Karpenter,
-Node Feature Discovery and NVIDIA GPU Operator. Ansible waits for those
-Applications, injects the Karpenter runtime settings that are specific to this
-cluster, manages Karpenter CPU/GPU capacity objects, and executes disposable
-CPU and GPU PyTorchJob smoke tests in `ansible-training-smoke`. Tenant traffic
-remains closed after rollout.
+its CPU/GPU `EC2NodeClass` and `NodePool` resources, Node Feature Discovery and
+NVIDIA GPU Operator. Ansible publishes the K3s agent token to the
+Terraform-owned Secrets Manager container, waits for those Applications, and
+executes disposable PyTorchJob smoke tests in `ansible-training-smoke`. Tenant
+traffic remains closed after rollout.
 
 Run the production rollout from WSL, copying the configuration to the native
 WSL filesystem (Ansible rejects configuration stored directly on `/mnt/d`):
@@ -113,10 +113,11 @@ ansible-playbook -i inventory/terraform.py site.yml \
 ```
 
 The rollout requires Terraform outputs for the Karpenter instance profile,
-interruption queue, and controller policy. Each Karpenter NodePool is capped at
-one node and permits Spot first with On-Demand fallback. The smoke namespace is
-always removed, then Ansible waits for the temporary Karpenter nodes to
-consolidate. It never uses `user-jobs` or application secrets.
+interruption queue, controller policy, private K3s API DNS and agent-token
+secret. Each GitOps-managed NodePool is capped at one node and permits Spot
+first with On-Demand fallback. The smoke namespace is always removed, then
+Ansible waits for the temporary Karpenter nodes to consolidate. It never uses
+`user-jobs` or application secrets.
 
 `TRAINING_ENABLED=false` remains in the Control Plane ConfigMap. The API returns
 HTTP 503 for training submission and the UI hides training execution controls,
@@ -124,10 +125,11 @@ even while the platform components are installed. Do not set an Argo training
 webhook URL or enable the feature until Sensor mapping, EventSource
 authentication, and workload-isolation controls have been reviewed.
 
-For rollback, first delete smoke resources and wait until no `PyTorchJob` is
-running. Disable/delete Karpenter NodePools, let empty training nodes drain, then
-remove Karpenter. Remove the GPU Operator before the Training Operator; do not
-change core GitOps workloads during this process.
+For rollback or Terraform destroy, first delete smoke resources and wait until
+no `PyTorchJob` is running. Suspend the capacity Application, remove NodePools
+through Git, and wait for every NodeClaim and elastic training node to disappear
+before removing Karpenter or AWS resources. Do not delete CRDs while runtime
+objects still exist.
 
 ## Access and artifacts
 
@@ -139,11 +141,12 @@ publishing port 6443.
 
 ## Ownership and deferred hardening
 
-- Terraform: VPC, EC2, ALB, IAM, S3, Secrets Manager and Karpenter AWS resources.
-- Ansible: OS/K3s, core bootstrap operators, GitOps bootstrap and
-  cluster-specific Karpenter runtime settings and NodeClass/NodePool.
-- Argo CD: resources referenced by root Kustomize, including applications and
-  platform manifests already present there.
+- Terraform: VPC, EC2, ALB, IAM, S3, Secrets Manager metadata, Karpenter AWS
+  resources and the private K3s API DNS record.
+- Ansible: OS/K3s, K3s TLS SAN and agent-token publication, Helm and Argo CD
+  bootstrap, plus read-only verification.
+- Argo CD: every reconciled Kubernetes resource above bootstrap, including the
+  Karpenter controller, EC2NodeClasses and NodePools.
 
 `k8s/security` is intentionally not referenced by root GitOps in this rollout.
 Custom NetworkPolicies and PodDisruptionBudgets are deferred until the platform

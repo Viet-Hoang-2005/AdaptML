@@ -53,7 +53,7 @@
     - role: platform_core
       when: deploy_core_platform | bool
 
-- name: Configure optional training capacity and verify GitOps operators
+- name: Wait for optional training operators and GitOps-managed capacity
   hosts: master
   become: true
   gather_facts: true
