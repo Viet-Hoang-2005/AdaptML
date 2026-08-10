@@ -9,6 +9,8 @@ resources:
   - argo-workflows.yaml
   - argo-events.yaml
   - monitoring.yaml
+  - kyverno.yaml
+  - image-verification.yaml
   - kubeflow-training.yaml
   - karpenter-crds.yaml
   - karpenter.yaml

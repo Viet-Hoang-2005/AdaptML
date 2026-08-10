@@ -16,6 +16,12 @@ import yaml
 
 
 REPOSITORY_URL = "https://github.com/Viet-Hoang-2005/MLOps-paas-system.git"
+PLATFORM_IMAGE_PATTERN = "registry.mlops-nids-nt114.id.vn/mlops-paas/*"
+KEYLESS_SIGNER_IDENTITY = (
+    "https://github.com/Viet-Hoang-2005/MLOps-paas-system/"
+    ".github/workflows/cd.yml@refs/heads/main"
+)
+KEYLESS_SIGNER_ISSUER = "https://token.actions.githubusercontent.com"
 ALLOWED_BASELINE_EXTRAS = {
     ("v1", "Namespace", "", "karpenter"),
     ("v1", "Namespace", "", "gpu-operator"),
@@ -28,7 +34,24 @@ LEGACY_K8S_PATHS = (
     "k8s/workloads",
     "k8s/execution",
     "k8s/deferred",
+    "k8s/infra/foundation",
 )
+PRODUCTION_NAMESPACES = {
+    "argo",
+    "argo-events",
+    "cloudflare",
+    "cnpg-system",
+    "external-secrets",
+    "gpu-operator",
+    "harbor",
+    "karpenter",
+    "keda",
+    "kubeflow",
+    "kyverno",
+    "mlflow-server",
+    "monitoring",
+    "user-jobs",
+}
 WORKLOAD_APPLICATIONS = {
     "mlops-prod-control-plane": ("control-plane", "mlops-paas-control-plane"),
     "mlops-prod-consumer": ("consumer", "mlops-paas-consumer"),
@@ -186,6 +209,57 @@ def validate_workload_layout(repo_root: Path, applications: list[dict]) -> list[
                 errors.append(
                     f"{service} base image must not contain a tag or digest: {image}"
                 )
+
+    return errors
+
+
+def validate_cluster_namespace_ownership(
+    repo_root: Path, root_resources: list[dict], applications: list[dict]
+) -> list[str]:
+    """Keep namespaces root-owned and storage limited to its StorageClass."""
+    errors: list[str] = []
+    root_namespaces = {
+        (resource.get("metadata") or {}).get("name")
+        for resource in root_resources
+        if resource.get("kind") == "Namespace"
+    }
+    if root_namespaces != PRODUCTION_NAMESPACES:
+        errors.append(
+            "root GitOps namespace set must be "
+            f"{sorted(PRODUCTION_NAMESPACES)}, found {sorted(root_namespaces)}"
+        )
+    for resource in root_resources:
+        if resource.get("kind") != "Namespace":
+            continue
+        annotations = (resource.get("metadata") or {}).get("annotations") or {}
+        if annotations.get("argocd.argoproj.io/sync-wave") != "-40":
+            errors.append(
+                f"Namespace {(resource.get('metadata') or {}).get('name')} must reconcile at sync wave -40"
+            )
+
+    applications_by_name = {
+        (application.get("metadata") or {}).get("name", ""): application
+        for application in applications
+    }
+    storage_application = applications_by_name.get("mlops-prod-storage") or {}
+    storage_source = ((storage_application.get("spec") or {}).get("source") or {})
+    if storage_source.get("path") != "k8s/infra/storage":
+        errors.append("mlops-prod-storage must source k8s/infra/storage")
+    if (storage_application.get("metadata") or {}).get("annotations", {}).get(
+        "argocd.argoproj.io/sync-wave"
+    ) != "-30":
+        errors.append("mlops-prod-storage must reconcile at sync wave -30")
+
+    storage_resources = render(repo_root, "k8s/infra/storage")
+    if any(resource.get("kind") == "Namespace" for resource in storage_resources):
+        errors.append("mlops-prod-storage must not own Namespace resources")
+    storage_classes = {
+        (resource.get("metadata") or {}).get("name")
+        for resource in storage_resources
+        if resource.get("kind") == "StorageClass"
+    }
+    if storage_classes != {"ebs-gp3"}:
+        errors.append("mlops-prod-storage must own exactly the ebs-gp3 StorageClass")
 
     return errors
 
@@ -399,6 +473,108 @@ def validate_secret_ownership(repo_root: Path) -> list[str]:
     return errors
 
 
+def validate_image_verification(repo_root: Path, applications: list[dict]) -> list[str]:
+    """Keep the keyless image-verification boundary explicit and fail closed."""
+    errors: list[str] = []
+    applications_by_name = {
+        (application.get("metadata") or {}).get("name", ""): application
+        for application in applications
+    }
+
+    kyverno_application = applications_by_name.get("platform-kyverno") or {}
+    kyverno_source = ((kyverno_application.get("spec") or {}).get("source") or {})
+    kyverno_destination = ((kyverno_application.get("spec") or {}).get("destination") or {})
+    if kyverno_source.get("repoURL") != "https://kyverno.github.io/kyverno":
+        errors.append("platform-kyverno must use the official Kyverno Helm repository")
+    if kyverno_source.get("chart") != "kyverno" or kyverno_source.get("targetRevision") != "3.8.2":
+        errors.append("platform-kyverno must pin the Kyverno chart to 3.8.2")
+    if kyverno_destination.get("namespace") != "kyverno":
+        errors.append("platform-kyverno must install into the kyverno namespace")
+    if (kyverno_application.get("metadata") or {}).get("annotations", {}).get(
+        "argocd.argoproj.io/sync-wave"
+    ) != "-20":
+        errors.append("platform-kyverno must reconcile at sync wave -20")
+
+    verification_application = applications_by_name.get("platform-image-verification") or {}
+    verification_source = ((verification_application.get("spec") or {}).get("source") or {})
+    verification_destination = ((verification_application.get("spec") or {}).get("destination") or {})
+    if verification_source.get("path") != "k8s/operators/image-verification":
+        errors.append("platform-image-verification must use the Git-backed policy source")
+    if verification_destination.get("namespace") != "kyverno":
+        errors.append("platform-image-verification must reconcile in the kyverno namespace")
+    if (verification_application.get("metadata") or {}).get("annotations", {}).get(
+        "argocd.argoproj.io/sync-wave"
+    ) != "-19":
+        errors.append("platform-image-verification must reconcile after platform-kyverno")
+
+    resources = render(repo_root, "k8s/operators/image-verification")
+
+    def find_resource(kind: str, name: str) -> dict:
+        return next(
+            (
+                resource
+                for resource in resources
+                if resource.get("kind") == kind
+                and (resource.get("metadata") or {}).get("name") == name
+            ),
+            {},
+        )
+
+    credentials = find_resource("ExternalSecret", "kyverno-harbor-registry-auth-sync")
+    credentials_spec = credentials.get("spec") or {}
+    credentials_target = credentials_spec.get("target") or {}
+    if resource_namespace(credentials) != "kyverno":
+        errors.append("Kyverno registry credentials must be synchronized into the kyverno namespace")
+    if credentials_target.get("name") != "kyverno-harbor-registry-auth":
+        errors.append("Kyverno registry credential target must be kyverno-harbor-registry-auth")
+    if (credentials_target.get("template") or {}).get("type") != "kubernetes.io/dockerconfigjson":
+        errors.append("Kyverno registry credentials must be a dockerconfigjson Secret")
+    if credentials_spec.get("secretStoreRef") != {
+        "kind": "ClusterSecretStore",
+        "name": "aws-secrets-manager",
+    }:
+        errors.append("Kyverno registry credentials must use aws-secrets-manager")
+
+    policy = find_resource("ClusterPolicy", "verify-platform-images")
+    policy_spec = policy.get("spec") or {}
+    if policy_spec.get("background") is not False:
+        errors.append("image verification must not mutate existing workloads in the background")
+    if policy_spec.get("failurePolicy") != "Fail":
+        errors.append("image verification must fail closed when Kyverno cannot verify")
+    if policy_spec.get("validationFailureAction") != "Enforce":
+        errors.append("image verification must be enforced, not audit-only")
+    if policy_spec.get("webhookTimeoutSeconds") != 30:
+        errors.append("image verification must use the bounded 30-second registry timeout")
+
+    rules = policy_spec.get("rules") or []
+    verify_images = ((rules[0] if rules else {}).get("verifyImages") or [])
+    if len(verify_images) != 1:
+        errors.append("image verification policy must contain exactly one verifyImages rule")
+        return errors
+    verification = verify_images[0]
+    if verification.get("imageReferences") != [PLATFORM_IMAGE_PATTERN]:
+        errors.append("image verification must scope only platform images, never tenant images")
+    for field in ("required", "mutateDigest", "verifyDigest"):
+        if verification.get(field) is not True:
+            errors.append(f"image verification must set {field}=true")
+    if (verification.get("imageRegistryCredentials") or {}).get("secrets") != [
+        "kyverno-harbor-registry-auth"
+    ]:
+        errors.append("image verification must authenticate to Harbor with its scoped credential")
+
+    attestors = verification.get("attestors") or []
+    entries = ((attestors[0] if attestors else {}).get("entries") or [])
+    keyless = ((entries[0] if entries else {}).get("keyless") or {})
+    if keyless.get("subject") != KEYLESS_SIGNER_IDENTITY:
+        errors.append("image verification must require the exact CD workflow keyless identity")
+    if keyless.get("issuer") != KEYLESS_SIGNER_ISSUER:
+        errors.append("image verification must require the GitHub Actions OIDC issuer")
+    if keyless.get("rekor", {}).get("url") != "https://rekor.sigstore.dev":
+        errors.append("image verification must verify the transparency-log entry")
+
+    return errors
+
+
 def validate(repo_root: Path, baseline: Path | None) -> int:
     root_resources = render(repo_root, "k8s")
     applications = [
@@ -410,8 +586,10 @@ def validate(repo_root: Path, baseline: Path | None) -> int:
     layout_errors = validate_workload_layout(repo_root, applications)
     validation_errors = [
         *layout_errors,
+        *validate_cluster_namespace_ownership(repo_root, root_resources, applications),
         *validate_execution_security(repo_root, applications),
         *validate_secret_ownership(repo_root),
+        *validate_image_verification(repo_root, applications),
     ]
     if validation_errors:
         for error in validation_errors:

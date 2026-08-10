@@ -8,8 +8,8 @@ each child owns one independently observable service or domain.
 
 | Plane | Source | Argo CD project |
 | --- | --- | --- |
-| GitOps control | `k8s/gitops/production` | `default` |
-| Foundation and platform | `k8s/infra` | `mlops-platform` |
+| GitOps control and cluster namespaces | `k8s/gitops/production` | `default` |
+| Storage and platform | `k8s/infra` | `mlops-platform` |
 | Argo execution | `k8s/argo` | `mlops-execution` |
 | Static workloads | `k8s/apps/overlays/production` | `mlops-workloads` |
 | Core and training operators | Pinned Git/Helm sources | `platform-operators` |
@@ -20,11 +20,15 @@ are declared in Git; the K3s join-token value remains in Secrets Manager.
 Dynamic model Deployments and PyTorchJobs remain lifecycle-owned resources and
 are not adopted by Argo CD.
 
-## Foundation
+## Cluster namespaces and storage
 
-`mlops-prod-foundation` is the only owner of production namespaces declared in
-Git and the EBS StorageClass. Upstream operator namespace manifests are removed
-from their rendered sources so namespace ownership stays with foundation.
+The root `mlops-paas-system` Application owns production Namespace resources in
+`k8s/gitops/production/cluster` at sync wave `-40`, before child Applications
+are reconciled. Upstream operator namespace manifests are removed from their
+rendered sources so namespace ownership remains single and explicit.
+
+`mlops-prod-storage` owns only the `ebs-gp3` StorageClass in
+`k8s/infra/storage` at wave `-30`.
 
 ## Secrets
 
@@ -80,8 +84,23 @@ Argo CD owns seven core Helm releases: AWS EBS CSI, External Secrets,
 CloudNativePG, KEDA, Argo Workflows, Argo Events and kube-prometheus-stack. It
 also retains the existing `platform-*` children for Kubeflow Training,
 Karpenter CRDs/controller/capacity, Node Feature Discovery and NVIDIA GPU
-Operator. Ansible owns only K3s, token publication and the Argo CD bootstrap;
+Operator, plus Kyverno and its image-verification policy. Ansible owns only K3s, token publication and the Argo CD bootstrap;
 there are no ignored or runtime-patched Karpenter controller fields.
+
+## Image verification
+
+`platform-kyverno` verifies only images under
+`registry.mlops-nids-nt114.id.vn/mlops-paas/*`. The policy requires a keyless
+Cosign signature issued to this repository's `cd.yml` workflow on `main`, then
+resolves tags to immutable digests before admission. Unsigned or incorrectly
+signed platform images are denied. Third-party images and tenant `user-images/*`
+are intentionally outside this policy until their build path gains an isolated
+signing identity.
+
+For a clean bootstrap, first dispatch CD with `component=all` from `main` and
+merge its GitOps promotion PR. This ensures every platform tag referenced by
+the production overlays and WorkflowTemplates has a signature matching the
+enforced GitHub Actions identity before Argo CD creates the workloads.
 
 ## Deferred security resources
 

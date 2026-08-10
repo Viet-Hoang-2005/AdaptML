@@ -79,8 +79,6 @@ def main():
         "GITHUB_TOKEN",
         "HARBOR_GITHUB_USERNAME",
         "HARBOR_GITHUB_PASSWORD",
-        "COSIGN_PASSWORD",
-        "COSIGN_PRIVATE_KEY",
     ]
     production_keys = [
         "DB_USER",

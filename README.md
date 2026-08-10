@@ -159,7 +159,7 @@ MLOps-paas-system/
 │   │   ├── applications/                     # Explicit child Applications, gồm operator apps
 │   │   └── repositories/                     # Public Helm/OCI repository descriptors
 │   ├── infra/
-│   │   ├── foundation/                       # Namespace và StorageClass
+│   │   ├── storage/                          # EBS StorageClass production
 │   │   ├── secrets/                          # Chỉ ClusterSecretStore
 │   │   ├── {postgres,redis,redpanda}/        # Data services
 │   │   ├── harbor/                           # Harbor registry
@@ -170,7 +170,9 @@ MLOps-paas-system/
 │   ├── apps/
 │   │   ├── base/                             # Manifest dùng chung cho bốn workload
 │   │   └── overlays/production/              # Registry và Git SHA tag cho production
-│   ├── operators/kubeflow-training/          # Runtime settings cho Training Operator
+│   ├── operators/                            # Git-managed operator runtime resources
+│   │   ├── kubeflow-training/                # Runtime settings cho Training Operator
+│   │   └── image-verification/               # Kyverno policy + Harbor verification credential
 │   ├── security/                             # Policy dự kiến, chưa được reconcile
 │   └── argocd/                               # Tài nguyên bootstrap Argo CD do Ansible sử dụng
 │
@@ -359,7 +361,7 @@ cp .env.example .env
 - **Cơ sở dữ liệu PostgreSQL**: `DB_USER`, `DB_PASSWORD`
 - **Harbor Registry**: `HARBOR_USERNAME`, `HARBOR_PASSWORD`, `HARBOR_GITHUB_USERNAME`, `HARBOR_GITHUB_PASSWORD`
 - **GitHub & CI/CD**: `GITHUB_REPO`, `GITHUB_TOKEN`
-- **Bảo mật & Ký image (Cosign)**: `COSIGN_PASSWORD`, `COSIGN_PRIVATE_KEY`
+- **Ký image**: CD dùng GitHub Actions OIDC và Cosign keyless; không lưu Cosign private key hoặc password trong `.env` hay AWS Secrets Manager.
 - **Django, JWT & internal execution**: `DJANGO_SECRET_KEY`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `CONTROL_PLANE_WEBHOOK_SECRET`, `ARGO_EVENTS_WEBHOOK_TOKEN`
 - **OAuth & Cloudflare Tunnel**: `GOOGLE_OAUTH2_CLIENT_ID`, `GITHUB_OAUTH2_CLIENT_ID`, `GITHUB_OAUTH2_CLIENT_SECRET`, `TUNNEL_TOKEN`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`
 
@@ -381,7 +383,7 @@ deactivate
 **Script sẽ tự động phân nhóm và tạo/cập nhật chính xác 3 kho Secret trên AWS:**
 
 - **`mlops/aws-secrets`**: Lưu thông tin xác thực AWS S3.
-- **`mlops/github-actions-secrets`**: Lưu thông tin cho CI/CD GitOps và ký Cosign.
+- **`mlops/github-actions-secrets`**: Lưu Harbor robot credential cho CI/CD; Cosign dùng GitHub Actions OIDC keyless.
 - **`mlops/production-secrets`**: Lưu toàn bộ cấu hình bảo mật cho cụm K3s (DB, Harbor, JWT, OAuth, Webhook...).
 
 `ARGO_EVENTS_WEBHOOK_TOKEN` phải là token ngẫu nhiên tối thiểu 32 ký tự và
@@ -432,6 +434,13 @@ ansible-playbook site.yml --tags platform-core
 ansible-playbook site.yml --tags preflight,platform-training,verify
 ```
 
+Trước một clean bootstrap, chạy CD thủ công với `component=all` trên nhánh
+`main` và merge GitOps promotion PR do workflow tạo ra. Bước này phải hoàn tất
+trước `platform-core`: Kyverno sẽ fail closed cho mọi image
+`registry.mlops-nids-nt114.id.vn/mlops-paas/*` không có Cosign keyless
+signature từ chính `cd.yml` trên `main`. Nó không áp dụng cho image bên thứ ba
+hoặc `user-images/*`.
+
 Nếu chủ đích chỉ xác minh core mà không chạy training smoke, tắt rõ ràng training verification trong lần chạy đó:
 
 ```bash
@@ -450,7 +459,7 @@ Các phase hiện có:
 | `platform-training` | Chờ 6 training/capacity Application do Argo CD quản lý và chạy smoke tests | Bật trong group vars hiện tại |
 | `verify` | Xác minh node, operator và root Application | Chạy cuối |
 
-Ansible chỉ cài Argo CD rồi tạo root Application `mlops-paas-system`. Repository GitHub hiện public nên không cần repository credential bootstrap. Foundation, core operators, `ClusterSecretStore`, ExternalSecrets scoped theo owner và workload đều được Argo CD reconcile theo sync wave; không cần `kubectl apply` thủ công sau khi `platform-core` hoàn tất.
+Ansible chỉ cài Argo CD rồi tạo root Application `mlops-paas-system`. Repository GitHub hiện public nên không cần repository credential bootstrap. Root GitOps tạo Namespace production trước, sau đó storage, core operators, `ClusterSecretStore`, ExternalSecrets scoped theo owner và workload được Argo CD reconcile theo sync wave; không cần `kubectl apply` thủ công sau khi `platform-core` hoàn tất.
 
 #### Bước 5: Xác minh GitOps, workload và AWS edge health
 
@@ -463,9 +472,10 @@ sudo k3s kubectl get applications -n argocd \
 sudo k3s kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded
 sudo k3s kubectl get clustersecretstore,externalsecret -A
 sudo k3s kubectl get clusters.postgresql.cnpg.io -A
+sudo k3s kubectl get clusterpolicy verify-platform-images
 ```
 
-Mọi Application phải là `Synced/Healthy`; CNPG phải có hai instance Ready; lệnh pod bất thường không được trả về workload lỗi. `verify` của Ansible cũng kiểm tra bảy core operator Application, CRD/controller, ESO, root GitOps, Traefik trên static worker, ALB target health, CNPG, Argo Workflow server-side dry-run và EBS smoke/cleanup.
+Mọi Application phải là `Synced/Healthy`; CNPG phải có hai instance Ready; lệnh pod bất thường không được trả về workload lỗi. `platform-kyverno` và `platform-image-verification` cũng phải Healthy trước khi application platform được tạo. `verify` của Ansible cũng kiểm tra bảy core operator Application, CRD/controller, ESO, root GitOps, Traefik trên static worker, ALB target health, CNPG, Argo Workflow server-side dry-run và EBS smoke/cleanup.
 
 Từ WSL control host, xác nhận cả hai ALB targets healthy:
 

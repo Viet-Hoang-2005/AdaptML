@@ -55,11 +55,13 @@ jobs:
               - 'services/training-runner/**'
             ci_workflow:
               - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
             service_test_shared:
               - 'services/requirements-test.txt'
             k8s:
               - 'k8s/**'
               - 'scripts/validate_gitops_layout.py'
+              - 'scripts/validate_cd_signature.py'
             ansible:
               - 'ansible/**'
             terraform:
@@ -374,6 +376,7 @@ jobs:
             kubeconform -ignore-missing-schemas -summary "$output"
           done
           python scripts/validate_gitops_layout.py
+          python scripts/validate_cd_signature.py
 
   validate-ansible:
     name: "Ansible Validation (Syntax & Lint)"

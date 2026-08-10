@@ -175,19 +175,18 @@ jobs:
         with:
           cosign-release: 'v2.2.4'
 
-      - name: Sign the published Docker image
+      - name: Keylessly sign and verify the published Docker image
         env:
-          COSIGN_PASSWORD: ${{ env.SECRETS_COSIGN_PASSWORD }}
-          COSIGN_PRIVATE_KEY: ${{ env.SECRETS_COSIGN_PRIVATE_KEY }}
           REGISTRY_HOST: "registry.mlops-nids-nt114.id.vn"
           IMAGE: "${{ matrix.target.image }}"
-          SHA: "${{ github.sha }}"
         run: |
-          printf "%b\n" "${COSIGN_PRIVATE_KEY}" > cosign.key
-          trap 'rm -f cosign.key' EXIT
           DIGEST="${{ steps.build-and-push.outputs.digest }}"
+          IMAGE_REFERENCE="${REGISTRY_HOST}/mlops-paas/${IMAGE}@${DIGEST}"
           for attempt in 1 2 3 4 5; do
-            if cosign sign --yes --key cosign.key "${REGISTRY_HOST}/mlops-paas/${IMAGE}@${DIGEST}"; then
+            if cosign sign --yes "${IMAGE_REFERENCE}" && \
+              cosign verify "${IMAGE_REFERENCE}" \
+                --certificate-identity="https://github.com/Viet-Hoang-2005/MLOps-paas-system/.github/workflows/cd.yml@refs/heads/main" \
+                --certificate-oidc-issuer="https://token.actions.githubusercontent.com"; then
               exit 0
             fi
             if [ "$attempt" -lt 5 ]; then
