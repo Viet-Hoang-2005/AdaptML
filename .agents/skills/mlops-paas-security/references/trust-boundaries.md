@@ -15,7 +15,7 @@
 - Public/browser/API input.
 - Runtime logs and callback payloads until authenticated and validated.
 
-Untrusted workloads must not receive shared application secrets, JWT private keys, OAuth secrets, AWS credentials, production Redis, broad MLflow access, or node metadata access.
+Untrusted workloads must not receive shared application secrets, JWT private keys, OAuth secrets, AWS credentials, production Redis, broad MLflow access, or node metadata access. Kubernetes target Secrets are scoped to the consuming workload: AWS may be a shared source, but a broad cross-workload target Secret is prohibited.
 
 Karpenter-created training nodes may read only the dedicated K3s agent-token
 secret during host bootstrap. The token value stays out of Git and Terraform

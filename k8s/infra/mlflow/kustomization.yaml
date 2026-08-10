@@ -5,6 +5,7 @@ resources:
 - configmap.yaml
 - service.yaml
 - deployment.yaml
+- external-secrets.yaml
 
 images:
 - name: mlops-paas-mlflow

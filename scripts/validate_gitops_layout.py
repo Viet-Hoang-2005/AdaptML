@@ -36,6 +36,30 @@ WORKLOAD_APPLICATIONS = {
     "mlops-prod-web": ("web", "mlops-paas-web"),
 }
 ARGO_WEBHOOK_EVENTS = {"build", "deploy", "delete", "drift", "train", "cancel-train"}
+LEGACY_SHARED_SECRET_TARGETS = {
+    "mlops-paas-secret",
+    "postgres-secrets",
+    "harbor-registry-secret",
+}
+EXTERNAL_SECRET_OWNERS = {
+    "k8s/apps/overlays/production/control-plane": {
+        ("default", "control-plane-api-secret"),
+        ("default", "control-plane-worker-secret"),
+    },
+    "k8s/apps/overlays/production/consumer": {("default", "consumer-secret")},
+    "k8s/apps/overlays/production/model-server": {("default", "model-server-secret")},
+    "k8s/infra/postgres": {("default", "postgres-bootstrap-secret")},
+    "k8s/infra/mlflow": {("mlflow-server", "mlflow-secret")},
+    "k8s/infra/cloudflare": {("cloudflare", "tunnel-token")},
+    "k8s/argo": {
+        ("default", "argo-build-callback-secret"),
+        ("default", "harbor-registry-dockerconfig"),
+        ("default", "argo-delete-callback-secret"),
+        ("default", "argo-evidently-secret"),
+        ("argo-events", "argo-events-webhook-server"),
+        ("user-jobs", "harbor-registry-pull-secret"),
+    },
+}
 
 
 def render(repo_root: Path, path: str) -> list[dict]:
@@ -169,8 +193,7 @@ def validate_workload_layout(repo_root: Path, applications: list[dict]) -> list[
 def validate_execution_security(repo_root: Path, applications: list[dict]) -> list[str]:
     errors: list[str] = []
     execution_resources = render(repo_root, "k8s/argo")
-    control_plane_resources = render(repo_root, "k8s/apps/base/control-plane")
-    secret_resources = render(repo_root, "k8s/infra/secrets")
+    control_plane_resources = render(repo_root, "k8s/apps/overlays/production/control-plane")
 
     def find_resource(resources: list[dict], kind: str, name: str) -> dict:
         for resource in resources:
@@ -252,6 +275,8 @@ def validate_execution_security(repo_root: Path, applications: list[dict]) -> li
         "NetworkPolicy",
         "allow-control-plane-worker-to-argo-events-webhook",
     )
+
+
     webhook_ingress = ((webhook_policy.get("spec") or {}).get("ingress") or [])
     if len(webhook_ingress) != 1 or webhook_ingress[0] != {
         "from": [
@@ -267,14 +292,17 @@ def validate_execution_security(repo_root: Path, applications: list[dict]) -> li
         errors.append("EventSource NetworkPolicy must allow only the default Control Plane worker on TCP 12000")
 
     external_secret_targets = {
-        ((resource.get("spec") or {}).get("target") or {}).get("name")
-        for resource in secret_resources
+        (resource_namespace(resource), ((resource.get("spec") or {}).get("target") or {}).get("name"))
+        for resource in execution_resources
         if resource.get("kind") == "ExternalSecret"
     }
-    if not {"argo-events-webhook-client", "argo-events-webhook-server"} <= external_secret_targets:
-        errors.append("dedicated Argo Events client/server Secrets must be synchronized by External Secrets")
+    if ("argo-events", "argo-events-webhook-server") not in external_secret_targets:
+        errors.append("the Argo Events server bearer-token Secret must be synchronized by External Secrets")
 
-    for deployment_name in ("mlops-paas-control-plane", "mlops-paas-control-plane-worker"):
+    for deployment_name, expected_secret in {
+        "mlops-paas-control-plane": "control-plane-api-secret",
+        "mlops-paas-control-plane-worker": "control-plane-worker-secret",
+    }.items():
         deployment = find_resource(control_plane_resources, "Deployment", deployment_name)
         pod_spec = (((deployment.get("spec") or {}).get("template") or {}).get("spec") or {})
         if pod_spec.get("automountServiceAccountToken") is not False:
@@ -289,10 +317,10 @@ def validate_execution_security(repo_root: Path, applications: list[dict]) -> li
         ]
         if not token_env or any(
             (((env.get("valueFrom") or {}).get("secretKeyRef") or {}).get("name"))
-            != "argo-events-webhook-client"
+            != expected_secret
             for env in token_env
         ):
-            errors.append(f"{deployment_name} must source the Argo bearer token from its client Secret")
+            errors.append(f"{deployment_name} must source the Argo bearer token from {expected_secret}")
 
     applications_by_name = {
         (application.get("metadata") or {}).get("name", ""): application
@@ -313,6 +341,64 @@ def validate_execution_security(repo_root: Path, applications: list[dict]) -> li
     return errors
 
 
+def resource_namespace(resource: dict) -> str:
+    return ((resource.get("metadata") or {}).get("namespace")) or "default"
+
+
+def validate_secret_ownership(repo_root: Path) -> list[str]:
+    """Ensure target Secrets have one nearby ExternalSecret owner and a consumer."""
+    errors: list[str] = []
+    all_resources: list[dict] = []
+    targets: dict[tuple[str, str], str] = {}
+
+    for source_path, expected_targets in EXTERNAL_SECRET_OWNERS.items():
+        resources = render(repo_root, source_path)
+        all_resources.extend(resources)
+        actual_targets = {
+            (resource_namespace(resource), ((resource.get("spec") or {}).get("target") or {}).get("name"))
+            for resource in resources
+            if resource.get("kind") == "ExternalSecret"
+        }
+        if actual_targets != expected_targets:
+            errors.append(
+                f"{source_path} ExternalSecret targets must be {sorted(expected_targets)}, found {sorted(actual_targets)}"
+            )
+        for resource in resources:
+            if resource.get("kind") != "ExternalSecret":
+                continue
+            metadata = resource.get("metadata") or {}
+            spec = resource.get("spec") or {}
+            if (metadata.get("annotations") or {}).get("argocd.argoproj.io/sync-wave") != "-1":
+                errors.append(f"ExternalSecret {metadata.get('name')} must use sync wave -1")
+            if spec.get("secretStoreRef") != {"kind": "ClusterSecretStore", "name": "aws-secrets-manager"}:
+                errors.append(f"ExternalSecret {metadata.get('name')} must use aws-secrets-manager")
+        for target in actual_targets:
+            if not target[1]:
+                errors.append(f"{source_path} contains an ExternalSecret without spec.target.name")
+                continue
+            if target in targets:
+                errors.append(f"ExternalSecret target {target} is owned by both {targets[target]} and {source_path}")
+            targets[target] = source_path
+
+    rendered_text = json.dumps(
+        [resource for resource in all_resources if resource.get("kind") != "ExternalSecret"],
+        sort_keys=True,
+    )
+    for namespace, target in sorted(targets):
+        if target not in rendered_text:
+            errors.append(f"ExternalSecret target {namespace}/{target} has no consumer in its owner source")
+
+    for target in LEGACY_SHARED_SECRET_TARGETS:
+        if target in rendered_text or any(target == target_name for _, target_name in targets):
+            errors.append(f"legacy shared Secret target {target} must not be rendered")
+
+    secrets_resources = render(repo_root, "k8s/infra/secrets")
+    if any(resource.get("kind") == "ExternalSecret" for resource in secrets_resources):
+        errors.append("mlops-prod-secrets must own only ClusterSecretStore, not ExternalSecrets")
+
+    return errors
+
+
 def validate(repo_root: Path, baseline: Path | None) -> int:
     root_resources = render(repo_root, "k8s")
     applications = [
@@ -325,6 +411,7 @@ def validate(repo_root: Path, baseline: Path | None) -> int:
     validation_errors = [
         *layout_errors,
         *validate_execution_security(repo_root, applications),
+        *validate_secret_ownership(repo_root),
     ]
     if validation_errors:
         for error in validation_errors:

@@ -67,7 +67,8 @@ Secrets, CloudNativePG, KEDA, Argo Workflows, Argo Events and
 kube-prometheus-stack from pinned Helm charts. Operator controllers stay on
 static workers, whose EC2 instance profile provides AWS access where required.
 The public Git repository does not require a bootstrap repository credential;
-`mlops-prod-secrets` owns the ClusterSecretStore and all ExternalSecrets.
+`mlops-prod-secrets` owns only the ClusterSecretStore. Each GitOps workload
+Application owns the ExternalSecrets for the Kubernetes Secrets it consumes.
 
 ## Commands
 

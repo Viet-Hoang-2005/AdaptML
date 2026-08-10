@@ -160,7 +160,7 @@ MLOps-paas-system/
 │   │   └── repositories/                     # Public Helm/OCI repository descriptors
 │   ├── infra/
 │   │   ├── foundation/                       # Namespace và StorageClass
-│   │   ├── secrets/                          # ClusterSecretStore và ExternalSecrets
+│   │   ├── secrets/                          # Chỉ ClusterSecretStore
 │   │   ├── {postgres,redis,redpanda}/        # Data services
 │   │   ├── harbor/                           # Harbor registry
 │   │   ├── mlflow/                           # MLflow tracking
@@ -386,10 +386,10 @@ deactivate
 
 `ARGO_EVENTS_WEBHOOK_TOKEN` phải là token ngẫu nhiên tối thiểu 32 ký tự và
 không được tái sử dụng `CONTROL_PLANE_WEBHOOK_SECRET`. Khi rotate, cập nhật
-`mlops/production-secrets`, chờ cả `argo-events-webhook-client-sync` và
-`argo-events-webhook-server-sync` Ready, rồi rolling restart Control Plane
-API/worker và EventSource; xác minh token mới hoạt động trước khi kết thúc cửa
-sổ rotation.
+`mlops/production-secrets`, chờ `control-plane-api-secret-sync`,
+`control-plane-worker-secret-sync` và `argo-events-webhook-server-sync` Ready,
+rồi rolling restart Control Plane API/worker và EventSource; xác minh token mới
+hoạt động trước khi kết thúc cửa sổ rotation.
 
 #### Bước 3: Chuẩn bị Ansible control host trong WSL
 
@@ -450,7 +450,7 @@ Các phase hiện có:
 | `platform-training` | Chờ 6 training/capacity Application do Argo CD quản lý và chạy smoke tests | Bật trong group vars hiện tại |
 | `verify` | Xác minh node, operator và root Application | Chạy cuối |
 
-Ansible chỉ cài Argo CD rồi tạo root Application `mlops-paas-system`. Repository GitHub hiện public nên không cần repository credential bootstrap. Foundation, core operators, `ClusterSecretStore`, ExternalSecrets và workload đều được Argo CD reconcile theo sync wave; không cần `kubectl apply` thủ công sau khi `platform-core` hoàn tất.
+Ansible chỉ cài Argo CD rồi tạo root Application `mlops-paas-system`. Repository GitHub hiện public nên không cần repository credential bootstrap. Foundation, core operators, `ClusterSecretStore`, ExternalSecrets scoped theo owner và workload đều được Argo CD reconcile theo sync wave; không cần `kubectl apply` thủ công sau khi `platform-core` hoàn tất.
 
 #### Bước 5: Xác minh GitOps, workload và AWS edge health
 

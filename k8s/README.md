@@ -28,9 +28,12 @@ from their rendered sources so namespace ownership stays with foundation.
 
 ## Secrets
 
-`mlops-prod-secrets` owns the ClusterSecretStore and every production
-ExternalSecret. Secret values stay in AWS Secrets Manager and must never be
-committed or printed during debugging.
+`mlops-prod-secrets` owns only the cluster-scoped `ClusterSecretStore`.
+Each workload, infrastructure domain, and execution plane owns its own
+production `ExternalSecret` beside the manifest that consumes its target
+Secret. AWS remains the shared source of values, but no Pod receives a broad
+shared application Secret. Secret values must never be committed or printed
+during debugging.
 
 ## Data and platform services
 
@@ -43,8 +46,9 @@ owns the affected resource.
 `mlops-prod-execution` owns the EventBus, EventSource, Sensor and their stable
 webhook Service in `argo-events`; WorkflowTemplates remain in `default` and
 training runtime resources remain in `user-jobs`. The six webhook routes use a
-dedicated bearer token synchronized to separate client/server Secrets. Native
-NATS uses token authentication, and reconciled NetworkPolicies permit only the
+dedicated bearer token synchronized into the Control Plane API/worker target
+Secrets and the EventSource target Secret. Native NATS uses token authentication,
+and reconciled NetworkPolicies permit only the
 Control Plane worker to reach the EventSource and only Argo Events components
 to reach the EventBus.
 

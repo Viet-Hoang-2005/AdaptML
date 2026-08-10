@@ -88,4 +88,4 @@ spec:
         env:
           - name: CONTROL_PLANE_WEBHOOK_SECRET
             valueFrom:
-              secretKeyRef: {name: mlops-paas-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}
+              secretKeyRef: {name: argo-delete-callback-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}

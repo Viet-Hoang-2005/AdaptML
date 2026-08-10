@@ -50,17 +50,17 @@ spec:
             - name: CONTROL_PLANE_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: mlops-paas-secret
+                  name: consumer-secret
                   key: CONTROL_PLANE_WEBHOOK_SECRET
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secrets
+                  name: consumer-secret
                   key: DB_USER
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secrets
+                  name: consumer-secret
                   key: DB_PASSWORD
           # Cấu hình tài nguyên cho Consumer
           resources:

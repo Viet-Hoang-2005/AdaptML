@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - ../../../base/control-plane
+  - external-secrets.yaml
 
 images:
   - name: mlops-paas-control-plane

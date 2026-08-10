@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - ../../../base/consumer
+  - external-secrets.yaml
 
 images:
   - name: mlops-paas-consumer

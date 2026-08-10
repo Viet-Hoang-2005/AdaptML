@@ -4,6 +4,7 @@
 - Root `k8s/kustomization.yaml` renders only the production GitOps control tree after migration.
 - Explicit child Applications under `k8s/gitops/production` own service/domain Kustomizations.
 - Static workload manifests live under `k8s/apps/base`; Argo CD reconciles only environment overlays such as `k8s/apps/overlays/production`. Infrastructure, Argo execution and operator resources have separate ownership paths.
+- `mlops-prod-secrets` owns only `ClusterSecretStore`. Each workload, infrastructure domain and execution source owns its colocated `ExternalSecret` and the narrowly scoped Kubernetes target Secret it consumes; AWS Secrets Manager remains the shared value source.
 
 ## Current topology caveats
 

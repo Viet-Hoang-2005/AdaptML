@@ -32,9 +32,7 @@ spec:
         imagePullPolicy: Always
         envFrom:
           - secretRef:
-              name: mlops-paas-secret
-          - secretRef:
-              name: postgres-secrets
+              name: argo-evidently-secret
           - configMapRef:
               name: mlops-paas-control-plane-config
         env:

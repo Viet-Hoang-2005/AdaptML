@@ -28,6 +28,8 @@ spec:
       kind: RoleBinding
     - group: networking.k8s.io
       kind: NetworkPolicy
+    - group: external-secrets.io
+      kind: ExternalSecret
     - group: argoproj.io
       kind: EventBus
     - group: argoproj.io

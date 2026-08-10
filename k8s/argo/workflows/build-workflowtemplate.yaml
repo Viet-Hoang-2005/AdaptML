@@ -109,7 +109,7 @@ spec:
           - {name: CONTROL_PLANE_WEBHOOK_URL, value: "{{inputs.parameters.control_plane_webhook_url}}"}
           - name: CONTROL_PLANE_WEBHOOK_SECRET
             valueFrom:
-              secretKeyRef: {name: mlops-paas-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}
+              secretKeyRef: {name: argo-build-callback-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}
     - name: build-image
       nodeSelector: {workload-type: worker}
       inputs:
@@ -148,7 +148,7 @@ spec:
           - {name: CONTROL_PLANE_WEBHOOK_URL, value: "{{inputs.parameters.control_plane_webhook_url}}"}
           - name: CONTROL_PLANE_WEBHOOK_SECRET
             valueFrom:
-              secretKeyRef: {name: mlops-paas-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}
+              secretKeyRef: {name: argo-build-callback-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}
     - name: notify-build-exit
       nodeSelector: {workload-type: worker}
       container:
@@ -167,4 +167,4 @@ spec:
         env:
           - name: CONTROL_PLANE_WEBHOOK_SECRET
             valueFrom:
-              secretKeyRef: {name: mlops-paas-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}
+              secretKeyRef: {name: argo-build-callback-secret, key: CONTROL_PLANE_WEBHOOK_SECRET}

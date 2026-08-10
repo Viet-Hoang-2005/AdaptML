@@ -29,12 +29,12 @@ spec:
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secrets
+                  name: model-server-secret
                   key: DB_USER
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secrets
+                  name: model-server-secret
                   key: DB_PASSWORD
           envFrom:
             - configMapRef:

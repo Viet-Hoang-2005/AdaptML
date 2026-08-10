@@ -22,7 +22,7 @@ spec:
       database: mlops_paas_db
       owner: postgres
       secret:
-        name: postgres-secrets
+        name: postgres-bootstrap-secret
       postInitApplicationSQL:
         - "CREATE SCHEMA IF NOT EXISTS control_plane;"
         - "CREATE SCHEMA IF NOT EXISTS mlflow;"
