@@ -6,6 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: mlops-paas
     mlops-paas.io/environment: production
+    mlops-paas.io/plane: workload
 spec:
   description: Static production workloads in the default namespace.
   sourceRepos:

@@ -6,6 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: mlops-paas
     mlops-paas.io/environment: production
+    mlops-paas.io/plane: execution
 spec:
   description: Argo Events and Workflows execution resources for production.
   sourceRepos:

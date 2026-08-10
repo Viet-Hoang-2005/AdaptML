@@ -2,10 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  - cluster.yaml
+  - addons.yaml
   - platform.yaml
   - execution.yaml
   - workloads.yaml
-  - operators.yaml
 
 patches:
   - target:

@@ -1,17 +1,17 @@
 ---
-- name: Verify Argo CD owns the training and capacity applications
+- name: Verify Argo CD owns the training addons and capacity application
   kubernetes.core.k8s_info:
     api_version: argoproj.io/v1alpha1
     kind: Application
     name: "{{ item }}"
     namespace: argocd
     kubeconfig: "{{ k3s_remote_kubeconfig }}"
-  register: verified_training_operator_application
+  register: verified_training_application
   failed_when: >-
-    verified_training_operator_application.resources | length != 1 or
-    verified_training_operator_application.resources[0].status.sync.status | default('') != 'Synced' or
-    verified_training_operator_application.resources[0].status.health.status | default('') != 'Healthy'
-  loop: "{{ platform_operator_application_names }}"
+    verified_training_application.resources | length != 1 or
+    verified_training_application.resources[0].status.sync.status | default('') != 'Synced' or
+    verified_training_application.resources[0].status.health.status | default('') != 'Healthy'
+  loop: "{{ training_addon_application_names + training_cluster_application_names }}"
 
 - name: Verify the PyTorchJob CRD is Established
   kubernetes.core.k8s_info:

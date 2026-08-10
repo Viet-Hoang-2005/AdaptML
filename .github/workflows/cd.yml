@@ -235,7 +235,7 @@ jobs:
           fi
           
           if [ "${{ needs.detect-changes.outputs.mlflow }}" == "true" ]; then
-            (cd k8s/infra/mlflow && kustomize edit set image mlops-paas-mlflow=$REG/mlops-paas-mlflow:$SHA)
+            (cd k8s/platform/mlflow && kustomize edit set image mlops-paas-mlflow=$REG/mlops-paas-mlflow:$SHA)
           fi
           
           # 2. Update Argo Workflow Templates (packager and evidently)

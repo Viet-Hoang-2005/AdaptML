@@ -20,17 +20,23 @@ deploy_core_platform: true
 deploy_training_platform: true
 enable_karpenter: true
 
-# Core and training operators are child Applications of the unified production root.
-# Ansible owns only Argo CD bootstrap
-core_operator_application_names:
-  - platform-aws-ebs-csi
-  - platform-external-secrets
-  - platform-cloudnative-pg
-  - platform-keda
-  - platform-argo-workflows
-  - platform-argo-events
-  - platform-monitoring
-core_operator_workloads:
+# Add-ons install upstream cluster capabilities; cluster Applications configure
+# their instances. Ansible only waits for the GitOps contract.
+core_addon_application_names:
+  - mlops-prod-addon-aws-ebs-csi
+  - mlops-prod-addon-external-secrets
+  - mlops-prod-addon-cloudnative-pg
+  - mlops-prod-addon-keda
+  - mlops-prod-addon-argo-workflows
+  - mlops-prod-addon-argo-events
+  - mlops-prod-addon-monitoring
+  - mlops-prod-addon-kyverno
+core_cluster_application_names:
+  - mlops-prod-cluster-namespaces
+  - mlops-prod-cluster-storage
+  - mlops-prod-cluster-secret-store
+  - mlops-prod-cluster-image-verification
+core_addon_workloads:
   - {namespace: kube-system, release: aws-ebs-csi-driver}
   - {namespace: external-secrets, release: external-secrets}
   - {namespace: cnpg-system, release: cloudnative-pg}
@@ -38,20 +44,23 @@ core_operator_workloads:
   - {namespace: argo, release: argo-workflows}
   - {namespace: argo-events, release: argo-events}
   - {namespace: monitoring, release: monitoring}
-core_operator_crds:
+  - {namespace: kyverno, release: kyverno}
+core_addon_crds:
   - externalsecrets.external-secrets.io
   - clusters.postgresql.cnpg.io
   - scaledobjects.keda.sh
   - workflows.argoproj.io
   - eventsources.argoproj.io
   - prometheuses.monitoring.coreos.com
-platform_operator_application_names:
-  - platform-kubeflow-training
-  - platform-karpenter-crds
-  - platform-karpenter
-  - platform-karpenter-capacity
-  - platform-node-feature-discovery
-  - platform-gpu-operator
+  - clusterpolicies.kyverno.io
+training_addon_application_names:
+  - mlops-prod-addon-kubeflow-training
+  - mlops-prod-addon-karpenter-crds
+  - mlops-prod-addon-karpenter
+  - mlops-prod-addon-node-feature-discovery
+  - mlops-prod-addon-gpu-operator
+training_cluster_application_names:
+  - mlops-prod-cluster-karpenter-capacity
 
 # Ansible publishes only the runtime K3s token value. Terraform owns the
 # secret container and Argo CD owns all Karpenter Kubernetes resources.

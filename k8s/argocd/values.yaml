@@ -64,7 +64,8 @@ configs:
       p, role:github-actions, applications, get, mlops-platform/*, allow
       p, role:github-actions, applications, get, mlops-execution/*, allow
       p, role:github-actions, applications, get, mlops-workloads/*, allow
-      p, role:github-actions, applications, get, platform-operators/*, allow
+      p, role:github-actions, applications, get, mlops-cluster/*, allow
+      p, role:github-actions, applications, get, mlops-addons/*, allow
       g, github-actions, role:github-actions
 
 controller:

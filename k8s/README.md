@@ -8,31 +8,33 @@ each child owns one independently observable service or domain.
 
 | Plane | Source | Argo CD project |
 | --- | --- | --- |
-| GitOps control and cluster namespaces | `k8s/gitops/production` | `default` |
-| Storage and platform | `k8s/infra` | `mlops-platform` |
+| GitOps control | `k8s/gitops/production` | `default` |
+| Cluster configuration | `k8s/cluster` | `mlops-cluster` |
+| Cluster add-ons | Pinned Git/Helm sources | `mlops-addons` |
+| Shared platform services | `k8s/platform` | `mlops-platform` |
 | Argo execution | `k8s/argo` | `mlops-execution` |
 | Static workloads | `k8s/apps/overlays/production` | `mlops-workloads` |
-| Core and training operators | Pinned Git/Helm sources | `platform-operators` |
 
-`platform-karpenter-capacity` owns the production CPU/GPU EC2NodeClasses and
+`mlops-prod-cluster-karpenter-capacity` owns the production CPU/GPU EC2NodeClasses and
 NodePools. Their non-secret cluster identifiers and stable private K3s API DNS
 are declared in Git; the K3s join-token value remains in Secrets Manager.
 Dynamic model Deployments and PyTorchJobs remain lifecycle-owned resources and
 are not adopted by Argo CD.
 
-## Cluster namespaces and storage
+## Cluster configuration
 
-The root `mlops-paas-system` Application owns production Namespace resources in
-`k8s/gitops/production/cluster` at sync wave `-40`, before child Applications
-are reconciled. Upstream operator namespace manifests are removed from their
-rendered sources so namespace ownership remains single and explicit.
+`mlops-prod-cluster-namespaces` owns production Namespace resources from
+`k8s/cluster/namespaces` at wave `-50`. Upstream add-on namespace manifests are
+removed from their rendered sources so namespace ownership remains single and
+explicit.
 
-`mlops-prod-storage` owns only the `ebs-gp3` StorageClass in
-`k8s/infra/storage` at wave `-30`.
+`mlops-prod-cluster-storage` owns only `ebs-gp3`; the cluster secret-store and
+Karpenter capacity each have their own cluster Application. Cluster configuration
+consumes installed capabilities but never installs their controllers.
 
 ## Secrets
 
-`mlops-prod-secrets` owns only the cluster-scoped `ClusterSecretStore`.
+`mlops-prod-cluster-secret-store` owns only the cluster-scoped `ClusterSecretStore`.
 Each workload, infrastructure domain, and execution plane owns its own
 production `ExternalSecret` beside the manifest that consumes its target
 Secret. AWS remains the shared source of values, but no Pod receives a broad
@@ -47,7 +49,7 @@ owns the affected resource.
 
 ## Execution
 
-`mlops-prod-execution` owns the EventBus, EventSource, Sensor and their stable
+`mlops-prod-execution-argo` owns the EventBus, EventSource, Sensor and their stable
 webhook Service in `argo-events`; WorkflowTemplates remain in `default` and
 training runtime resources remain in `user-jobs`. The six webhook routes use a
 dedicated bearer token synchronized into the Control Plane API/worker target
@@ -75,21 +77,21 @@ putting environment-specific registry names, tags, ConfigMaps or patches in base
 
 ## Edge
 
-`mlops-prod-edge` owns Cloudflare Tunnel configuration, Traefik routes and the
+`mlops-prod-platform-edge` owns Cloudflare Tunnel configuration, Traefik routes and the
 Traefik health endpoint. Public exposure changes require a security review.
 
-## Operators
+## Cluster add-ons
 
-Argo CD owns seven core Helm releases: AWS EBS CSI, External Secrets,
-CloudNativePG, KEDA, Argo Workflows, Argo Events and kube-prometheus-stack. It
-also retains the existing `platform-*` children for Kubeflow Training,
-Karpenter CRDs/controller/capacity, Node Feature Discovery and NVIDIA GPU
-Operator, plus Kyverno and its image-verification policy. Ansible owns only K3s, token publication and the Argo CD bootstrap;
+Argo CD owns upstream add-ons: AWS EBS CSI, External Secrets, CloudNativePG,
+KEDA, Argo Workflows, Argo Events, kube-prometheus-stack, Kyverno, Kubeflow
+Training, Karpenter CRDs/controller, Node Feature Discovery and NVIDIA GPU
+Operator. `mlops-addons` installs these capabilities; their configuration lives
+under `cluster` or `platform`. Ansible owns only K3s, token publication and the Argo CD bootstrap;
 there are no ignored or runtime-patched Karpenter controller fields.
 
 ## Image verification
 
-`platform-kyverno` verifies only images under
+`mlops-prod-addon-kyverno` and `mlops-prod-cluster-image-verification` verify only images under
 `registry.mlops-nids-nt114.id.vn/mlops-paas/*`. The policy requires a keyless
 Cosign signature issued to this repository's `cd.yml` workflow on `main`, then
 resolves tags to immutable digests before admission. Unsigned or incorrectly
@@ -107,7 +109,7 @@ enforced GitHub Actions identity before Argo CD creates the workloads.
 `k8s/security` is intentionally outside every reconciled
 Kustomization. Its broad NetworkPolicies and PDBs are not active controls. This
 does not include the execution-plane NetworkPolicies in `k8s/argo`, which are
-active production resources owned by `mlops-prod-execution`.
+active production resources owned by `mlops-prod-execution-argo`.
 
 ## Validation and debugging
 
@@ -125,5 +127,5 @@ runtime-created workloads to repair an Application status.
 
 Orphan warnings stay enabled. AppProjects ignore only accepted runtime resources
 created by CloudNativePG, Kubernetes and Argo Workflows. Monitoring resources
-are owned directly by `platform-monitoring`; a new orphan outside the accepted
+are owned directly by `mlops-prod-addon-monitoring`; a new orphan outside the accepted
 identities remains visible as an `OrphanedResourceWarning`.

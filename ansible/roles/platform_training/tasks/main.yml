@@ -1,17 +1,17 @@
 ---
-- name: Require Argo CD to reconcile every training operator application
+- name: Require Argo CD to reconcile every training addon and capacity application
   kubernetes.core.k8s_info:
     api_version: argoproj.io/v1alpha1
     kind: Application
     name: "{{ item }}"
     namespace: argocd
     kubeconfig: "{{ k3s_remote_kubeconfig }}"
-  register: reconciled_platform_operator_application
+  register: reconciled_training_application
   until:
-    - reconciled_platform_operator_application.resources | length == 1
-    - reconciled_platform_operator_application.resources[0].status.sync.status | default('') == 'Synced'
-    - reconciled_platform_operator_application.resources[0].status.health.status | default('') == 'Healthy'
+    - reconciled_training_application.resources | length == 1
+    - reconciled_training_application.resources[0].status.sync.status | default('') == 'Synced'
+    - reconciled_training_application.resources[0].status.health.status | default('') == 'Healthy'
   retries: 60
   delay: 10
   changed_when: false
-  loop: "{{ platform_operator_application_names }}"
+  loop: "{{ training_addon_application_names + training_cluster_application_names }}"

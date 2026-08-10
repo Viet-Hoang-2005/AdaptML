@@ -70,22 +70,22 @@
     - app.kubernetes.io/name=traefik
   when: verify_scope == 'platform'
 
-- name: Verify every core operator Application is reconciled
+- name: Verify every core addon and cluster Application is reconciled
   kubernetes.core.k8s_info:
     api_version: argoproj.io/v1alpha1
     kind: Application
     name: "{{ item }}"
     namespace: argocd
     kubeconfig: "{{ k3s_remote_kubeconfig }}"
-  register: verified_core_operator_application
+  register: verified_core_application
   failed_when: >-
-    verified_core_operator_application.resources | length != 1 or
-    verified_core_operator_application.resources[0].status.sync.status | default('') != 'Synced' or
-    verified_core_operator_application.resources[0].status.health.status | default('') != 'Healthy'
-  loop: "{{ core_operator_application_names }}"
+    verified_core_application.resources | length != 1 or
+    verified_core_application.resources[0].status.sync.status | default('') != 'Synced' or
+    verified_core_application.resources[0].status.health.status | default('') != 'Healthy'
+  loop: "{{ core_addon_application_names + core_cluster_application_names }}"
   when: verify_scope == 'platform'
 
-- name: Verify every core operator CRD is Established
+- name: Verify every core addon CRD is Established
   kubernetes.core.k8s_info:
     api_version: apiextensions.k8s.io/v1
     kind: CustomResourceDefinition
@@ -96,10 +96,10 @@
     wait_condition:
       type: Established
       status: "True"
-  loop: "{{ core_operator_crds }}"
+  loop: "{{ core_addon_crds }}"
   when: verify_scope == 'platform'
 
-- name: Verify every core operator workload is Ready
+- name: Verify every core addon workload is Ready
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Pod
@@ -107,16 +107,16 @@
     kubeconfig: "{{ k3s_remote_kubeconfig }}"
     label_selectors:
       - "app.kubernetes.io/instance={{ item.release }}"
-  register: verified_core_operator_pods
+  register: verified_core_addon_pods
   until:
-    - verified_core_operator_pods.resources | length > 0
+    - verified_core_addon_pods.resources | length > 0
     - >-
-      (verified_core_operator_pods.resources |
+      (verified_core_addon_pods.resources |
       json_query("[?status.conditions[?type=='Ready' && status=='True']]") |
-      length) == verified_core_operator_pods.resources | length
+      length) == verified_core_addon_pods.resources | length
   retries: 120
   delay: 5
-  loop: "{{ core_operator_workloads }}"
+  loop: "{{ core_addon_workloads }}"
   when: verify_scope == 'platform'
 
 - name: Verify the AWS EBS CSI driver is registered

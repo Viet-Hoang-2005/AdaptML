@@ -158,21 +158,13 @@ MLOps-paas-system/
 │   │   ├── projects/                         # AppProject theo trust boundary
 │   │   ├── applications/                     # Explicit child Applications, gồm operator apps
 │   │   └── repositories/                     # Public Helm/OCI repository descriptors
-│   ├── infra/
-│   │   ├── storage/                          # EBS StorageClass production
-│   │   ├── secrets/                          # Chỉ ClusterSecretStore
-│   │   ├── {postgres,redis,redpanda}/        # Data services
-│   │   ├── harbor/                           # Harbor registry
-│   │   ├── mlflow/                           # MLflow tracking
-│   │   ├── observability/                    # Prometheus, Grafana và Alertmanager
-│   │   └── {cloudflare,routing,health}/      # Edge resources
+│   ├── cluster/                              # Namespace, StorageClass, SecretStore, policy và capacity
+│   ├── addons/                               # Upstream controller/CRD/driver adapter
+│   ├── platform/                             # Data, registry, MLflow, observability và edge dùng chung
 │   ├── argo/                                 # Argo Events/Workflows, templates và RBAC
 │   ├── apps/
 │   │   ├── base/                             # Manifest dùng chung cho bốn workload
 │   │   └── overlays/production/              # Registry và Git SHA tag cho production
-│   ├── operators/                            # Git-managed operator runtime resources
-│   │   ├── kubeflow-training/                # Runtime settings cho Training Operator
-│   │   └── image-verification/               # Kyverno policy + Harbor verification credential
 │   ├── security/                             # Policy dự kiến, chưa được reconcile
 │   └── argocd/                               # Tài nguyên bootstrap Argo CD do Ansible sử dụng
 │
@@ -294,7 +286,7 @@ Production được triển khai theo ba lớp ownership rõ ràng:
 
 Core platform dùng một K3s server và hai static worker. Server chạy embedded etcd, secrets encryption và snapshot định kỳ; đây vẫn là **single control-plane**, chưa phải HA. Bộ policy tổng quát trong `k8s/security` vẫn được chủ động hoãn, nhưng các NetworkPolicy tối thiểu bảo vệ Argo EventSource/EventBus nằm trong `k8s/argo` và được production GitOps reconcile.
 
-Sau `platform-core`, root Application để Argo CD reconcile AWS EBS CSI, External Secrets, CloudNativePG, KEDA, Argo Workflows/Events, monitoring, training operators và Karpenter capacity. Ansible chỉ chạy smoke verification trong phase `platform-training`. Dù các operator được cài, tenant training vẫn đóng: `TRAINING_ENABLED=false`, API submit trả HTTP 503 và UI không hiển thị thao tác submit/GPU.
+Sau `platform-core`, root Application để Argo CD reconcile core add-ons, cluster configuration và shared platform services theo lifecycle wave. Ansible chỉ chạy smoke verification trong phase `platform-training`. Dù các training add-on được cài, tenant training vẫn đóng: `TRAINING_ENABLED=false`, API submit trả HTTP 503 và UI không hiển thị thao tác submit/GPU.
 
 Ở production, Celery giữ lifecycle state trong PostgreSQL và dispatch side effect sau transaction commit. Build, deployment và drift đi qua Argo Events/Workflows. Sáu webhook nội bộ dùng bearer token riêng, EventBus dùng token authentication, NetworkPolicy chỉ cho Control Plane worker gọi EventSource và mỗi Workflow chạy bằng service account tối thiểu theo chức năng. Training controllers có thể được cài nhưng tenant training vẫn chỉ được mở sau một rollout cô lập workload riêng.
 
@@ -455,11 +447,11 @@ Các phase hiện có:
 | --- | --- | --- |
 | `preflight` | Kiểm tra WSL, Terraform inventory, SSH và rollout flags | Luôn chạy |
 | `bootstrap` | Cài K3s `v1.34.9+k3s1`, một server và hai worker | Bật |
-| `platform-core` | Cài Argo CD, bootstrap root và chờ các core operator Application | Bật |
-| `platform-training` | Chờ 6 training/capacity Application do Argo CD quản lý và chạy smoke tests | Bật trong group vars hiện tại |
+| `platform-core` | Cài Argo CD, bootstrap root và chờ core add-on/cluster Application | Bật |
+| `platform-training` | Chờ training add-on/capacity Application do Argo CD quản lý và chạy smoke tests | Bật trong group vars hiện tại |
 | `verify` | Xác minh node, operator và root Application | Chạy cuối |
 
-Ansible chỉ cài Argo CD rồi tạo root Application `mlops-paas-system`. Repository GitHub hiện public nên không cần repository credential bootstrap. Root GitOps tạo Namespace production trước, sau đó storage, core operators, `ClusterSecretStore`, ExternalSecrets scoped theo owner và workload được Argo CD reconcile theo sync wave; không cần `kubectl apply` thủ công sau khi `platform-core` hoàn tất.
+Ansible chỉ cài Argo CD rồi tạo root Application `mlops-paas-system`. Repository GitHub hiện public nên không cần repository credential bootstrap. Root chỉ tạo GitOps control tree; child cluster Application tạo Namespace trước, tiếp đến add-ons, cluster configuration, platform service, execution và workload được Argo CD reconcile theo sync wave; không cần `kubectl apply` thủ công sau khi `platform-core` hoàn tất.
 
 #### Bước 5: Xác minh GitOps, workload và AWS edge health
 
@@ -475,7 +467,7 @@ sudo k3s kubectl get clusters.postgresql.cnpg.io -A
 sudo k3s kubectl get clusterpolicy verify-platform-images
 ```
 
-Mọi Application phải là `Synced/Healthy`; CNPG phải có hai instance Ready; lệnh pod bất thường không được trả về workload lỗi. `platform-kyverno` và `platform-image-verification` cũng phải Healthy trước khi application platform được tạo. `verify` của Ansible cũng kiểm tra bảy core operator Application, CRD/controller, ESO, root GitOps, Traefik trên static worker, ALB target health, CNPG, Argo Workflow server-side dry-run và EBS smoke/cleanup.
+Mọi Application phải là `Synced/Healthy`; CNPG phải có hai instance Ready; lệnh pod bất thường không được trả về workload lỗi. `mlops-prod-addon-kyverno` và `mlops-prod-cluster-image-verification` cũng phải Healthy trước khi application platform được tạo. `verify` của Ansible cũng kiểm tra core add-on/cluster Application, CRD/controller, ESO, root GitOps, Traefik trên static worker, ALB target health, CNPG, Argo Workflow server-side dry-run và EBS smoke/cleanup.
 
 Từ WSL control host, xác nhận cả hai ALB targets healthy:
 

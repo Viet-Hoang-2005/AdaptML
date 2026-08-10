@@ -22,10 +22,12 @@ committed source; the WSL key must be `~/.ssh/aws_key` with mode `0600`.
 
 Terraform owns AWS primitives, private K3s API DNS and agent-token secret
 metadata. Ansible owns host/Argo CD bootstrap, adds the private DNS TLS SAN and
-publishes the runtime token version. Argo CD owns Karpenter CRDs, controller,
-EC2NodeClasses and NodePools together with AWS EBS CSI, External Secrets, CloudNativePG,
-KEDA, Argo Workflows, Argo Events, kube-prometheus-stack and the training
-operators through the unified `mlops-paas-system` app-of-apps root.
+publishes the runtime token version. Argo CD owns pinned add-ons (AWS EBS CSI,
+External Secrets, CloudNativePG, KEDA, Argo Workflows/Events, monitoring,
+Kyverno and training controllers) and their separate cluster/platform instances
+through the unified `mlops-paas-system` app-of-apps root. Karpenter
+CRDs/controller are add-ons; EC2NodeClasses and NodePools are cluster
+configuration.
 
 Ansible also owns the bundled Traefik `HelmChartConfig`. Public TLS terminates
 at the ALB, while K3s ServiceLB with `externalTrafficPolicy: Cluster` presents

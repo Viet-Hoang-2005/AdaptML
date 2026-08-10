@@ -29,12 +29,12 @@ ALLOWED_BASELINE_EXTRAS = {
 LEGACY_K8S_PATHS = (
     "k8s/.kube",
     "k8s/harbor",
-    "k8s/operators/bootstrap",
-    "k8s/platform",
     "k8s/workloads",
     "k8s/execution",
     "k8s/deferred",
-    "k8s/infra/foundation",
+    "k8s/infra",
+    "k8s/operators",
+    "k8s/gitops/production/cluster",
 )
 PRODUCTION_NAMESPACES = {
     "argo",
@@ -53,10 +53,10 @@ PRODUCTION_NAMESPACES = {
     "user-jobs",
 }
 WORKLOAD_APPLICATIONS = {
-    "mlops-prod-control-plane": ("control-plane", "mlops-paas-control-plane"),
-    "mlops-prod-consumer": ("consumer", "mlops-paas-consumer"),
-    "mlops-prod-model-server": ("model-server", "mlops-paas-model-server"),
-    "mlops-prod-web": ("web", "mlops-paas-web"),
+    "mlops-prod-workload-control-plane": ("control-plane", "mlops-paas-control-plane"),
+    "mlops-prod-workload-consumer": ("consumer", "mlops-paas-consumer"),
+    "mlops-prod-workload-model-server": ("model-server", "mlops-paas-model-server"),
+    "mlops-prod-workload-web": ("web", "mlops-paas-web"),
 }
 ARGO_WEBHOOK_EVENTS = {"build", "deploy", "delete", "drift", "train", "cancel-train"}
 LEGACY_SHARED_SECRET_TARGETS = {
@@ -71,9 +71,9 @@ EXTERNAL_SECRET_OWNERS = {
     },
     "k8s/apps/overlays/production/consumer": {("default", "consumer-secret")},
     "k8s/apps/overlays/production/model-server": {("default", "model-server-secret")},
-    "k8s/infra/postgres": {("default", "postgres-bootstrap-secret")},
-    "k8s/infra/mlflow": {("mlflow-server", "mlflow-secret")},
-    "k8s/infra/cloudflare": {("cloudflare", "tunnel-token")},
+    "k8s/platform/data/postgres": {("default", "postgres-bootstrap-secret")},
+    "k8s/platform/mlflow": {("mlflow-server", "mlflow-secret")},
+    "k8s/platform/edge/cloudflare": {("cloudflare", "tunnel-token")},
     "k8s/argo": {
         ("default", "argo-build-callback-secret"),
         ("default", "harbor-registry-dockerconfig"),
@@ -213,53 +213,203 @@ def validate_workload_layout(repo_root: Path, applications: list[dict]) -> list[
     return errors
 
 
+def validate_lifecycle_contract(applications: list[dict]) -> list[str]:
+    """Require every child Application to declare one unambiguous lifecycle plane."""
+    errors: list[str] = []
+    if len(applications) != 30:
+        errors.append(f"root GitOps must render exactly 30 child Applications, found {len(applications)}")
+
+    git_boundaries = {
+        "k8s/cluster/": ("mlops-prod-cluster-", "mlops-cluster", "cluster"),
+        "k8s/addons/": ("mlops-prod-addon-", "mlops-addons", "addon"),
+        "k8s/platform/": ("mlops-prod-platform-", "mlops-platform", "platform"),
+        "k8s/argo": ("mlops-prod-execution-", "mlops-execution", "execution"),
+        "k8s/apps/": ("mlops-prod-workload-", "mlops-workloads", "workload"),
+    }
+
+    for application in applications:
+        metadata = application.get("metadata") or {}
+        spec = application.get("spec") or {}
+        name = metadata.get("name", "")
+        project = spec.get("project")
+        plane = (metadata.get("labels") or {}).get("mlops-paas.io/plane")
+        sources = spec.get("sources") or [spec.get("source") or {}]
+        is_chart = any(source.get("chart") for source in sources)
+
+        if is_chart:
+            expected = ("mlops-prod-addon-", "mlops-addons", "addon")
+            if not all((name.startswith(expected[0]), project == expected[1], plane == expected[2])):
+                errors.append(f"Helm Application {name} must belong to the addons lifecycle boundary")
+            continue
+
+        paths = [source.get("path", "") for source in sources]
+        boundary = next(
+            (
+                contract
+                for path_prefix, contract in git_boundaries.items()
+                if paths and all(path.startswith(path_prefix) for path in paths)
+            ),
+            None,
+        )
+        if not boundary:
+            errors.append(f"Git Application {name} has an unsupported lifecycle source path: {paths}")
+            continue
+        expected_name, expected_project, expected_plane = boundary
+        if not name.startswith(expected_name) or project != expected_project or plane != expected_plane:
+            errors.append(
+                f"Git Application {name} must use {expected_name}<component>, "
+                f"project {expected_project}, and plane {expected_plane}"
+            )
+
+    expected_waves = {
+        "mlops-prod-cluster-namespaces": "-50",
+        "mlops-prod-cluster-storage": "-30",
+        "mlops-prod-cluster-secret-store": "-30",
+        "mlops-prod-cluster-image-verification": "-29",
+        "mlops-prod-addon-karpenter-crds": "-25",
+        "mlops-prod-addon-karpenter": "-24",
+        "mlops-prod-addon-kubeflow-training": "-24",
+        "mlops-prod-addon-node-feature-discovery": "-24",
+        "mlops-prod-cluster-karpenter-capacity": "-23",
+        "mlops-prod-addon-gpu-operator": "-23",
+    }
+    expected_waves.update(
+        {
+            name: "-40"
+            for name in (
+                "mlops-prod-addon-aws-ebs-csi",
+                "mlops-prod-addon-external-secrets",
+                "mlops-prod-addon-cloudnative-pg",
+                "mlops-prod-addon-keda",
+                "mlops-prod-addon-argo-workflows",
+                "mlops-prod-addon-argo-events",
+                "mlops-prod-addon-monitoring",
+                "mlops-prod-addon-kyverno",
+            )
+        }
+    )
+    for application in applications:
+        metadata = application.get("metadata") or {}
+        name = metadata.get("name", "")
+        expected_wave = expected_waves.get(name)
+        if expected_wave and (metadata.get("annotations") or {}).get(
+            "argocd.argoproj.io/sync-wave"
+        ) != expected_wave:
+            errors.append(f"{name} must reconcile at sync wave {expected_wave}")
+
+    return errors
+
+
+def validate_project_boundaries(root_resources: list[dict]) -> list[str]:
+    """Verify that trust boundaries match the lifecycle Application contract."""
+    errors: list[str] = []
+    projects = {
+        (resource.get("metadata") or {}).get("name"): resource
+        for resource in root_resources
+        if resource.get("kind") == "AppProject"
+    }
+    required_projects = {
+        "mlops-cluster",
+        "mlops-addons",
+        "mlops-platform",
+        "mlops-execution",
+        "mlops-workloads",
+    }
+    if set(projects) != required_projects:
+        errors.append(
+            f"GitOps must define exactly {sorted(required_projects)} AppProjects, found {sorted(projects)}"
+        )
+        return errors
+
+    repo_only = [REPOSITORY_URL]
+    for project_name in ("mlops-cluster", "mlops-platform", "mlops-execution", "mlops-workloads"):
+        if (projects[project_name].get("spec") or {}).get("sourceRepos") != repo_only:
+            errors.append(f"{project_name} must trust only the repository Git source")
+
+    platform_spec = projects["mlops-platform"].get("spec") or {}
+    if platform_spec.get("clusterResourceBlacklist") != [{"group": "*", "kind": "*"}]:
+        errors.append("mlops-platform must explicitly deny all cluster-scoped resources")
+
+    cluster_spec = projects["mlops-cluster"].get("spec") or {}
+    cluster_kinds = {
+        (entry.get("group"), entry.get("kind"))
+        for entry in cluster_spec.get("clusterResourceWhitelist") or []
+    }
+    expected_cluster_kinds = {
+        ("", "Namespace"),
+        ("storage.k8s.io", "StorageClass"),
+        ("external-secrets.io", "ClusterSecretStore"),
+        ("karpenter.k8s.aws", "EC2NodeClass"),
+        ("karpenter.sh", "NodePool"),
+        ("kyverno.io", "ClusterPolicy"),
+    }
+    if cluster_kinds != expected_cluster_kinds:
+        errors.append("mlops-cluster must allow only declared cluster-configuration resource kinds")
+
+    addons_spec = projects["mlops-addons"].get("spec") or {}
+    if addons_spec.get("clusterResourceWhitelist") != [{"group": "*", "kind": "*"}]:
+        errors.append("mlops-addons must retain the trusted add-on chart cluster-resource allowance")
+
+    return errors
+
+
 def validate_cluster_namespace_ownership(
     repo_root: Path, root_resources: list[dict], applications: list[dict]
 ) -> list[str]:
-    """Keep namespaces root-owned and storage limited to its StorageClass."""
+    """Keep namespaces and cluster configuration in their dedicated child apps."""
     errors: list[str] = []
     root_namespaces = {
         (resource.get("metadata") or {}).get("name")
         for resource in root_resources
         if resource.get("kind") == "Namespace"
     }
-    if root_namespaces != PRODUCTION_NAMESPACES:
+    if root_namespaces:
+        errors.append("root GitOps must own only control-tree resources, never Namespace resources")
+
+    namespace_resources = render(repo_root, "k8s/cluster/namespaces")
+    namespace_names = {
+        (resource.get("metadata") or {}).get("name")
+        for resource in namespace_resources
+        if resource.get("kind") == "Namespace"
+    }
+    if namespace_names != PRODUCTION_NAMESPACES:
         errors.append(
-            "root GitOps namespace set must be "
-            f"{sorted(PRODUCTION_NAMESPACES)}, found {sorted(root_namespaces)}"
+            "cluster namespace set must be "
+            f"{sorted(PRODUCTION_NAMESPACES)}, found {sorted(namespace_names)}"
         )
-    for resource in root_resources:
-        if resource.get("kind") != "Namespace":
-            continue
-        annotations = (resource.get("metadata") or {}).get("annotations") or {}
-        if annotations.get("argocd.argoproj.io/sync-wave") != "-40":
-            errors.append(
-                f"Namespace {(resource.get('metadata') or {}).get('name')} must reconcile at sync wave -40"
-            )
 
     applications_by_name = {
         (application.get("metadata") or {}).get("name", ""): application
         for application in applications
     }
-    storage_application = applications_by_name.get("mlops-prod-storage") or {}
+    namespaces_application = applications_by_name.get("mlops-prod-cluster-namespaces") or {}
+    namespaces_source = ((namespaces_application.get("spec") or {}).get("source") or {})
+    if namespaces_source.get("path") != "k8s/cluster/namespaces":
+        errors.append("mlops-prod-cluster-namespaces must source k8s/cluster/namespaces")
+    if (namespaces_application.get("metadata") or {}).get("annotations", {}).get(
+        "argocd.argoproj.io/sync-wave"
+    ) != "-50":
+        errors.append("mlops-prod-cluster-namespaces must reconcile at sync wave -50")
+
+    storage_application = applications_by_name.get("mlops-prod-cluster-storage") or {}
     storage_source = ((storage_application.get("spec") or {}).get("source") or {})
-    if storage_source.get("path") != "k8s/infra/storage":
-        errors.append("mlops-prod-storage must source k8s/infra/storage")
+    if storage_source.get("path") != "k8s/cluster/storage":
+        errors.append("mlops-prod-cluster-storage must source k8s/cluster/storage")
     if (storage_application.get("metadata") or {}).get("annotations", {}).get(
         "argocd.argoproj.io/sync-wave"
     ) != "-30":
-        errors.append("mlops-prod-storage must reconcile at sync wave -30")
+        errors.append("mlops-prod-cluster-storage must reconcile at sync wave -30")
 
-    storage_resources = render(repo_root, "k8s/infra/storage")
+    storage_resources = render(repo_root, "k8s/cluster/storage")
     if any(resource.get("kind") == "Namespace" for resource in storage_resources):
-        errors.append("mlops-prod-storage must not own Namespace resources")
+        errors.append("mlops-prod-cluster-storage must not own Namespace resources")
     storage_classes = {
         (resource.get("metadata") or {}).get("name")
         for resource in storage_resources
         if resource.get("kind") == "StorageClass"
     }
     if storage_classes != {"ebs-gp3"}:
-        errors.append("mlops-prod-storage must own exactly the ebs-gp3 StorageClass")
+        errors.append("mlops-prod-cluster-storage must own exactly the ebs-gp3 StorageClass")
 
     return errors
 
@@ -400,7 +550,7 @@ def validate_execution_security(repo_root: Path, applications: list[dict]) -> li
         (application.get("metadata") or {}).get("name", ""): application
         for application in applications
     }
-    workflows_application = applications_by_name.get("platform-argo-workflows") or {}
+    workflows_application = applications_by_name.get("mlops-prod-addon-argo-workflows") or {}
     helm_values = (
         (((workflows_application.get("spec") or {}).get("source") or {}).get("helm") or {})
         .get("values", "")
@@ -466,9 +616,9 @@ def validate_secret_ownership(repo_root: Path) -> list[str]:
         if target in rendered_text or any(target == target_name for _, target_name in targets):
             errors.append(f"legacy shared Secret target {target} must not be rendered")
 
-    secrets_resources = render(repo_root, "k8s/infra/secrets")
+    secrets_resources = render(repo_root, "k8s/cluster/secret-store")
     if any(resource.get("kind") == "ExternalSecret" for resource in secrets_resources):
-        errors.append("mlops-prod-secrets must own only ClusterSecretStore, not ExternalSecrets")
+        errors.append("mlops-prod-cluster-secret-store must own only ClusterSecretStore, not ExternalSecrets")
 
     return errors
 
@@ -481,33 +631,33 @@ def validate_image_verification(repo_root: Path, applications: list[dict]) -> li
         for application in applications
     }
 
-    kyverno_application = applications_by_name.get("platform-kyverno") or {}
+    kyverno_application = applications_by_name.get("mlops-prod-addon-kyverno") or {}
     kyverno_source = ((kyverno_application.get("spec") or {}).get("source") or {})
     kyverno_destination = ((kyverno_application.get("spec") or {}).get("destination") or {})
     if kyverno_source.get("repoURL") != "https://kyverno.github.io/kyverno":
-        errors.append("platform-kyverno must use the official Kyverno Helm repository")
+        errors.append("mlops-prod-addon-kyverno must use the official Kyverno Helm repository")
     if kyverno_source.get("chart") != "kyverno" or kyverno_source.get("targetRevision") != "3.8.2":
-        errors.append("platform-kyverno must pin the Kyverno chart to 3.8.2")
+        errors.append("mlops-prod-addon-kyverno must pin the Kyverno chart to 3.8.2")
     if kyverno_destination.get("namespace") != "kyverno":
-        errors.append("platform-kyverno must install into the kyverno namespace")
+        errors.append("mlops-prod-addon-kyverno must install into the kyverno namespace")
     if (kyverno_application.get("metadata") or {}).get("annotations", {}).get(
         "argocd.argoproj.io/sync-wave"
-    ) != "-20":
-        errors.append("platform-kyverno must reconcile at sync wave -20")
+    ) != "-40":
+        errors.append("mlops-prod-addon-kyverno must reconcile at sync wave -40")
 
-    verification_application = applications_by_name.get("platform-image-verification") or {}
+    verification_application = applications_by_name.get("mlops-prod-cluster-image-verification") or {}
     verification_source = ((verification_application.get("spec") or {}).get("source") or {})
     verification_destination = ((verification_application.get("spec") or {}).get("destination") or {})
-    if verification_source.get("path") != "k8s/operators/image-verification":
-        errors.append("platform-image-verification must use the Git-backed policy source")
+    if verification_source.get("path") != "k8s/cluster/policies/image-verification":
+        errors.append("mlops-prod-cluster-image-verification must use the Git-backed policy source")
     if verification_destination.get("namespace") != "kyverno":
-        errors.append("platform-image-verification must reconcile in the kyverno namespace")
+        errors.append("mlops-prod-cluster-image-verification must reconcile in the kyverno namespace")
     if (verification_application.get("metadata") or {}).get("annotations", {}).get(
         "argocd.argoproj.io/sync-wave"
-    ) != "-19":
-        errors.append("platform-image-verification must reconcile after platform-kyverno")
+    ) != "-29":
+        errors.append("mlops-prod-cluster-image-verification must reconcile after its dependencies")
 
-    resources = render(repo_root, "k8s/operators/image-verification")
+    resources = render(repo_root, "k8s/cluster/policies/image-verification")
 
     def find_resource(kind: str, name: str) -> dict:
         return next(
@@ -586,6 +736,8 @@ def validate(repo_root: Path, baseline: Path | None) -> int:
     layout_errors = validate_workload_layout(repo_root, applications)
     validation_errors = [
         *layout_errors,
+        *validate_lifecycle_contract(applications),
+        *validate_project_boundaries(root_resources),
         *validate_cluster_namespace_ownership(repo_root, root_resources, applications),
         *validate_execution_security(repo_root, applications),
         *validate_secret_ownership(repo_root),
