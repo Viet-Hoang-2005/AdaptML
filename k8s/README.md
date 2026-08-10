@@ -116,7 +116,7 @@ active production resources owned by `mlops-prod-execution-argo`.
 
 ```bash
 kubectl kustomize --enable-helm k8s
-python3 scripts/validate_gitops_layout.py
+python3 -m k8s.validate.run_all
 kubectl get applications -n argocd -L mlops-paas.io/plane,mlops-paas.io/component
 kubectl get application -n argocd <application> -o yaml
 ```
