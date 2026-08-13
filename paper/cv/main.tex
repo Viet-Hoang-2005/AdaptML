@@ -22,8 +22,8 @@
 \addtolength{\oddsidemargin}{-0.5in}
 \addtolength{\evensidemargin}{-0.5in}
 \addtolength{\textwidth}{1in}
-\addtolength{\topmargin}{-.55in}
-\addtolength{\textheight}{1.1in}
+\addtolength{\topmargin}{-.65in}
+\addtolength{\textheight}{1.3in}
 
 \urlstyle{same}
 \raggedbottom
@@ -74,7 +74,7 @@
 %-----------SUMMARY-----------
 \section{Summary}
 \begin{itemize}[leftmargin=0.15in, label={}]
-  \small{\item{Third-year Computer Networks and Data Communications student pursuing a \textbf{DevOps Intern} role. Interested in containerization, infrastructure, cloud-native platforms, CI/CD pipeline and MLOps. Architected scalable systems using Docker, Kubernetes, Terraform, and GitHub Actions.
+  \small{\item{Third-year Computer Networks student at UIT-VNU seeking a \textbf{DevOps Intern} role. Hands-on experience building production-grade systems with Kubernetes, Terraform, CI/CD pipelines, and MLOps at scale.
 }}
 \end{itemize}
 
@@ -89,56 +89,50 @@
   \resumeItemListEnd
 \resumeSubHeadingListEnd
 
-%-----------PROJECTS-----------
-\section{Projects}
-\resumeSubHeadingListStart
-
-\resumeProjectHeading
-{\textbf{MLOps PaaS System} $|$ \href{https://github.com/Viet-Hoang-2005/mlops-paas-system}{GitHub} $|$ \emph{Django, FastAPI, Redpanda, PostgreSQL, Docker, Kubernetes, AWS, GitHub Actions, ArgoCD, Argo Workflows, MLflow, Kubeflow, BentoML}}
-{3/2026 -- Present}
-\resumeItemListStart
-\resumeItem{Built a multi-tenant MLOps platform automating model training, dynamic deployment, version management, and data drift monitoring for diverse ML/DL models (XGBoost, Scikit-Learn, PyTorch, TensorFlow).}
-\resumeItem{Developed a Django RESTful API as the central control system for managing user resources, model state, and an immutable registry, with Argo Workflows orchestrating all Kubernetes workloads (build, deploy, train, drift).}
-\resumeItem{Packaged multi-framework models via MLflow Model Packaging, then dynamically served ML models through FastAPI + MLflow Model Loading and DL models through BentoML, each deployed as isolated per-version pods.}
-\resumeItem{Implemented data drift monitoring using Evidently AI, comparing reference datasets against live production data streamed through a Redpanda event pipeline and persisted by a KEDA-scaled consumer.}
-\resumeItem{Orchestrated distributed model training with Kubeflow Training Operator (PyTorchJob) and dynamically provisioned GPU/CPU compute nodes on-demand via Karpenter auto-scaling.}
-\resumeItem{Achieved zero-downtime model serving using rolling updates and HPA, benchmarked at \textasciitilde100 concurrent users with p95 latency $\leq$ 100\,ms and throughput of $\geq$ 50\,req/s.}
-\resumeItem{Implemented a GitOps-driven CI/CD pipeline using GitHub Actions and ArgoCD, automating code quality checks, unit testing, container image scanning, building, and declarative cluster state synchronization via Kustomize.}
-\resumeItemListEnd
-
-\resumeProjectHeading
-{\textbf{SageLMS} $|$ \href{https://github.com/daithang59/sagelms}{GitHub} $|$ \emph{Spring Boot, FastAPI, LangChain, Redis, PostgreSQL, Docker, Kubernetes, GCP, GitHub Actions, FluxCD, Kyverno, Grafana \& Prometheus}}
-{4/2026 -- 6/2026}
-\resumeItemListStart
-\resumeItem{Architected a secure-by-design microservices platform (Spring Boot gateway, auth, course, assessment, challenge, and a FastAPI + LangChain AI tutor) following DevSecOps principles across the entire software lifecycle.}
-\resumeItem{Implemented a shift-left CI gate on every PR: Conventional Commit linting, secret scanning (Gitleaks), path-filtered unit tests (JUnit/pytest/Vitest), Dockerfile linting (Hadolint), dependency vulnerability scanning (Trivy filesystem), IaC validation (OpenTofu fmt/validate + Checkov), and static code analysis with quality gate enforcement (SonarCloud).}
-\resumeItem{Built an automated CD pipeline that detects changed services, builds Docker images, Trivy scans for HIGH/CRITICAL vulnerabilities, pushes to a private Harbor registry, then cryptographically signs each image and attests its CycloneDX SBOM using Cosign, and finally opens a deploy PR that pins image digests in the Kustomization manifest for FluxCD to reconcile.}
-\resumeItem{Enforced supply-chain and runtime security in the Kubernetes cluster via Kyverno admission policies: requiring images from the trusted Harbor registry only, pinning by immutable SHA-256 digest, disallowing the mutable \texttt{:latest} tag, verifying Cosign keyless signatures against the CI workflow identity, enforcing Pod Security Baseline, requiring resource limits/health probes, and mandating non-root containers with no privilege escalation.}
-\resumeItem{Managed secrets securely through GCP Workload Identity Federation for passwordless CI/CD authentication, External Secrets Operator for runtime credential injection, and automated post-deploy verification (GKE rollout status checks and endpoint health probes).}
-\resumeItemListEnd
-
-\resumeSubHeadingListEnd
-%-----------RESEARCH-----------
-\section{Research}
-\resumeSubHeadingListStart
-  \resumeProjectHeading
-    {\parbox[t]{0.79\textwidth}{\textbf{\href{https://csonet-conf.github.io/csonet26/index.html}{CSoNet 2026: A Drift-Aware MLOps Framework for Multi-Model Serving: A Network Intrusion Detection Case Study}}}}{Preview}
-  \resumeItemListStart
-    \resumeItem{First author; proposed a cloud-native MLOps architecture for multi-model ML and DL lifecycle management, featuring a decoupled control-plane/data-plane design to separate model governance from online prediction serving.}
-    \resumeItem{Addressed the data drift problem---where changing production data distributions degrade model reliability---by designing a monitoring pipeline that asynchronously logs predictions, computes statistical drift scores over production windows, and triggers review-driven adaptation actions (e.g., alerts, retraining).}
-    \resumeItem{Validated the framework on a CIC-IDS2017 Network Intrusion Detection case study across 3 attack families $\times$ 3 severity levels; drift-triggered retraining recovered Macro-F1 from 0.13--0.46 (fixed model) to 0.98--1.00 (retrained challenger), demonstrating $\Delta$Macro-F1 gains of +0.54 to +0.87.}
-  \resumeItemListEnd
-\resumeSubHeadingListEnd
-
 %-----------AWARDS-----------
 \section{Awards}
 \resumeSubHeadingListStart
   \resumeProjectHeading
     {\parbox[t]{0.79\textwidth}{\textbf{Encouragement Scholarship for Academic Excellence}}}{}
   \resumeItemListStart
-    \resumeItem{Semester 1, 2023--2024}
-    \resumeItem{Semester 1, 2024--2025}
-    \resumeItem{Semester 2, 2024--2025}
+    \resumeItem{Semester 1, 2023 -- 2024}
+    \resumeItem{Semester 1, 2024 -- 2025}
+    \resumeItem{Semester 2, 2024 -- 2025}
+  \resumeItemListEnd
+\resumeSubHeadingListEnd
+
+%-----------PROJECTS-----------
+\section{Projects}
+\resumeSubHeadingListStart
+
+\resumeProjectHeading
+{\textbf{MLOps PaaS System} $|$ \href{https://github.com/Viet-Hoang-2005/mlops-paas-system}{GitHub} $|$ \emph{Django, FastAPI, Redpanda, PostgreSQL, Docker, Kubernetes, AWS, Argo Workflows, MLflow, Kubeflow, BentoML}}
+{3/2026 -- Present}
+\resumeItemListStart
+\resumeItem{Built a multi-tenant MLOps PaaS automating model training, versioned deployment, and drift monitoring for XGBoost, PyTorch, and TensorFlow, orchestrated by a Django REST control plane and Argo Workflows.}
+\resumeItem{Dynamically served ML/DL models as isolated per-version pods via FastAPI + MLflow (ML) and BentoML (DL); achieved \textasciitilde100 concurrent users with p95 latency $\leq$ 100\,ms and throughput $\geq$ 50\,req/s.}
+\resumeItem{Streamed live predictions through Redpanda into an Evidently AI drift monitor; scaled the consumer via KEDA and triggered automated retraining workflows on detected drift.}
+\resumeItem{Orchestrated distributed model training with Kubeflow Training Operator (PyTorchJob); provisioned GPU/CPU nodes on-demand via Karpenter auto-scaling and delivered zero-downtime updates through rolling HPA.}
+\resumeItemListEnd
+
+\resumeProjectHeading
+{\textbf{SageLMS} $|$ \href{https://github.com/daithang59/sagelms}{GitHub} $|$ \emph{Spring Boot, FastAPI, LangChain, Redis, PostgreSQL, Docker, Kubernetes, GCP, GitHub Actions, FluxCD, Kyverno, Grafana \& Prometheus}}
+{4/2026 -- 6/2026}
+\resumeItemListStart
+\resumeItem{Designed a DevSecOps microservices LMS (Spring Boot gateway/auth/course + FastAPI LangChain AI tutor) on GKE with FluxCD GitOps and Kyverno admission policies enforcing supply-chain security end-to-end.}
+\resumeItem{Automated shift-left CI on every PR: secret scanning (Gitleaks), unit tests (JUnit/pytest/Vitest), Dockerfile linting (Hadolint), Trivy vulnerability scans, IaC validation (Checkov), and SonarCloud quality gates.}
+\resumeItem{Built CD pipeline that builds, Trivy-scans, signs (Cosign), and attests CycloneDX SBOM per image; Kyverno enforces digest-pinned, Harbor-trusted, non-root pods leveraging GCP Workload Identity for passwordless authentication.}
+\resumeItemListEnd
+
+\resumeSubHeadingListEnd
+
+%-----------RESEARCH-----------
+\section{Research}
+\resumeSubHeadingListStart
+  \resumeProjectHeading
+    {\parbox[t]{0.79\textwidth}{\textbf{\href{https://csonet-conf.github.io/csonet26/index.html}{CSoNet 2026: A Drift-Aware MLOps Framework for Multi-Model Serving: A Network Intrusion Detection Case Study}}}}{Preview}
+  \resumeItemListStart
+    \resumeItem{First author; proposed a cloud-native MLOps framework with decoupled control/data planes for multi-model lifecycle management; drift-triggered retraining on CIC-IDS2017 recovered Macro-F1 from 0.13--0.46 to 0.98--1.00 ($\Delta$+0.54--+0.87).}
   \resumeItemListEnd
 \resumeSubHeadingListEnd
 
@@ -146,7 +140,8 @@
 \section{Technical Skills}
 \begin{itemize}[leftmargin=0.15in, label={}]
   \small{\item{
-    \textbf{Software:} ReactJS, Django, FastAPI, PostgreSQL, Redis, Redpanda/Kafka \\
+    \textbf{Languages:} Python, TypeScript, Bash, SQL \\
+    \textbf{Frameworks \& Databases:} ReactJS, Django, FastAPI, PostgreSQL, Redis, Redpanda/Kafka \\
     \textbf{Containers \& Orchestration:} Docker, Kubernetes, EKS, GKE, Argo Workflows \\
     \textbf{Infrastructure:} GCP, AWS, Terraform, Ansible, Helm \\
     \textbf{CI/CD \& GitOps:} Git, GitHub, GitHub Actions, Argo CD, Flux CD \\
