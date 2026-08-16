@@ -123,7 +123,9 @@ services:
 
   # 2.1 Celery Worker for Django Control Plane
   control-plane-worker:
-    image: mlops-paas-control-plane
+    build:
+      context: ./services/control-plane
+      dockerfile: Dockerfile
     container_name: mlops_paas_control_plane_worker
     restart: unless-stopped
     environment:

@@ -93,8 +93,8 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-JWT_PRIVATE_KEY = env("JWT_PRIVATE_KEY", "")
-JWT_PUBLIC_KEY = env("JWT_PUBLIC_KEY", "")
+JWT_PRIVATE_KEY = env("JWT_PRIVATE_KEY", "").replace("\\n", "\n")
+JWT_PUBLIC_KEY = env("JWT_PUBLIC_KEY", "").replace("\\n", "\n")
 JWT_ALGORITHM = "RS256" if JWT_PRIVATE_KEY and JWT_PUBLIC_KEY else "HS256"
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
