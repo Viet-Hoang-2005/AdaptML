@@ -104,9 +104,9 @@ ML Component Deployer & \statusyes & Thực thể Deployment, Endpoint, Kustomiz
 \addlinespace
 ML Model Deployer & \statusno & Chưa hỗ trợ nạp mô hình động vào một Inference Engine Pool dùng chung. & Chỉ áp dụng khi mở rộng sang biến thể V2/V4. \\
 \addlinespace
-ML Pipeline Builder & \statusno & Chưa có module đóng gói toàn bộ pipeline huấn luyện thành pipeline artifact. & Cần thiết khi chuyển dịch lên biến thể V3 (Continuous Training). \\
+ML Pipeline Builder & \statuspartial & Cấu hình Argo Workflows / Kubeflow pipeline manifests có sẵn trong hệ thống. & Đóng gói pipeline huấn luyện chuẩn hóa qua Argo templates, không tự xây dựng orchestrator mới. \\
 \addlinespace
-ML Pipeline Deployer & \statusno & Chưa có module triển khai và kích hoạt pipeline huấn luyện tự động định kỳ. & Cần thiết khi chuyển dịch lên biến thể V3 (Continuous Training). \\
+ML Pipeline Deployer & \statuspartial & Kích hoạt qua Celery tasks và Kubernetes CRDs. & Kết nối \codepath{RetrainingRequest} với Argo Events để kích hoạt pipeline tự động có điều kiện. \\
 \bottomrule
 \end{xltabular}
 

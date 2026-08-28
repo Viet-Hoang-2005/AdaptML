@@ -2,11 +2,11 @@
 \section{Kết luận và Đóng góp khoa học}
 %===============================================================================
 
-Quá trình đối chiếu 39 thành phần kiến trúc và 56 bước quy trình khẳng định repository MLOps PaaS đã sở hữu nền tảng vững chắc về quản trị vòng đời mô hình bất biến, hạ tầng huấn luyện đa dạng và kênh thu thập sự kiện suy luận. Đóng góp cốt lõi tiếp theo của đề tài không phải là việc gắn thêm một trigger tái huấn luyện cơ học, mà là xây dựng khối \textbf{trí tuệ ra quyết định thích ứng (Adaptive Decision Intelligence)} giúp hệ thống nhận thức sâu sắc nguyên nhân suy giảm trước khi hành động.
+Quá trình đối chiếu 39 thành phần kiến trúc và 56 bước quy trình khẳng định repository MLOps PaaS đã sở hữu nền tảng vững chắc về quản trị vòng đời mô hình bất biến, hạ tầng huấn luyện đa dạng và kênh thu thập sự kiện suy luận. Đóng góp khoa học cốt lõi của đề tài không phải là việc xây dựng thêm một nền tảng MLOps platform hay gắn thêm trigger tái huấn luyện cơ học, mà là đề xuất và kiểm chứng \textbf{Khung ra quyết định nhận thức suy giảm (Degradation-Aware Decision Framework)} giúp hệ thống tự thích ứng an toàn và tối ưu chi phí. Trong cấu trúc này, repository MLOps PaaS đóng vai trò là \textbf{nền tảng thực nghiệm nguồn mở (Experimental Platform)} phục vụ đánh giá và tái lập kết quả.
 
-Ba sản phẩm khoa học chính (Deliverables) được đóng gói bao gồm:
+Ba đóng góp khoa học chính (Scientific Contributions) bao gồm:
 \begin{enumerate}
-  \item \textbf{Khung phân loại \& Thuật toán chẩn đoán (Taxonomy \& Algorithm):} Hệ thống phân loại Evidence-to-Action và thuật toán chẩn đoán nguyên nhân suy giảm có thể giải thích được, tích hợp cơ chế xử lý nhãn trễ.
-  \item \textbf{Nền tảng thực nghiệm nguồn mở (Open Platform):} Bản hiện thực hoàn chỉnh trên nền tảng MLOps PaaS, chứng minh tính khả thi của chu trình khép kín từ Detection $\rightarrow$ Diagnosis $\rightarrow$ Conditional CT $\rightarrow$ Progressive Promotion.
-  \item \textbf{Bộ Benchmark \& Đánh giá thực nghiệm (Benchmark Protocol):} Bộ dữ liệu thực nghiệm chuẩn hóa với nguyên nhân suy giảm đã biết trước, kiểm chứng định lượng vượt trội của phương pháp đề xuất về hiệu quả chi phí, độ chính xác phục hồi và tính an toàn vận hành.
+  \item \textbf{Khung phân loại nguyên nhân và mức độ suy giảm (Degradation Taxonomy \& Severity Model):} Hệ thống hóa 7 nhóm nguyên nhân suy giảm và 5 cấp độ nghiêm trọng ($S_0$--$S_4$), phân tách rành mạch hiện tượng trôi dạt dữ liệu ($P(X)$) khỏi suy giảm hiệu năng thực tế ($P(Y|X)$) và sự cố chất lượng dữ liệu.
+  \item \textbf{Chính sách can thiệp thích ứng nhận thức rủi ro (Risk-Aware Adaptive Intervention Policy):} Thuật toán chẩn đoán có thể giải thích được và chính sách điều phối hành động đa nhánh (No-op, Data Engineering, Incremental CT, Full CT, HITL), tích hợp cơ chế watermark xử lý nhãn trễ và quản trị ngân sách tính toán.
+  \item \textbf{Giao thức Đánh giá Thực nghiệm Chuẩn hóa (Standardized Benchmark Protocol):} Bộ benchmark toàn diện gồm 12 kịch bản ($S_0$--$S_{11}$) có gắn sẵn nguyên nhân suy giảm thực tế (\codepath{ground\_truth\_cause}), 6 baseline đối chứng ($B_0$--$B_5$) và hệ thống chỉ số đo lường hiệu quả cắt giảm CT thừa ($\text{URR}$), ngăn ngừa bỏ sót suy giảm ($\text{MDR}$) và bảo đảm an toàn tự động hóa.
 \end{enumerate}

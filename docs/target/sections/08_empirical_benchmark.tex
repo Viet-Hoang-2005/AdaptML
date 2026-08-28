@@ -2,26 +2,28 @@
 \section{Thiết kế thực nghiệm và Đánh giá Benchmark}
 %===============================================================================
 
-Để khẳng định tính đóng góp khoa học, bộ benchmark thực nghiệm phải được thiết kế với \textbf{nguyên nhân suy giảm đã biết trước (Ground-truth Cause)}, vượt ra ngoài việc chỉ quan sát nhãn bài toán máy học.
+Để khẳng định tính đóng góp khoa học, bộ benchmark thực nghiệm được thiết kế theo nguyên tắc \textbf{nguyên nhân suy giảm đã biết trước (Ground-truth Cause)}, vượt ra ngoài việc chỉ quan sát nhãn bài toán máy học đơn thuần.
 
 \subsection{Không gian kịch bản thực nghiệm (Benchmark Scenarios)}
 
 \begin{table}[ht]
 \centering
-\caption{Danh mục các kịch bản thực nghiệm phân theo mức độ ưu tiên.}\label{tab:scenarios}
-\begin{tabularx}{\linewidth}{@{}C{0.9cm} L{2.2cm} L{5.2cm} Y@{}}
+\caption{Danh mục các kịch bản thực nghiệm chuẩn hóa.}\label{tab:scenarios}
+\begin{tabularx}{\linewidth}{@{}C{0.9cm} L{2.0cm} L{5.4cm} Y@{}}
 \toprule
 \textbf{Mã} & \textbf{Phân tầng} & \textbf{Bản chất kịch bản (Scenario Injection)} & \textbf{Hành động kỳ vọng chuẩn xác} \\
 \midrule
-S0 & Cốt lõi & Môi trường ổn định, không có suy giảm (\texttt{Stable}) & Không can thiệp (\texttt{NO\_ACTION}) \\
-S1 & Cốt lõi & Trôi dạt lành tính: $P(X)$ đổi nhưng $P(Y|X)$ ổn định & Cảnh báo, theo dõi (\texttt{OBSERVE}) \\
-S2 & Cốt lõi & Trôi dạt có hại: $P(X)$ đổi kéo theo F1 giảm, đủ nhãn & Tái huấn luyện tự động (\texttt{AUTO\_CT}) \\
-S3 & Cốt lõi & Sự cố chất lượng dữ liệu: lỗi schema, range, freshness & Đình chỉ CT, mở \texttt{ENGINEERING\_INCIDENT} \\
+S0 & Cốt lõi & Môi trường ổn định, không có suy giảm (\texttt{Stable}) & Không can thiệp (\texttt{NO\_OP}) \\
+S1 & Cốt lõi & Trôi dạt lành tính: $P(X)$ đổi nhưng $P(Y|X)$ ổn định & Cảnh báo, theo dõi (\texttt{NO\_OP / OBSERVE}) \\
+S2 & Cốt lõi & Trôi dạt có hại: $P(X)$ đổi kéo theo F1 giảm, đủ nhãn & Tái huấn luyện gia tăng (\texttt{INCREMENTAL\_RETRAIN}) \\
+S3 & Cốt lõi & Sự cố chất lượng dữ liệu: lỗi schema, range, missing & Đình chỉ CT, mở \texttt{DATA\_ENGINEERING} \\
 \midrule
-S4 & Quan trọng & Dịch chuyển khái niệm/nhãn: $P(Y|X)$ đổi đột ngột & Phê duyệt chuyên gia (\texttt{HUMAN\_APPROVED\_CT}) \\
-S9 & Quan trọng & Tín hiệu hỗn hợp: vừa trôi dạt dữ liệu vừa trễ nhãn & Phân tích chuyên sâu (\texttt{HUMAN\_REVIEW}) \\
+S4 & Quan trọng & Dịch chuyển khái niệm/nhãn: $P(Y|X)$ đổi đột ngột & Phê duyệt chuyên gia (\texttt{HITL}) \\
+S9 & Quan trọng & Tín hiệu hỗn hợp: vừa trôi dạt dữ liệu vừa trễ nhãn & Phân tích chuyên sâu (\texttt{HITL}) \\
+S10 & Quan trọng & Cảnh báo trôi dạt giả (False Drift Signal) & Nhận diện lành tính, \textbf{không CT thừa} \\
+S11 & Quan trọng & Nhãn trễ / Chưa đủ độ phủ ($r_\text{labels} < r_\text{min}$) & Tạm giữ (\texttt{PROXY\_HOLD}), \textbf{cấm Auto CT} \\
 \midrule
-S5 & Mở rộng & Dữ liệu huấn luyện bị lão hóa dần theo thời gian & Tái huấn luyện định kỳ hoặc có điều kiện \\
+S5 & Mở rộng & Dữ liệu huấn luyện bị lão hóa dần theo thời gian & Tái huấn luyện toàn phần (\texttt{FULL\_RETRAIN}) \\
 S6 & Mở rộng & Suy giảm cấu hình siêu tham số (HPO degradation) & Cập nhật không gian tìm kiếm HPO \\
 S7 & Mở rộng & Lỗi mã nguồn xử lý đặc trưng (Feature code bug) & Sửa đổi qua luồng CI/CD kỹ thuật \\
 S8 & Mở rộng & Sự cố hạ tầng phục vụ (OOM, nghẽn mạng) & Thu hồi tự động hoặc mở rộng tài nguyên \\
@@ -29,15 +31,17 @@ S8 & Mở rộng & Sự cố hạ tầng phục vụ (OOM, nghẽn mạng) & Thu
 \end{tabularx}
 \end{table}
 
+Mỗi kịch bản được tạo thông qua bộ sinh dữ liệu (Scenario Injector) với nhãn nguyên nhân suy giảm thực tế (\codepath{ground\_truth\_cause}), cho phép đánh giá định lượng ma trận nhầm lẫn (Confusion Matrix) của thuật toán chẩn đoán.
+
 \subsection{Các phương pháp đối chứng (Baselines)}
-Quá trình thực nghiệm so sánh phương pháp đề xuất với 5 đường cơ sở chuẩn mực:
+Quá trình thực nghiệm so sánh phương pháp đề xuất với 6 đường cơ sở chuẩn mực:
 \begin{itemize}
-  \item \textbf{B0 -- Observe-only:} Không thực hiện tái huấn luyện trong suốt chu kỳ; đo lường mức độ suy giảm tự nhiên.
-  \item \textbf{B1 -- Manual Retraining:} Tái huấn luyện theo thao tác thủ công định kỳ của chuyên gia.
-  \item \textbf{B2 -- Periodic CT:} Tái huấn luyện cố định theo lịch trình (ví dụ: hàng tuần hoặc hàng tháng).
-  \item \textbf{B3 -- Alert-driven CT:} Tự động kích hoạt tái huấn luyện ngay khi có bất kỳ cảnh báo data drift nào (baseline đại diện cho cách tiếp cận truyền thống).
+  \item \textbf{B0 -- Static / No Retraining:} Mô hình giữ nguyên không tái huấn luyện trong suốt vòng đời; đo lường mức độ suy thoái tự nhiên.
+  \item \textbf{B1 -- Periodic Retraining:} Tái huấn luyện cố định theo lịch trình định kỳ (ví dụ: hàng tuần hoặc hàng tháng) bất kể có trôi dạt hay không.
+  \item \textbf{B2 -- Single-Signal Drift-Triggered CT:} Tự động tái huấn luyện ngay khi có bất kỳ cảnh báo data drift đơn lẻ nào vượt ngưỡng (đại diện cho cách tiếp cận phổ biến trong công nghiệp).
+  \item \textbf{B3 -- Performance-Triggered CT:} Chỉ kích hoạt tái huấn luyện khi hiệu năng kiểm chứng thực tế bị suy giảm.
   \item \textbf{B4 -- Always Retrain:} Huấn luyện lại liên tục sau mỗi lô dữ liệu mới (đóng vai trò đường cơ sở trần về chi phí tài nguyên).
-  \item \textbf{B5 -- Degradation-Aware Adaptive CT (Đề xuất):} Chuỗi xử lý Detection $\rightarrow$ Diagnosis $\rightarrow$ Policy $\rightarrow$ Conditional CT $\rightarrow$ Evaluation Gate.
+  \item \textbf{B5 -- Proposed Degradation-Aware Adaptive CT:} Chuỗi xử lý hoàn chỉnh Detection $\rightarrow$ Diagnosis $\rightarrow$ Severity $\rightarrow$ Risk Policy $\rightarrow$ Conditional CT / HITL $\rightarrow$ Evaluation Gate.
 \end{itemize}
 
 \subsection{Hệ thống chỉ số đánh giá đa chiều (Evaluation Metrics)}
@@ -49,26 +53,61 @@ Quá trình thực nghiệm so sánh phương pháp đề xuất với 5 đườ
 \toprule
 \textbf{Chiều cạnh đánh giá} & \textbf{Tập chỉ số đo lường chi tiết} \\
 \midrule
-Chất lượng phát hiện & Precision, Recall, F1 của cảnh báo; độ trễ phát hiện (thời gian từ lúc inject tới cảnh báo đầu tiên). \\
+Chất lượng phát hiện & Precision, Recall, F1 của cảnh báo; False Positive Rate; độ trễ phát hiện (Detection Delay). \\
 \addlinespace
-Chất lượng chẩn đoán & Độ chính xác Top-k và Multi-label của nguyên nhân suy giảm; sai số hiệu chuẩn độ tin cậy (ECE, Brier Score). \\
+Chất lượng chẩn đoán & Độ chính xác chẩn đoán nguyên nhân (Diagnosis Accuracy); Macro-F1; Confusion Matrix giữa 7 loại nguyên nhân; sai số hiệu chuẩn độ tin cậy (ECE, Brier Score). \\
 \addlinespace
-Chất lượng quyết định & Tỷ lệ ra quyết định chính xác (Strategy Accuracy); tỷ lệ tự động hóa mất an toàn (Unsafe Automation Rate). \\
+Chất lượng quyết định & Tỷ lệ ra quyết định chính xác (Strategy Accuracy); Tỷ lệ tự động hóa mất an toàn (Unsafe Automation Rate); Tỷ lệ tái huấn luyện không cần thiết (Unnecessary Retraining Rate); Tỷ lệ bỏ sót suy giảm (Missed Degradation Rate). \\
 \addlinespace
-Năng lực phục hồi & Thời gian phục hồi (Time-to-Recovery); đường cong phục hồi hiệu năng (F1 recovery curve). \\
+Năng lực phục hồi & Thời gian phục hồi (Time-to-Recovery); Đường cong phục hồi hiệu năng (F1 recovery curve); Mức cải thiện hiệu năng sau CT ($\Delta_\text{recovery}$). \\
 \addlinespace
-Hiệu quả chi phí & Số lần CT không cần thiết bị triệt tiêu; tổng số giờ tính toán (GPU/CPU-hours); chi phí serving shadow/canary. \\
+Hiệu quả chi phí & Tổng số giờ tính toán (GPU/CPU-hours); Tỷ lệ cắt giảm tái huấn luyện thừa ($\text{URR}$); Chi phí phục vụ shadow mode. \\
 \addlinespace
-Gánh nặng con người & Số lượng yêu cầu cần duyệt; thời gian phản hồi trung bình của chuyên gia; tỷ lệ phủ quyết (Override rate). \\
+Gánh nặng chuyên gia & Số lượng yêu cầu duyệt thủ công (Manual Approval Count); Tỷ lệ can thiệp của con người (Human Intervention Rate); Thời gian phản hồi trung bình. \\
 \addlinespace
-An toàn triển khai & Tỷ lệ vi phạm guardrails; tỷ lệ thu hồi tự động thành công (Rollback success); độ tin cậy kiểm thử candidate. \\
+An toàn triển khai & Tỷ lệ vi phạm guardrails; Tỷ lệ thu hồi tự động thành công (Rollback success); Tỷ lệ candidate bị từ chối tại Evaluation Gate. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\subsection{Mô hình chi phí và Hiệu quả đầu tư (Cost-Benefit Model)}
-Tổng chi phí của một chu kỳ bảo trì được mô hình hóa theo công thức:
-$$C_\text{Cycle} = C_\text{data\_prep} + C_\text{train} + C_\text{evaluate} + C_\text{shadow/canary} + C_\text{human\_effort}$$
-Hiệu quả của chính sách thích ứng được định lượng thông qua chỉ số tỷ suất lợi ích trên chi phí tính toán (Efficiency Ratio):
-$$\text{ROI}_\text{CT} = \frac{\Delta \text{Performance Gained} \times \text{Business Value}}{C_\text{Cycle} + C_\text{Risk}}$$
-Một chu kỳ CT chỉ được coi là hợp lý khi $\text{ROI}_\text{CT} > 1$, khẳng định tính kinh tế của việc chắt lọc điều kiện tái huấn luyện.
+Ba chỉ số cốt lõi trực tiếp chứng minh đóng góp khoa học của đề tài:
+\begin{align}
+  \text{Unnecessary Retraining Rate (URR)} &= \frac{\text{Số lần CT khi không có suy giảm có hại}}{\text{Tổng số lần kích hoạt CT}} \\[0.3em]
+  \text{Missed Degradation Rate (MDR)} &= \frac{\text{Số ca suy giảm có hại bị bỏ qua không xử lý}}{\text{Tổng số ca suy giảm có hại thực tế}} \\[0.3em]
+  \text{Unnecessary Retraining Reduction} &= 1 - \frac{\text{URR}_\text{Proposed}}{\text{URR}_\text{Baseline}}
+\end{align}
+
+\subsection{Mô hình Phân tích Hiệu quả Đa mục tiêu (Cost-Effectiveness Model)}
+Để loại bỏ sự thiếu nhất quán về mặt thứ nguyên, hiệu quả của chính sách bảo trì mô hình được lượng hóa qua hàm thỏa dụng tổng hợp (Composite Utility Function):
+$$\text{Utility} = \Delta \text{Performance Gained} - \lambda_1 \cdot C_\text{compute} - \lambda_2 \cdot C_\text{human} - \lambda_3 \cdot \text{Risk}_\text{unsafe}$$
+trong đó:
+\begin{itemize}
+  \item $\Delta \text{Performance Gained}$ là mức độ phục hồi hiệu năng F1 tích lũy theo thời gian.
+  \item $C_\text{compute}$ là tổng chi phí tài nguyên tính toán (chuẩn hóa theo GPU/CPU-hours).
+  \item $C_\text{human}$ là chi phí nỗ lực chuyên gia (số lượt can thiệp thủ công $\times$ thời gian xử lý).
+  \item $\text{Risk}_\text{unsafe}$ là tổn thất do các quyết định tự động hóa sai lầm gây ra (phạt nặng các trường hợp thăng cấp candidate lỗi).
+  \item $\lambda_1, \lambda_2, \lambda_3 \ge 0$ là các hệ số chuẩn hóa và trọng số đánh đổi theo yêu cầu nghiệp vụ.
+\end{itemize}
+
+\subsection{Thiết kế Thử nghiệm Bóc tách và Độ nhạy (Ablation \& Sensitivity)}
+
+\subsubsection{Ablation Study (Đánh giá đóng góp từng thành phần)}
+Nghiên cứu tiến hành bóc tách 6 cấu hình luỹ tiến để chứng minh giá trị của từng khối chức năng:
+\begin{itemize}
+  \item $A_0$: Kích hoạt CT thuần túy dựa trên Data Drift đơn lẻ.
+  \item $A_1$: Bổ sung phát hiện đa tín hiệu (Multi-Signal Detection: Data drift + Quality + Confidence).
+  \item $A_2$: Bổ sung Khối chẩn đoán phân loại nguyên nhân ($A_1 + \text{Diagnosis}$).
+  \item $A_3$: Bổ sung Thang đo mức độ nghiêm trọng ($A_2 + \text{Severity } S_0\text{--}S_4$).
+  \item $A_4$: Bổ sung Chính sách can thiệp thích ứng ($A_3 + \text{Adaptive Policy}$).
+  \item $A_5$: Bổ sung Vòng lặp chuyên gia ($A_4 + \text{HITL}$).
+  \item $A_6$: Toàn bộ hệ thống hoàn chỉnh ($A_5 + \text{EvaluationGate} + \text{Shadow Mode}$).
+\end{itemize}
+
+\subsubsection{Sensitivity Analysis (Phân tích độ nhạy tham số)}
+Kiểm chứng tính bền vững của chính sách khi thay đổi các ngưỡng quyết định:
+\begin{itemize}
+  \item Ngưỡng phủ nhãn: $r_\text{min} \in \{0.3, 0.5, 0.7, 0.9\}$.
+  \item Ngưỡng suy giảm hiệu năng: $\theta_\text{perf} \in \{0.03, 0.05, 0.08, 0.10\}$.
+  \item Ngưỡng trôi dạt: $\theta_\text{drift} \in \{0.1, 0.2, 0.3\}$ (khoảng cách Wasserstein/PSI).
+  \item Thời gian giãn cách: $\text{Cooldown} \in \{12\text{h}, 24\text{h}, 72\text{h}, 168\text{h}\}$.
+\end{itemize}
