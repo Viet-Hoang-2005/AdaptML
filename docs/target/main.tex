@@ -1,0 +1,1097 @@
+% !TEX program = xelatex
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,margin=2.0cm,top=2.2cm,bottom=2.2cm]{geometry}
+\usepackage{fontspec}
+\setmainfont{Times New Roman}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{xltabular}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{tcolorbox}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!45!black,
+  urlcolor=blue!55!black,
+  citecolor=blue!45!black,
+  pdftitle={Đề cương Khoá luận tốt nghiệp - Đánh giá kiến trúc MLOps và Lộ trình Degradation-Aware CT},
+  pdfauthor={Trần Nguyễn Việt Hoàng, Bùi Ngọc Thái}
+}
+
+% --- Typography & Spacing Optimization ---
+\setlength{\parskip}{0.35em plus 0.1em minus 0.05em}
+\setlength{\parindent}{0pt}
+
+\captionsetup{font=small,labelfont=bf,skip=4pt}
+\setlength{\textfloatsep}{9pt plus 2pt minus 2pt}
+\setlength{\floatsep}{7pt plus 2pt minus 2pt}
+\setlength{\intextsep}{7pt plus 2pt minus 2pt}
+\setlength{\abovecaptionskip}{3pt}
+\setlength{\belowcaptionskip}{2pt}
+
+% Section Titles Spacing
+\titleformat{\section}{\large\bfseries}{\thesection}{0.7em}{}
+\titlespacing*{\section}{0pt}{1.2ex plus .3ex minus .2ex}{0.4ex plus .1ex}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.7em}{}
+\titlespacing*{\subsection}{0pt}{0.9ex plus .2ex minus .1ex}{0.3ex plus .1ex}
+\titleformat{\subsubsection}{\small\bfseries}{\thesubsubsection}{0.7em}{}
+\titlespacing*{\subsubsection}{0pt}{0.7ex plus .2ex minus .1ex}{0.2ex plus .1ex}
+
+% List Spacing
+\setlist[itemize]{leftmargin=1.4em,itemsep=0.12em,topsep=0.18em,partopsep=0pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=1.5em,itemsep=0.15em,topsep=0.18em,partopsep=0pt,parsep=0pt}
+
+% Full-width Abstract with matching large title
+\renewenvironment{abstract}{%
+  \par\vspace{0.2em}
+  {\centering\textbf{\large Abstract}\par\vspace{0.4em}}
+  \normalsize
+  \noindent\ignorespaces
+}{%
+  \par\vspace{0.8em}
+}
+
+% Centered References with matching large title and identical spacing
+\makeatletter
+\renewenvironment{thebibliography}[1]{%
+  \clearpage
+  \par\vspace{0.2em}
+  {\centering\textbf{\large\refname}\par\vspace{0.4em}}
+  \list{\@biblabel{\@arabic\c@enumiv}}%
+       {\settowidth\labelwidth{\@biblabel{#1}}%
+        \leftmargin\labelwidth
+        \advance\leftmargin\labelsep
+        \setlength{\itemsep}{0.35em}%
+        \setlength{\parskip}{0pt}%
+        \usecounter{enumiv}%
+        \let\p@enumiv\@empty
+        \renewcommand\theenumiv{\@arabic\c@enumiv}}%
+  \normalsize
+  \sloppy
+  \clubpenalty4000
+  \@clubpenalty \clubpenalty
+  \widowpenalty4000%
+  \sfcode`\.\@m
+}{%
+  \def\@noitemerr
+    {\@latex@warning{Empty `thebibliography' environment}}%
+  \endlist
+}
+\makeatother
+
+% Table Column Types
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% TikZ Styles
+\tikzset{
+  component/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
+    text width=4.3cm, minimum height=2.25cm, inner sep=4pt, line width=0.6pt},
+  flowbox/.style={draw, rounded corners=2pt, align=center, font=\footnotesize,
+    text width=2.7cm, minimum height=0.72cm, inner sep=3pt},
+  flowdecision/.style={draw, diamond, aspect=2.1, align=center, font=\footnotesize,
+    text width=2.35cm, inner sep=2pt},
+  flowarrow/.style={-{Latex[length=2.2mm]}, thick},
+  legendbox/.style={draw, rounded corners=2pt, font=\footnotesize, inner sep=2pt}
+}
+
+% Status indicators
+\newcommand{\statusyes}{\textcolor{green!45!black}{\textbf{Có}}}
+\newcommand{\statuspartial}{\textcolor{orange!75!black}{\textbf{Một phần}}}
+\newcommand{\statusno}{\textcolor{red!60!black}{\textbf{Thiếu}}}
+\newcommand{\codepath}[1]{\texttt{\small #1}}
+
+\title{\vspace{-1.2cm}\textbf{\Large Đánh giá kiến trúc MLOps ở giai đoạn hiện tại}\\[0.3em]
+\large Hiện trạng, khoảng trống và lộ trình Degradation-Aware Continuous Training\\[0.35em]
+\normalsize\textit{\today}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-2.2em}
+
+\begin{abstract}
+\noindent Báo cáo đánh giá repository MLOps theo kiến trúc tham chiếu của Amou Najafabadi \textit{et al.}~\cite{najafabadi2026}, một systematic mapping study tổng hợp 93 nghiên cứu, 39 thành phần kiến trúc, 56 bước quy trình và các vai trò MLOps. Kết quả cho thấy repository đã có nền tảng tốt cho một MLOps PaaS: control plane đa tenant, registry version bất biến, training/execution backend, đóng gói image, serving gateway, thu thập production event và data-drift workflow. Tuy nhiên, hệ thống hiện gần với biến thể V1 (inference service) có retraining thủ công hơn là V3 (continuous training) khép kín: thiếu ground-truth feedback, data-quality/performance monitoring, diagnosis đa tín hiệu, policy quyết định action, evaluation gate và traffic splitting có đo lường. Báo cáo đề xuất một lộ trình nghiên cứu và hiện thực hoá ``Degradation-Aware Adaptive Model Maintenance'', trong đó detection, diagnosis và action selection là ba lớp tách biệt; retraining chỉ là một action có điều kiện, không phải phản ứng mặc định.
+\end{abstract}
+
+%===============================================================================
+\section{Phạm vi và phương pháp đánh giá}
+%===============================================================================
+
+\subsection{Nguồn tham chiếu}
+Paper tham chiếu~\cite{najafabadi2026} mô tả MLOps bằng hai góc nhìn: \emph{structure} (39 thành phần trong sáu nhóm: Data Curation, Storage \& Versioning, ML Training, CI/CD, Inference, Infrastructure \& Supporting Services) và \emph{process} (56 bước quy trình tạo, triển khai, vận hành và bảo trì model). Công trình mô tả tám biến thể V1--V8: V1--V4 dùng model được huấn luyện từ đầu, còn V5--V8 tương ứng với V1--V4 nhưng dùng pretrained model. Bốn biến thể chính V1--V4 được phân biệt bởi cách serve model (Inference Service hoặc Inference Engine Pool) và cách retrain (manual hoặc continuous). Về stakeholder, paper không chỉ có sáu vai trò: framework nêu chín vai trò người dùng chính, năm chuyên biệt hoá vai trò và một automated stakeholder là System.
+
+Paper được dùng như \emph{khung tham chiếu}, không phải một checklist bắt buộc hay một chỉ dẫn thực thi. Một thành phần không xuất hiện trong repo không tự động là lỗi; nó là khoảng trống cần được cân nhắc theo mục tiêu sản phẩm và hướng nghiên cứu.
+
+\subsection{Bằng chứng repo và giới hạn}
+Đánh giá ưu tiên source code, database models, manifests và tests hơn README. Các luồng được kiểm tra gồm upload/build, training, inference, registry/deployment và drift. Các kết luận ``thiếu'' nghĩa là chưa thấy một contract hay implementation nền tảng trong source được kiểm tra, không có nghĩa là người dùng không thể tự đưa logic đó vào code training của mình.
+
+%===============================================================================
+\section{Kết luận điều hành}
+%===============================================================================
+
+Repository là một \textbf{nền tảng MLOps PaaS mạnh ở vận hành model}, nhưng chưa là một hệ thống \textbf{continuous training thích ứng đầu-cuối}. Điểm mạnh nằm ở control plane, versioned artifacts, execution backends, đóng gói/deployment và inference event ingestion. Điểm yếu chính nằm ở vòng phản hồi có nhãn, quality/performance monitoring và decision intelligence giữa alert với retraining.
+
+\begin{table}[ht]
+\centering
+\caption{Đánh giá định hướng theo khung kiến trúc tham chiếu (heuristic).}
+\begin{tabularx}{\linewidth}{@{}L{4.4cm} C{1.6cm} Y@{}}
+\toprule
+\textbf{Chiều cạnh} & \textbf{Mức} & \textbf{Nhận định} \\
+\midrule
+Nền tảng kiến trúc & 7/10 & Plane separation, state ownership và workflow nền tảng đã rõ. \\
+Storage, registry, lineage model & 7/10 & Model version, image digest, artifact và training snapshot khá tốt; data/feature lineage còn thiếu. \\
+Training và CI/CD & 7/10 & Có training runner, Docker/Argo/Kubeflow, packager và registry; chưa có CT policy/evaluation gate. \\
+Inference và observability & 6/10 & Có gateway, worker version-specific, event stream, Prometheus và data drift; performance feedback chưa hoàn chỉnh. \\
+Closed-loop lifecycle & 4/10 & Automatic drift tạo drift run, chưa tạo diagnosis hay retraining request. \\
+Stakeholder/governance process & 4/10 & Có auth/tenant/audit nền tảng; chưa có approval workflow và role mapping cho maintenance. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Về biến thể kiến trúc (theo Fig.~6 của paper tham chiếu), implementation hiện gần nhất với \textbf{V1 -- Inference Service + Manual Retraining}: ML Component Builder (model-packager) đóng gói model thành container image, ML Component Deployer (deployment task) đưa lên production, Inference Service (model-server + ml/dl-serving workers) phục vụ prediction. Retraining do người dùng submit training job thủ công qua control plane. Đây chưa phải V2 (Inference Engine Pool với dynamic model loading), và cũng chưa phải V3/V4 (Continuous Training pipeline tự động). Các biến thể V5--V8 dùng pretrained model, hiện nằm ngoài scope.
+
+%===============================================================================
+\section{Đối chiếu cấu trúc kiến trúc --- Mapping 39 thành phần}
+%===============================================================================
+
+Phần này ánh xạ chi tiết từng thành phần trong 39 component của kiến trúc tham chiếu~\cite{najafabadi2026} sang implementation thực tế trong repository, phân theo sáu nhóm.
+Hình~\ref{fig:component-map} tóm tắt quan hệ giữa sáu nhóm component và làm nổi bật decision loop chưa có trong implementation hiện tại.
+
+\subsection{Data Curation}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm Data Curation.}\\
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endhead
+Data Collector & \statuspartial & Workspace assets cho code/data upload; training job nhận \codepath{data\_snapshot\_uri}. & Không có data ingestion pipeline hay automated collection từ external sources. \\
+\addlinespace
+Data Source & \statuspartial & User upload data qua workspace; reference asset cho drift. & Platform không quản lý kết nối tới external data sources (APIs, IoT, databases). \\
+\addlinespace
+Data Preprocessor & \statusno & Preprocessing do user code trong training entry point. & Không có platform-managed preprocessing/validation pipeline. \\
+\addlinespace
+Data Quality Checker & \statusno & Chưa có implementation. & Thiếu hoàn toàn -- cần cho CT pipeline để tránh retrain trên dữ liệu lỗi. \\
+\addlinespace
+Data Labeler & \statusno & Chưa có labeling workflow hay ground-truth annotation. & Thiếu -- cần cho delayed-label feedback loop. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Storage \& Versioning}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm Storage \& Versioning.}\\
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endhead
+Data Catalog & \statusno & Chưa có dataset catalog/metadata inventory. & Cần cho traceability data $\rightarrow$ model. \\
+\addlinespace
+Dataset Repository & \statuspartial & S3 chứa training data snapshots (\codepath{data\_snapshot\_uri}); workspace assets. & Dataset không có entity/version riêng; latest-only, không versioned. \\
+\addlinespace
+Raw Data Store & \statuspartial & S3 chứa raw/reference assets; production logs nằm trong PostgreSQL. & Chưa tách rõ raw, processed và curated data store. \\
+\addlinespace
+Feature Store & \statusno & Chưa có implementation. & Thiếu -- features tính trực tiếp trong user code. \\
+\addlinespace
+Code Repository & \statusyes & \codepath{code\_snapshot\_uri} trong TrainingJob; Git repo cho platform code. & Đã đủ cho MVP. \\
+\addlinespace
+Model Repository & \statusyes & ModelVersion + ModelArtifact + ModelMetric trong registry app; immutable versions, metrics\_summary, params\_summary, artifacts (source, training\_output, package, mlflow, metrics, params, model\_insights, feature\_importance, input\_schema). & Rất tốt -- đây là điểm mạnh của hệ thống. \\
+\addlinespace
+Artifact Repository & \statusyes & S3 + ModelArtifact entity lưu trữ packaged/container artifacts theo version; immutable URI/checksum. & Đã đủ cho V1; cần liên kết chặt hơn với candidate evaluation. \\
+\addlinespace
+ML Metadata Repository & \statusyes & TrainingJob tracking (JSON), TrainingOutput, TrainingJobEvent, RegistryEvent; MLflow integration. & Đã tốt; thiếu environment lineage và config lineage đầy đủ. \\
+\addlinespace
+Feedback Database & \statusno & PostgreSQL schema có \codepath{confidence}, \codepath{latency\_ms}, \codepath{status\_code}, \codepath{request\_id}; chưa có feedback API/store cho ground truth. & \textbf{Thiếu nghiêm trọng} -- event ID tồn tại nhưng chưa được client dùng để nối feedback; các trường runtime cũng chưa đi vào event. \\
+\addlinespace
+Predictions Storage & \statusyes & \codepath{paas\_production\_logs} table có event \codepath{id} và tenant/project/version scoping. & Có storage, nhưng event hiện thiếu confidence/latency/status/request correlation và ID chưa trả cho client. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{ML Training}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm ML Training.}\\
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endhead
+Feature Engineering Pipeline & \statuspartial & Feature transformation hiện nằm trong user training/serving code; chưa có pipeline được platform quản lý. & Cần chuẩn hoá transform, version và lineage nếu feature logic ảnh hưởng CT. \\
+\addlinespace
+ML Experiment Pipeline & \statusyes & TrainingJob với entry point, code/data snapshot, MLflow integration; Docker local hoặc Argo/Kubeflow production; training-runner thực thi. & Experimentation metadata phụ thuộc user code/MLflow. \\
+\addlinespace
+Continuous Training Pipeline & \statusno & Chưa có CT pipeline tự động. & \textbf{Đây là mục tiêu nghiên cứu chính.} \\
+\addlinespace
+Model Evaluator & \statuspartial & Metrics lưu qua MLflow/TrainingOutput; chưa có platform-level evaluation gate và chuẩn so sánh candidate/champion. & Cần EvaluationGate entity cho champion--challenger. \\
+\addlinespace
+Fine-Tuning Module & \statusno & Chưa có pre-trained model fine-tuning workflow. & Có thể bổ sung sau. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{CI/CD}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm CI/CD.}\\
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endhead
+ML Component Builder & \statusyes & Model-packager service build image từ training artifacts; Build model với status tracking, image\_uri, image\_digest, BuildInputAsset. & Rất tốt. \\
+\addlinespace
+ML Component Deployer & \statusyes & Deployment model, Endpoint entity, Kustomize/GitOps manifests; celery task orchestration. & Tốt. \\
+\addlinespace
+ML Model Deployer & \statusno & Chưa có dynamic model deployment vào một Inference Engine Pool; repo deploy containerized component. & Chỉ cần khi chuyển sang V2/V4. \\
+\addlinespace
+ML Pipeline Builder & \statusno & Chưa có -- cần cho V3 (package ML pipeline code). & Cần khi chuyển sang CT variant. \\
+\addlinespace
+ML Pipeline Deployer & \statusno & Chưa có -- cần cho V3 (deploy ML pipeline). & Cần khi chuyển sang CT variant. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Inference}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm Inference.}\\
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endhead
+Inference Service & \statusyes & Model-server gateway + ML/DL serving workers; version-specific routing; authentication (JWT, API Key); Prometheus counters/histograms. & Tốt -- đây là V1 implementation. \\
+\addlinespace
+Inference Engine Pool & \statusno & Không có dynamic model loading engine. & Không cần cho V1/V3 approach. \\
+\addlinespace
+Runtime Model Monitor & \statuspartial & Prometheus prediction-count/latency metrics; Redpanda event stream; consumer persistence; Evidently data drift. & Thiếu: performance monitoring (F1/recall trên labels), prediction distribution drift, confidence tracking trong event stream. \\
+\addlinespace
+Trigger & \statuspartial & Automatic drift outbox và trigger threshold tạo DriftRun khi đủ số bản ghi. & Chỉ trigger drift run, không trigger CT pipeline hay evaluation. \\
+\addlinespace
+Model Comparison Runner & \statusno & Frontend comparison trả về metrics diff rỗng và recommendation ``unknown''. & \textbf{Cần bổ sung} -- champion--challenger evaluation là core của CT. \\
+\addlinespace
+Decision Processor & \statusno & Chưa có. & Thay thế bằng Diagnosis + RetrainingRequest trong lộ trình. \\
+\addlinespace
+XAI Module & \statusno & Chưa có explainability module. & Nice-to-have, không phải MVP. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Infrastructure \& Supporting Services}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm Infrastructure \& Supporting Services.}\\
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{Mức phủ} & \textbf{Bằng chứng trong repo} & \textbf{Khoảng trống / Hướng tiếp theo} \\
+\midrule
+\endhead
+Resource Manager & \statuspartial & TrainingJob có \codepath{vcpu}, \codepath{memory\_mb}, \codepath{max\_runtime\_seconds}, \codepath{accelerator\_type/count}. K8s resource limits. & Thiếu cost observability và GPU/DCGM metrics. \\
+\addlinespace
+Communication Middleware & \statusyes & Redpanda (Kafka-compatible) cho production events; EventOutbox trong control plane; Celery + Redis cho task queue. & Rất tốt. \\
+\addlinespace
+Container Orchestrator & \statusyes & Docker Compose (local); Kubernetes/K3s (production); container images qua model-packager. & Đã đủ. \\
+\addlinespace
+Workflow Orchestrator & \statusyes & Celery cho async tasks; Argo Workflows/Kubeflow cho production training; GitOps promotion. & Tốt. \\
+\addlinespace
+Log Manager & \statusyes & \codepath{paas\_production\_logs} table; TrainingJobEvent; RegistryEvent; EventOutbox. & Đã đủ. \\
+\addlinespace
+API Gateway & \statusyes & Model-server FastAPI gateway; Traefik reverse proxy; control plane Django REST APIs. & Tốt. \\
+\addlinespace
+MLOps User Interaction Manager & \statuspartial & React/Vite web frontend; monitoring dashboard; training/deployment management UI. & Cần hoàn thiện evidence visualization, approval inbox và comparison thật. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Tổng hợp mapping}
+
+\begin{table}[ht]
+\centering
+\caption{Tổng hợp mức phủ 39 thành phần theo nhóm.}
+\begin{tabularx}{\linewidth}{@{}L{4.4cm} C{1.4cm} C{1.8cm} C{1.4cm} Y@{}}
+\toprule
+\textbf{Nhóm thành phần} & \textbf{Có} & \textbf{Một phần} & \textbf{Thiếu} & \textbf{Nhận định} \\
+\midrule
+Data Curation (5) & 0 & 2 & 3 & Yếu nhất; cần Data Quality Checker và Feedback cho CT. \\
+Storage \& Versioning (10) & 5 & 2 & 3 & Model/Artifact Repository mạnh; thiếu Feedback Database nghiêm trọng. \\
+ML Training (5) & 1 & 2 & 2 & Experiment Pipeline tốt; CT Pipeline là mục tiêu nghiên cứu. \\
+CI/CD (5) & 2 & 0 & 3 & Component build/deploy có cho V1; thiếu model/pipeline deployer theo các variant khác. \\
+Inference (7) & 1 & 2 & 4 & Serving tốt; thiếu Model Comparison Runner và performance monitoring. \\
+Infrastructure \& Supporting (7) & 5 & 2 & 0 & Nền tảng tốt; thiếu cost/resource observability và interaction workflow hoàn chỉnh. \\
+\midrule
+\textbf{Tổng cộng (39)} & \textbf{14} & \textbf{10} & \textbf{15} & Tính đủ 39 component; V2-only và optional components vẫn được giữ để minh bạch scope. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[node distance=11mm and 14mm]
+  \node[component, fill=blue!6] (data) {
+    \textbf{Data Curation}\\[2pt]
+    Data Collector · Data Source\\
+    Data Preprocessor\\
+    Quality Checker · Data Labeler
+  };
+  \node[component, fill=blue!6, right=of data] (storage) {
+    \textbf{Storage \& Versioning}\\[2pt]
+    Dataset / Raw Data Store\\
+    Feature Store · Code Repo\\
+    Model \& Artifact Repo\\
+    ML Metadata · Feedback · Logs
+  };
+  \node[component, fill=blue!6, right=of storage] (training) {
+    \textbf{ML Training}\\[2pt]
+    Feature Engineering\\
+    ML Experiment Pipeline\\
+    Continuous Training\\
+    Model Evaluator · Fine-Tuning
+  };
+
+  \node[component, fill=green!7, below=of data] (cicd) {
+    \textbf{CI/CD}\\[2pt]
+    ML Pipeline Builder / Deployer\\
+    ML Model Deployer\\
+    ML Component Builder / Deployer
+  };
+  \node[component, fill=green!7, below=of storage] (inference) {
+    \textbf{Inference}\\[2pt]
+    Inference Service / Engine Pool\\
+    Runtime Model Monitor\\
+    Trigger · Comparison Runner\\
+    Decision Processor · XAI
+  };
+  \node[component, fill=green!7, below=of training] (infra) {
+    \textbf{Infrastructure \& Supporting}\\[2pt]
+    Resource · Communication\\
+    Container · Workflow Engine\\
+    Log Manager · API Gateway\\
+    User Interaction Manager
+  };
+  \node[component, fill=orange!12, below=of inference] (decision) {
+    \textbf{Decision loop đề xuất}\\[2pt]
+    Evidence $\rightarrow$ Diagnosis\\
+    Policy $\rightarrow$ RetrainingRequest\\
+    EvaluationGate $\rightarrow$ Rollout
+  };
+
+  % Forward pipeline flow
+  \draw[flowarrow] (data.east) -- node[above, font=\scriptsize, align=center]{raw / curated\\data} (storage.west);
+  \draw[flowarrow] (storage.east) -- node[above, font=\scriptsize, align=center]{versioned\\inputs} (training.west);
+  
+  % Package & Deploy
+  \draw[flowarrow] (training.south) -- ++(0,-0.55) -| node[pos=0.25, above, font=\scriptsize]{package} (cicd.north);
+  \draw[flowarrow] (cicd.east) -- node[above, font=\scriptsize]{deploy} (inference.west);
+  
+  % Feedback & Production loops
+  \draw[flowarrow, dashed] ([xshift=-8mm]inference.north) -- node[left, font=\scriptsize, align=right]{feedback\\\& logs} ([xshift=-8mm]storage.south);
+  \draw[flowarrow] (inference.south) -- node[right, font=\scriptsize]{production evidence} (decision.north);
+  \draw[flowarrow, dashed] (decision.east) -| ([xshift=6mm]infra.east) |- node[pos=0.25, right, font=\scriptsize, align=left]{conditional\\CT} (training.east);
+  
+  % Infrastructure Runtime Support
+  \draw[flowarrow, dotted] (infra.north) -- node[right, font=\scriptsize, align=left]{runtime\\support} (training.south);
+  \draw[flowarrow, dotted] (infra.west) -- node[above, font=\scriptsize]{runtime} (inference.east);
+\end{tikzpicture}
+\caption{Bản đồ sáu nhóm component của paper và decision loop đề xuất cho repo. Màu xanh biểu diễn các nhóm nền tảng; màu cam là lớp cần xây dựng để chuyển từ V1 sang continuous training.}
+\label{fig:component-map}
+\end{figure}
+
+\subsection{Những năng lực đã có và có giá trị để kế thừa}
+\begin{itemize}
+  \item \textbf{Plane và state boundary rõ:} control plane điều phối lifecycle; data plane phục vụ inference; execution plane dùng Docker hoặc Argo/Kubeflow; PostgreSQL và S3 giữ trạng thái bền vững.
+  \item \textbf{Version immutability:} build thành công tạo model version với image URI/digest và artifacts; alias chuyển version hỗ trợ promotion/rollback mà không sửa version lịch sử.
+  \item \textbf{Production event path:} gateway gửi event tenant/project/version-scoped sang Redpanda; consumer ghi vào PostgreSQL \codepath{paas\_production\_logs} và outbox tạo automatic-drift signal một cách transaction-safe.
+  \item \textbf{Drift workflow:} DriftMonitor gắn version với reference asset; Evidently tạo report; DriftRun callback cập nhật theo UUID với idempotency key.
+  \item \textbf{Training infrastructure:} TrainingJob hỗ trợ nhiều flavor/backend, resource constraints, capabilities-based security, và immutable code/data snapshots.
+\end{itemize}
+
+\subsection{Các khoảng trống quan trọng cần diễn đạt chính xác}
+\begin{enumerate}
+  \item \textbf{Event contract không đầy đủ:} Consumer schema có các cột runtime và request correlation, nhưng event hiện chỉ publish identity tenant/project/version, timestamp, features và prediction. Confidence lấy từ worker được trả cho client nhưng \textbf{không đi vào event stream} tới production log.
+  \item \textbf{Prediction correlation chưa end-to-end:} Event \codepath{id} do model-server tạo (\codepath{uuid.uuid4()}) và được lưu vào production log, nhưng không trả về cho client dưới tên \codepath{prediction\_id}. Client vì vậy chưa thể dùng ID này để submit ground-truth feedback sau đó.
+  \item \textbf{Evidently chỉ phân tích data drift:} Chưa đo F1, precision, recall trên nhãn production. Không có performance monitoring.
+  \item \textbf{Automatic drift outbox chỉ tạo DriftRun:} \codepath{request\_automatic\_drift\_runs()} chỉ tạo \codepath{DriftRun} sau ngưỡng số bản ghi. Không có lời gọi trực tiếp tới training job, HPO hay promotion.
+  \item \textbf{Registry alias promotion/rollback là manual:} Frontend comparison trả về metrics diff rỗng và recommendation ``unknown'', nên chưa phải champion--challenger evaluation.
+  \item \textbf{Không có traffic splitting:} Model-server gateway route 100\% traffic tới một version duy nhất. Không có shadow/canary mechanism.
+\end{enumerate}
+
+%===============================================================================
+\section{Đối chiếu quy trình lifecycle}
+%===============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Trạng thái của các nhóm bước lifecycle then chốt trong framework 56 process steps~\cite{najafabadi2026}.}
+\begin{tabularx}{\linewidth}{@{}L{3.6cm} C{1.6cm} Y@{}}
+\toprule
+\textbf{Bước quy trình} & \textbf{Mức} & \textbf{Hiện trạng} \\
+\midrule
+Onboard, build, register & \statusyes & Upload/training output $\rightarrow$ build image $\rightarrow$ immutable version. \\
+Experiment/train & \statuspartial & Training job có snapshots và outputs; experimentation metadata phụ thuộc code người dùng/MLflow. \\
+Deploy/serve & \statusyes & Ready build được deploy; gateway xác thực và proxy theo tenant/project/version. \\
+Collect production evidence & \statuspartial & Features/prediction được persist; cần hoàn chỉnh confidence/latency/status, prediction ID và feedback labels. \\
+Detect degradation & \statuspartial & Data drift và infrastructure metrics có; prediction drift, quality, performance và slice metrics chưa chuẩn hoá. \\
+Diagnose cause & \statusno & Chưa có cause candidates, evidence graph, confidence hay policy explanation. \\
+Select action and approve & \statusno & Alert/run chưa thành RetrainingRequest; không có Auto/Human/Engineering routing. \\
+Retrain / evaluate / promote & \statuspartial & Có train/build/register/deploy thủ công; thiếu candidate gate, shadow/canary, auto rollback và CT cooldown. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Điều này tạo một kết luận kiến trúc quan trọng: repo đã có \emph{plumbing} cho feedback loop, nhưng chưa có \emph{decision loop}. Bổ sung thêm một pipeline retraining đơn giản sẽ không giải quyết phần thiếu chính, vì data drift không đồng nghĩa model degradation và retrain lại data/code hiện hữu có thể lặp lại lỗi.
+
+%===============================================================================
+\section{Hướng phát triển: Degradation-Aware Adaptive Model Maintenance}
+%===============================================================================
+
+\subsection{Luận đề và phạm vi}
+
+\begin{tcolorbox}[colback=blue!3!white,colframe=blue!45!black,arc=2pt,boxrule=0.6pt,top=4pt,bottom=4pt,left=6pt,right=6pt]
+\textbf{Luận đề nghiên cứu:}\\[0.2em]
+\emph{Hệ thống nên quyết định cần thay đổi gì trước khi retrain, dựa trên bằng chứng production, lineage và mức rủi ro; không trigger lại pipeline cũ chỉ vì một alert.}
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=orange!4!white,colframe=orange!55!black,arc=2pt,boxrule=0.6pt,top=3pt,bottom=3pt,left=4pt,right=4pt,halign=center]
+\small\textbf{Vòng kín mục tiêu:}\\[0.1em]
+Inference + feedback $\rightarrow$ evidence windows $\rightarrow$ degradation event $\rightarrow$ diagnosis $\rightarrow$ strategy/approval $\rightarrow$ CT/HPO $\rightarrow$ evaluation $\rightarrow$ shadow/canary $\rightarrow$ promote/rollback
+\end{tcolorbox}
+
+Phiên bản nghiên cứu đầu tiên giới hạn vào ba action path có evidence rõ ràng:
+\begin{enumerate}
+  \item \textbf{Harmful data drift:} distribution shift cùng performance degradation và labels đủ $\rightarrow$ Auto CT trong policy giới hạn.
+  \item \textbf{Data quality/schema/freshness incident:} $\rightarrow$ dừng CT, mở engineering incident; không retrain trên dữ liệu lỗi.
+  \item \textbf{Performance degradation chưa chắc nguyên nhân:} $\rightarrow$ Human-approved CT hoặc investigation, đặc biệt khi labels trễ/mâu thuẫn.
+\end{enumerate}
+Code/feature semantics, label policy, architecture redesign và runtime outage nên là Engineering recommendation ở MVP. Configuration degradation/HPO là nhánh mở rộng sau khi ba path đầu đã có benchmark.
+Hình~\ref{fig:degradation-workflow} biểu diễn thứ tự kiểm tra an toàn trước khi cho phép một candidate đi vào CT.
+
+\begin{figure}[p]
+\centering
+\begin{tikzpicture}[
+  node distance=5.5mm and 12mm,
+  flowstep/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
+    text width=5.4cm, minimum height=1.1cm, inner sep=4pt, line width=0.6pt},
+  flowdecision/.style={draw, diamond, aspect=2.1, align=center, font=\footnotesize,
+    text width=2.6cm, inner sep=2.5pt, line width=0.6pt},
+  flowbranch/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
+    text width=4.6cm, minimum height=1.0cm, inner sep=3.5pt, line width=0.6pt},
+  flowarrow/.style={-{Latex[length=2.2mm]}, thick}
+]
+
+  % --- Central Backbone (Top to Bottom) ---
+  \node[flowstep, fill=blue!7] (events) {
+    \textbf{1. Inference Events \& Feedback}\\[1pt]
+    Production logs + Delayed labels
+  };
+
+  \node[flowstep, fill=blue!7, below=of events] (evidence) {
+    \textbf{2. EvidenceWindow Assembly}\\[1pt]
+    Drift · Data Quality · Performance\\
+    Confidence · Label Coverage
+  };
+
+  \node[flowdecision, fill=orange!15, below=of evidence] (quality) {
+    \textbf{Quality}\\\textbf{valid?}
+  };
+
+  \node[flowdecision, fill=orange!15, below=of quality] (labels) {
+    \textbf{Labels}\\\textbf{sufficient?}
+  };
+
+  \node[flowstep, fill=orange!10, below=of labels] (diagnosis) {
+    \textbf{3. Multi-Signal Diagnosis}\\[1pt]
+    Ranked cause candidates + Confidence
+  };
+
+  \node[flowdecision, fill=orange!15, below=of diagnosis] (policy) {
+    \textbf{Policy}\\\textbf{action?}
+  };
+
+  \node[flowstep, fill=green!10, below=of policy] (candidate) {
+    \textbf{4. Conditional Auto CT}\\[1pt]
+    Immutable snapshot + Trigger training
+  };
+
+  \node[flowstep, fill=green!10, below=of candidate] (gate) {
+    \textbf{5. EvaluationGate Validation}\\[1pt]
+    Offline benchmark metrics + Quality checks
+  };
+
+  \node[flowstep, fill=green!10, below=of gate] (traffic) {
+    \textbf{6. Traffic Experimentation}\\[1pt]
+    Shadow evaluation $\rightarrow$ Canary rollout
+  };
+
+  \node[flowstep, fill=green!10, below=of traffic] (outcome) {
+    \textbf{7. Production Outcome}\\[1pt]
+    Promote to Champion or Auto-Rollback
+  };
+
+  % --- Horizontal Branches (Side Exits) ---
+  % Quality invalid -> Engineering Incident
+  \node[flowbranch, fill=red!9, right=of quality] (engineering) {
+    \textbf{Engineering Incident}\\[1pt]
+    Schema / pipeline / sensor outage\\
+    \textit{Action: Alert infra team (No CT)}
+  };
+
+  % Labels insufficient -> Proxy Warning
+  \node[flowbranch, fill=yellow!22, right=of labels] (proxy) {
+    \textbf{Proxy Early Warning}\\[1pt]
+    Low coverage / high label delay\\
+    \textit{Action: Increase sampling / Hold}
+  };
+
+  % Policy Observe -> Left
+  \node[flowbranch, fill=gray!12, left=of policy] (observe) {
+    \textbf{Observe / Benign Drift}\\[1pt]
+    Drift detected but perf stable\\
+    \textit{Action: Log evidence (No CT)}
+  };
+
+  % Policy Human Review -> Right
+  \node[flowbranch, fill=red!9, right=of policy] (human) {
+    \textbf{Human Review}\\[1pt]
+    Concept drift / mixed signals\\
+    \textit{Action: Data Scientist triage}
+  };
+
+  % --- Arrows ---
+  \draw[flowarrow] (events) -- (evidence);
+  \draw[flowarrow] (evidence) -- (quality);
+  
+  \draw[flowarrow] (quality) -- node[right, font=\scriptsize\bfseries]{Yes} (labels);
+  \draw[flowarrow] (quality) -- node[above, font=\scriptsize\bfseries]{No} (engineering);
+  
+  \draw[flowarrow] (labels) -- node[right, font=\scriptsize\bfseries]{Yes} (diagnosis);
+  \draw[flowarrow] (labels) -- node[above, font=\scriptsize\bfseries]{No} (proxy);
+  
+  \draw[flowarrow] (diagnosis) -- (policy);
+  
+  \draw[flowarrow] (policy) -- node[above, font=\scriptsize\bfseries]{Observe} (observe);
+  \draw[flowarrow] (policy) -- node[above, font=\scriptsize\bfseries]{Review} (human);
+  \draw[flowarrow] (policy) -- node[right, font=\scriptsize\bfseries]{Auto CT} (candidate);
+  
+  \draw[flowarrow] (candidate) -- (gate);
+  \draw[flowarrow] (gate) -- (traffic);
+  \draw[flowarrow] (traffic) -- (outcome);
+
+\end{tikzpicture}
+\caption{Workflow degradation-aware: Trục dọc thể hiện pipeline tự động hóa khép kín (happy path); các nhánh ngang thể hiện chốt an toàn và điểm can thiệp của con người/kỹ thuật khi thiếu bằng chứng.}
+\label{fig:degradation-workflow}
+\end{figure}
+
+\subsection{Câu hỏi nghiên cứu và giả thuyết}
+Để phân biệt đóng góp nghiên cứu với một backlog tính năng, evaluation sẽ trả lời ba câu hỏi:
+
+\begin{enumerate}
+  \item \textbf{RQ1:} Evidence-to-action policy có giảm số lần retrain không cần thiết so với manual, periodic, alert-driven và always-retrain baselines mà vẫn duy trì recovery khi degradation có hại không?
+  \item \textbf{RQ2:} Diagnosis đa tín hiệu và delayed-label handling có giảm unsafe automation, tức tự động retrain/promotion trong scenario quality, mixed hoặc chưa đủ bằng chứng, không?
+  \item \textbf{RQ3:} Evaluation gate kết hợp shadow comparison có cải thiện promotion safety và chi phí vận hành so với retrain rồi deploy trực tiếp không?
+\end{enumerate}
+
+Các giả thuyết tương ứng là: (H1) policy thích ứng giảm unnecessary CT trong benign drift; (H2) diagnosis + HITL giảm unsafe automation trong khi vẫn giữ được recovery ở harmful drift; (H3) candidate gate + shadow làm giảm false promotion mà không làm tăng time-to-recovery quá mức. Mỗi scenario cần được chạy với nhiều seed, báo cáo confidence interval và kiểm định paired trên cùng seed; các ngưỡng và ngân sách là biến thực nghiệm, không phải hằng số phổ quát.
+
+\subsection{Taxonomy evidence-to-action}
+\begin{table}[ht]
+\centering
+\caption{Một policy khởi đầu có thể giải thích được.}\label{tab:policy}
+\begin{tabularx}{\linewidth}{@{}L{3.4cm} Y Y@{}}
+\toprule
+\textbf{Evidence pattern} & \textbf{Diagnosis ưu tiên} & \textbf{Action an toàn} \\
+\midrule
+Data drift cao; quality ổn; labels đủ; performance giảm & Distribution shift / training data không còn đại diện & Snapshot data window mới; chỉ Auto CT nếu mọi policy, budget, sample-size, confidence-bound và evaluation gate đều pass. \\
+Quality violation; schema, range hoặc freshness lỗi & Input/data pipeline issue & No CT; incident cho data/engineering owner. \\
+F1/recall giảm; drift thấp hoặc mâu thuẫn & Unexplained degradation; concept/label/feature/implementation issue chưa phân biệt được & Human review, slice analysis, kiểm tra labels và lineage. \\
+Confidence/entropy xấu; chưa có labels & Early warning hoặc calibration shift & Tăng sampling/monitoring; không Auto CT chỉ từ confidence. \\
+Latency/error rate xấu & Serving/infrastructure issue & Rollback, autoscale hoặc sửa runtime; không CT. \\
+Drift cao nhưng performance/risk ổn và đủ labels & Benign drift & Warning hoặc no action; tránh unnecessary retraining. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Confidence không phải thước đo universal của chất lượng model. Nó chỉ có giá trị làm evidence phụ khi được calibration theo model/version/segment; F1 chỉ có sau khi prediction được join với ground truth hợp lệ. Vì vậy prediction ID và delayed-label handling là \textbf{điều kiện tiên quyết}, không phải tiện ích phụ.
+
+\subsection{Diagnosis algorithm --- Pseudocode}\label{subsec:diagnosis}
+
+Rule-based cause scoring là lớp quyết định trung tâm. Dưới đây là pseudocode tối thiểu cho MVP diagnosis:
+
+Trong pseudocode, quy ước \(\Delta_\text{perf}=\text{current}-\text{baseline}\) cho metric càng cao càng tốt, nên \(\theta_\text{perf}<0\) biểu diễn suy giảm. Với metric càng thấp càng tốt, cần đảo chiều trước khi áp dụng. Các ngưỡng, minimum sample size và confidence level phải được cấu hình theo model/segment và được kiểm tra bằng sensitivity analysis.
+
+\begin{tcolorbox}[colback=gray!3!white,colframe=gray!40!black,arc=2pt,boxrule=0.6pt,top=4pt,bottom=4pt,left=6pt,right=6pt,title=\small\textbf{Thuật toán chẩn đoán nguyên nhân suy giảm (MVP Rule-based Cause Scoring)}]
+\small
+\textbf{Input:} EvidenceWindow $E$ với metrics $\{d_\text{drift}, q_\text{quality}, \Delta_\text{perf}, \Delta_\text{conf}, r_\text{labels}, n, CI_\text{perf}\}$\\[0.4em]
+\textbf{Step 1} (Data Quality Gate):\\
+  \hspace*{1em}If $q_\text{quality} < \theta_\text{quality}$ $\Rightarrow$ \textbf{Diagnosis}: \texttt{DATA\_QUALITY\_ISSUE},\\
+  \hspace*{1em}\textbf{Action}: \texttt{ENGINEERING}, \textbf{Confidence}: high\\[0.25em]
+\textbf{Step 2} (Harmful Drift):\\
+\hspace*{1em}If $d_\text{drift} > \theta_\text{drift}$ \textbf{and} $\Delta_\text{perf} < \theta_\text{perf}$ \textbf{and} $r_\text{labels} \ge r_\text{min}$ \textbf{and} $n \ge n_\text{min}$\\
+\hspace*{1em}and the lower bound of $CI_\text{perf}$ confirms degradation,\\
+  \hspace*{1em}$\Rightarrow$ \textbf{Diagnosis}: \texttt{HARMFUL\_DRIFT};\\
+  \hspace*{1em}\textbf{Action}: \texttt{AUTO\_CT} only if quality, cooldown, budget and candidate-gate preconditions pass; otherwise \texttt{HUMAN\_REVIEW};\\
+  \hspace*{1em}\textbf{Confidence}: medium-high\\[0.25em]
+\textbf{Step 3} (Unexplained Performance Drop):\\
+\hspace*{1em}If $\Delta_\text{perf} < \theta_\text{perf}$ \textbf{and} $d_\text{drift} < \theta_\text{drift}$\\
+  \hspace*{1em}$\Rightarrow$ \textbf{Diagnosis}: \texttt{UNEXPLAINED\_DEGRADATION} with ranked candidates,\\
+  \hspace*{1em}\textbf{Action}: \texttt{HUMAN\_REVIEW}, \textbf{Confidence}: medium\\[0.25em]
+\textbf{Step 4} (Benign Drift):\\
+\hspace*{1em}If $d_\text{drift} > \theta_\text{drift}$ \textbf{and} $|\Delta_\text{perf}| \approx 0$ \textbf{and} $r_\text{labels} \ge r_\text{min}$\\
+  \hspace*{1em}$\Rightarrow$ \textbf{Diagnosis}: \texttt{BENIGN\_DRIFT}, \textbf{Action}: \texttt{OBSERVE},\\
+  \hspace*{1em}\textbf{Confidence}: medium; otherwise \texttt{INSUFFICIENT\_EVIDENCE}\\[0.25em]
+\textbf{Step 5} (Confidence Early Warning):\\
+\hspace*{1em}If calibrated $\Delta_\text{conf}$ is significant \textbf{and} $r_\text{labels} < r_\text{min}$\\
+  \hspace*{1em}$\Rightarrow$ \textbf{Diagnosis}: \texttt{CALIBRATION\_WARNING}, \textbf{Action}: \texttt{INCREASE\_SAMPLING}, \textbf{Confidence}: low\\[0.25em]
+\textbf{Default}:\\
+  \hspace*{1em}$\Rightarrow$ \textbf{Diagnosis}: \texttt{AMBIGUOUS}, \textbf{Action}: \texttt{HUMAN\_REVIEW}, \textbf{Confidence}: low
+\end{tcolorbox}
+
+Mỗi diagnosis bao gồm: (1)~ranked cause candidates với confidence score, (2)~evidence IDs tham chiếu, (3)~explanation text cho audit trail. Khi hai causes có score gần nhau (ví dụ: data drift CAO + concept drift signals), hệ thống ưu tiên \texttt{HUMAN\_REVIEW} để tránh unsafe automation.
+
+\subsection{Delayed-label handling strategy}\label{subsec:delayed-labels}
+
+Delayed labels là bottleneck then chốt nhất, vì không có labels thì performance metrics (F1, recall, precision) không tính được. Chiến lược xử lý:
+
+\begin{enumerate}
+  \item \textbf{Prediction ID end-to-end:} Model-server trả \codepath{prediction\_id} cho client trong response và giữ cùng correlation ID trong event. Client dùng ID này để submit ground-truth label qua Feedback API. Đây là \textbf{điều kiện tiên quyết} để join prediction--label.
+
+  \item \textbf{Join strategy --- Watermark-based window:} Feedback store lưu labels với timestamp. Performance metrics tính trên window $[t-W, t]$ khi label coverage $r_\text{labels} = \frac{|\text{labeled predictions}|}{|\text{total predictions}|} \ge r_\text{min}$. Giá trị $r_\text{min}$ (ví dụ 0.1, 0.3 hoặc 0.5) là tham số cần sensitivity analysis, không phải khuyến nghị phổ quát. Nếu coverage thấp, hệ thống ghi nhận ``insufficient labels'' và \textbf{không} tính confirmed performance.
+
+  \item \textbf{Proxy metrics khi labels trễ:} Confidence distribution shift, prediction distribution shift và latency anomalies là proxy signals. Chúng \textbf{không} đủ để kết luận degradation nhưng đủ để tăng monitoring sampling hoặc tạm hold deployment.
+
+  \item \textbf{Label quality/trust:} Mỗi label record có \codepath{source} (automated pipeline, human annotator, implicit feedback) và \codepath{trust\_level}. Không nên âm thầm trộn các nguồn nhãn khác chất lượng; cần dùng trust để quyết định eligibility hoặc báo cáo metrics phân tầng, thay vì mặc định thay đổi trọng số F1.
+
+  \item \textbf{Partial label availability:} Khi chỉ có một phần predictions được label (ví dụ 30\%), performance metric tính trên labeled sample với confidence interval và kiểm tra selection bias. Decision engine chỉ trigger Auto CT khi lower bound confidence interval vẫn cho thấy degradation.
+\end{enumerate}
+
+\subsection{State model tối thiểu}
+\begin{xltabular}{\linewidth}{@{}L{3.4cm} L{5.4cm} Y@{}}
+\caption{Các entity cần bổ sung vào control plane.}\\
+\toprule
+\textbf{Entity} & \textbf{Trường cốt lõi} & \textbf{Mục đích} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Entity} & \textbf{Trường cốt lõi} & \textbf{Mục đích} \\
+\midrule
+\endhead
+PredictionRecord & prediction\_id, request\_id, tenant/project/version, timestamp, prediction, confidence, latency, status & Ghi nhận một lần inference và tạo correlation key ổn định cho feedback. \\
+\addlinespace
+Feedback & feedback\_id, prediction\_id, ground\_truth, label\_timestamp, label\_source, trust\_level, correction\_of & Nối label trễ với prediction; hỗ trợ nhiều feedback/correction và provenance. \\
+\addlinespace
+EvidenceWindow & model\_version, window\_start/end, baseline\_ref, metric\_values (drift, quality, perf, confidence), slices, label\_coverage, policy\_version & Lưu bằng chứng bất biến theo cửa sổ thay vì chỉ report file. \\
+\addlinespace
+DegradationEvent & evidence\_window\_ids, severity, affected\_component, deduplication\_key, status, created\_at & Chuẩn hoá alert có thể idempotent và audit được. \\
+\addlinespace
+Diagnosis & degradation\_event\_id, ranked\_cause\_candidates (JSON), top\_confidence, explanation, lineage\_snapshot, policy\_version & Tách suy luận nguyên nhân khỏi detection. \\
+\addlinespace
+RetrainingRequest & diagnosis\_id, strategy (auto/human/engineering), data/code/config\_version, budget\_limit, cooldown\_until, approval\_status, approved\_by & Là đơn vị điều phối thay cho ``DriftRun gọi TrainingJob''. \\
+\addlinespace
+EvaluationGate & candidate\_version, champion\_version, offline\_metrics, calibration\_score, latency\_p95, error\_rate, data\_quality\_checks, business\_checks, decision (pass/fail/hold), decided\_at & Chặn candidate không đủ bằng chứng trước production. \\
+\addlinespace
+TrafficExperiment & experiment\_type (shadow/canary), candidate\_version, champion\_version, cohort\_hash\_seed, weight\_schedule (JSON), guardrail\_thresholds, current\_weight, status, rollback\_reason & Ghi lại so sánh production và rollback path. \\
+\bottomrule
+\end{xltabular}
+
+Một prediction có thể chưa có label hoặc có nhiều lần label/correction; vì vậy \codepath{PredictionRecord} và \codepath{Feedback} nên là hai bảng có quan hệ một-nhiều, kèm unique/idempotency constraint cho nguồn feedback và version correction.
+
+%===============================================================================
+\section{Ranh giới tự động hoá và promotion}
+%===============================================================================
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} Y Y@{}}
+\caption{Ranh giới Auto--Human--Engineering cho MVP.}\label{tab:boundaries}\\
+\toprule
+\textbf{Mức độ} & \textbf{Hệ thống được phép làm} & \textbf{Không tự làm} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Mức độ} & \textbf{Hệ thống được phép làm} & \textbf{Không tự làm} \\
+\midrule
+\endhead
+Observe / no action & Tạo event, tăng sampling, theo dõi window tiếp theo. & Không tạo training storm chỉ từ warning. \\
+\addlinespace
+Auto CT & Chọn data window đã phê duyệt, snapshot, train, evaluate, register candidate. & Không đổi label definition, feature semantics, source code hay architecture. \\
+\addlinespace
+Human-approved CT & Chuẩn bị recommendation, lineage và candidate plan. & Không tự quyết risk/business trade-off hoặc data adequacy mơ hồ. \\
+\addlinespace
+Engineering intervention & Tạo issue/audit evidence và chờ Git/PR/CI. & Không tự sửa pipeline, dependency, feature code hoặc runtime. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Shadow/Canary architecture}\label{subsec:shadow-canary}
+
+Promotion trong kiến trúc đề xuất nên dùng \textbf{shadow + canary}; đây là capability tương lai, chưa phải implementation hiện tại:
+
+\begin{enumerate}
+  \item \textbf{Shadow mode (Phase 5a):} Candidate nhận traffic duplicate tại gateway level nhưng response không ảnh hưởng user. Kiến trúc đề xuất là model-server gateway fork request tới cả champion worker và candidate worker; chỉ trả response từ champion. Candidate predictions được log riêng vào \codepath{paas\_shadow\_logs} để so sánh offline trên cùng request/correlation ID.
+
+  \item \textbf{Canary mode (Phase 5b):} Weighted routing thực sự -- model-server gateway dùng consistent hashing trên một cohort key ổn định (user/session/request ID), không chỉ \codepath{tenant\_id}, để route traffic. Lộ trình tăng weight 5\% $\rightarrow$ 10\% $\rightarrow$ 25\% $\rightarrow$ 50\% $\rightarrow$ 100\% chỉ là lịch thử nghiệm; mỗi bước chỉ tăng khi guardrails đạt.
+
+  \item \textbf{Cohort consistency:} Dùng hash-based routing đảm bảo cùng user/session luôn đi vào cùng version trong một canary phase, tránh experience inconsistency. Nếu chọn canary theo tenant, phải ghi rõ đó là tenant-level rollout và không diễn giải là 5\% request-level traffic.
+
+  \item \textbf{Guardrail evaluation:} Đánh giá theo cửa sổ cấu hình được, với minimum sample size, confidence interval và paired champion--candidate logs. Ví dụ guardrails gồm:
+  \begin{itemize}
+    \item Error rate candidate $\le$ champion + $\epsilon$
+    \item Latency p95 candidate $\le$ champion $\times$ 1.2
+    \item Prediction distribution KL-divergence $\le$ threshold
+    \item Nếu labels available: performance metric candidate $\ge$ champion $- \delta$
+  \end{itemize}
+
+  \item \textbf{Rollback:} Rollback tự động khi guardrail nghiêm trọng hoặc vi phạm trong $k$ cửa sổ liên tiếp (có hysteresis/cooldown), thay vì phản ứng với một mẫu đơn lẻ. Ghi \codepath{rollback\_reason} vào TrafficExperiment. Blue--green alias swap chỉ là fast recovery khi cả hai endpoint đã healthy và routing/alias hỗ trợ atomic switch; hiện đây vẫn là capability đề xuất.
+\end{enumerate}
+
+\textbf{Lưu ý:} Shadow mode đơn giản hơn nhiều so với canary và đủ cho paper nếu timeline tight. Canary là stretch goal.
+Hình~\ref{fig:promotion-protocol} cho thấy promotion là một chuỗi gate, không phải alias swap ngay sau training.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+  node distance=5.5mm and 14mm,
+  promotestep/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
+    text width=5.4cm, minimum height=1.05cm, inner sep=4pt, line width=0.6pt},
+  promotedecision/.style={draw, diamond, aspect=2.1, align=center, font=\footnotesize,
+    text width=2.6cm, inner sep=2.5pt, line width=0.6pt},
+  promotebranch/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
+    text width=4.6cm, minimum height=1.0cm, inner sep=3.5pt, line width=0.6pt},
+  flowarrow/.style={-{Latex[length=2.2mm]}, thick}
+]
+
+  % --- Central Backbone (Top to Bottom) ---
+  \node[promotestep, fill=blue!7] (candidate) {
+    \textbf{1. Candidate Version Registered}\\[1pt]
+    Immutable artifact + Lineage snapshot
+  };
+
+  \node[promotedecision, fill=orange!15, below=of candidate] (gate_dec) {
+    \textbf{Offline}\\\textbf{Gate Pass?}
+  };
+
+  \node[promotestep, fill=yellow!18, below=of gate_dec] (shadow) {
+    \textbf{2. Shadow Mode (Phase 5a)}\\[1pt]
+    Duplicate live traffic · Champion answers\\
+    Compare candidate output offline
+  };
+
+  \node[promotestep, fill=yellow!18, below=of shadow] (canary) {
+    \textbf{3. Canary Staged Rollout (Phase 5b)}\\[1pt]
+    Consistent hashing: $5\% \rightarrow 10\% \rightarrow 25\% \rightarrow 50\%$
+  };
+
+  \node[promotedecision, fill=orange!15, below=of canary] (guard_dec) {
+    \textbf{Guardrails}\\\textbf{Satisfied?}
+  };
+
+  \node[promotestep, fill=green!12, below=of guard_dec] (promote) {
+    \textbf{4. Full Promotion (100\%)}\\[1pt]
+    Atomic alias switch $\rightarrow$ New Champion
+  };
+
+  % --- Horizontal Branches (Side Rejections & Rollback) ---
+  \node[promotebranch, fill=red!9, right=of gate_dec] (gate_fail) {
+    \textbf{Offline Gate Rejected}\\[1pt]
+    F1 / latency / quality checks failed\\
+    \textit{Action: Keep Champion, discard candidate}
+  };
+
+  \node[promotebranch, fill=red!9, right=of guard_dec] (rollback) {
+    \textbf{Automated Rollback (0\%)}\\[1pt]
+    Error rate spike / latency / drift violation\\
+    \textit{Action: Instant blue--green recovery}
+  };
+
+  % --- Arrows ---
+  \draw[flowarrow] (candidate) -- (gate_dec);
+  \draw[flowarrow] (gate_dec) -- node[right, font=\scriptsize\bfseries]{Yes} (shadow);
+  \draw[flowarrow] (gate_dec) -- node[above, font=\scriptsize\bfseries]{No} (gate_fail);
+  
+  \draw[flowarrow] (shadow) -- (canary);
+  \draw[flowarrow] (canary) -- (guard_dec);
+  
+  \draw[flowarrow] (guard_dec) -- node[right, font=\scriptsize\bfseries]{Yes} (promote);
+  \draw[flowarrow] (guard_dec) -- node[above, font=\scriptsize\bfseries]{No} (rollback);
+
+\end{tikzpicture}
+\caption{Protocol champion--challenger đề xuất: Trục dọc thể hiện các tầng kiểm thử luỹ tiến (Offline Gate $\rightarrow$ Shadow $\rightarrow$ Canary $\rightarrow$ Full Promotion); nhánh ngang thể hiện điểm dừng an toàn và cơ chế rollback tự động.}
+\label{fig:promotion-protocol}
+\end{figure}
+
+%===============================================================================
+\section{Lộ trình hiện thực và nghiên cứu}
+%===============================================================================
+
+\begin{xltabular}{\linewidth}{@{}L{1.8cm} L{3.0cm} L{4.8cm} Y@{}}
+\caption{Lộ trình đề xuất 26 tuần, gồm 24 tuần phát triển và 2 tuần viết paper song song.}\label{tab:roadmap}\\
+\toprule
+\textbf{Mốc} & \textbf{Mục tiêu} & \textbf{Deliverables} & \textbf{Tiêu chí hoàn thành} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Mốc} & \textbf{Mục tiêu} & \textbf{Deliverables} & \textbf{Tiêu chí hoàn thành} \\
+\midrule
+\endhead
+
+\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn chuẩn bị ---}}\\
+\addlinespace
+
+Phase 0 (Tuần 1--2) & Freeze protocol nghiên cứu & Dataset/task, scenario injection framework, ground-truth causes, baselines, budget, metrics, seeds. Chọn 1--2 task tabular classification/regression. & Benchmark protocol được version-control (Git + immutable S3 manifest; DVC là optional). Document chọn dataset, scenarios, metrics trước khi có kết quả. \\
+\addlinespace
+
+Phase 0.5 (Tuần 3--4) & Vertical Slice PoC & End-to-end trên 1 scenario (S2 harmful drift): inject drift $\rightarrow$ detect $\rightarrow$ diagnose (hardcoded) $\rightarrow$ retrain $\rightarrow$ evaluate offline $\rightarrow$ register candidate $\rightarrow$ compare manual. & Pipeline integration validated; các blocking issues được phát hiện sớm. \\
+
+\addlinespace
+\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn xây dựng ---}}\\
+\addlinespace
+
+Phase 1 (Tuần 5--9) & Measurement foundation & \textbf{1a (Tuần 5--6):} Prediction ID end-to-end, confidence/latency/status event contract, sửa \codepath{send\_to\_redpanda()} gửi đầy đủ fields.\newline \textbf{1b (Tuần 7--8):} Feedback API + store, PredictionRecord entity, join prediction--label integration test.\newline \textbf{1c (Tuần 9):} Immutable data snapshot, EvidenceWindow entity, data quality checks cơ bản. & Join được prediction--label trên synthetic data. Truy được model $\rightarrow$ training $\rightarrow$ data/code/config. Consumer nhận và persist đầy đủ event fields. \\
+\addlinespace
+
+Phase 2 (Tuần 10--13) & Detection & \textbf{2a (Tuần 10--11):} Mở rộng Evidently: data drift, prediction distribution drift, quality violations (schema, range, freshness), baseline/threshold/slice.\newline \textbf{2b (Tuần 12):} Performance monitoring với delayed labels: tính F1/recall/precision khi label coverage $\ge r_\text{min}$.\newline \textbf{2c (Tuần 13):} DegradationEvent entity, idempotent event creation, test coverage scenarios S0--S3. & Stable (S0), benign drift (S1), harmful drift (S2), quality (S3) tạo đúng event type, idempotent. Detection precision/recall đo được trên synthetic scenarios. \\
+\addlinespace
+
+Phase 3 (Tuần 14--17) & Diagnosis + HITL & \textbf{3a (Tuần 14--15):} Diagnosis entity, rule-based cause scoring (pseudocode Section~\ref{subsec:diagnosis}), explanation text, evidence IDs.\newline \textbf{3b (Tuần 16):} RetrainingRequest entity, cooldown/budget policy, approval API.\newline \textbf{3c (Tuần 17):} Approval UI/inbox, audit trail, integration tests: warning $\not\rightarrow$ train; mỗi decision có evidence IDs; conflict resolution cho multi-cause. & Unit/integration tests chứng minh warning không gọi train trực tiếp. Diagnosis top-k/multi-label accuracy đo được trên scenarios S0--S4, S9. \\
+
+\addlinespace
+\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn CT pipeline ---}}\\
+\addlinespace
+
+Phase 4 (Tuần 18--20) & CT candidate & Dataset builder (data window mới + validated), constrained HPO (nếu có), train, EvaluationGate entity, registry candidate với champion lineage. & Candidate có reproducible lineage và bị reject/promote theo policy. Offline evaluation gate pass/fail/hold hoạt động. \\
+\addlinespace
+
+Phase 5 (Tuần 21--23) & Production comparison & \textbf{5a (Tuần 21--22):} Shadow routing ở gateway level, shadow logs, offline comparison metrics.\newline \textbf{5b (Tuần 23, stretch):} Canary weighted routing, guardrails, automatic rollback, alias promotion. & MVP có champion--challenger experiment với shadow comparison. Canary là stretch; nếu chưa hoàn thành thì không claim production promotion safety. \\
+
+\addlinespace
+\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn đánh giá ---}}\\
+\addlinespace
+
+Phase 6 (Tuần 24--26) & Benchmark / paper & Run baselines, ablation, sensitivity analysis. Cost/human-effort analysis. Artifact release. Paper viết và review nội bộ. & Kết quả lặp lại được với bảng, plots, limitations và raw metadata. \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Lưu ý về timeline:} So với bản lộ trình 20 tuần ban đầu, phiên bản này bổ sung: (1)~Phase 0.5 PoC để validate integration sớm, (2)~mở rộng Phase 1 thành 5 tuần (từ 4) vì event contract refactor cần sửa cả model-server, consumer và control-plane, (3)~mở rộng Phase 3 thành 4 tuần (từ 3) vì diagnosis + approval UI là module mới hoàn toàn, (4)~tách Phase 5 thành shadow (core) và canary (stretch). Tổng timeline là 26 tuần, trong đó 24 tuần phát triển và 2 tuần cuối dành cho benchmark/paper song song.
+
+\subsection{Backlog theo ownership hiện tại}
+\begin{itemize}
+  \item \textbf{model-server + consumer:} Hoàn chỉnh event contract gửi prediction ID, confidence, latency và status. Consumer persist đầy đủ fields, bảo đảm durable hand-off để feedback join được event.
+  \item \textbf{control plane:} Thêm Feedback API, EvidenceWindow, DegradationEvent, Diagnosis, RetrainingRequest, EvaluationGate, TrafficExperiment. Giữ UUID, tenant scope, callback idempotency và PostgreSQL/S3 state ownership.
+  \item \textbf{evidently service:} Mở rộng từ data drift $\rightarrow$ prediction distribution drift, quality checks, performance metrics (khi labels available).
+  \item \textbf{training-runner + execution:} Nhận immutable snapshot, dataset window/config policy và xuất standardized metrics/artifacts.
+  \item \textbf{registry + deployment + GitOps:} Candidate/champion metadata, TrafficExperiment, weighted routing/rollout và rollback guardrails.
+  \item \textbf{web frontend:} Evidence timeline, approval inbox, candidate comparison thật, shadow/canary dashboard và audit trail.
+\end{itemize}
+
+%===============================================================================
+\section{Thiết kế thực nghiệm}
+%===============================================================================
+
+Để claim nghiên cứu có giá trị, benchmark phải biết \emph{ground-truth cause} của từng scenario, không chỉ ground-truth label của bài toán ML.
+
+\subsection{Benchmark scenarios --- chia priority}
+
+\begin{table}[ht]
+\centering
+\caption{Benchmark scenarios phân theo priority.}
+\begin{tabularx}{\linewidth}{@{}C{1.0cm} L{2.2cm} L{5.0cm} Y@{}}
+\toprule
+\textbf{ID} & \textbf{Priority} & \textbf{Scenario} & \textbf{Expected action} \\
+\midrule
+S0 & Core & Stable (no degradation) & No action \\
+S1 & Core & Benign data drift (performance ổn) & Warning, observe \\
+S2 & Core & Harmful data drift (performance giảm, labels đủ) & Auto CT nếu các gate pass \\
+S3 & Core & Data quality violation (schema, range, freshness) & Engineering, no CT \\
+\midrule
+S4 & Important & Concept/label change & Human-approved CT \\
+S9 & Important & Mixed/ambiguous (nhiều cause) & Human review \\
+\midrule
+S5 & Stretch & Training-data aging (gradual) & Auto CT hoặc human \\
+S6 & Stretch & Configuration degradation & HPO/config update \\
+S7 & Stretch & Code/feature issue & Engineering \\
+S8 & Stretch & Runtime / infrastructure issue & Rollback/autoscale \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Khởi đầu nên dùng một hoặc hai task tabular classification/regression để kiểm soát chi phí và tái lập. Mỗi scenario có seed, thời điểm inject, cường độ, affected component, expected diagnosis và expected action; tách timeline baseline, injection, detection, intervention và recovery.
+
+\subsection{Baselines}
+
+\begin{itemize}
+  \item \textbf{B0 -- Observe-only:} Không retrain, dùng để đo degradation và recovery tự nhiên.
+  \item \textbf{B1 -- Manual retraining:} Người dùng tự quyết định retrain.
+  \item \textbf{B2 -- Periodic CT:} Retrain theo lịch cố định (mỗi tuần/tháng).
+  \item \textbf{B3 -- Alert-driven CT:} Retrain mỗi khi có drift alert; đây là baseline đối chứng, chưa phải luồng hiện tại của repo.
+  \item \textbf{B4 -- Always retrain:} Stress/cost baseline, retrain sau mỗi batch data.
+  \item \textbf{B5 -- Proposed adaptive CT:} Detection $\rightarrow$ Diagnosis $\rightarrow$ Policy $\rightarrow$ Conditional CT.
+\end{itemize}
+
+Các baseline B0--B3 và B5 nên có budget compute tương đương; B4 là stress/cost baseline. Với B1, protocol thao tác của người dùng, thời gian phản hồi và tiêu chí quyết định phải được cố định để bảo đảm tái lập.
+
+\subsection{Evaluation metrics}
+
+\begin{table}[ht]
+\centering
+\caption{Evaluation metrics theo dimension.}
+\begin{tabularx}{\linewidth}{@{}L{3.5cm} Y@{}}
+\toprule
+\textbf{Dimension} & \textbf{Metrics} \\
+\midrule
+Detection quality & Precision, recall, F1 of detection; detection latency (time from injection to first alert); data-quality detection precision/recall \\
+\addlinespace
+Diagnosis quality & Top-k and multi-label accuracy (is ground-truth cause in top-k?); confidence calibration (ECE/Brier) \\
+\addlinespace
+Strategy quality & Strategy accuracy (correct action for cause); unsafe automation rate; false promotion rate \\
+\addlinespace
+Recovery & Time-to-recovery; performance recovery curve; slice-level recovery \\
+\addlinespace
+Cost efficiency & Unnecessary CT count; compute hours per strategy; storage cost; serving cost for shadow/canary \\
+\addlinespace
+Human effort & Approval burden; review time; override rate; false alarm rate reported separately from labor \\
+\addlinespace
+Promotion safety & Guardrail violation rate; rollback rate/success; minimum-sample compliance; candidate/champion confidence interval \\
+\addlinespace
+Reproducibility & Lineage completeness; scenario replay success; rollback success rate \\
+\addlinespace
+Statistical validity & Multiple seeds, confidence intervals and paired tests across the same scenario/seed \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Không nên chỉ báo cáo F1 cuối cùng: recovery theo thời gian và chi phí của false retraining mới kiểm chứng được policy có ích.
+
+\subsection{Cost model}
+
+\begin{itemize}
+  \item Mỗi CT cycle có chi phí: $C_\text{CT} = C_\text{data\_prep} + C_\text{train} + C_\text{evaluate} + C_\text{shadow/canary}$; báo cáo riêng CPU-hours/GPU-hours, storage và human-hours rồi mới quy đổi sang đơn giá cụ thể.
+  \item Budget policy: tối đa $N$ CT runs/tuần, tổng compute hours/tháng $\le B$
+  \item Cost-benefit: CT chỉ justified khi $\text{expected\_performance\_gain} \times \text{business\_value} > C_\text{CT} + C_\text{risk}$
+  \item Metric so sánh strategies: \textbf{performance gained per compute dollar} (efficiency ratio), với giả định business value được công bố rõ hoặc thay bằng proxy performance thống nhất giữa các scenario.
+\end{itemize}
+
+%===============================================================================
+\section{Rủi ro và nguyên tắc kiểm soát}
+%===============================================================================
+
+\begin{itemize}
+  \item \textbf{Delayed labels:} Performance metric đến muộn. Thiết kế phải phân tách proxy monitoring với confirmed degradation; lưu timestamp và source của label. Chi tiết chiến lược xem Section~\ref{subsec:delayed-labels}.
+  \item \textbf{Causal ambiguity:} Nhiều cause cùng lúc. Diagnosis trả ranked candidates, evidence coverage và no-action/human fallback; không tuyên bố root cause tuyệt đối ngoài controlled scenarios.
+  \item \textbf{Unsafe automation:} Dùng policy-as-code, budget/concurrency/cooldown, immutable lineage, approval boundary và rollback availability.
+  \item \textbf{Multi-tenancy/privacy:} Raw feature/prediction/feedback có thể nhạy cảm. Feedback store và evidence query phải tenant-scoped, retention-aware và tối thiểu hoá dữ liệu lưu.
+  \item \textbf{External validity:} Synthetic drift đơn giản có thể làm kết quả quá lạc quan. Cần varied intensity, missing/delayed labels, mixed causes và temporal replay trước khi đưa kết luận rộng.
+  \item \textbf{Training storm:} Cooldown period tối thiểu giữa các CT runs cho cùng model version. Budget cap ngăn cascade retraining.
+\end{itemize}
+
+%===============================================================================
+\section{Related Work}
+%===============================================================================
+
+\subsection{MLOps architecture và reference frameworks}
+Amou Najafabadi et al.~\cite{najafabadi2026} cung cấp systematic mapping study toàn diện nhất cho kiến trúc MLOps. Google~\cite{google_mlops} đề xuất ba mức maturity MLOps (ML0--ML2) với CT ở ML2. Microsoft~\cite{microsoft_mlops} mô tả maturity model năm mức. Bayram và Ahmed~\cite{bayram2025} survey trustworthy ML in production với trọng tâm về robustness.
+
+\subsection{Model monitoring và drift detection}
+Evidently (open-source) cung cấp data drift, prediction drift và data quality monitoring~\cite{evidently}. NannyML tập trung vào performance estimation khi labels chưa có~\cite{nannyml}. Các phương pháp drift detection học thuật bao gồm ADWIN~\cite{bifet2007}, Page-Hinkley test, và DDM~\cite{gama2004}. Lu et al.~\cite{lu2019} cung cấp survey toàn diện về concept drift.
+
+\subsection{Continuous training và adaptive retraining}
+Luo et al.~\cite{luo2023} đề xuất open-source pipeline cho autonomously adaptive ML. Semola et al.~\cite{semola2023} giới thiệu CLaaS (Continual Learning as a Service). Seldon Core và BentoML cung cấp model serving với canary deployment capabilities. Trong phạm vi tài liệu được khảo sát ở đây, nhiều công trình tập trung vào \emph{khi nào} retrain (trigger); mức độ hỗ trợ cho \emph{tại sao} và \emph{nên làm gì} (diagnosis $\rightarrow$ action selection) cần được kiểm chứng bằng một systematic comparison riêng. Đây là gap nghiên cứu được đề xuất, không phải kết luận phổ quát từ các tài liệu hiện có.
+
+%===============================================================================
+\section{Kết luận}
+%===============================================================================
+
+Repository đã đủ các mảnh ghép để trở thành experimental platform tốt cho nghiên cứu MLOps: immutable model lifecycle, execution infrastructure, serving, production event ingestion và data drift. Mapping đủ 39 thành phần cho thấy 14 đã có, 10 một phần và 15 thiếu theo tiêu chí heuristic của report --- trong đó các khoảng trống quan trọng nhất là Feedback Database, Continuous Training Pipeline, Model Comparison Runner, Data Quality Checker và Trigger $\rightarrow$ CT connection.
+
+Giá trị nghiên cứu tiếp theo không nằm ở việc thêm ``auto retrain sau drift'', mà ở lớp \textbf{decision intelligence} có thể giải thích được giữa monitoring và execution. Lộ trình 26 tuần với 7 phase (bao gồm Phase 0.5 PoC và buffer; 24 tuần phát triển và 2 tuần paper song song) cung cấp con đường khả thi để repo hỗ trợ một đóng góp rõ ràng về degradation-aware adaptive model maintenance: duy trì recovery tương đương hoặc tốt hơn trong khi giảm unnecessary retraining, chi phí và unsafe automation.
+
+Ba deliverable chính cho paper:
+\begin{enumerate}
+  \item \textbf{Taxonomy:} Evidence-to-action mapping (Table~\ref{tab:policy}) với diagnosis algorithm có thể giải thích và đánh giá (Section~\ref{subsec:diagnosis}).
+  \item \textbf{Platform:} Open-source implementation trên MLOps PaaS repo hiện có, chứng minh tính khả thi của approach.
+  \item \textbf{Benchmark:} Evaluation trên synthetic scenarios với ground-truth causes, so sánh adaptive CT với baselines theo cả performance, cost và human effort.
+\end{enumerate}
+
+\clearpage
+\begin{thebibliography}{20}
+\bibitem{najafabadi2026}
+F. Amou Najafabadi, J. Bogner, I. Gerostathopoulos, and P. Lago,
+``An architectural perspective on MLOps: Structures, processes, tools, and stakeholders,''
+\emph{Information and Software Technology}, vol. 193, Art. 108029, 2026.
+doi: \href{https://doi.org/10.1016/j.infsof.2026.108029}{10.1016/j.infsof.2026.108029}.
+
+\bibitem{repo}
+MLOps PaaS repository, source inspection of control plane, model server, consumer, Evidently, training, registry, deployment, GitOps manifests, and architecture documentation, accessed \today.
+
+\bibitem{google_mlops}
+K. Salama, J. Kazmierczak, and D. Schut,
+``Practitioners guide to MLOps: A framework for continuous delivery and automation of machine learning,'' Google Cloud, 2021.
+
+\bibitem{microsoft_mlops}
+Microsoft, ``MLOps maturity model,'' Microsoft Learn, 2025.
+\url{https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/mlops-maturity-model}.
+
+\bibitem{bayram2025}
+F. Bayram and B. S. Ahmed,
+``Towards trustworthy machine learning in production: An overview of the robustness in MLOps approach,''
+\emph{ACM Computing Surveys}, vol. 57, no. 5, pp. 1--35, 2025.
+
+\bibitem{evidently}
+Evidently AI, ``Evidently: Open-source ML monitoring,'' \url{https://www.evidentlyai.com/}.
+
+\bibitem{nannyml}
+NannyML, ``NannyML: Performance estimation and monitoring,'' \url{https://www.nannyml.com/}.
+
+\bibitem{bifet2007}
+A. Bifet and R. Gavald\`{a},
+``Learning from time-changing data with adaptive windowing,''
+in \emph{Proc. SDM}, SIAM, 2007, pp. 443--448.
+
+\bibitem{gama2004}
+J. Gama, P. Medas, G. Castillo, and P. Rodrigues,
+``Learning with drift detection,''
+in \emph{SBIA}, Springer, 2004, pp. 286--295.
+
+\bibitem{lu2019}
+J. Lu, A. Liu, F. Dong, F. Gu, J. Gama, and G. Zhang,
+``Learning under concept drift: A review,''
+\emph{IEEE Trans. Knowl. Data Eng.}, vol. 31, no. 12, pp. 2346--2363, 2019.
+
+\bibitem{luo2023}
+Y. Luo, M. Raatikainen, and J. K. Nurminen,
+``Autonomously adaptive machine learning systems: Experimentation-driven open-source pipeline,''
+2023.
+
+\bibitem{semola2023}
+R. Semola, V. Lomonaco, and D. Bacciu,
+``Continual-learning-as-a-service (CLaaS): On-demand efficient adaptation of predictive models,''
+2023.
+\end{thebibliography}
+
+\end{document}
