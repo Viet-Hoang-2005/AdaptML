@@ -1,0 +1,114 @@
+%===============================================================================
+\section{Ranh giới tự động hoá và Quy trình kiểm thử thăng cấp}
+%===============================================================================
+
+\begin{xltabular}{\linewidth}{@{}L{3.2cm} Y Y@{}}
+\caption{Ma trận phân định ranh giới tự động hóa (Auto vs. Human vs. Engineering).}\label{tab:boundaries}\\
+\toprule
+\textbf{Cấp độ tự động} & \textbf{Quyền hạn của hệ thống} & \textbf{Ranh giới cấm tự động (Cần con người/CI)} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Cấp độ tự động} & \textbf{Quyền hạn của hệ thống} & \textbf{Ranh giới cấm tự động (Cần con người/CI)} \\
+\midrule
+\endhead
+Observe / No Action & Ghi nhận sự kiện, tăng tỷ lệ lấy mẫu, theo dõi cửa sổ tiếp theo. & Tuyệt đối không kích hoạt huấn luyện (tránh training storm). \\
+\addlinespace
+Conditional Auto CT & Snapshot dữ liệu được phê duyệt, kích hoạt huấn luyện, kiểm thử qua EvaluationGate và đăng ký candidate. & Không tự ý thay đổi định nghĩa nhãn, cấu trúc feature, mã nguồn hay kiến trúc mô hình. \\
+\addlinespace
+Human-approved CT & Chuẩn bị đầy đủ báo cáo chẩn đoán, vết nguồn gốc (lineage) và kế hoạch huấn luyện ứng viên. & Không tự quyết định đánh đổi rủi ro kinh doanh hoặc tiếp tục khi nhãn mâu thuẫn. \\
+\addlinespace
+Engineering Incident & Tạo issue cảnh báo kèm bằng chứng audit trail, chuyển giao đội ngũ kỹ thuật. & Không tự can thiệp chỉnh sửa pipeline, dependency thư viện, mã ETL hay hạ tầng runtime. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Kiến trúc thử nghiệm lưu lượng thực tế (Shadow \& Canary Architecture)}\label{subsec:shadow-canary}
+
+Quy trình thăng cấp (promotion) trong kiến trúc đề xuất tuân thủ phương pháp kiểm định đa tầng luỹ tiến thay vì hoán đổi trực tiếp sau huấn luyện:
+
+\begin{enumerate}
+  \item \textbf{Chế độ nhân bản lưu lượng (Shadow Mode - Phase 5a):} Mô hình ứng viên (Candidate) nhận một bản sao lưu lượng thực tế từ gateway mà không làm ảnh hưởng tới phản hồi trả về người dùng (Champion vẫn trả response). Dự đoán của candidate được ghi nhận độc lập vào \codepath{paas\_shadow\_logs} để phục vụ so sánh đối kháng trên cùng request ID.
+  \item \textbf{Chế độ lưu lượng tăng dần (Canary Rollout - Phase 5b):} Định tuyến lưu lượng thực tế dựa trên băm nhất quán (consistent hashing) theo khóa phân nhóm ổn định (User/Session ID). Tỷ lệ lưu lượng được nâng dần theo các mốc $5\% \rightarrow 10\% \rightarrow 25\% \rightarrow 50\% \rightarrow 100\%$ khi và chỉ khi thỏa mãn đầy đủ các chỉ số rào chắn an toàn (Guardrails).
+  \item \textbf{Tiêu chí rào chắn an toàn (Guardrail Evaluation):} Đánh giá liên tục trên cửa sổ trượt có kiểm định thống kê:
+  \begin{itemize}
+    \item Tỷ lệ lỗi (Error rate) của Candidate $\le$ Champion $+ \epsilon$
+    \item Độ trễ p95 của Candidate $\le$ Champion $\times 1.2$
+    \item Khoảng cách phân phối dự đoán (KL-Divergence) $\le \theta_\text{dist}$
+    \item Hiệu năng thực tế (khi có nhãn) của Candidate $\ge$ Champion $- \delta$
+  \end{itemize}
+  \item \textbf{Thu hồi tự động (Automated Rollback):} Tự động ngắt toàn bộ lưu lượng của Candidate và chuyển đổi Blue--Green về Champion cũ khi vi phạm guardrail trong $k$ cửa sổ liên tiếp, đồng thời lưu vết \codepath{rollback\_reason} vào thực thể \codepath{TrafficExperiment}.
+\end{enumerate}
+
+Hình~\ref{fig:promotion-protocol} mô tả trực quan quy trình kiểm định thăng cấp luỹ tiến này.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+  node distance=5.5mm and 14mm,
+  promotestep/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
+    text width=5.4cm, minimum height=1.05cm, inner sep=4pt, line width=0.6pt},
+  promotedecision/.style={draw, diamond, aspect=2.1, align=center, font=\footnotesize,
+    text width=2.6cm, inner sep=2.5pt, line width=0.6pt},
+  promotebranch/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
+    text width=4.6cm, minimum height=1.0cm, inner sep=3.5pt, line width=0.6pt},
+  flowarrow/.style={-{Latex[length=2.2mm]}, thick}
+]
+
+  % --- Central Backbone (Top to Bottom) ---
+  \node[promotestep, fill=blue!7] (candidate) {
+    \textbf{1. Candidate Version Registered}\\[1pt]
+    Immutable artifact + Lineage snapshot
+  };
+
+  \node[promotedecision, fill=orange!15, below=of candidate] (gate_dec) {
+    \textbf{Offline}\\\textbf{Gate Pass?}
+  };
+
+  \node[promotestep, fill=yellow!18, below=of gate_dec] (shadow) {
+    \textbf{2. Shadow Mode (Phase 5a)}\\[1pt]
+    Duplicate live traffic · Champion answers\\
+    Compare candidate output offline
+  };
+
+  \node[promotestep, fill=yellow!18, below=of shadow] (canary) {
+    \textbf{3. Canary Staged Rollout (Phase 5b)}\\[1pt]
+    Consistent hashing: $5\% \rightarrow 10\% \rightarrow 25\% \rightarrow 50\%$
+  };
+
+  \node[promotedecision, fill=orange!15, below=of canary] (guard_dec) {
+    \textbf{Guardrails}\\\textbf{Satisfied?}
+  };
+
+  \node[promotestep, fill=green!12, below=of guard_dec] (promote) {
+    \textbf{4. Full Promotion (100\%)}\\[1pt]
+    Atomic alias switch $\rightarrow$ New Champion
+  };
+
+  % --- Horizontal Branches (Side Rejections & Rollback) ---
+  \node[promotebranch, fill=red!9, right=of gate_dec] (gate_fail) {
+    \textbf{Offline Gate Rejected}\\[1pt]
+    F1 / latency / quality checks failed\\
+    \textit{Action: Keep Champion, discard candidate}
+  };
+
+  \node[promotebranch, fill=red!9, right=of guard_dec] (rollback) {
+    \textbf{Automated Rollback (0\%)}\\[1pt]
+    Error rate spike / latency / drift violation\\
+    \textit{Action: Instant blue--green recovery}
+  };
+
+  % --- Arrows ---
+  \draw[flowarrow] (candidate) -- (gate_dec);
+  \draw[flowarrow] (gate_dec) -- node[right, font=\scriptsize\bfseries]{Yes} (shadow);
+  \draw[flowarrow] (gate_dec) -- node[above, font=\scriptsize\bfseries]{No} (gate_fail);
+  
+  \draw[flowarrow] (shadow) -- (canary);
+  \draw[flowarrow] (canary) -- (guard_dec);
+  
+  \draw[flowarrow] (guard_dec) -- node[right, font=\scriptsize\bfseries]{Yes} (promote);
+  \draw[flowarrow] (guard_dec) -- node[above, font=\scriptsize\bfseries]{No} (rollback);
+
+\end{tikzpicture}
+\caption{Protocol champion--challenger đề xuất: Trục dọc thể hiện các tầng kiểm thử luỹ tiến (Offline Gate $\rightarrow$ Shadow $\rightarrow$ Canary $\rightarrow$ Full Promotion); nhánh ngang thể hiện điểm dừng an toàn và cơ chế rollback tự động.}
+\label{fig:promotion-protocol}
+\end{figure}

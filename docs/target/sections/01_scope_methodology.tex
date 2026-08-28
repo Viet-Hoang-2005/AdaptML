@@ -1,0 +1,16 @@
+%===============================================================================
+\section{Phạm vi và phương pháp đánh giá}
+%===============================================================================
+
+\subsection{Khung kiến trúc tham chiếu}
+Nghiên cứu tham chiếu của Amou Najafabadi \textit{et al.}~\cite{najafabadi2026} mô tả hệ thống MLOps thông qua hai chiều cạnh cấu trúc cốt lõi:
+\begin{itemize}
+  \item \textbf{Cấu trúc tĩnh (Structure):} Gồm 39 thành phần chức năng được phân bổ trong 6 nhóm: (1)~Data Curation, (2)~Storage \& Versioning, (3)~ML Training, (4)~CI/CD, (5)~Inference, và (6)~Infrastructure \& Supporting Services.
+  \item \textbf{Quy trình động (Process):} Gồm 56 bước quy trình bao quát trọn vẹn vòng đời từ thu thập dữ liệu, huấn luyện, kiểm thử, triển khai đến giám sát và bảo trì trong môi trường sản xuất.
+  \item \textbf{Không gian biến thể (Variants):} Phân định 8 biến thể kiến trúc (V1--V8). Trong đó, nhóm cốt lõi V1--V4 áp dụng cho mô hình huấn luyện từ đầu (train from scratch), phân biệt bởi hình thức phục vụ dự đoán (Inference Service độc lập vs. Inference Engine Pool dùng chung) và phương thức tái huấn luyện (Manual vs. Continuous Training). Các biến thể V5--V8 tương ứng áp dụng cho mô hình nạp sẵn (pre-trained/fine-tuned).
+\end{itemize}
+
+Khung tham chiếu trên được sử dụng như một chuẩn mực đánh giá cấu trúc và phân tích khoảng trống (gap analysis), giúp định hình hướng phát triển học thuật thay vì xem xét như một danh mục kiểm tra cứng nhắc.
+
+\subsection{Phương pháp thẩm định mã nguồn}
+Đánh giá được thực hiện trực tiếp trên mã nguồn, schema cơ sở dữ liệu, đặc tả hạ tầng Kubernetes/Docker và các bộ kiểm thử tự động của repository. Các luồng nghiệp vụ chính được rà soát bao gồm: (1)~upload/build artifacts, (2)~training execution \& tracking, (3)~model serving \& event stream, (4)~model registry \& deployment, và (5)~drift monitoring workflow. Một thành phần được ghi nhận là ``Thiếu'' thể hiện rằng nền tảng chưa cung cấp contract hoặc module cài đặt sẵn trong hệ thống quản trị, không hàm ý người dùng bị giới hạn khi tự định nghĩa logic trong mã nguồn mô hình riêng.

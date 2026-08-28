@@ -1,0 +1,255 @@
+%===============================================================================
+\section{Hướng phát triển: Degradation-Aware Adaptive Model Maintenance}
+%===============================================================================
+
+\subsection{Luận đề nghiên cứu và Phạm vi}
+
+\begin{tcolorbox}[colback=blue!3!white,colframe=blue!45!black,arc=2pt,boxrule=0.6pt,top=4pt,bottom=4pt,left=6pt,right=6pt]
+\textbf{Luận đề nghiên cứu cốt lõi:}\\[0.2em]
+\emph{``Một hệ thống Continuous Training tin cậy phải xác định chính xác nguyên nhân suy giảm và mức độ rủi ro trước khi quyết định hành động; không tự động tái huấn luyện theo quán tính chỉ dựa trên một cảnh báo đơn lẻ.''}
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=orange!4!white,colframe=orange!55!black,arc=2pt,boxrule=0.6pt,top=3pt,bottom=3pt,left=4pt,right=4pt,halign=center]
+\small\textbf{Vòng lặp khép kín mục tiêu:}\\[0.1em]
+Inference + Feedback $\rightarrow$ EvidenceWindow $\rightarrow$ DegradationEvent $\rightarrow$ Multi-signal Diagnosis $\rightarrow$ Policy Selection $\rightarrow$ Conditional CT $\rightarrow$ EvaluationGate $\rightarrow$ Shadow/Canary $\rightarrow$ Promotion / Rollback
+\end{tcolorbox}
+
+Trong phạm vi đề tài nghiên cứu, hệ thống tập trung hiện thực hóa và kiểm chứng ba nhánh hành động chính:
+\begin{enumerate}
+  \item \textbf{Harmful Data Drift (Trôi dạt có hại):} Khi dữ liệu đầu vào biến đổi kèm theo suy giảm hiệu năng thực tế và đã có đủ mẫu nhãn kiểm chứng $\rightarrow$ Kích hoạt \textbf{Conditional Auto CT} trong giới hạn ngân sách và chính sách an toàn.
+  \item \textbf{Data Quality / Pipeline Incident (Sự cố chất lượng dữ liệu):} Khi xuất hiện vi phạm schema, sai lệch miền giá trị hoặc mất tính tươi mới (freshness) $\rightarrow$ Dừng hoàn toàn tái huấn luyện, phát cảnh báo cho đội ngũ kỹ thuật (\textbf{Engineering Incident}).
+  \item \textbf{Unexplained Degradation / Concept Shift (Suy giảm chưa rõ nguyên nhân):} Khi hiệu năng giảm nhưng phân phối dữ liệu không đổi hoặc nhãn bị trễ $\rightarrow$ Kích hoạt cơ chế \textbf{Human-in-the-Loop (HITL)} để chuyên gia thẩm định dữ liệu trước khi hành động.
+\end{enumerate}
+Code/feature semantics, label policy, architecture redesign và runtime outage nên là Engineering recommendation ở MVP. Configuration degradation/HPO là nhánh mở rộng sau khi ba path đầu đã có benchmark.
+Hình~\ref{fig:degradation-workflow} biểu diễn thứ tự kiểm tra an toàn trước khi cho phép một candidate đi vào CT.
+
+\begin{figure}[p]
+\centering
+\begin{tikzpicture}[
+  node distance=5.5mm and 12mm,
+  flowstep/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
+    text width=5.4cm, minimum height=1.1cm, inner sep=4pt, line width=0.6pt},
+  flowdecision/.style={draw, diamond, aspect=2.1, align=center, font=\footnotesize,
+    text width=2.6cm, inner sep=2.5pt, line width=0.6pt},
+  flowbranch/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
+    text width=4.6cm, minimum height=1.0cm, inner sep=3.5pt, line width=0.6pt},
+  flowarrow/.style={-{Latex[length=2.2mm]}, thick}
+]
+
+  % --- Central Backbone (Top to Bottom) ---
+  \node[flowstep, fill=blue!7] (events) {
+    \textbf{1. Inference Events \& Feedback}\\[1pt]
+    Production logs + Delayed labels
+  };
+
+  \node[flowstep, fill=blue!7, below=of events] (evidence) {
+    \textbf{2. EvidenceWindow Assembly}\\[1pt]
+    Drift · Data Quality · Performance\\
+    Confidence · Label Coverage
+  };
+
+  \node[flowdecision, fill=orange!15, below=of evidence] (quality) {
+    \textbf{Quality}\\\textbf{valid?}
+  };
+
+  \node[flowdecision, fill=orange!15, below=of quality] (labels) {
+    \textbf{Labels}\\\textbf{sufficient?}
+  };
+
+  \node[flowstep, fill=orange!10, below=of labels] (diagnosis) {
+    \textbf{3. Multi-Signal Diagnosis}\\[1pt]
+    Ranked cause candidates + Confidence
+  };
+
+  \node[flowdecision, fill=orange!15, below=of diagnosis] (policy) {
+    \textbf{Policy}\\\textbf{action?}
+  };
+
+  \node[flowstep, fill=green!10, below=of policy] (candidate) {
+    \textbf{4. Conditional Auto CT}\\[1pt]
+    Immutable snapshot + Trigger training
+  };
+
+  \node[flowstep, fill=green!10, below=of candidate] (gate) {
+    \textbf{5. EvaluationGate Validation}\\[1pt]
+    Offline benchmark metrics + Quality checks
+  };
+
+  \node[flowstep, fill=green!10, below=of gate] (traffic) {
+    \textbf{6. Traffic Experimentation}\\[1pt]
+    Shadow evaluation $\rightarrow$ Canary rollout
+  };
+
+  \node[flowstep, fill=green!10, below=of traffic] (outcome) {
+    \textbf{7. Production Outcome}\\[1pt]
+    Promote to Champion or Auto-Rollback
+  };
+
+  % --- Horizontal Branches (Side Exits) ---
+  % Quality invalid -> Engineering Incident
+  \node[flowbranch, fill=red!9, right=of quality] (engineering) {
+    \textbf{Engineering Incident}\\[1pt]
+    Schema / pipeline / sensor outage\\
+    \textit{Action: Alert infra team (No CT)}
+  };
+
+  % Labels insufficient -> Proxy Warning
+  \node[flowbranch, fill=yellow!22, right=of labels] (proxy) {
+    \textbf{Proxy Early Warning}\\[1pt]
+    Low coverage / high label delay\\
+    \textit{Action: Increase sampling / Hold}
+  };
+
+  % Policy Observe -> Left
+  \node[flowbranch, fill=gray!12, left=of policy] (observe) {
+    \textbf{Observe / Benign Drift}\\[1pt]
+    Drift detected but perf stable\\
+    \textit{Action: Log evidence (No CT)}
+  };
+
+  % Policy Human Review -> Right
+  \node[flowbranch, fill=red!9, right=of policy] (human) {
+    \textbf{Human Review}\\[1pt]
+    Concept drift / mixed signals\\
+    \textit{Action: Data Scientist triage}
+  };
+
+  % --- Arrows ---
+  \draw[flowarrow] (events) -- (evidence);
+  \draw[flowarrow] (evidence) -- (quality);
+  
+  \draw[flowarrow] (quality) -- node[right, font=\scriptsize\bfseries]{Yes} (labels);
+  \draw[flowarrow] (quality) -- node[above, font=\scriptsize\bfseries]{No} (engineering);
+  
+  \draw[flowarrow] (labels) -- node[right, font=\scriptsize\bfseries]{Yes} (diagnosis);
+  \draw[flowarrow] (labels) -- node[above, font=\scriptsize\bfseries]{No} (proxy);
+  
+  \draw[flowarrow] (diagnosis) -- (policy);
+  
+  \draw[flowarrow] (policy) -- node[above, font=\scriptsize\bfseries]{Observe} (observe);
+  \draw[flowarrow] (policy) -- node[above, font=\scriptsize\bfseries]{Review} (human);
+  \draw[flowarrow] (policy) -- node[right, font=\scriptsize\bfseries]{Auto CT} (candidate);
+  
+  \draw[flowarrow] (candidate) -- (gate);
+  \draw[flowarrow] (gate) -- (traffic);
+  \draw[flowarrow] (traffic) -- (outcome);
+
+\end{tikzpicture}
+\caption{Workflow degradation-aware: Trục dọc thể hiện pipeline tự động hóa khép kín (happy path); các nhánh ngang thể hiện chốt an toàn và điểm can thiệp của con người/kỹ thuật khi thiếu bằng chứng.}
+\label{fig:degradation-workflow}
+\end{figure}
+
+\subsection{Câu hỏi nghiên cứu và Giả thuyết khoa học}
+Để chứng minh đóng góp học thuật vượt ra ngoài phạm vi xây dựng tính năng kỹ thuật, quá trình thực nghiệm sẽ tập trung kiểm chứng ba câu hỏi nghiên cứu cốt lõi:
+
+\begin{enumerate}
+  \item \textbf{RQ1 (Hiệu quả chi phí và phục hồi):} Cơ chế quyết định hành động dựa trên bằng chứng (Evidence-to-Action Policy) có thể giảm thiểu bao nhiêu phần trăm số lần tái huấn luyện không cần thiết (unnecessary CT) so với các baseline truyền thống (Manual, Periodic, Alert-driven, Always-retrain) mà vẫn duy trì năng lực phục hồi độ chính xác tương đương khi xuất hiện trôi dạt có hại (harmful drift)?
+  \item \textbf{RQ2 (An toàn tự động hóa):} Việc kết hợp chẩn đoán nguyên nhân đa tín hiệu (Multi-Signal Diagnosis) với cơ chế xử lý nhãn trễ (Delayed-Label Handling) có thể triệt tiêu hiện tượng tự động hóa mất an toàn (unsafe automation---tái huấn luyện/thăng cấp sai lầm trên dữ liệu lỗi hoặc khi chưa đủ bằng chứng thống kê) hay không?
+  \item \textbf{RQ3 (An toàn triển khai thực tế):} Cổng kiểm thử đối kháng (Evaluation Gate) kết hợp với cơ chế so sánh lưu lượng nhân bản (Shadow Comparison) nâng cao tính an toàn và giảm thiểu rủi ro vận hành như thế nào so với quy trình huấn luyện và hoán đổi mô hình trực tiếp (direct promotion)?
+\end{enumerate}
+
+Các giả thuyết khoa học tương ứng được đặt ra:
+\begin{itemize}
+  \item \textbf{H1:} Chính sách thích ứng giúp triệt tiêu trên 90\% số lần kích hoạt CT không cần thiết trong kịch bản trôi dạt lành tính (Benign Drift - S1).
+  \item \textbf{H2:} Khối chẩn đoán kết hợp với cổng dữ liệu (Data Quality Gate) và vòng lặp chuyên gia (HITL) ngăn chặn hoàn toàn 100\% các ca tái huấn luyện sai lầm khi xảy ra sự cố dữ liệu (S3) hoặc thay đổi khái niệm phức tạp (S4, S9).
+  \item \textbf{H3:} Cơ chế kiểm định đối kháng đa tầng (Offline Gate $\rightarrow$ Shadow Mode) ngăn chặn triệt để các trường hợp thoái hóa ngầm (false promotion) mà không làm tăng thời gian phục hồi (time-to-recovery) vượt quá ngưỡng cho phép.
+\end{itemize}
+
+\subsection{Phân loại chính sách Bằng chứng -- Hành động (Evidence-to-Action Taxonomy)}
+
+\begin{table}[ht]
+\centering
+\caption{Bảng phân loại chính sách ra quyết định thích ứng.}\label{tab:policy}
+\begin{tabularx}{\linewidth}{@{}L{3.5cm} Y Y@{}}
+\toprule
+\textbf{Mẫu hình bằng chứng} & \textbf{Chẩn đoán suy luận ưu tiên} & \textbf{Hành động an toàn đề xuất} \\
+\midrule
+$d_\text{drift}$ cao; Quality đạt; Nhãn đủ; F1/Recall suy giảm & Trôi dạt phân phối có hại (\texttt{HARMFUL\_DRIFT}) & Kích hoạt \textbf{Conditional Auto CT} trên cửa sổ dữ liệu mới (chỉ khi vượt qua kiểm tra ngân sách và cổng đánh giá). \\
+Vi phạm Quality (lỗi schema, out-of-range, mất freshness) & Sự cố đường ống dữ liệu (\texttt{DATA\_QUALITY\_ISSUE}) & \textbf{Engineering Incident}; đình chỉ hoàn toàn CT để tránh huấn luyện trên dữ liệu rác. \\
+F1/Recall giảm; $d_\text{drift}$ thấp hoặc mâu thuẫn & Suy giảm chưa rõ nguyên nhân (\texttt{UNEXPLAINED\_DEGRADATION}) & \textbf{Human Review}; chuyển giao chuyên gia ML phân tích lát cắt (slice analysis) và kiểm tra nhãn. \\
+Điểm tự tin (Confidence) giảm; chưa có nhãn thực tế & Cảnh báo sớm trôi dạt (\texttt{CALIBRATION\_WARNING}) & Tăng tần suất lấy mẫu giám sát; \textbf{không} tự động CT chỉ dựa trên điểm tự tin suy luận. \\
+Độ trễ (Latency) p95 hoặc tỷ lệ lỗi 5xx tăng cao & Sự cố hạ tầng phục vụ (\texttt{SERVING\_INFRA\_ISSUE}) & Kích hoạt Auto-scaling hoặc Rollback về phiên bản trước; \textbf{không} can thiệp vào mô hình. \\
+$d_\text{drift}$ cao nhưng hiệu năng F1 ổn định (đủ nhãn) & Trôi dạt lành tính (\texttt{BENIGN\_DRIFT}) & \textbf{Observe / Log evidence}; ghi nhận bằng chứng và duy trì mô hình hiện tại để tiết kiệm chi phí. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Thuật toán chẩn đoán nguyên nhân suy giảm (Diagnosis Algorithm)}\label{subsec:diagnosis}
+
+Khối chẩn đoán nguyên nhân đóng vai trò hạt nhân trong việc ra quyết định. Dưới đây là đặc tả thuật toán chẩn đoán dựa trên tập luật có thể giải thích được (Interpretable Rule-based Cause Scoring) cho phiên bản MVP:
+
+\begin{tcolorbox}[colback=gray!3!white,colframe=gray!40!black,arc=2pt,boxrule=0.6pt,top=4pt,bottom=4pt,left=6pt,right=6pt,title=\small\textbf{Thuật toán 1: Chẩn đoán nguyên nhân suy giảm và đề xuất hành động}]
+\small
+\textbf{Đầu vào (Input):} Thực thể EvidenceWindow $E$ gồm tập chỉ số:
+$$\{d_\text{drift}, q_\text{quality}, \Delta_\text{perf}, \Delta_\text{conf}, r_\text{labels}, n, CI_\text{perf}\}$$
+\textit{Quy ước:} $\Delta_\text{perf} = \text{Metric}_\text{current} - \text{Metric}_\text{baseline}$ (đối với metric càng cao càng tốt như F1, $\Delta_\text{perf} < 0$ biểu thị suy giảm).\\[0.4em]
+\textbf{Bước 1 (Kiểm định chất lượng dữ liệu - Data Quality Gate):}\\
+\hspace*{1em}\textbf{If} $q_\text{quality} < \theta_\text{quality}$ \textbf{then}\\
+\hspace*{2em}\textbf{Return} Diagnosis(\texttt{DATA\_QUALITY\_ISSUE}, Action: \texttt{ENGINEERING}, Confidence: High)\\[0.25em]
+\textbf{Bước 2 (Kiểm định trôi dạt có hại - Harmful Drift Gate):}\\
+\hspace*{1em}\textbf{If} $d_\text{drift} > \theta_\text{drift}$ \textbf{and} $\Delta_\text{perf} < \theta_\text{perf}$ \textbf{and} $r_\text{labels} \ge r_\text{min}$ \textbf{and} $n \ge n_\text{min}$\\
+\hspace*{2em}\textbf{and} Cận dưới của $CI_\text{perf}$ xác nhận suy giảm có ý nghĩa thống kê \textbf{then}\\
+\hspace*{2em}\textbf{If} Kiểm tra điều kiện (Cooldown OK $\wedge$ Budget OK) \textbf{then}\\
+\hspace*{3em}\textbf{Return} Diagnosis(\texttt{HARMFUL\_DRIFT}, Action: \texttt{AUTO\_CT}, Confidence: High)\\
+\hspace*{2em}\textbf{Else}\\
+\hspace*{3em}\textbf{Return} Diagnosis(\texttt{HARMFUL\_DRIFT}, Action: \texttt{HUMAN\_REVIEW}, Confidence: High)\\[0.25em]
+\textbf{Bước 3 (Suy giảm hiệu năng chưa rõ nguyên nhân):}\\
+\hspace*{1em}\textbf{If} $\Delta_\text{perf} < \theta_\text{perf}$ \textbf{and} $d_\text{drift} \le \theta_\text{drift}$ \textbf{then}\\
+\hspace*{2em}\textbf{Return} Diagnosis(\texttt{UNEXPLAINED\_DEGRADATION}, Action: \texttt{HUMAN\_REVIEW}, Confidence: Medium)\\[0.25em]
+\textbf{Bước 4 (Trôi dạt lành tính - Benign Drift):}\\
+\hspace*{1em}\textbf{If} $d_\text{drift} > \theta_\text{drift}$ \textbf{and} $|\Delta_\text{perf}| \approx 0$ \textbf{and} $r_\text{labels} \ge r_\text{min}$ \textbf{then}\\
+\hspace*{2em}\textbf{Return} Diagnosis(\texttt{BENIGN\_DRIFT}, Action: \texttt{OBSERVE}, Confidence: High)\\[0.25em]
+\textbf{Bước 5 (Cảnh báo sớm từ phân phối điểm tự tin):}\\
+\hspace*{1em}\textbf{If} $\Delta_\text{conf}$ lệch chuẩn có ý nghĩa \textbf{and} $r_\text{labels} < r_\text{min}$ \textbf{then}\\
+\hspace*{2em}\textbf{Return} Diagnosis(\texttt{CALIBRATION\_WARNING}, Action: \texttt{INCREASE\_SAMPLING}, Confidence: Low)\\[0.25em]
+\textbf{Mặc định (Default Fallback):}\\
+\hspace*{1em}\textbf{Return} Diagnosis(\texttt{AMBIGUOUS}, Action: \texttt{HUMAN\_REVIEW}, Confidence: Low)
+\end{tcolorbox}
+
+\subsection{Chiến lược xử lý nhãn trễ (Delayed-Label Handling Strategy)}\label{subsec:delayed-labels}
+
+Nhãn thực tế (ground-truth labels) thường có độ trễ lớn so với thời điểm suy luận, tạo nên điểm nghẽn nghiêm trọng nhất trong việc giám sát hiệu năng mô hình. Hệ thống đề xuất 5 nguyên tắc xử lý nhãn trễ:
+
+\begin{enumerate}
+  \item \textbf{Chuỗi liên kết mã định danh dự đoán (End-to-end Prediction ID):} Gateway \codepath{model-server} tạo mã định danh duy nhất (\codepath{prediction\_id}) và trả về cho client trong HTTP response, đồng thời gắn kèm mã này vào event stream lưu trữ. Client sử dụng chính \codepath{prediction\_id} để gửi nhãn thực tế qua Feedback API. Đây là \textbf{điều kiện tiên quyết} để thực hiện phép join giữa dự đoán và nhãn thực tế.
+  \item \textbf{Cửa sổ trượt gắn mốc thời gian nhãn (Watermark-based Sliding Window):} Phép tính toán hiệu năng (F1, Precision, Recall) chỉ được thực hiện trên cửa sổ thời gian $[t-W, t]$ khi tỷ lệ phủ nhãn đạt ngưỡng tin cậy tối thiểu:
+  $$r_\text{labels} = \frac{|\text{Dự đoán đã có nhãn}|}{|\text{Tổng số lượt dự đoán}|} \ge r_\text{min}$$
+  Nếu $r_\text{labels} < r_\text{min}$, hệ thống ghi nhận trạng thái chưa đủ nhãn (\texttt{INSUFFICIENT\_LABELS}) và tuyệt đối không nội suy hiệu năng giả định.
+  \item \textbf{Chỉ số đại diện khi thiếu nhãn (Proxy Signals):} Khi nhãn chưa sẵn sàng, hệ thống dựa vào các tín hiệu đại diện: độ trôi dạt phân phối đầu ra $P(\hat{Y})$, độ dịch chuyển điểm tự tin (calibrated confidence drift) và biến động độ trễ để phát cảnh báo sớm, không dùng để kích hoạt CT trực tiếp.
+  \item \textbf{Phân tầng độ tin cậy của nhãn (Label Trust Levels):} Mỗi bản ghi nhãn phản hồi đều lưu kèm nguồn thu thập (\codepath{label\_source}: người dùng cuối, chuyên gia gán nhãn, hay pipeline tự động) và mức độ tin cậy (\codepath{trust\_level}), ngăn ngừa việc trộn lẫn nhãn nhiễu vào dữ liệu huấn luyện mới.
+  \item \textbf{Ước lượng thống kê với độ phủ nhãn một phần:} Khi chỉ có một phần dự đoán được gán nhãn (ví dụ 30\%), hiệu năng được tính toán kèm khoảng tin cậy 95\% ($CI_\text{perf}$). Cổng quyết định chỉ kích hoạt CT khi cận dưới của khoảng tin cậy xác nhận sự suy giảm thực sự.
+\end{enumerate}
+
+\subsection{Mô hình dữ liệu trạng thái (Minimal State Model)}
+
+Để hiện thực hóa vòng lặp khép kín, Control Plane cần bổ sung 8 thực thể dữ liệu bất biến:
+
+\begin{xltabular}{\linewidth}{@{}L{3.2cm} L{5.4cm} Y@{}}
+\caption{Các thực thể dữ liệu cốt lõi bổ sung vào Control Plane.}\label{tab:state-model}\\
+\toprule
+\textbf{Thực thể (Entity)} & \textbf{Thuộc tính then chốt} & \textbf{Mục đích kiến trúc \& Nghiệp vụ} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Thực thể (Entity)} & \textbf{Thuộc tính then chốt} & \textbf{Mục đích kiến trúc \& Nghiệp vụ} \\
+\midrule
+\endhead
+PredictionRecord & prediction\_id, request\_id, tenant, project, version, timestamp, features, prediction, confidence, latency, status & Ghi nhận từng giao dịch suy luận và thiết lập khóa liên kết (correlation key) cho dữ liệu phản hồi. \\
+\addlinespace
+Feedback & feedback\_id, prediction\_id, ground\_truth, label\_timestamp, label\_source, trust\_level, correction\_version & Lưu vết nhãn thực tế trả về từ client; hỗ trợ nhiều lượt phản hồi và đính chính nhãn (correction). \\
+\addlinespace
+EvidenceWindow & model\_version, window\_start, window\_end, baseline\_ref, metric\_values (drift, quality, perf, conf), slices, label\_coverage, policy\_version & Lưu trữ bằng chứng vận hành bất biến theo cửa sổ thời gian phục vụ chẩn đoán và kiểm toán. \\
+\addlinespace
+DegradationEvent & evidence\_window\_ids, severity, affected\_component, deduplication\_key, status, created\_at & Chuẩn hóa sự kiện cảnh báo suy giảm với tính chất bất biến và chống trùng lặp (idempotency). \\
+\addlinespace
+Diagnosis & degradation\_event\_id, ranked\_causes (JSON), top\_confidence, explanation, lineage\_snapshot, policy\_version & Tách biệt tường minh khâu suy luận nguyên nhân gốc rễ khỏi khâu phát hiện cảnh báo thô. \\
+\addlinespace
+RetrainingRequest & diagnosis\_id, strategy (auto/human/eng), data\_snapshot\_uri, config\_version, budget\_limit, cooldown\_until, status, approved\_by & Đơn vị điều phối vòng đời tái huấn luyện thay thế cho việc gọi trực tiếp training job từ drift run. \\
+\addlinespace
+EvaluationGate & candidate\_version, champion\_version, offline\_metrics, calibration\_score, latency\_p95, error\_rate, data\_quality\_passed, decision (pass/fail/hold) & Cổng thẩm định đối kháng nghiêm ngặt trước khi cho phép mô hình ứng viên tiếp cận môi trường sản xuất. \\
+\addlinespace
+TrafficExperiment & experiment\_type (shadow/canary), candidate\_version, champion\_version, hash\_seed, weight\_schedule, guardrails, current\_weight, rollback\_reason & Điều phối và ghi nhận toàn bộ quá trình thử nghiệm lưu lượng thực tế và cơ chế thu hồi tự động. \\
+\bottomrule
+\end{xltabular}
+
+Một prediction có thể chưa có label hoặc có nhiều lần label/correction; vì vậy \codepath{PredictionRecord} và \codepath{Feedback} nên là hai bảng có quan hệ một-nhiều, kèm unique/idempotency constraint cho nguồn feedback và version correction.

@@ -1,0 +1,24 @@
+%===============================================================================
+\section{Đối chiếu quy trình vòng đời (56 Process Steps)}
+%===============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Hiện trạng triển khai các nhóm quy trình vòng đời then chốt~\cite{najafabadi2026}.}
+\begin{tabularx}{\linewidth}{@{}L{3.8cm} C{1.6cm} Y@{}}
+\toprule
+\textbf{Nhóm quy trình} & \textbf{Mức độ} & \textbf{Hiện trạng triển khai thực tế} \\
+\midrule
+Khởi tạo, đóng gói \& đăng ký & \statusyes & Upload code/data $\rightarrow$ build container image $\rightarrow$ đăng ký model version bất biến. \\
+Thử nghiệm \& huấn luyện & \statuspartial & Training job quản lý snapshot dữ liệu/mã nguồn; tracking metadata tích hợp qua MLflow. \\
+Triển khai \& phục vụ dự đoán & \statusyes & Model build sẵn sàng được deploy; Gateway xác thực và proxy theo tenant/project/version. \\
+Thu thập bằng chứng sản xuất & \statuspartial & Đã lưu vết features/prediction; cần bổ sung confidence, latency, prediction ID và feedback. \\
+Phát hiện suy giảm (Detection) & \statuspartial & Đã có data drift và metrics hạ tầng; chưa chuẩn hóa prediction drift, data quality và performance. \\
+Chẩn đoán nguyên nhân (Diagnosis) & \statusno & Chưa có module suy luận nguyên nhân (cause candidates), đồ thị bằng chứng và giải thích. \\
+Lựa chọn hành động \& phê duyệt & \statusno & Alert chưa chuyển đổi thành RetrainingRequest; thiếu cơ chế định tuyến Auto/Human/Engineering. \\
+Tái huấn luyện, kiểm thử \& thăng cấp & \statuspartial & Thực hiện thủ công; thiếu Evaluation Gate tự động, shadow/canary routing và auto-rollback. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Kết quả đối chiếu quy trình khẳng định một kết luận kiến trúc quan trọng: \textbf{hệ thống đã xây dựng hoàn chỉnh hạ tầng đường ống (Ingestion Plumbing), nhưng còn thiếu hoàn toàn khối trí tuệ ra quyết định (Adaptive Decision Loop)}. Việc chỉ gắn thêm một lệnh kích hoạt tái huấn luyện đơn giản sau khi phát hiện data drift sẽ không tạo nên một hệ thống CT tin cậy, bởi vì: (1)~data drift không đồng nghĩa với suy giảm hiệu năng thực tế (có thể là benign drift), và (2)~việc tự động huấn luyện lại trên dữ liệu bị lỗi hoặc nhãn nhiễu sẽ làm lặp lại hoặc trầm trọng hóa sai số mô hình.

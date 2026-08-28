@@ -1,0 +1,12 @@
+%===============================================================================
+\section{Tổng quan các công trình liên quan (Related Work)}
+%===============================================================================
+
+\subsection{Khung kiến trúc MLOps và Mô hình trưởng thành}
+Nghiên cứu của Amou Najafabadi \textit{et al.}~\cite{najafabadi2026} là công trình systematic mapping toàn diện nhất hiện nay về cấu trúc và quy trình MLOps. Mô hình trưởng thành của Google Cloud~\cite{google_mlops} định nghĩa 3 cấp độ (ML0--ML2) với Continuous Training nằm ở mức trưởng thành cao nhất ML2. Mô hình 5 cấp độ của Microsoft~\cite{microsoft_mlops} và khảo sát của Bayram \& Ahmed~\cite{bayram2025} nhấn mạnh tính vững chắc (robustness) và quản trị rủi ro trong môi trường sản xuất.
+
+\subsection{Giám sát mô hình và Phát hiện trôi dạt}
+Thư viện mã nguồn mở Evidently AI~\cite{evidently} cung cấp khả năng đo lường data drift và kiểm tra chất lượng dữ liệu cơ bản. NannyML~\cite{nannyml} tập trung vào phương pháp ước lượng hiệu năng khi chưa có nhãn. Về mặt thuật toán học thuật, các cơ chế phát hiện trôi dạt kinh điển bao gồm ADWIN~\cite{bifet2007}, Page-Hinkley test, DDM~\cite{gama2004} và tổng quan toàn diện về concept drift của Lu \textit{et al.}~\cite{lu2019}.
+
+\subsection{Hệ thống Continuous Training và Tự thích ứng}
+Luo \textit{et al.}~\cite{luo2023} đề xuất kiến trúc thử nghiệm thích ứng tự động trên nền tảng nguồn mở. Semola \textit{et al.}~\cite{semola2023} giới thiệu mô hình Continual Learning as a Service (CLaaS). Trong khi đa số các công trình hiện nay chỉ tập trung vào câu hỏi \emph{``Khi nào nên huấn luyện lại?''} (Triggering), đề tài này đóng góp vào khoảng trống \emph{``Tại sao xảy ra suy giảm và nên lựa chọn hành động an toàn nào?''} (Multi-Signal Diagnosis $\rightarrow$ Safe Action Selection).

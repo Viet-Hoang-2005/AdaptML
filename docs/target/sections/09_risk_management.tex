@@ -1,0 +1,11 @@
+%===============================================================================
+\section{Quản trị rủi ro và Ranh giới an toàn hệ thống}
+%===============================================================================
+
+\begin{itemize}
+  \item \textbf{Thách thức về nhãn trễ (Delayed Labels):} Hệ thống áp dụng nguyên tắc phân tách ranh giới giữa giám sát tín hiệu đại diện (Proxy Monitoring) và tính toán hiệu năng đã xác thực (Confirmed Performance); chỉ kích hoạt CT khi độ phủ nhãn $r_\text{labels}$ đạt ý nghĩa thống kê (chi tiết tại Mục~\ref{subsec:delayed-labels}).
+  \item \textbf{Tính mơ hồ trong quan hệ nhân quả (Causal Ambiguity):} Khi xảy ra đồng thời nhiều dạng biến động, khối chẩn đoán xếp hạng các nguyên nhân theo xác suất và tự động rơi về chế độ an toàn \texttt{HUMAN\_REVIEW}, tránh việc suy diễn nguyên nhân tuyệt đối khi thiếu chứng cứ.
+  \item \textbf{Ngăn ngừa bão tái huấn luyện (Training Storm):} Thiết lập thời gian giãn cách tối thiểu (Cooldown Period) giữa hai lần CT liên tiếp của cùng một mô hình và đặt ngưỡng trần ngân sách tính toán (Budget Cap) theo tuần/tháng.
+  \item \textbf{Bảo mật và cô lập đa tenant (Multi-Tenancy Isolation):} Mọi bản ghi sự kiện, dữ liệu phản hồi và truy vấn bằng chứng đều được gắn khóa phân vùng cứng theo \codepath{tenant\_id}, tuân thủ chính sách lưu giữ và xóa dữ liệu định kỳ.
+  \item \textbf{Kiểm soát sai số tổng quát hóa (External Validity):} Các kịch bản thử nghiệm được tạo với nhiều mức cường độ, kết hợp dữ liệu nhiễu và độ trễ nhãn ngẫu nhiên trên nhiều hạt giống (seeds) để bảo đảm kết luận thực nghiệm mang tính khách quan.
+\end{itemize}

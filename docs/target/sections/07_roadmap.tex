@@ -1,0 +1,63 @@
+%===============================================================================
+\section{Lộ trình hiện thực hoá và Kế hoạch nghiên cứu}
+%===============================================================================
+
+Lộ trình thực hiện được thiết kế kéo dài 26 tuần, phân bổ thành 4 giai đoạn logic từ chuẩn bị thực nghiệm đến triển khai hoàn thiện và công bố:
+
+\begin{xltabular}{\linewidth}{@{}L{1.8cm} L{3.0cm} L{4.8cm} Y@{}}
+\caption{Lộ trình nghiên cứu và phát triển 26 tuần.}\label{tab:roadmap}\\
+\toprule
+\textbf{Giai đoạn} & \textbf{Mục tiêu trọng tâm} & \textbf{Sản phẩm bàn giao (Deliverables)} & \textbf{Tiêu chí hoàn thành (Exit Criteria)} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Giai đoạn} & \textbf{Mục tiêu trọng tâm} & \textbf{Sản phẩm bàn giao (Deliverables)} & \textbf{Tiêu chí hoàn thành (Exit Criteria)} \\
+\midrule
+\endhead
+
+\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 1: Chuẩn bị \& Chứng minh khái niệm (PoC) ---}}\\
+\addlinespace
+
+Phase 0 (Tuần 1--2) & Đóng băng giao thức nghiên cứu & Bộ dataset tabular, framework tạo kịch bản trôi dạt (scenario injection), danh sách baseline, ngân sách và hạt giống ngẫu nhiên (seeds). & Giao thức benchmark được kiểm soát phiên bản qua Git và S3 manifest trước khi thực hiện đo đạc. \\
+\addlinespace
+
+Phase 0.5 (Tuần 3--4) & Thử nghiệm lát cắt dọc (Vertical Slice PoC) & Tích hợp khép kín trên 1 kịch bản mẫu (S2 Harmful Drift): Inject drift $\rightarrow$ Detect $\rightarrow$ Hardcoded Diagnosis $\rightarrow$ Retrain $\rightarrow$ Evaluate $\rightarrow$ Promote. & Xác nhận tính thông suốt của luồng dữ liệu và phát hiện sớm các điểm nghẽn tích hợp giữa các service. \\
+
+\addlinespace
+\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 2: Xây dựng nền tảng đo lường \& Giám sát ---}}\\
+\addlinespace
+
+Phase 1 (Tuần 5--9) & Hoàn thiện hạ tầng dữ liệu \& nhãn trễ & \textbf{1a (Tuần 5--6):} Hoàn chỉnh event contract gửi \codepath{prediction\_id}, confidence, latency, status.\newline \textbf{1b (Tuần 7--8):} Xây dựng Feedback API + Store, thực thể \codepath{PredictionRecord}, kiểm thử phép join nhãn.\newline \textbf{1c (Tuần 9):} Snapshot dữ liệu bất biến, thực thể \codepath{EvidenceWindow}, kiểm tra chất lượng dữ liệu cơ bản. & Thực hiện thành công phép join prediction--feedback trên dữ liệu mẫu; truy vết trọn vẹn từ model $\rightarrow$ data $\rightarrow$ code. \\
+\addlinespace
+
+Phase 2 (Tuần 10--13) & Mở rộng phát hiện đa tín hiệu (Detection) & \textbf{2a (Tuần 10--11):} Mở rộng Evidently đo prediction drift, data quality checks, slice monitoring.\newline \textbf{2b (Tuần 12):} Giám sát hiệu năng F1/Recall trên cửa sổ trượt watermark khi $r_\text{labels} \ge r_\text{min}$.\newline \textbf{2c (Tuần 13):} Thực thể \codepath{DegradationEvent} chống trùng lặp, kiểm thử phát hiện trên kịch bản S0--S3. & Phân loại chính xác các dạng bất thường (S0, S1, S2, S3); đo lường được Precision/Recall của khâu phát hiện. \\
+
+\addlinespace
+\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 3: Trí tuệ ra quyết định \& Vòng đời CT ---}}\\
+\addlinespace
+
+Phase 3 (Tuần 14--17) & Chẩn đoán nguyên nhân \& Vòng lặp HITL & \textbf{3a (Tuần 14--15):} Thực thể \codepath{Diagnosis}, bộ quy luật tính điểm nguyên nhân (Thuật toán 1), văn bản giải thích.\newline \textbf{3b (Tuần 16):} Thực thể \codepath{RetrainingRequest}, chính sách cooldown, API phê duyệt.\newline \textbf{3c (Tuần 17):} Giao diện duyệt yêu cầu (Approval Inbox), lưu vết kiểm toán (Audit Trail). & Kiểm thử tự động chứng minh cảnh báo không tự ý gọi huấn luyện; độ chính xác chẩn đoán đạt trên kịch bản S0--S4, S9. \\
+\addlinespace
+
+Phase 4 (Tuần 18--20) & Tái huấn luyện ứng viên \& Cổng kiểm thử & Trình đóng gói dữ liệu cửa sổ mới, huấn luyện tự động, thực thể \codepath{EvaluationGate}, đăng ký candidate trong Model Registry. & Candidate có lineage bất biến và vượt qua cổng kiểm định offline trước khi được xem xét triển khai. \\
+\addlinespace
+
+Phase 5 (Tuần 21--23) & Thử nghiệm so sánh môi trường thực tế & \textbf{5a (Tuần 21--22):} Điều phối Shadow Mode tại gateway, lưu log \codepath{paas\_shadow\_logs}, đo đạc sai lệch.\newline \textbf{5b (Tuần 23, Stretch):} Canary weighted routing, rào chắn guardrails và cơ chế tự động rollback. & Hệ thống hỗ trợ thử nghiệm đối kháng Champion--Candidate an toàn trên môi trường production. \\
+
+\addlinespace
+\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 4: Thực nghiệm tổng thể \& Đóng gói công bố ---}}\\
+\addlinespace
+
+Phase 6 (Tuần 24--26) & Đánh giá Benchmark \& Hoàn thiện bài báo & Chạy toàn bộ kịch bản thực nghiệm với 6 baseline, phân tích ablation, độ nhạy (sensitivity), chi phí tài nguyên và hoàn thiện bài báo khoa học. & Kết quả có thể tái lập hoàn toàn; bộ dữ liệu, mã nguồn và báo cáo kỹ thuật được đóng gói chuẩn mực. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Phân bổ trách nhiệm theo phân hệ dịch vụ (Subsystem Ownership)}
+\begin{itemize}
+  \item \textbf{model-server + consumer:} Hoàn chỉnh event contract (gửi \codepath{prediction\_id}, confidence, latency, status); consumer lưu vết bền vững vào PostgreSQL và quản lý transactional outbox.
+  \item \textbf{control plane:} Bổ sung 8 thực thể dữ liệu mới, cung cấp Feedback API, quản lý logic chẩn đoán, chính sách phê duyệt và điều phối thử nghiệm lưu lượng.
+  \item \textbf{evidently service:} Mở rộng từ data drift sang prediction drift, kiểm định chất lượng dữ liệu và tính toán chỉ số hiệu năng trên nhãn thực tế.
+  \item \textbf{training-runner + execution backend:} Nhận snapshot dữ liệu bất biến, thực thi huấn luyện có giới hạn tài nguyên và trích xuất chỉ số kiểm định chuẩn hóa.
+  \item \textbf{registry + deployment + GitOps:} Quản lý metadata candidate/champion, điều phối cấu hình định tuyến lưu lượng và giám sát rào chắn an toàn.
+  \item \textbf{web frontend:} Xây dựng dòng thời gian bằng chứng (Evidence Timeline), hộp thư phê duyệt (Approval Inbox) và giao diện so sánh mô hình trực quan.
+\end{itemize}

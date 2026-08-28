@@ -1,0 +1,282 @@
+%===============================================================================
+\section{Đối chiếu cấu trúc kiến trúc --- Mapping 39 thành phần}
+%===============================================================================
+
+Phần này ánh xạ chi tiết 39 thành phần chức năng của khung kiến trúc tham chiếu~\cite{najafabadi2026} với hiện trạng mã nguồn thực tế của repository, chia theo 6 nhóm chức năng. Sơ đồ Hình~\ref{fig:component-map} mô tả mối quan hệ tương tác giữa 6 nhóm nền tảng và làm nổi bật vòng lặp ra quyết định (Decision Loop) đề xuất bổ sung.
+
+\subsection{Data Curation}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm Data Curation.}\\
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endhead
+Data Collector & \statuspartial & Workspace assets hỗ trợ upload mã/dữ liệu; TrainingJob nhận \codepath{data\_snapshot\_uri}. & Chưa có đường ống thu nạp dữ liệu tự động (automated data ingestion) từ nguồn bên ngoài. \\
+\addlinespace
+Data Source & \statuspartial & Hỗ trợ nạp dataset qua workspace; asset tham chiếu (reference asset) cho drift. & Nền tảng chưa quản trị kết nối trực tiếp tới các nguồn dữ liệu ngoại vi (APIs, Streaming, DBs). \\
+\addlinespace
+Data Preprocessor & \statusno & Tiền xử lý dữ liệu được thực thi trực tiếp trong mã người dùng tại entry point. & Chưa có pipeline tiền xử lý và chuẩn hóa dữ liệu được quản lý ở cấp độ nền tảng (platform-managed). \\
+\addlinespace
+Data Quality Checker & \statusno & Chưa có module hiện thực sẵn trong nền tảng. & Khoảng trống trọng yếu; cần thiết để ngăn chặn việc tái huấn luyện trên dữ liệu sai hỏng/lỗi schema. \\
+\addlinespace
+Data Labeler & \statusno & Chưa có luồng gán nhãn hoặc tích hợp hệ thống annotation. & Cần thiết cho vòng lặp tiếp nhận nhãn trễ (delayed-label feedback loop). \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Storage \& Versioning}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm Storage \& Versioning.}\\
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endhead
+Data Catalog & \statusno & Chưa có metadata catalog quản lý danh mục dataset tập trung. & Cần thiết nhằm truy xuất toàn diện nguồn gốc dữ liệu phục vụ mô hình (data $\rightarrow$ model lineage). \\
+\addlinespace
+Dataset Repository & \statuspartial & S3 lưu trữ các snapshot dữ liệu huấn luyện (\codepath{data\_snapshot\_uri}); workspace assets. & Dữ liệu chưa được mô hình hóa thành thực thể phiên bản độc lập; lưu trữ dạng snapshot tĩnh. \\
+\addlinespace
+Raw Data Store & \statuspartial & S3 lưu trữ raw/reference assets; production logs lưu trong PostgreSQL. & Chưa phân tách triệt để giữa tầng lưu trữ dữ liệu thô (raw), sơ chế (processed) và dữ liệu chuẩn (curated). \\
+\addlinespace
+Feature Store & \statusno & Chưa có module hiện thực trong hệ thống. & Các đặc trưng hiện được tính toán trực tiếp trong mã nguồn người dùng. \\
+\addlinespace
+Code Repository & \statusyes & Quản lý \codepath{code\_snapshot\_uri} bất biến trong TrainingJob; liên kết Git repo. & Đã đáp ứng trọn vẹn yêu cầu quản lý phiên bản mã nguồn huấn luyện. \\
+\addlinespace
+Model Repository & \statusyes & ModelVersion + ModelArtifact + ModelMetric trong ứng dụng registry; phiên bản bất biến, metrics/params summary, artifacts. & Đạt chuẩn mực cao; đây là năng lực nền tảng cốt lõi của hệ thống. \\
+\addlinespace
+Artifact Repository & \statusyes & S3 + thực thể ModelArtifact lưu trữ container image và artifacts theo phiên bản; checksum cố định. & Đã đáp ứng tốt cho biến thể V1; cần mở rộng liên kết với cổng thẩm định candidate. \\
+\addlinespace
+ML Metadata Repository & \statusyes & Tracking TrainingJob (JSON), TrainingOutput, TrainingJobEvent, RegistryEvent; tích hợp MLflow. & Đã hoàn thiện ở mức nền tảng; cần bổ sung thêm environment lineage và configuration lineage. \\
+\addlinespace
+Feedback Database & \statusno & Schema PostgreSQL có các trường runtime nhưng chưa có Feedback API/Store cho ground truth. & \textbf{Khoảng trống then chốt}---cần xây dựng bảng Feedback liên kết trực tiếp với \codepath{prediction\_id}. \\
+\addlinespace
+Predictions Storage & \statusyes & Bảng \codepath{paas\_production\_logs} lưu trữ log suy luận phân vùng theo tenant/project/version. & Đã có lưu trữ, nhưng cần bổ sung các trường runtime (confidence, latency, status) vào event stream. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{ML Training}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm ML Training.}\\
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endhead
+Feature Engineering Pipeline & \statuspartial & Biến đổi đặc trưng nằm trong mã người dùng; chưa có pipeline quản lý tập trung. & Cần chuẩn hóa biến đổi và phiên bản hóa đặc trưng khi logic feature ảnh hưởng tới CT. \\
+\addlinespace
+ML Experiment Pipeline & \statusyes & TrainingJob hỗ trợ entry point, snapshot mã/dữ liệu, tích hợp MLflow; Docker hoặc Argo/Kubeflow. & Nền tảng thực thi thử nghiệm hoạt động tin cậy và linh hoạt. \\
+\addlinespace
+Continuous Training Pipeline & \statusno & Chưa có luồng tự động hóa tái huấn luyện khép kín. & \textbf{Trọng tâm nghiên cứu cốt lõi của đề tài.} \\
+\addlinespace
+Model Evaluator & \statuspartial & Trích xuất metrics qua MLflow/TrainingOutput; chưa có cổng thẩm định đối kháng tự động. & Cần xây dựng thực thể \codepath{EvaluationGate} phục vụ so sánh Champion--Candidate. \\
+\addlinespace
+Fine-Tuning Module & \statusno & Chưa hỗ trợ quy trình tinh chỉnh mô hình nạp sẵn chuyên biệt. & Thành phần mở rộng cho các biến thể V5--V8 trong tương lai. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{CI/CD}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm CI/CD.}\\
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endhead
+ML Component Builder & \statusyes & Dịch vụ \codepath{model-packager} đóng gói container image từ training artifacts; theo dõi trạng thái, digest. & Đã hoàn thiện vững chắc cho quy trình đóng gói tự động. \\
+\addlinespace
+ML Component Deployer & \statusyes & Thực thể Deployment, Endpoint, Kustomize/GitOps manifests; Celery task orchestration. & Đã đáp ứng tốt việc triển khai containerized component lên hạ tầng. \\
+\addlinespace
+ML Model Deployer & \statusno & Chưa hỗ trợ nạp mô hình động vào một Inference Engine Pool dùng chung. & Chỉ áp dụng khi mở rộng sang biến thể V2/V4. \\
+\addlinespace
+ML Pipeline Builder & \statusno & Chưa có module đóng gói toàn bộ pipeline huấn luyện thành pipeline artifact. & Cần thiết khi chuyển dịch lên biến thể V3 (Continuous Training). \\
+\addlinespace
+ML Pipeline Deployer & \statusno & Chưa có module triển khai và kích hoạt pipeline huấn luyện tự động định kỳ. & Cần thiết khi chuyển dịch lên biến thể V3 (Continuous Training). \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Inference}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm Inference.}\\
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endhead
+Inference Service & \statusyes & Model-server gateway + ML/DL serving workers; định tuyến theo phiên bản; xác thực JWT/API-Key; Prometheus metrics. & Nền tảng phục vụ suy luận hoạt động ổn định và tin cậy (đặc trưng V1). \\
+\addlinespace
+Inference Engine Pool & \statusno & Không sử dụng mô hình engine pool nạp động đa mô hình. & Không thuộc phạm vi kiến trúc hướng tới (V1/V3). \\
+\addlinespace
+Runtime Model Monitor & \statuspartial & Prometheus theo dõi latency/request count; Redpanda event stream; Evidently tính toán data drift. & Còn thiếu: giám sát hiệu năng thực tế (F1/Recall trên nhãn trễ) và trôi dạt phân phối dự đoán. \\
+\addlinespace
+Trigger & \statuspartial & Transactional Outbox tạo \codepath{DriftRun} tự động khi đủ ngưỡng số lượng bản ghi tích lũy. & Hiện chỉ kích hoạt tính toán drift, chưa kết nối tới luồng chẩn đoán hay quyết định CT. \\
+\addlinespace
+Model Comparison Runner & \statusno & Giao diện so sánh mô hình hiện là placeholder, chưa có engine so sánh đối kháng thực tế. & \textbf{Khoảng trống trọng yếu}---cần thiết để thẩm định candidate trước khi triển khai. \\
+\addlinespace
+Decision Processor & \statusno & Chưa có khối logic ra quyết định bảo trì mô hình. & Sẽ được hiện thực hóa qua module Chẩn đoán và \codepath{RetrainingRequest}. \\
+\addlinespace
+XAI Module & \statusno & Chưa tích hợp module giải thích mô hình (Explainable AI). & Thành phần mở rộng nghiên cứu, không thuộc phạm vi cốt lõi của đề tài. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Infrastructure \& Supporting Services}
+
+\begin{xltabular}{\linewidth}{@{}L{3.0cm} C{1.8cm} L{5.2cm} Y@{}}
+\caption{Ánh xạ nhóm Infrastructure \& Supporting Services.}\\
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Thành phần} & \textbf{Mức độ} & \textbf{Bằng chứng trong mã nguồn} & \textbf{Khoảng trống kiến trúc / Hướng phát triển} \\
+\midrule
+\endhead
+Resource Manager & \statuspartial & TrainingJob quản lý cấu hình tài nguyên (\codepath{vcpu}, \codepath{memory\_mb}, GPU); Kubernetes resource limits. & Còn thiếu: cơ chế quan sát chi phí tính toán (cost observability) và metrics GPU chi tiết. \\
+\addlinespace
+Communication Middleware & \statusyes & Redpanda (tương thích Kafka) truyền nhận sự kiện suy luận; EventOutbox; Celery + Redis cho hàng đợi tác vụ. & Đạt chuẩn mực cao về tính ổn định và khả năng mở rộng. \\
+\addlinespace
+Container Orchestrator & \statusyes & Docker Compose cho môi trường phát triển cục bộ; Kubernetes/K3s cho môi trường sản xuất. & Đã đáp ứng trọn vẹn yêu cầu điều phối container. \\
+\addlinespace
+Workflow Orchestrator & \statusyes & Celery xử lý tác vụ bất đồng bộ; Argo Workflows/Kubeflow điều phối huấn luyện quy mô lớn; GitOps. & Hệ thống điều phối quy trình hoạt động hoàn chỉnh và linh hoạt. \\
+\addlinespace
+Log Manager & \statusyes & Bảng \codepath{paas\_production\_logs}; nhật ký TrainingJobEvent; RegistryEvent; Transactional Outbox. & Hạ tầng quản lý log phân tầng và đảm bảo tính nhất quán dữ liệu. \\
+\addlinespace
+API Gateway & \statusyes & Model-server FastAPI gateway; Traefik reverse proxy; Django REST framework APIs tại Control Plane. & Đã hoàn thiện tốt khả năng định tuyến và kiểm soát truy cập an toàn. \\
+\addlinespace
+MLOps User Interaction Manager & \statuspartial & Giao diện người dùng React/Vite; dashboard theo dõi drift; giao diện quản lý training/deployment. & Cần bổ sung dòng thời gian bằng chứng, hộp thư duyệt yêu cầu và giao diện so sánh mô hình. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Tổng hợp kết quả ánh xạ 39 thành phần}
+
+\begin{table}[ht]
+\centering
+\caption{Tổng hợp mức độ đáp ứng 39 thành phần chức năng theo từng nhóm.}
+\begin{tabularx}{\linewidth}{@{}L{4.4cm} C{1.4cm} C{1.8cm} C{1.4cm} Y@{}}
+\toprule
+\textbf{Nhóm thành phần} & \textbf{Có} & \textbf{Một phần} & \textbf{Thiếu} & \textbf{Nhận định kiến trúc} \\
+\midrule
+Data Curation (5) & 0 & 2 & 3 & Nhóm yếu nhất; cần bổ sung Data Quality Checker và Feedback cho CT. \\
+Storage \& Versioning (10) & 5 & 2 & 3 & Model/Artifact Repository mạnh mẽ; thiếu Feedback Database liên kết. \\
+ML Training (5) & 1 & 2 & 2 & ML Experiment Pipeline tốt; Continuous Training là trọng tâm phát triển. \\
+CI/CD (5) & 2 & 0 & 3 & Đóng gói/triển khai tốt cho V1; thiếu pipeline builder/deployer cho V3. \\
+Inference (7) & 1 & 2 & 4 & Serving gateway ổn định; thiếu Model Comparison Runner và performance monitoring. \\
+Infrastructure \& Supporting (7) & 5 & 2 & 0 & Hạ tầng nền tảng hoàn thiện; cần bổ sung giao diện tương tác nâng cao. \\
+\midrule
+\textbf{Tổng cộng (39)} & \textbf{14} & \textbf{10} & \textbf{15} & Đánh giá bao quát đủ 39 thành phần nhằm minh bạch phạm vi và định vị rõ ranh giới nghiên cứu. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[node distance=11mm and 14mm]
+  \node[component, fill=blue!6] (data) {
+    \textbf{Data Curation}\\[2pt]
+    Data Collector · Data Source\\
+    Data Preprocessor\\
+    Quality Checker · Data Labeler
+  };
+  \node[component, fill=blue!6, right=of data] (storage) {
+    \textbf{Storage \& Versioning}\\[2pt]
+    Dataset / Raw Data Store\\
+    Feature Store · Code Repo\\
+    Model \& Artifact Repo\\
+    ML Metadata · Feedback · Logs
+  };
+  \node[component, fill=blue!6, right=of storage] (training) {
+    \textbf{ML Training}\\[2pt]
+    Feature Engineering\\
+    ML Experiment Pipeline\\
+    Continuous Training\\
+    Model Evaluator · Fine-Tuning
+  };
+
+  \node[component, fill=green!7, below=of data] (cicd) {
+    \textbf{CI/CD}\\[2pt]
+    ML Pipeline Builder / Deployer\\
+    ML Model Deployer\\
+    ML Component Builder / Deployer
+  };
+  \node[component, fill=green!7, below=of storage] (inference) {
+    \textbf{Inference}\\[2pt]
+    Inference Service / Engine Pool\\
+    Runtime Model Monitor\\
+    Trigger · Comparison Runner\\
+    Decision Processor · XAI
+  };
+  \node[component, fill=green!7, below=of training] (infra) {
+    \textbf{Infrastructure \& Supporting}\\[2pt]
+    Resource · Communication\\
+    Container · Workflow Engine\\
+    Log Manager · API Gateway\\
+    User Interaction Manager
+  };
+  \node[component, fill=orange!12, below=of inference] (decision) {
+    \textbf{Decision loop đề xuất}\\[2pt]
+    Evidence $\rightarrow$ Diagnosis\\
+    Policy $\rightarrow$ RetrainingRequest\\
+    EvaluationGate $\rightarrow$ Rollout
+  };
+
+  % Forward pipeline flow
+  \draw[flowarrow] (data.east) -- node[above, font=\scriptsize, align=center]{raw / curated\\data} (storage.west);
+  \draw[flowarrow] (storage.east) -- node[above, font=\scriptsize, align=center]{versioned\\inputs} (training.west);
+  
+  % Package & Deploy
+  \draw[flowarrow] (training.south) -- ++(0,-0.55) -| node[pos=0.25, above, font=\scriptsize]{package} (cicd.north);
+  \draw[flowarrow] (cicd.east) -- node[above, font=\scriptsize]{deploy} (inference.west);
+  
+  % Feedback & Production loops
+  \draw[flowarrow, dashed] ([xshift=-8mm]inference.north) -- node[left, font=\scriptsize, align=right]{feedback\\\& logs} ([xshift=-8mm]storage.south);
+  \draw[flowarrow] (inference.south) -- node[right, font=\scriptsize]{production evidence} (decision.north);
+  \draw[flowarrow, dashed] (decision.east) -| ([xshift=6mm]infra.east) |- node[pos=0.25, right, font=\scriptsize, align=left]{conditional\\CT} (training.east);
+  
+  % Infrastructure Runtime Support
+  \draw[flowarrow, dotted] (infra.north) -- node[right, font=\scriptsize, align=left]{runtime\\support} (training.south);
+  \draw[flowarrow, dotted] (infra.west) -- node[above, font=\scriptsize]{runtime} (inference.east);
+\end{tikzpicture}
+}%
+\caption{Bản đồ sáu nhóm component của paper và decision loop đề xuất cho repo. Màu xanh biểu diễn các nhóm nền tảng; màu cam là lớp cần xây dựng để chuyển từ V1 sang continuous training.}
+\label{fig:component-map}
+\end{figure}
+
+\subsection{Nền tảng kiến trúc hiện hữu có giá trị kế thừa}
+\begin{itemize}
+  \item \textbf{Phân tách ranh giới các mặt phẳng (Planes Boundary):} Hệ thống phân định rõ ràng giữa Control Plane (điều phối vòng đời, xác thực đa tenant), Data Plane (phục vụ suy luận với độ trễ thấp) và Execution Plane (huấn luyện phi tập trung qua Docker hoặc Argo/Kubeflow). Trạng thái nghiệp vụ được bảo đảm tính nhất quán bền vững trên PostgreSQL và S3.
+  \item \textbf{Tính bất biến của phiên bản mô hình (Version Immutability):} Mọi build thành công đều gắn liền với digest container image và artifact checksum cố định. Khái niệm Model Alias cho phép thăng cấp (promotion) hoặc thu hồi (rollback) linh hoạt mà không làm biến đổi lịch sử phiên bản.
+  \item \textbf{Kênh truyền nhận sự kiện sản xuất an toàn (Production Event Pipeline):} Gateway truyền dữ liệu suy luận có phân quyền tenant/project sang Redpanda/Kafka; dịch vụ Consumer lưu vết vào bảng \codepath{paas\_production\_logs} và sử dụng Transactional Outbox pattern để tạo tín hiệu kích hoạt tính toán drift an toàn.
+  \item \textbf{Quy trình giám sát trôi dạt dữ liệu (Drift Workflow):} Hỗ trợ liên kết model version với dữ liệu tham chiếu (reference dataset); Evidently tính toán chỉ số trôi dạt; callback cập nhật trạng thái \codepath{DriftRun} dựa trên UUID và idempotency key.
+  \item \textbf{Hạ tầng huấn luyện linh hoạt:} Thực thể \codepath{TrainingJob} hỗ trợ cấu hình tài nguyên chi tiết (vCPU, RAM, GPU), cơ chế bảo mật capabilities-based và lưu vết bất biến mã nguồn (\codepath{code\_snapshot\_uri}) cùng dữ liệu (\codepath{data\_snapshot\_uri}).
+\end{itemize}
+
+\subsection{Phân tích các khoảng trống kiến trúc then chốt}
+Đối chiếu với yêu cầu của một hệ thống Continuous Training thích ứng, repository hiện tồn tại 6 khoảng trống cốt lõi:
+\begin{enumerate}
+  \item \textbf{Hợp đồng dữ liệu sự kiện (Event Contract) chưa hoàn chỉnh:} Mặc dù schema consumer đã định nghĩa các trường \codepath{confidence}, \codepath{latency\_ms}, \codepath{status\_code} và \codepath{request\_id}, nhưng gateway \codepath{model-server} hiện chỉ mới gửi dữ liệu features và output thô. Điểm số tự tin (confidence) và các thông số vận hành chưa được truyền tải vào event stream.
+  \item \textbf{Đứt gãy mối nối định danh dự đoán (Prediction ID Correlation):} Khóa định danh sự kiện \codepath{id} được sinh nội bộ tại gateway nhưng chưa được trả về cho phía client trong response. Do đó, client không có mã tham chiếu để gửi nhãn thực tế (ground truth) tương ứng sau này.
+  \item \textbf{Phạm vi giám sát dừng lại ở Data Drift:} Evidently hiện chỉ đo lường sự dịch chuyển phân phối dữ liệu đầu vào ($P(X)$), chưa hỗ trợ đánh giá chất lượng dữ liệu (data quality checks) cũng như chưa đo lường suy giảm hiệu năng thực tế ($P(Y|X)$, F1, Precision, Recall) do thiếu nhãn.
+  \item \textbf{Cơ chế kích hoạt thụ động (Passive Triggering):} Bảng \codepath{paas\_automatic\_drift\_outbox} chỉ kích hoạt việc tạo một lượt chạy \codepath{DriftRun} khi tích lũy đủ số lượng bản ghi, hoàn toàn chưa có liên kết tự động tới luồng chẩn đoán hay yêu cầu tái huấn luyện.
+  \item \textbf{Quy trình đánh giá và thăng cấp thủ công:} Chức năng so sánh mô hình trên giao diện hiện chỉ hiển thị placeholder, thiếu một Evaluation Gate có thể tự động kiểm tra đối kháng (champion vs. candidate) trước khi quyết định triển khai.
+  \item \textbf{Chưa hỗ trợ phân tách lưu lượng (Traffic Splitting):} Gateway chỉ định tuyến toàn bộ 100\% lưu lượng tới một phiên bản duy nhất, chưa hỗ trợ Shadow Mode (nhân bản request) hoặc Canary Rollout (chia tỉ lệ lưu lượng động).
+\end{enumerate}
