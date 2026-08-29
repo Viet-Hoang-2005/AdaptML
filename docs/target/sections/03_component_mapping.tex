@@ -166,11 +166,18 @@ MLOps User Interaction Manager & \statuspartial & Giao diện người dùng Rea
 \bottomrule
 \end{xltabular}
 
+\clearpage
 \subsection{Tổng hợp kết quả ánh xạ 39 thành phần}
 
-\begin{table}[ht]
+Đối chiếu toàn diện 39 thành phần kiến trúc theo khung tham chiếu chuẩn mực của Amou Najafabadi \textit{et al.}~\cite{najafabadi2026}, hệ thống hiện đáp ứng trọn vẹn 14 thành phần ($35.9\%$), đáp ứng một phần 10 thành phần ($25.6\%$) và còn thiếu 15 thành phần ($38.5\%$). Bảng~\ref{tab:39-summary} và Hình~\ref{fig:component-map} tổng hợp chi tiết mức độ đáp ứng theo từng nhóm chức năng:
+\begin{itemize}
+  \item \textbf{Nhóm thế mạnh nền tảng (Infrastructure \& Supporting, Storage \& Versioning):} Đạt mức độ hoàn thiện cao nhất, cung cấp đầy đủ hạ tầng container (Kubernetes/K3s), messaging (Redpanda/Kafka), điều phối tác vụ (Celery) và quản lý phiên bản mô hình/artifact bất biến.
+  \item \textbf{Nhóm trọng tâm cần nghiên cứu (Data Curation, Inference \& ML Training):} Là khu vực tồn tại các khoảng trống lớn nhất về vòng lặp phản hồi nhãn thực tế, chẩn đoán nguyên nhân suy giảm đa tín hiệu, cổng thẩm định đối kháng candidate--champion và điều phối lưu lượng shadow/canary. Đây chính là không gian đóng góp khoa học cốt lõi của đề tài nhằm đưa hệ thống tiến hóa lên biến thể Continuous Training thích ứng.
+\end{itemize}
+
+\begin{table}[htbp]
 \centering
-\caption{Tổng hợp mức độ đáp ứng 39 thành phần chức năng theo từng nhóm.}
+\caption{Tổng hợp mức độ đáp ứng 39 thành phần chức năng theo từng nhóm.}\label{tab:39-summary}
 \begin{tabularx}{\linewidth}{@{}L{4.4cm} C{1.4cm} C{1.8cm} C{1.4cm} Y@{}}
 \toprule
 \textbf{Nhóm thành phần} & \textbf{Có} & \textbf{Một phần} & \textbf{Thiếu} & \textbf{Nhận định kiến trúc} \\
