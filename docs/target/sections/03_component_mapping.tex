@@ -280,3 +280,48 @@ Infrastructure \& Supporting (7) & 5 & 2 & 0 & Hạ tầng nền tảng hoàn th
   \item \textbf{Quy trình đánh giá và thăng cấp thủ công:} Chức năng so sánh mô hình trên giao diện hiện chỉ hiển thị placeholder, thiếu một Evaluation Gate có thể tự động kiểm tra đối kháng (champion vs. candidate) trước khi quyết định triển khai.
   \item \textbf{Chưa hỗ trợ phân tách lưu lượng (Traffic Splitting):} Gateway chỉ định tuyến toàn bộ 100\% lưu lượng tới một phiên bản duy nhất, chưa hỗ trợ Shadow Mode (nhân bản request) hoặc Canary Rollout (chia tỉ lệ lưu lượng động).
 \end{enumerate}
+
+\subsection{Phân định Ranh giới Nền tảng (Platform Scope) và Phạm vi Nghiên cứu (Research Scope)}
+
+Để tránh phân tán nguồn lực vào việc phát triển hệ thống mà thiếu chiều sâu khoa học, Bảng~\ref{tab:platform-vs-research} phân định rành mạch ranh giới giữa vai trò hạ tầng nền tảng và các cấp độ đóng góp nghiên cứu (Q3 $\rightarrow$ Q2 $\rightarrow$ Q1 Stretch):
+
+\begin{xltabular}{\linewidth}{@{}L{3.8cm} L{3.0cm} C{1.6cm} C{1.8cm} Y@{}}
+\caption{Phân định ranh giới giữa Hạ tầng Nền tảng và các Cấp độ Nghiên cứu.}\label{tab:platform-vs-research}\\
+\toprule
+\textbf{Thành phần chức năng} & \textbf{Vai trò Nền tảng (Platform)} & \textbf{Chuẩn Q3} & \textbf{Mở rộng Q2} & \textbf{Mục tiêu Q1 Stretch} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Thành phần chức năng} & \textbf{Vai trò Nền tảng (Platform)} & \textbf{Chuẩn Q3} & \textbf{Mở rộng Q2} & \textbf{Mục tiêu Q1 Stretch} \\
+\midrule
+\endhead
+
+Event Pipeline \& Logging & Hạ tầng thu thập & Hỗ trợ & Hỗ trợ & Hỗ trợ \\
+\addlinespace
+Data Drift \& Quality Checks & Bằng chứng vận hành & Sâu & Sâu & Sâu \\
+\addlinespace
+Concept Drift Monitoring & Bằng chứng nghiên cứu & Sâu & Sâu & Sâu \\
+\addlinespace
+Biểu diễn Đa bằng chứng & Cốt lõi nghiên cứu & \textbf{Core} & \textbf{Core} & \textbf{Core} \\
+\addlinespace
+Chẩn đoán Nguyên nhân & Cốt lõi nghiên cứu & \textbf{Core} & \textbf{Core} & \textbf{Core} \\
+\addlinespace
+Định lượng Severity \& Confidence & Cốt lõi nghiên cứu & \textbf{Core} & \textbf{Core} & \textbf{Core} \\
+\addlinespace
+Bộ Lựa chọn Chiến lược (Policy) & Cốt lõi nghiên cứu & \textbf{Core} & \textbf{Core} & \textbf{Core} \\
+\addlinespace
+Tái huấn luyện Gia tăng / Toàn phần & Hạ tầng thực thi CT & Hỗ trợ & Sâu & Sâu \\
+\addlinespace
+Vòng lặp Chuyên gia (HITL) & Rào chắn an toàn & Hỗ trợ & Sâu & Sâu \\
+\addlinespace
+Tối ưu Siêu tham số (HPO) & Nhánh mở rộng & Tùy chọn & Vừa phải & Sâu \\
+\addlinespace
+Shadow Mode \& Rollback & An toàn triển khai & Hỗ trợ & Hỗ trợ & Hỗ trợ \\
+\addlinespace
+Khái quát hóa Đa miền (Tasks) & Đánh giá thực nghiệm & 2--3 tasks & \textbf{Bắt buộc} & \textbf{Mạnh mẽ} \\
+\addlinespace
+Chẩn đoán Nhân quả (Causal) & Nghiên cứu dài hạn & Không & Tùy chọn & \textbf{Core tiềm năng} \\
+\addlinespace
+Online / Adaptive Policy Learning & Nghiên cứu dài hạn & Không & Tùy chọn & \textbf{Core tiềm năng} \\
+\bottomrule
+\end{xltabular}

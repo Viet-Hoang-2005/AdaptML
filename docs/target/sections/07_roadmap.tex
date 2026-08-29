@@ -1,83 +1,95 @@
 %===============================================================================
-\section{Lộ trình hiện thực hoá và Kế hoạch nghiên cứu}
+\section{Lộ trình hiện thực hoá và Kế hoạch nghiên cứu phân tầng \texorpdfstring{(Q3 $\rightarrow$ Q2 $\rightarrow$ Q1)}{(Q3 -> Q2 -> Q1)}}
 %===============================================================================
 
-Lộ trình thực hiện được thiết kế kéo dài 26 tuần, phân bổ thành 6 giai đoạn cấu trúc chặt chẽ nhằm bảo đảm tính sẵn sàng nghiên cứu (Research-Ready) và tối ưu hóa nguồn lực:
+Lộ trình nghiên cứu được thiết kế theo nguyên tắc phân tầng lũy tiến (Graduation Ladder), cho phép đóng gói một kết quả hoàn chỉnh tại chuẩn **Q3 (Baseline vững chắc)**, mở rộng nâng cao lên **Q2 (Nghiên cứu chuyên sâu)** và đặt mục tiêu dài hạn **Q1 (Đột phá khoa học)** mà không cần viết lại kiến trúc từ đầu.
 
-\begin{xltabular}{\linewidth}{@{}L{1.8cm} L{3.0cm} L{4.8cm} Y@{}}
-\caption{Lộ trình nghiên cứu và phát triển 26 tuần.}\label{tab:roadmap}\\
+\subsection{Khung phân tầng mục tiêu nghiên cứu (Research Maturity Levels)}
+
+Bảng~\ref{tab:roadmap-levels} tóm lược câu hỏi khoa học, phương pháp cốt lõi và tiêu chí hoàn thành theo từng cấp độ trưởng thành nghiên cứu:
+
+\begin{xltabular}{\linewidth}{@{}L{2.0cm} L{3.6cm} L{3.8cm} C{1.6cm} Y@{}}
+\caption{Lộ trình phân tầng mục tiêu nghiên cứu theo cấp độ trưởng thành.}\label{tab:roadmap-levels}\\
 \toprule
-\textbf{Giai đoạn} & \textbf{Mục tiêu trọng tâm} & \textbf{Sản phẩm bàn giao (Deliverables)} & \textbf{Tiêu chí hoàn thành (Exit Criteria)} \\
+\textbf{Cấp độ} & \textbf{Câu hỏi khoa học} & \textbf{Phương pháp cốt lõi} & \textbf{Phạm vi} & \textbf{Tiêu chí hoàn thành (Exit Criterion)} \\
 \midrule
 \endfirsthead
 \toprule
-\textbf{Giai đoạn} & \textbf{Mục tiêu trọng tâm} & \textbf{Sản phẩm bàn giao (Deliverables)} & \textbf{Tiêu chí hoàn thành (Exit Criteria)} \\
+\textbf{Cấp độ} & \textbf{Câu hỏi khoa học} & \textbf{Phương pháp cốt lõi} & \textbf{Phạm vi} & \textbf{Tiêu chí hoàn thành (Exit Criterion)} \\
 \midrule
 \endhead
 
-\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 1: Nền tảng Thực nghiệm \& Vertical Slice PoC ---}}\\
+Nền tảng hiện hữu & Hệ thống có thể hỗ trợ thu thập và thực thi CT khép kín không? & Nền tảng MLOps PaaS mã nguồn mở & Rộng & Nền tảng vận hành ổn định, thông suốt luồng log và pipeline. \\
 \addlinespace
 
-Stage 1 (Tuần 1--4) & Đóng băng giao thức nghiên cứu \& Lát cắt dọc & \textbf{1a (Tuần 1--2):} Bộ dataset tabular chuẩn, framework tạo kịch bản trôi dạt (Scenario Injector) gắn sẵn Ground-truth Cause, danh sách 6 baseline.\newline \textbf{1b (Tuần 3--4):} Lát cắt dọc tích hợp khép kín trên kịch bản $S_2$: Inject drift $\rightarrow$ Detect $\rightarrow$ Argo Trigger $\rightarrow$ Train $\rightarrow$ Gate $\rightarrow$ Promote. & Giao thức benchmark được kiểm soát phiên bản (Git/S3 manifest); luồng dữ liệu khép kín thông suốt giữa các service. \\
-
-\addlinespace
-\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 2: Hạ tầng Dữ liệu Bằng chứng \& Nhãn trễ ---}}\\
+\textbf{Cấp độ Q3 (Baseline)} & Chẩn đoán đa bằng chứng có tối ưu hóa quyết định bảo trì hơn baseline không? & Weighted evidence scoring + Diagnosis + Policy & 5 causes, 4 actions & Kết quả thực nghiệm B0--B5, D1--D3 trên 2--3 tasks; \textbf{Sẵn sàng bài báo Q3}. \\
 \addlinespace
 
-Stage 2 (Tuần 5--9) & Hạ tầng Evidence \& Feedback Store & \textbf{2a (Tuần 5--6):} Hoàn chỉnh event contract gửi \codepath{prediction\_id}, confidence, latency, status.\newline \textbf{2b (Tuần 7--8):} Xây dựng Feedback API + Store, thực thể \codepath{PredictionRecord}, kiểm thử phép join nhãn theo watermark.\newline \textbf{2c (Tuần 9):} Snapshot dữ liệu bất biến, thực thể \codepath{EvidenceWindow}, kiểm định Data Quality. & Thực hiện thành công phép join prediction--feedback trên dữ liệu mẫu; truy vết trọn vẹn từ model $\rightarrow$ data $\rightarrow$ code. \\
-
-\addlinespace
-\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 3: Chẩn đoán Suy giảm Đa tín hiệu ---}}\\
+\textbf{Cấp độ Q2 (Nâng cao)} & Khung bảo trì có đạt tính vững chắc, tối ưu chi phí và khái quát hóa không? & Calibrated diagnosis + Uncertainty + Pareto cost/risk & Đa miền, trễ nhãn, nhiễu & Phân tích Pareto, độ nhạy, khái quát hóa đa bài toán; \textbf{Ứng viên Q2 mạnh}. \\
 \addlinespace
 
-Stage 3 (Tuần 10--13) & Phân loại nguyên nhân \& Định lượng Severity & \textbf{3a (Tuần 10--11):} Mở rộng Evidently đo prediction drift, data quality checks, slice monitoring.\newline \textbf{3b (Tuần 12):} Giám sát hiệu năng F1/Recall trên cửa sổ trượt watermark khi $r_\text{labels} \ge r_\text{min}$.\newline \textbf{3c (Tuần 13):} Hiện thực hóa bộ luật phân loại 7 nhóm nguyên nhân, định lượng Severity $S_0$--$S_4$, thực thể \codepath{DegradationEvent}. & Phân loại chính xác các dạng bất thường ($S_0$--$S_3, S_{10}, S_{11}$); đo lường được Precision/Recall của khâu phát hiện. \\
-
-\addlinespace
-\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 4: Trí tuệ Ra quyết định Thích ứng (Research Core) ---}}\\
-\addlinespace
-
-Stage 4 (Tuần 14--17) & Chính sách can thiệp thích ứng \& Vòng lặp HITL & \textbf{4a (Tuần 14--15):} Module Policy ánh xạ Evidence $\rightarrow$ Action Space (No-op, Data Eng, Incremental CT, Full CT, HITL).\newline \textbf{4b (Tuần 16):} Thực thể \codepath{RetrainingRequest}, chính sách cooldown, ngân sách tính toán (Budget Cap).\newline \textbf{4c (Tuần 17):} Giao diện duyệt yêu cầu (Approval Inbox), lưu vết kiểm toán quyết định (Decision Audit Trail). & Kiểm thử tự động chứng minh hệ thống không tự ý gọi huấn luyện khi xảy ra Benign Drift hoặc Data Quality Failure. \\
-
-\addlinespace
-\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 5: Vòng đời Tái huấn luyện An toàn \& Cổng Thẩm định ---}}\\
-\addlinespace
-
-Stage 5 (Tuần 18--23) & Điều phối Argo Workflow \& Cổng đối kháng & \textbf{5a (Tuần 18--20):} Kích hoạt Argo Workflow huấn luyện candidate có giới hạn tài nguyên, thực thể \codepath{EvaluationGate}, đăng ký Model Registry.\newline \textbf{5b (Tuần 21--22):} Điều phối Shadow Mode tại gateway, lưu log \codepath{paas\_shadow\_logs}, đo đạc sai lệch.\newline \textbf{5c (Tuần 23, Stretch):} Canary weighted routing, rào chắn guardrails và cơ chế tự động rollback. & Candidate có lineage bất biến và vượt qua cổng kiểm định đối kháng đa tầng trước khi được thăng cấp. \\
-
-\addlinespace
-\multicolumn{4}{@{}l}{\textbf{--- Giai đoạn 6: Đánh giá Thực nghiệm Tổng thể \& Công bố Khoa học ---}}\\
-\addlinespace
-
-Stage 6 (Tuần 24--26) & Đánh giá Benchmark Toàn diện \& Bài báo & Chạy toàn bộ 12 kịch bản ($S_0$--$S_{11}$) với 6 baseline ($B_0$--$B_5$), phân tích Ablation ($A_0$--$A_6$), độ nhạy (sensitivity), chi phí tài nguyên, nỗ lực HITL và hoàn thiện bài báo khoa học. & Kết quả có thể tái lập hoàn toàn (reproducible); bộ dữ liệu, mã nguồn và báo cáo kỹ thuật được đóng gói chuẩn mực. \\
+\textbf{Cấp độ Q1 (Đột phá)} & Quyết định bảo trì có thể tự thích ứng online hoặc suy luận nhân quả không? & Causal diagnosis hoặc Online adaptive policy & Rộng & Mô hình đột phá mới + kiểm chứng đa miền khắt khe; \textbf{Tiến tới Q1}. \\
 \bottomrule
 \end{xltabular}
 
-\subsection{Thứ tự ưu tiên triển khai (Implementation Priorities)}
-Để tránh phân tán nguồn lực vào các tính năng kỹ thuật phụ trợ, quy trình cài đặt tuân thủ nghiêm ngặt 13 bước tuần tự:
-\begin{quote}
-\small
-1.~Prediction ID + Feedback API $\rightarrow$ 
-2.~Delayed Label Watermark + EvidenceWindow $\rightarrow$ 
-3.~Data Quality + Drift + Performance $\rightarrow$ 
-4.~DegradationEvent $\rightarrow$ 
-5.~Diagnosis Algorithm (Cause + Severity) $\rightarrow$ 
-6.~RetrainingRequest + Policy Engine $\rightarrow$ 
-7.~Argo Trigger $\rightarrow$ Training Execution $\rightarrow$ 
-8.~EvaluationGate $\rightarrow$ 
-9.~Model Registry $\rightarrow$ 
-10.~Shadow Mode $\rightarrow$ 
-11.~Benchmark Suite ($S_0$--$S_{11}$) $\rightarrow$ 
-12.~Ablation \& Sensitivity Analysis $\rightarrow$ 
-13.~Paper Packaging.
-\end{quote}
-Các thành phần giao diện người dùng nâng cao hoặc điều phối Canary phức tạp chỉ được xem xét sau khi đã hoàn thành toàn bộ phép đo thực nghiệm cốt lõi.
+\subsection{Các cổng kiểm soát độ trưởng thành nghiên cứu (Research Maturity Gates)}
 
-\subsection{Phân bổ trách nhiệm theo phân hệ dịch vụ (Subsystem Ownership)}
+Để kiểm soát rủi ro và xác định thời điểm hoàn thành sản phẩm nghiên cứu, hệ thống thiết lập 7 cổng kiểm định (Gates):
 \begin{itemize}
-  \item \textbf{model-server + consumer:} Hoàn chỉnh event contract (gửi \codepath{prediction\_id}, confidence, latency, status); consumer lưu vết bền vững vào PostgreSQL và quản lý transactional outbox.
-  \item \textbf{control plane:} Bổ sung 8 thực thể dữ liệu mới, cung cấp Feedback API, quản lý logic chẩn đoán nguyên nhân/severity, chính sách phê duyệt và kích hoạt Argo Event.
-  \item \textbf{evidently service:} Mở rộng từ data drift sang prediction drift, kiểm định chất lượng dữ liệu và tính toán chỉ số hiệu năng trên nhãn thực tế theo watermark.
-  \item \textbf{argo workflows + kubeflow runner:} Nhận snapshot dữ liệu bất biến, thực thi huấn luyện có giới hạn tài nguyên và trích xuất chỉ số kiểm định chuẩn hóa vào MLflow.
-  \item \textbf{registry + deployment + GitOps:} Quản lý metadata candidate/champion, điều phối cấu hình định tuyến lưu lượng shadow và giám sát rào chắn an toàn.
-  \item \textbf{web frontend (tối giản):} Xây dựng dòng thời gian bằng chứng (Evidence Timeline) và hộp thư phê duyệt (Approval Inbox) phục vụ vòng lặp HITL.
+  \item \textbf{Gate G0 (Design Freeze):} Đóng băng định nghĩa bài toán, RQs, Hypotheses, Taxonomy 5 causes và Action Space.
+  \item \textbf{Gate G1 (Benchmark Execution):} Scenario Injector sinh thành công các kịch bản có nhãn chuẩn kép (Cause \& Best Action).
+  \item \textbf{Gate G2 (Diagnosis Superiority):} Khối chẩn đoán đa bằng chứng vượt trội rõ rệt so với detector đơn lẻ (D3 > D1).
+  \item \textbf{Gate G3 (Q3 Paper-Ready):} Chính sách thích ứng cắt giảm CT thừa mà không làm suy giảm năng lực phục hồi $\rightarrow$ \textbf{Đóng scope và nộp bài báo Q3}.
+  \item \textbf{Gate G4 (Cross-Domain Validation):} Kết quả tái lập ổn định trên 2--3 họ bài toán (Classification, Regression, Forecasting) $\rightarrow$ \textbf{Ứng viên Q2}.
+  \item \textbf{Gate G5 (Q2 Strong):} Đạt độ vững chắc cao trước nhãn trễ, bằng chứng nhiễu và phân tích tối ưu Pareto Cost-Risk.
+  \item \textbf{Gate G6 (Q1 Stretch):} Đạt mô hình chẩn đoán nhân quả (Causal) hoặc chính sách thích ứng online độc lập.
 \end{itemize}
+
+\subsection{Kế hoạch triển khai 30 tuần chi tiết}
+
+\begin{xltabular}{\linewidth}{@{}L{1.6cm} L{1.8cm} L{3.6cm} L{4.4cm} C{1.4cm} Y@{}}
+\caption{Bảng tổng hợp tiến độ nghiên cứu và phát triển 30 tuần.}\label{tab:roadmap}\\
+\toprule
+\textbf{Giai đoạn} & \textbf{Thời lượng} & \textbf{Mục tiêu trọng tâm} & \textbf{Sản phẩm bàn giao cốt lõi} & \textbf{Ưu tiên} & \textbf{Tiêu chí hoàn thành (Exit Criteria)} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Giai đoạn} & \textbf{Thời lượng} & \textbf{Mục tiêu trọng tâm} & \textbf{Sản phẩm bàn giao cốt lõi} & \textbf{Ưu tiên} & \textbf{Tiêu chí hoàn thành (Exit Criteria)} \\
+\midrule
+\endhead
+
+Phase 0 & Tuần 1--2 & Đóng băng thiết kế nghiên cứu (Design Freeze) & Tài liệu định nghĩa bài toán, RQs, Hypotheses, Taxonomy C0--C4, Severity $S_0$--$S_4$, Action Space và ma trận Ground-truth mapping. & \textbf{P0} & Bảng mapping hoàn chỉnh: Scenario $\rightarrow$ Cause $\rightarrow$ Severity $\rightarrow$ Evidence $\rightarrow$ Best Action (Gate G0). \\
+\addlinespace
+
+Phase 1 & Tuần 3--6 & Bộ Benchmark \& Lát cắt dọc (Vertical Slice) & Bộ dataset tabular, Scenario Injector (sinh nhãn cause và best action), vertical slice trên kịch bản $S_2$: Detect $\rightarrow$ Evidence $\rightarrow$ Policy $\rightarrow$ CT $\rightarrow$ Gate. & \textbf{P0} & Luồng dữ liệu khép kín thông suốt giữa các service trên môi trường thử nghiệm (Gate G1). \\
+\addlinespace
+
+Phase 2 & Tuần 7--10 & Hạ tầng Bằng chứng \& Nhãn trễ & Event contract \codepath{prediction\_id}, Feedback API + Store, watermark windowing, thực thể \codepath{EvidenceWindow}, Data Quality checks. & \textbf{P0} & Thực hiện thành công phép join prediction--feedback trên dữ liệu mẫu; truy vết trọn vẹn lineage. \\
+\addlinespace
+
+Phase 3 & Tuần 11--15 & Khối Chẩn đoán Đa tín hiệu (Research Core) & Module chẩn đoán phân loại 5 nhóm nguyên nhân cốt lõi (Cause Probabilities), định lượng Severity $S_0$--$S_4$, Confidence score, thực thể \codepath{Diagnosis}. & \textbf{P0} & Độ chính xác chẩn đoán vượt trội so với detector đơn lẻ (D3 > D1, Gate G2). \\
+\addlinespace
+
+Phase 4 & Tuần 16--18 & Bộ Lựa chọn Chiến lược \& Quản trị rủi ro & Module Strategy Selector độc lập: ánh xạ Evidence + Diagnosis $\rightarrow$ Action Space (No-op, Incremental CT, Full CT, HITL), Approval Inbox. & \textbf{P0} & Hệ thống ngăn chặn hoàn toàn việc tự ý kích hoạt CT khi gặp sự cố dữ liệu hoặc trôi dạt lành tính. \\
+\addlinespace
+
+Phase 5 & Tuần 19--22 & Vòng đời CT Thích ứng \& Cổng Thẩm định & Kích hoạt Argo Workflow huấn luyện candidate, thực thể \codepath{EvaluationGate} kiểm định đối kháng, chạy toàn diện 6 baseline $B_0$--$B_5$. & \textbf{P0} & Candidate vượt qua cổng kiểm định trước khi đăng ký thăng cấp vào Model Registry (Gate G3 - Q3 Ready). \\
+\addlinespace
+
+Phase 6 & Tuần 23--24 & An toàn Triển khai \& Thu hồi (Safe Rollout) & Điều phối Shadow Mode tại gateway, lưu log \codepath{paas\_shadow\_logs}, cấu hình Canary routing và cơ chế tự động Rollback. & \textbf{P1/P2} & Xác nhận tính an toàn vận hành; không làm ảnh hưởng đến tiến độ đo đạc thực nghiệm cốt lõi. \\
+\addlinespace
+
+Phase 7 & Tuần 25--30 & Thực nghiệm Tổng thể, Ablation \& Bài báo & Chạy full benchmark, kiểm định thống kê, Ablation Study $A_0$--$A_4$, phân tích độ nhạy, hoàn thiện bài báo khoa học chuẩn mực. & \textbf{P0} & Đóng gói bài báo hoàn chỉnh sẵn sàng nộp các hội nghị/tạp chí uy tín (Gate G3/G4). \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Nguyên tắc phân bổ Ưu tiên và Kiểm soát Phạm vi (Scope Priority \& Rules)}
+
+Để bảo đảm tiến độ và chất lượng khoa học, các hạng mục phát triển được phân tầng ưu tiên nghiêm ngặt:
+\begin{itemize}
+  \item \textbf{P0 (Must Have -- Tuyệt đối không cắt giảm):} Scenario Injector, Nhãn chuẩn kép (Dual Ground Truth), Biểu diễn đa bằng chứng, Baselines D1/D2/D3, Khối chẩn đoán, Định lượng Severity/Confidence, Bộ lựa chọn chiến lược, Baselines B0--B5 và Đánh giá thực nghiệm.
+  \item \textbf{P1 (Should Have -- Cần thiết cho tính toàn diện):} Xử lý nhãn trễ, Vòng lặp chuyên gia (HITL), Cổng thẩm định Evaluation Gate, Ablation bóc tách bằng chứng, Kiểm định thống kê, Đánh giá trên nhiều bộ dữ liệu.
+  \item \textbf{P2 (Nice to Have / Cut First -- Cắt giảm đầu tiên nếu thiếu thời gian):} Shadow Mode, Canary Rollout, Tự động thu hồi Rollback, Tối ưu siêu tham số HPO, Chẩn đoán lỗi mã nguồn/hạ tầng, LLM-based diagnosis.
+\end{itemize}
+
+\textbf{Quy tắc điều hành:} Khi gặp áp lực về thời gian hoặc tài nguyên, luôn cắt giảm các hạng mục \textbf{P2} trước; tuyệt đối không cắt giảm các khối Chẩn đoán, Chiến lược và Đo đạc thực nghiệm cốt lõi.

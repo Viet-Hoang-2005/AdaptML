@@ -16,16 +16,16 @@ Bayram \& Ahmed~\cite{bayram2025} khảo sát toàn diện về tính vững ch�
 
 \subsection{Bảng đánh giá khoảng trống nghiên cứu (Literature Gap Matrix)}
 
-Bảng~\ref{tab:lit-gap} đối chiếu toàn diện đề tài nghiên cứu này với các công trình tiêu biểu trên y văn thế giới theo 8 tiêu chí chức năng cốt lõi:
+Bảng~\ref{tab:lit-gap} đối chiếu toàn diện hiện trạng y văn và nền tảng hiện hữu với mục tiêu thiết kế của đề tài nghiên cứu theo 7 tiêu chí chức năng cốt lõi:
 
 \begin{xltabular}{\linewidth}{@{}L{2.8cm} C{0.7cm} C{0.7cm} C{0.7cm} C{0.7cm} C{0.7cm} C{0.7cm} C{0.7cm} Y@{}}
 \caption{Bảng đối chiếu và đánh giá khoảng trống nghiên cứu.}\label{tab:lit-gap}\\
 \toprule
-\textbf{Công trình / Framework} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{Khoảng trống chưa giải quyết (Identified Research Gap)} \\
+\textbf{Công trình / Nền tảng} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{Khoảng trống chưa giải quyết (Identified Research Gap)} \\
 \midrule
 \endfirsthead
 \toprule
-\textbf{Công trình / Framework} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{Khoảng trống chưa giải quyết (Identified Research Gap)} \\
+\textbf{Công trình / Nền tảng} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{Khoảng trống chưa giải quyết (Identified Research Gap)} \\
 \midrule
 \endhead
 
@@ -50,19 +50,30 @@ Bayram \& Ahmed~\cite{bayram2025} & \pmark & \pmark & \xmark & \pmark & \pmark &
 ADWIN / DDM / Lu~\cite{bifet2007,gama2004,lu2019} & \cmark & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & Thuật toán phát hiện biến động trên luồng dữ liệu thô; hoàn toàn nằm ngoài bối cảnh kiến trúc MLOps và pipeline serving/CT. \\
 \midrule
 
-\textbf{Đề tài nghiên cứu (Đề xuất)} & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \textbf{Giải quyết trọn vẹn chuỗi khép kín:} Phát hiện đa tín hiệu $\rightarrow$ Chẩn đoán nguyên nhân \& Severity $\rightarrow$ Chính sách can thiệp an toàn (No-op/Data Eng/CT/HITL) $\rightarrow$ Evaluation Gate $\rightarrow$ Shadow/Canary. \\
+\textbf{Nền tảng MLOps hiện hữu} & \pmark & \pmark & \xmark & \xmark & \xmark & \pmark & \pmark & Đã có pipeline serving, tracking, model registry và kích hoạt huấn luyện cơ bản; thiếu chẩn đoán đa bằng chứng và chính sách thích ứng. \\
+\addlinespace
+
+\textbf{Mục tiêu thiết kế Đề xuất} & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \textbf{Khép kín chuỗi xử lý khoa học:} Giám sát đa nguồn $\rightarrow$ Chẩn đoán đa bằng chứng $\rightarrow$ Phân tầng Severity $\rightarrow$ Lựa chọn chiến lược thích ứng $\rightarrow$ Cổng thẩm định \& Triển khai an toàn. \\
 \bottomrule
 \end{xltabular}
 
-\textit{Quy ước ký hiệu:} \cmark: Hỗ trợ đầy đủ; \pmark: Hỗ trợ một phần / mức khái niệm; \xmark: Chưa hỗ trợ / Khoảng trống nghiên cứu.
+\textit{Quy ước ký hiệu:} \cmark: Hỗ trợ đầy đủ / Mục tiêu thiết kế; \pmark: Hỗ trợ một phần / Mức khái niệm; \xmark: Chưa hỗ trợ / Khoảng trống nghiên cứu.
 
 \textit{Ghi chú các tiêu chí đánh giá (C1--C7):}
 \begin{itemize}
   \item \textbf{C1 (Multi-Signal Drift Detection):} Phát hiện đa tín hiệu (Data drift $P(X)$, Prediction drift $P(\hat{Y})$, Data quality).
   \item \textbf{C2 (Performance Monitoring):} Giám sát hiệu năng thực tế ($P(Y|X)$, F1, Precision, Recall).
   \item \textbf{C3 (Delayed-Label Handling):} Xử lý nhãn trễ dựa trên \codepath{prediction\_id} và cửa sổ trượt watermark.
-  \item \textbf{C4 (Root-Cause Diagnosis):} Phân loại nguyên nhân suy giảm (7 nhóm) và định lượng mức độ nghiêm trọng ($S_0$--$S_4$).
-  \item \textbf{C5 (Adaptive Action Space):} Không gian hành động đa nhánh (No-op, Data Engineering, Incremental CT, Full CT, HITL).
+  \item \textbf{C4 (Root-Cause Diagnosis):} Phân loại nguyên nhân suy giảm cốt lõi và định lượng mức độ nghiêm trọng ($S_0$--$S_4$).
+  \item \textbf{C5 (Adaptive Action Space):} Không gian hành động đa nhánh (No-op, Incremental CT, Full CT, HITL).
   \item \textbf{C6 (Safe Evaluation Gate):} Cổng thẩm định đối kháng Champion--Candidate đa tiêu chí trước khi triển khai.
   \item \textbf{C7 (Traffic Experiment \& Rollback):} Hỗ trợ Shadow Mode, Canary rollout và cơ chế thu hồi tự động khi vi phạm rào chắn.
+\end{itemize}
+
+\subsection{Định vị Công bố Khoa học (Publication Positioning)}
+Kết quả nghiên cứu của đề tài hướng tới đóng gói bài báo khoa học gửi đến các diễn đàn công bố quốc tế uy tín theo các tầng đóng góp:
+\begin{itemize}
+  \item \textbf{Đóng góp Cốt lõi (Core Contribution):} Các tạp chí và hội nghị uy tín chuyên sâu về hệ thống và phần mềm: Journal of Systems and Software (JSS), Automated Software Engineering (ASE), Empirical Software Engineering (EMSE), ICSME.
+  \item \textbf{Mở rộng Chuyên sâu (Advanced Extension):} Các hội nghị và tạp chí chuyên ngành hàng đầu về thực nghiệm và tiến hóa phần mềm: EMSE, JSS, MSR (Mining Software Repositories).
+  \item \textbf{Đột phá Dài hạn (Stretch / Future Direction):} Các diễn đàn hàng đầu thế giới về Công nghệ Phần mềm \& AI: IEEE Transactions on Software Engineering (TSE), ACM Transactions on Software Engineering and Methodology (TOSEM), ICSE, ESEC/FSE.
 \end{itemize}

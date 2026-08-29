@@ -1,113 +1,136 @@
 %===============================================================================
-\section{Thiết kế thực nghiệm và Đánh giá Benchmark}
+\section{Thiết kế thực nghiệm và Đánh giá Benchmark Phân tầng}
 %===============================================================================
 
-Để khẳng định tính đóng góp khoa học, bộ benchmark thực nghiệm được thiết kế theo nguyên tắc \textbf{nguyên nhân suy giảm đã biết trước (Ground-truth Cause)}, vượt ra ngoài việc chỉ quan sát nhãn bài toán máy học đơn thuần.
+Để khẳng định tính đóng góp khoa học, bộ benchmark thực nghiệm được thiết kế theo nguyên tắc \textbf{gắn nhãn chuẩn kép (Dual Ground Truth)}: mỗi kịch bản có cả nguyên nhân suy giảm thực tế (\codepath{ground\_truth\_cause}) và hành động tối ưu kỳ vọng (\codepath{ground\_truth\_best\_action}).
 
-\subsection{Không gian kịch bản thực nghiệm (Benchmark Scenarios)}
+\subsection{Không gian kịch bản thực nghiệm và Nhãn chuẩn (Benchmark Scenarios)}
 
 \begin{table}[ht]
 \centering
-\caption{Danh mục các kịch bản thực nghiệm chuẩn hóa.}\label{tab:scenarios}
-\begin{tabularx}{\linewidth}{@{}C{0.9cm} L{2.0cm} L{5.4cm} Y@{}}
+\caption{Danh mục các kịch bản thực nghiệm và bảng ánh xạ Ground Truth chuẩn hóa.}\label{tab:scenarios}
+\begin{tabularx}{\linewidth}{@{}C{0.9cm} L{2.0cm} L{5.2cm} Y@{}}
 \toprule
-\textbf{Mã} & \textbf{Phân tầng} & \textbf{Bản chất kịch bản (Scenario Injection)} & \textbf{Hành động kỳ vọng chuẩn xác} \\
+\textbf{Mã} & \textbf{Phân tầng} & \textbf{Bản chất kịch bản (Scenario Injection)} & \textbf{Hành động tối ưu (Best Action)} \\
 \midrule
-S0 & Cốt lõi & Môi trường ổn định, không có suy giảm (\texttt{Stable}) & Không can thiệp (\texttt{NO\_OP}) \\
-S1 & Cốt lõi & Trôi dạt lành tính: $P(X)$ đổi nhưng $P(Y|X)$ ổn định & Cảnh báo, theo dõi (\texttt{NO\_OP / OBSERVE}) \\
-S2 & Cốt lõi & Trôi dạt có hại: $P(X)$ đổi kéo theo F1 giảm, đủ nhãn & Tái huấn luyện gia tăng (\texttt{INCREMENTAL\_RETRAIN}) \\
-S3 & Cốt lõi & Sự cố chất lượng dữ liệu: lỗi schema, range, missing & Đình chỉ CT, mở \texttt{DATA\_ENGINEERING} \\
+S0 & Cốt lõi (Q3) & Môi trường ổn định, không có suy giảm (\texttt{Stable}) & \textbf{NO\_OP} (Không can thiệp) \\
+S1 & Cốt lõi (Q3) & Trôi dạt lành tính: $P(X)$ đổi nhưng $P(Y|X)$ ổn định & \textbf{NO\_OP / OBSERVE} (Log bằng chứng) \\
+S2 & Cốt lõi (Q3) & Trôi dạt có hại: $P(X)$ đổi kéo theo F1 giảm, đủ nhãn & \textbf{INCREMENTAL\_CT} (Cập nhật gia tăng) \\
+S3 & Cốt lõi (Q3) & Sự cố chất lượng dữ liệu: lỗi schema, range, missing & \textbf{DATA\_ENGINEERING} (Đình chỉ CT) \\
+S4 & Cốt lõi (Q3) & Dịch chuyển khái niệm/nhãn: $P(Y|X)$ đổi đột ngột & \textbf{HITL} (Chuyên gia phân tích lát cắt) \\
+S5 & Cốt lõi (Q3) & Lão hóa dữ liệu huấn luyện (Data Staleness: C4) & \textbf{FULL\_CT} (Cập nhật snapshot mới) \\
 \midrule
-S4 & Quan trọng & Dịch chuyển khái niệm/nhãn: $P(Y|X)$ đổi đột ngột & Phê duyệt chuyên gia (\texttt{HITL}) \\
-S9 & Quan trọng & Tín hiệu hỗn hợp: vừa trôi dạt dữ liệu vừa trễ nhãn & Phân tích chuyên sâu (\texttt{HITL}) \\
-S10 & Quan trọng & Cảnh báo trôi dạt giả (False Drift Signal) & Nhận diện lành tính, \textbf{không CT thừa} \\
-S11 & Quan trọng & Nhãn trễ / Chưa đủ độ phủ ($r_\text{labels} < r_\text{min}$) & Tạm giữ (\texttt{PROXY\_HOLD}), \textbf{cấm Auto CT} \\
+S9 & Nâng cao (Q2) & Tín hiệu hỗn hợp (Mixed): vừa trôi dạt vừa trễ nhãn & \textbf{HITL} (Thẩm định đa nguồn) \\
+S10 & Nâng cao (Q2) & Cảnh báo trôi dạt giả (False Drift Signal) & \textbf{NO\_OP} (Nhận diện lành tính, cấm CT) \\
+S11 & Nâng cao (Q2) & Nhãn trễ dài hạn / Độ phủ thấp ($r_\text{labels} < r_\text{min}$) & \textbf{NO\_OP / PROXY\_HOLD} (Cấm Auto CT) \\
 \midrule
-S5 & Mở rộng & Dữ liệu huấn luyện bị lão hóa dần theo thời gian & Tái huấn luyện toàn phần (\texttt{FULL\_RETRAIN}) \\
-S6 & Mở rộng & Suy giảm cấu hình siêu tham số (HPO degradation) & Cập nhật không gian tìm kiếm HPO \\
-S7 & Mở rộng & Lỗi mã nguồn xử lý đặc trưng (Feature code bug) & Sửa đổi qua luồng CI/CD kỹ thuật \\
-S8 & Mở rộng & Sự cố hạ tầng phục vụ (OOM, nghẽn mạng) & Thu hồi tự động hoặc mở rộng tài nguyên \\
+S6 & Mở rộng (Q1) & Suy giảm cấu hình siêu tham số (HPO degradation) & \textbf{HPO + CT} (Tìm kiếm cấu hình) \\
+S7 & Mở rộng (Q1) & Lỗi mã nguồn xử lý đặc trưng (Feature code bug) & Sửa đổi qua luồng CI/CD kỹ thuật \\
+S8 & Mở rộng (Q1) & Sự cố hạ tầng phục vụ (OOM, nghẽn mạng) & Thu hồi tự động hoặc mở rộng tài nguyên \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-Mỗi kịch bản được tạo thông qua bộ sinh dữ liệu (Scenario Injector) với nhãn nguyên nhân suy giảm thực tế (\codepath{ground\_truth\_cause}), cho phép đánh giá định lượng ma trận nhầm lẫn (Confusion Matrix) của thuật toán chẩn đoán.
+Cấu trúc metadata chuẩn được Scenario Injector sinh ra hỗ trợ cả kịch bản đơn nguyên nhân lẫn đa nguyên nhân:
+\begin{tcolorbox}[colback=gray!4!white,colframe=gray!45!black,arc=2pt,boxrule=0.5pt,top=3pt,bottom=3pt,left=5pt,right=5pt]
+\small
+\begin{verbatim}
+{
+  "scenario_id": "S09_MIXED",
+  "ground_truth": {
+    "primary_cause": "DATA_DRIFT",
+    "secondary_causes": ["DATA_QUALITY"],
+    "severity": "S3_HIGH",
+    "severity_factors": { "perf_impact": 0.11, "scope": 0.70, "risk": "high" },
+    "harmful": true,
+    "best_action": "HITL",
+    "auto_action_allowed": false
+  }
+}
+\end{verbatim}
+\end{tcolorbox}
 
 \subsection{Các phương pháp đối chứng (Baselines)}
-Quá trình thực nghiệm so sánh phương pháp đề xuất với 6 đường cơ sở chuẩn mực:
+
+\subsubsection{Hệ thống Baselines vận hành toàn trình (End-to-End Maintenance Baselines)}
 \begin{itemize}
   \item \textbf{B0 -- Static / No Retraining:} Mô hình giữ nguyên không tái huấn luyện trong suốt vòng đời; đo lường mức độ suy thoái tự nhiên.
-  \item \textbf{B1 -- Periodic Retraining:} Tái huấn luyện cố định theo lịch trình định kỳ (ví dụ: hàng tuần hoặc hàng tháng) bất kể có trôi dạt hay không.
-  \item \textbf{B2 -- Single-Signal Drift-Triggered CT:} Tự động tái huấn luyện ngay khi có bất kỳ cảnh báo data drift đơn lẻ nào vượt ngưỡng (đại diện cho cách tiếp cận phổ biến trong công nghiệp).
+  \item \textbf{B1 -- Periodic Retraining:} Tái huấn luyện cố định theo lịch trình định kỳ (hàng tuần/hàng tháng).
+  \item \textbf{B2 -- Single-Signal Drift-Triggered CT:} Tự động tái huấn luyện ngay khi có bất kỳ cảnh báo data drift đơn lẻ nào.
   \item \textbf{B3 -- Performance-Triggered CT:} Chỉ kích hoạt tái huấn luyện khi hiệu năng kiểm chứng thực tế bị suy giảm.
-  \item \textbf{B4 -- Always Retrain:} Huấn luyện lại liên tục sau mỗi lô dữ liệu mới (đóng vai trò đường cơ sở trần về chi phí tài nguyên).
-  \item \textbf{B5 -- Proposed Degradation-Aware Adaptive CT:} Chuỗi xử lý hoàn chỉnh Detection $\rightarrow$ Diagnosis $\rightarrow$ Severity $\rightarrow$ Risk Policy $\rightarrow$ Conditional CT / HITL $\rightarrow$ Evaluation Gate.
+  \item \textbf{B4 -- Always Retrain:} Huấn luyện lại liên tục sau mỗi lô dữ liệu mới (đường cơ sở trần về chi phí tài nguyên).
+  \item \textbf{B5 -- Proposed Degradation-Aware Adaptive CT:} Chuỗi xử lý hoàn chỉnh Detection $\rightarrow$ Diagnosis $\rightarrow$ Severity $\rightarrow$ Strategy Selector $\rightarrow$ Action Space $\rightarrow$ Evaluation Gate.
+\end{itemize}
+
+\subsubsection{Baselines ở cấp độ chẩn đoán (Diagnosis-Level Baselines)}
+\begin{itemize}
+  \item \textbf{D1 -- Single-Signal Detector (Baseline):} Suy luận nguyên nhân chỉ dựa trên một chỉ số trôi dạt duy nhất (ví dụ: khoảng cách Wasserstein hoặc PSI).
+  \item \textbf{D2 -- Rule-Based Multi-Signal Diagnosis (Heuristic Baseline):} Phân loại dựa trên tập luật điều kiện kết hợp ngưỡng cứng đơn giản.
+  \item \textbf{D3 -- Proposed Multi-Evidence Weighted Diagnosis (Proposed Method):} Phân loại kết hợp trọng số bằng chứng đa nguồn, khoảng tin cậy thống kê và hiệu chuẩn xác suất.
+\end{itemize}
+
+\subsection{Thiết kế Thử nghiệm Bóc tách (Ablation Study)}
+
+\subsubsection{Bóc tách theo chuỗi thành phần kiến trúc (Core Chain Ablation)}
+Nhằm chứng minh tính đóng góp của từng khâu trong chuỗi nghiên cứu:
+\begin{itemize}
+  \item $A_0$: Single-Signal Trigger Baseline (chỉ kích hoạt CT theo một chỉ số drift đơn lẻ).
+  \item $A_1$: Thêm biểu diễn bằng chứng đa nguồn (Multi-Signal Evidence Representation).
+  \item $A_2$: Thêm khối chẩn đoán nguyên nhân xác suất ($P(\text{Cause} \mid E)$).
+  \item $A_3$: Thêm mô hình định lượng Mức độ nghiêm trọng ($S_0$--$S_4$) và Độ tin cậy (Confidence).
+  \item $A_4$: Thêm bộ lựa chọn chiến lược thích ứng nhận thức rủi ro (Risk-Aware Strategy Selector).
+\end{itemize}
+
+\subsubsection{Bóc tách theo nhóm bằng chứng (Evidence Group Ablation)}
+Để đánh giá độ nhạy của từng nhóm tín hiệu đối với độ chính xác chẩn đoán:
+\begin{itemize}
+  \item $A_\text{Full}$: Sử dụng đầy đủ tất cả các nhóm bằng chứng đa nguồn.
+  \item $A_{-\text{Drift}}$: Loại bỏ nhóm bằng chứng trôi dạt dữ liệu ($P(X)$).
+  \item $A_{-\text{Quality}}$: Loại bỏ nhóm bằng chứng kiểm định chất lượng dữ liệu.
+  \item $A_{-\text{Prediction}}$: Loại bỏ nhóm bằng chứng phân phối đầu ra và điểm tự tin ($P(\hat{Y})$, Confidence).
+  \item $A_{-\text{Performance}}$: Loại bỏ nhóm bằng chứng hiệu năng thực tế ($P(Y|X)$, F1, Error distribution).
+  \item $A_{-\text{Lineage}}$: Loại bỏ nhóm bằng chứng lịch sử huấn luyện, tuổi dữ liệu và lineage.
 \end{itemize}
 
 \subsection{Hệ thống chỉ số đánh giá đa chiều (Evaluation Metrics)}
 
-\begin{table}[ht]
-\centering
-\caption{Khung chỉ số đánh giá thực nghiệm toàn diện.}\label{tab:metrics}
-\begin{tabularx}{\linewidth}{@{}L{3.5cm} Y@{}}
+Khung đánh giá bao quát 6 chiều cạnh đo lường:
+
+\begin{xltabular}{\linewidth}{@{}L{3.5cm} Y@{}}
+\caption{Khung chỉ số đánh giá thực nghiệm 6 chiều.}\label{tab:metrics}\\
 \toprule
 \textbf{Chiều cạnh đánh giá} & \textbf{Tập chỉ số đo lường chi tiết} \\
 \midrule
-Chất lượng phát hiện & Precision, Recall, F1 của cảnh báo; False Positive Rate; độ trễ phát hiện (Detection Delay). \\
+\endfirsthead
+\toprule
+\textbf{Chiều cạnh đánh giá} & \textbf{Tập chỉ số đo lường chi tiết} \\
+\midrule
+\endhead
+
+A. Chất lượng phát hiện & Precision, Recall, F1 của cảnh báo; False Positive Rate (FPR); Độ trễ phát hiện (Detection Delay). \\
 \addlinespace
-Chất lượng chẩn đoán & Độ chính xác chẩn đoán nguyên nhân (Diagnosis Accuracy); Macro-F1; Confusion Matrix giữa 7 loại nguyên nhân; sai số hiệu chuẩn độ tin cậy (ECE, Brier Score). \\
+
+B. Chất lượng chẩn đoán & Độ chính xác chẩn đoán nguyên nhân (Diagnosis Accuracy); Macro-F1 phân loại các nhóm nguyên nhân; Confusion Matrix; Sai số hiệu chuẩn xác suất (ECE, Brier Score). \\
 \addlinespace
-Chất lượng quyết định & Tỷ lệ ra quyết định chính xác (Strategy Accuracy); Tỷ lệ tự động hóa mất an toàn (Unsafe Automation Rate); Tỷ lệ tái huấn luyện không cần thiết (Unnecessary Retraining Rate); Tỷ lệ bỏ sót suy giảm (Missed Degradation Rate). \\
+
+C. Lựa chọn chiến lược & Độ chính xác hành động (Strategy Accuracy); Macro-F1 của các lớp hành động; Tỷ lệ hành động mất an toàn (Unsafe Action Rate); Tỷ lệ tái huấn luyện không cần thiết (Unnecessary Retraining Rate - URR); Tỷ lệ bỏ sót suy giảm (Missed Degradation Rate - MDR). \\
 \addlinespace
-Năng lực phục hồi & Thời gian phục hồi (Time-to-Recovery); Đường cong phục hồi hiệu năng (F1 recovery curve); Mức cải thiện hiệu năng sau CT ($\Delta_\text{recovery}$). \\
+
+D. Năng lực phục hồi & Mức độ phục hồi hiệu năng ($\Delta \text{Recovery}$); Thời gian phục hồi (Time-to-Recovery); Mức cải thiện Candidate-vs-Champion. \\
 \addlinespace
-Hiệu quả chi phí & Tổng số giờ tính toán (GPU/CPU-hours); Tỷ lệ cắt giảm tái huấn luyện thừa ($\text{URR}$); Chi phí phục vụ shadow mode. \\
+
+E. Chi phí và Nỗ lực & Số lần chạy huấn luyện; Tổng số giờ tính toán (GPU/CPU-hours); Tần suất tái huấn luyện; Số lượng yêu cầu duyệt thủ công (Human Intervention Count). \\
 \addlinespace
-Gánh nặng chuyên gia & Số lượng yêu cầu duyệt thủ công (Manual Approval Count); Tỷ lệ can thiệp của con người (Human Intervention Rate); Thời gian phản hồi trung bình. \\
-\addlinespace
-An toàn triển khai & Tỷ lệ vi phạm guardrails; Tỷ lệ thu hồi tự động thành công (Rollback success); Tỷ lệ candidate bị từ chối tại Evaluation Gate. \\
+
+F. An toàn triển khai & Tỷ lệ thăng cấp thất bại tại Evaluation Gate; Tỷ lệ thu hồi tự động (Rollback Rate); Mức độ suy thoái hiệu năng sau triển khai. \\
 \bottomrule
-\end{tabularx}
-\end{table}
+\end{xltabular}
 
-Ba chỉ số cốt lõi trực tiếp chứng minh đóng góp khoa học của đề tài:
-\begin{align}
-  \text{Unnecessary Retraining Rate (URR)} &= \frac{\text{Số lần CT khi không có suy giảm có hại}}{\text{Tổng số lần kích hoạt CT}} \\[0.3em]
-  \text{Missed Degradation Rate (MDR)} &= \frac{\text{Số ca suy giảm có hại bị bỏ qua không xử lý}}{\text{Tổng số ca suy giảm có hại thực tế}} \\[0.3em]
-  \text{Unnecessary Retraining Reduction} &= 1 - \frac{\text{URR}_\text{Proposed}}{\text{URR}_\text{Baseline}}
-\end{align}
+\subsection{Ma trận Thực nghiệm Phân tầng \texorpdfstring{(Q3 $\rightarrow$ Q2 $\rightarrow$ Q1 Matrix)}{(Q3 -> Q2 -> Q1 Matrix)}}
 
-\subsection{Mô hình Phân tích Hiệu quả Đa mục tiêu (Cost-Effectiveness Model)}
-Để loại bỏ sự thiếu nhất quán về mặt thứ nguyên, hiệu quả của chính sách bảo trì mô hình được lượng hóa qua hàm thỏa dụng tổng hợp (Composite Utility Function):
-$$\text{Utility} = \Delta \text{Performance Gained} - \lambda_1 \cdot C_\text{compute} - \lambda_2 \cdot C_\text{human} - \lambda_3 \cdot \text{Risk}_\text{unsafe}$$
-trong đó:
 \begin{itemize}
-  \item $\Delta \text{Performance Gained}$ là mức độ phục hồi hiệu năng F1 tích lũy theo thời gian.
-  \item $C_\text{compute}$ là tổng chi phí tài nguyên tính toán (chuẩn hóa theo GPU/CPU-hours).
-  \item $C_\text{human}$ là chi phí nỗ lực chuyên gia (số lượt can thiệp thủ công $\times$ thời gian xử lý).
-  \item $\text{Risk}_\text{unsafe}$ là tổn thất do các quyết định tự động hóa sai lầm gây ra (phạt nặng các trường hợp thăng cấp candidate lỗi).
-  \item $\lambda_1, \lambda_2, \lambda_3 \ge 0$ là các hệ số chuẩn hóa và trọng số đánh đổi theo yêu cầu nghiệp vụ.
-\end{itemize}
-
-\subsection{Thiết kế Thử nghiệm Bóc tách và Độ nhạy (Ablation \& Sensitivity)}
-
-\subsubsection{Ablation Study (Đánh giá đóng góp từng thành phần)}
-Nghiên cứu tiến hành bóc tách 6 cấu hình luỹ tiến để chứng minh giá trị của từng khối chức năng:
-\begin{itemize}
-  \item $A_0$: Kích hoạt CT thuần túy dựa trên Data Drift đơn lẻ.
-  \item $A_1$: Bổ sung phát hiện đa tín hiệu (Multi-Signal Detection: Data drift + Quality + Confidence).
-  \item $A_2$: Bổ sung Khối chẩn đoán phân loại nguyên nhân ($A_1 + \text{Diagnosis}$).
-  \item $A_3$: Bổ sung Thang đo mức độ nghiêm trọng ($A_2 + \text{Severity } S_0\text{--}S_4$).
-  \item $A_4$: Bổ sung Chính sách can thiệp thích ứng ($A_3 + \text{Adaptive Policy}$).
-  \item $A_5$: Bổ sung Vòng lặp chuyên gia ($A_4 + \text{HITL}$).
-  \item $A_6$: Toàn bộ hệ thống hoàn chỉnh ($A_5 + \text{EvaluationGate} + \text{Shadow Mode}$).
-\end{itemize}
-
-\subsubsection{Sensitivity Analysis (Phân tích độ nhạy tham số)}
-Kiểm chứng tính bền vững của chính sách khi thay đổi các ngưỡng quyết định:
-\begin{itemize}
-  \item Ngưỡng phủ nhãn: $r_\text{min} \in \{0.3, 0.5, 0.7, 0.9\}$.
-  \item Ngưỡng suy giảm hiệu năng: $\theta_\text{perf} \in \{0.03, 0.05, 0.08, 0.10\}$.
-  \item Ngưỡng trôi dạt: $\theta_\text{drift} \in \{0.1, 0.2, 0.3\}$ (khoảng cách Wasserstein/PSI).
-  \item Thời gian giãn cách: $\text{Cooldown} \in \{12\text{h}, 24\text{h}, 72\text{h}, 168\text{h}\}$.
+  \item \textbf{Cấp độ Q3 (Baseline Vững chắc -- Paper-Ready):} 2--3 bộ dữ liệu tabular chuẩn; 5 nhóm nguyên nhân cốt lõi (C0--C4); 4 hành động cốt lõi; so sánh B0--B5 và D1--D3; Ablation từng nhóm bằng chứng; chứng minh $\text{URR} \downarrow$, Chi phí $\downarrow$, Phục hồi duy trì.
+  \item \textbf{Cấp độ Q2 (Mở rộng Nâng cao):} Mở rộng sang nhiều họ bài toán (Classification, Regression, Time-series); suy giảm hỗn hợp (mixed causes), trôi dạt dần (gradual drift); cửa sổ nhãn trễ kéo dài; phân tích tối ưu đa mục tiêu Pareto Frontier:
+  $$U(a \mid E) = \text{Benefit}(a) - \text{Cost}(a) - \text{Risk}(a) - \text{HumanEffort}(a)$$
+  \item \textbf{Cấp độ Q1 Stretch (Hướng nghiên cứu Đột phá):} Khung chẩn đoán suy luận nhân quả (Causal Degradation Diagnosis / Counterfactuals) hoặc chính sách học thích ứng online (Online Adaptive Policy / Contextual Bandits) có khả năng khái quát hóa đa lĩnh vực.
 \end{itemize}
