@@ -31,7 +31,7 @@ IF condition A + B
 → Action D
 ```
 
-Giữ rule-based logic như **baseline/prototype**, nhưng không để nó là scientific method duy nhất.
+Giữ rule-based logic như **baseline/prototype**, nhưng không để nó là scientific method duy nhất.[text](../../../../codex_final_scope_q3_q2_q1_revision.md)
 
 Đề xuất cấu trúc:
 
