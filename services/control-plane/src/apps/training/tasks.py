@@ -57,7 +57,11 @@ def execute_training_job(self, job_id):
         append_training_log(job.public_id, f"[ERROR] Training failed: {exc}")
         raise
     if isinstance(result, dict) and result.get("dispatched"):
-        append_training_log(job.public_id, "[SYSTEM] Training workload dispatched; waiting for trusted callback.")
+        append_training_log(job.public_id, f"[SYSTEM] Training workload dispatched ({job.backend}).")
+        if hasattr(training_backend(job.backend), "poll"):
+            poll_training_job_status.apply_async(args=[str(job.public_id)], countdown=3)
+        else:
+            append_training_log(job.public_id, "[SYSTEM] Waiting for trusted callback.")
         return "running"
     with transaction.atomic():
         job = TrainingJob.objects.select_for_update().get(pk=job.pk)
@@ -76,6 +80,83 @@ def execute_training_job(self, job_id):
         append_training_log(job.public_id, line)
     append_training_log(job.public_id, "[SYSTEM] Training completed successfully.")
     return "completed"
+
+
+@shared_task(bind=True, max_retries=7200)
+def poll_training_job_status(self, job_id):
+    from .models import TrainingJob, TrainingJobEvent
+    from .services.logs import append_training_log
+
+    try:
+        job = TrainingJob.objects.select_related("project", "project__owner").get(public_id=job_id)
+    except TrainingJob.DoesNotExist:
+        return "not_found"
+
+    if job.status in {"completed", "failed", "cancelled"} or job.deletion_requested_at:
+        return job.status
+
+    backend = training_backend(job.backend)
+    if not hasattr(backend, "poll"):
+        return job.status
+
+    result = backend.poll(job)
+    current_status = result.get("status")
+
+    if current_status == "running":
+        raise self.retry(countdown=5)
+
+    if current_status == "completed":
+        logs = result.get("logs", "")
+        with transaction.atomic():
+            job = TrainingJob.objects.select_for_update().get(pk=job.pk)
+            if job.status in {"cancelling", "cancelled"} or job.deletion_requested_at:
+                return job.status
+            job.mark_finished("completed")
+            job.tracking = {**job.tracking, "logs_tail": logs[-6000:]}
+            job.save(update_fields=["status", "completed_at", "runtime_seconds", "tracking", "updated_at"])
+            job.outputs.update_or_create(
+                relative_path="model.tar.gz",
+                defaults={"kind": "model", "s3_uri": job.output_uri, "content_type": "application/gzip"},
+            )
+            TrainingJobEvent.objects.create(job=job, event_type="completed", message="Training execution completed.")
+        for line in logs.splitlines()[-500:]:
+            append_training_log(job.public_id, line)
+        append_training_log(job.public_id, "[SYSTEM] Training completed successfully.")
+        return "completed"
+
+    if current_status == "failed":
+        logs = result.get("logs", "")
+        error_msg = result.get("error") or f"Training failed with exit code {result.get('exit_code')}"
+        with transaction.atomic():
+            job = TrainingJob.objects.select_for_update().get(pk=job.pk)
+            if job.status in {"cancelling", "cancelled"} or job.deletion_requested_at:
+                return job.status
+            job.mark_finished("failed")
+            job.error_message = error_msg[:12000]
+            job.save(update_fields=["status", "completed_at", "runtime_seconds", "error_message", "updated_at"])
+            TrainingJobEvent.objects.create(
+                job=job, event_type="failed", message="Training execution failed.", metadata={"error": error_msg[:1000]}
+            )
+        for line in logs.splitlines()[-500:]:
+            append_training_log(job.public_id, line)
+        append_training_log(job.public_id, f"[ERROR] Training failed: {error_msg}")
+        return "failed"
+
+    if current_status in {"not_found", "error"}:
+        with transaction.atomic():
+            job = TrainingJob.objects.select_for_update().get(pk=job.pk)
+            if job.status in {"cancelling", "cancelled"} or job.deletion_requested_at:
+                return job.status
+            job.mark_finished("failed")
+            job.error_message = f"Training container error: {result.get('error') or 'Container not found'}"
+            job.save(update_fields=["status", "completed_at", "runtime_seconds", "error_message", "updated_at"])
+            TrainingJobEvent.objects.create(
+                job=job, event_type="failed", message="Training runtime disappeared or errored."
+            )
+        append_training_log(job.public_id, f"[ERROR] {job.error_message}")
+        return "failed"
+
+    return job.status
 
 
 @shared_task(

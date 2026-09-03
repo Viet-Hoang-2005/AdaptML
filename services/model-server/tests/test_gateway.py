@@ -6,7 +6,7 @@ import pytest
 
 from unittest.mock import AsyncMock, Mock
 from fastapi import BackgroundTasks, HTTPException
-from src import index
+from src import database, index
 
 
 class FakeResponse:
@@ -244,3 +244,65 @@ def test_runtime_factories_fail_closed(monkeypatch):
     monkeypatch.setattr(index, "Producer", Mock(side_effect=RuntimeError("no")))
     assert index.create_redis_client() is None
     assert index.create_kafka_producer() is None
+
+
+def test_invalidate_model_version_cache():
+    fake_redis = Mock()
+    fake_redis.delete.return_value = 1
+    assert database.invalidate_model_version_cache("v123", fake_redis) is True
+    fake_redis.delete.assert_called_once_with("model-version:v123")
+    assert database.invalidate_model_version_cache("", fake_redis) is False
+    assert database.invalidate_model_version_cache("v123", None) is False
+
+
+@pytest.mark.asyncio
+async def test_predict_network_error_evicts_cache_and_returns_409_if_stopped(monkeypatch):
+    record = {
+        "id": "v-stopped",
+        "project_id": "proj",
+        "tenant_id": "t",
+        "flavor": "sklearn",
+        "endpoint_container_name": "worker-stopped",
+        "deployment_status": "healthy",
+    }
+    monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
+    fake_redis = Mock()
+    monkeypatch.setattr(index, "redis_client", fake_redis)
+
+    request_error = httpx.RequestError("Connection refused", request=Mock())
+    monkeypatch.setattr(index.httpx, "AsyncClient", lambda **kw: FakeAsyncClient(post=request_error))
+
+    stopped_db_record = {
+        "id": "v-stopped",
+        "project_id": "proj",
+        "tenant_id": "t",
+        "flavor": "sklearn",
+        "endpoint_container_name": None,
+        "deployment_status": "stopped",
+    }
+    monkeypatch.setattr(index, "_fetch_model_version_from_db", lambda vid: stopped_db_record)
+
+    with pytest.raises(HTTPException) as exc:
+        await index.predict(
+            "v-stopped",
+            Mock(),
+            index.InferenceRequest(features={}),
+            BackgroundTasks(),
+            {"model_record": record},
+        )
+
+    fake_redis.delete.assert_called_with("model-version:v-stopped")
+    assert exc.value.status_code == 409
+    assert "stopped" in exc.value.detail.lower()
+
+
+def test_resolve_worker_url_rejects_stopped_deployment(monkeypatch):
+    monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
+    stopped_record = {
+        "flavor": "sklearn",
+        "endpoint_container_name": None,
+        "deployment_status": "stopped",
+    }
+    with pytest.raises(HTTPException) as exc:
+        index.resolve_worker_url(stopped_record, "/predict")
+    assert exc.value.status_code == 409

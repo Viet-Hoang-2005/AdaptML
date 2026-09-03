@@ -8,6 +8,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.catalog.models import ModelProject
 from apps.deployment.models import Deployment, Endpoint
+from apps.deployment.services.cache import invalidate_model_server_cache
 
 
 def request_project_deletion(project):
@@ -83,6 +84,8 @@ def finalize_project_deletion(project, *, storage=None):
             stopped_at=timezone.now(),
         )
         Endpoint.objects.filter(deployment__version__project=project).update(health_status="stopped")
+        for version_id in project.versions.values_list("public_id", flat=True):
+            invalidate_model_server_cache(str(version_id))
         project.deletion_state = "deleted"
         project.deletion_error = ""
         project.deletion_task_id = ""

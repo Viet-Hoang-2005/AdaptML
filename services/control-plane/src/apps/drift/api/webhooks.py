@@ -36,6 +36,9 @@ class DriftRunWebhookEndpoint(APIView):
             run.completed_at = run.completed_at or timezone.now()
             run.error_message = ""
             run.save(update_fields=["summary", "drift_score", "has_drift", "status", "completed_at", "error_message"])
+            if run.has_drift:
+                from apps.drift.tasks import handle_drift_detected
+                transaction.on_commit(lambda: handle_drift_detected.delay(str(run.public_id)))
         return Response({"status": run.status})
 
 

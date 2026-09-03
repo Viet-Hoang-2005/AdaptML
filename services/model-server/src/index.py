@@ -18,7 +18,13 @@ from jwt.algorithms import RSAAlgorithm
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
-from src.database import get_model_version_record, model_registry_engine, verify_project_api_key
+from src.database import (
+    _fetch_model_version_from_db,
+    get_model_version_record,
+    invalidate_model_version_cache,
+    model_registry_engine,
+    verify_project_api_key,
+)
 
 JWKS_URL = os.environ.get("JWKS_URL", "http://control-plane:8000/api/auth/.well-known/jwks.json")
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "redpanda:9092")
@@ -224,8 +230,17 @@ def resolve_worker_url(model_record: Dict[str, Any], endpoint_path: str) -> str:
     serving_engine = serving_engine_for_flavor(model_record.get("flavor"))
     target_port = 5001 if serving_engine == "ml" else 5002
     container_name = model_record.get("endpoint_container_name")
+    deployment_status = model_record.get("deployment_status")
 
     if not container_name:
+        if deployment_status in {"stopped", "failed", "unhealthy"}:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Model deployment is not active (current status: '{deployment_status}'). "
+                    "Please deploy the model from the Control Plane first."
+                ),
+            )
         if os.environ.get("KUBERNETES_SERVICE_HOST"):
             # On K8s there is no shared fallback pod — fail clearly.
             raise HTTPException(
@@ -259,6 +274,7 @@ async def health_check():
 async def model_health(version_id: str, token_payload: dict = Depends(verify_model_access)):
     model_record = token_payload["model_record"]
     worker_url = resolve_worker_url(model_record, "/health")
+    resolved_model_version_id = str(model_record.get("id", version_id))
     
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -270,6 +286,7 @@ async def model_health(version_id: str, token_payload: dict = Depends(verify_mod
                 content={"status": "unhealthy", "message": f"Worker health returned HTTP {response.status_code}", "detail": response.text}
             )
     except Exception as exc:
+        invalidate_model_version_cache(resolved_model_version_id, redis_client=redis_client)
         return JSONResponse(
             status_code=503,
             content={"status": "unhealthy", "model_loaded": False, "error": f"Cannot reach worker pod: {exc}"}
@@ -370,7 +387,29 @@ async def predict(
             model_version_id=resolved_model_version_id,
             status="error_503",
         ).inc()
-        raise HTTPException(status_code=503, detail=f"Service Unavailable: Cannot reach model serving pod ({exc})")
+        # Reactive invalidation: evict stale routing cache immediately
+        invalidate_model_version_cache(resolved_model_version_id, redis_client=redis_client)
+
+        fresh_record = None
+        try:
+            fresh_record = _fetch_model_version_from_db(resolved_model_version_id)
+        except Exception:
+            fresh_record = None
+
+        if fresh_record and (
+            fresh_record.get("deployment_status") in {"stopped", "failed", "unhealthy"}
+            or not fresh_record.get("endpoint_container_name")
+        ):
+            current_status = fresh_record.get("deployment_status") or "stopped"
+            raise HTTPException(
+                status_code=409,
+                detail=f"Model deployment is not active (current status: '{current_status}'). Serving container is stopped or unavailable.",
+            )
+
+        raise HTTPException(
+            status_code=503,
+            detail=f"Service Unavailable: Cannot reach model serving pod ({exc}). Routing cache invalidated.",
+        )
     except Exception as exc:
         paas_predictions_counter.labels(
             tenant_id=tenant_id,

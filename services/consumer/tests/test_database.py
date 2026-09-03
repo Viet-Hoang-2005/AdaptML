@@ -141,3 +141,5 @@ def test_init_db_creates_model_version_count_index(monkeypatch):
 
     statements = [str(call.args[0]) for call in connection.execute.call_args_list]
     assert any("idx_paas_prod_logs_model_version" in statement for statement in statements)
+    assert any("idx_paas_prod_logs_version_timestamp" in statement for statement in statements)
+    assert any("idx_paas_prod_logs_prediction_id" in statement for statement in statements)

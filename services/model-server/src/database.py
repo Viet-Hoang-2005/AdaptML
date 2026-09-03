@@ -96,6 +96,19 @@ def get_model_version_record(version_id: str, redis_client=None):
     return record
 
 
+def invalidate_model_version_cache(version_id: str, redis_client=None) -> bool:
+    """Invalidate the cached model version record in Redis."""
+    if redis_client is None or not version_id:
+        return False
+    try:
+        cache_key = f"model-version:{version_id}"
+        deleted = redis_client.delete(cache_key)
+        return bool(deleted)
+    except Exception as exc:
+        print(f"Warning: Failed to invalidate cache for version {version_id}: {exc}")
+        return False
+
+
 def verify_project_api_key(raw_key: str, project_pk: int):
     if model_registry_engine is None or not raw_key:
         return None

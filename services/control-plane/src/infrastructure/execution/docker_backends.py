@@ -123,6 +123,7 @@ class DockerTrainingBackend:
             "REQUIREMENTS_TEXT": base64.b64encode(job.requirements_text.encode()).decode()
             if job.requirements_text
             else "",
+            "REDIS_URL": settings.REDIS_URL,
         }
         container = self.docker.run(
             image="mlops-paas-training-runner:latest",
@@ -132,10 +133,36 @@ class DockerTrainingBackend:
         )
         job.external_job_id = container.id
         job.save(update_fields=["external_job_id", "updated_at"])
-        status_code, logs = _wait_and_cleanup(container)
-        if status_code:
-            raise RuntimeError(logs[-12000:])
-        return logs
+        return {"dispatched": True, "container_id": container.id}
+
+    def poll(self, job):
+        if not job.external_job_id:
+            return {"status": "failed", "error": "No container ID registered."}
+        try:
+            container = self.docker.client.containers.get(job.external_job_id)
+            container.reload()
+            state = container.attrs.get("State", {})
+            status = state.get("Status", "").lower()
+            if status in {"running", "created", "restarting"}:
+                return {"status": "running"}
+            exit_code = state.get("ExitCode", 0)
+            logs = container.logs(stdout=True, stderr=True).decode("utf-8", errors="replace")
+            try:
+                container.remove(force=True)
+            except docker.errors.NotFound:
+                pass
+            if exit_code == 0:
+                return {"status": "completed", "logs": logs, "exit_code": 0}
+            return {
+                "status": "failed",
+                "error": logs[-12000:],
+                "logs": logs,
+                "exit_code": exit_code,
+            }
+        except docker.errors.NotFound:
+            return {"status": "not_found"}
+        except Exception as exc:
+            return {"status": "error", "error": str(exc)}
 
     def cancel(self, job):
         if getattr(job, "started_at", None) and not job.external_job_id:
@@ -309,7 +336,46 @@ class DockerDriftBackend:
         drift_run.report_json_uri = uris["report.json"]
         drift_run.summary_uri = uris["summary.json"]
         drift_run.save(update_fields=["external_run_id", "report_html_uri", "report_json_uri", "summary_uri"])
-        status_code, logs = _wait_and_cleanup(container)
-        if status_code:
-            raise RuntimeError(logs[-12000:])
-        return logs
+        return {"dispatched": True, "container_id": container.id}
+
+    def poll(self, drift_run):
+        if not drift_run.external_run_id:
+            return {"status": "failed", "error": "No container ID registered."}
+        try:
+            container = self.docker.client.containers.get(drift_run.external_run_id)
+            container.reload()
+            state = container.attrs.get("State", {})
+            status = state.get("Status", "").lower()
+            if status in {"running", "created", "restarting"}:
+                return {"status": "running"}
+            exit_code = state.get("ExitCode", 0)
+            logs = container.logs(stdout=True, stderr=True).decode("utf-8", errors="replace")
+            try:
+                container.remove(force=True)
+            except docker.errors.NotFound:
+                pass
+            if exit_code == 0:
+                return {"status": "completed", "logs": logs, "exit_code": 0}
+            return {
+                "status": "failed",
+                "error": logs[-12000:],
+                "logs": logs,
+                "exit_code": exit_code,
+            }
+        except docker.errors.NotFound:
+            return {"status": "not_found"}
+        except Exception as exc:
+            return {"status": "error", "error": str(exc)}
+
+    def cancel(self, drift_run):
+        if drift_run.external_run_id:
+            try:
+                container = self.docker.client.containers.get(drift_run.external_run_id)
+                try:
+                    container.kill()
+                except Exception:
+                    pass
+                container.remove(force=True)
+            except docker.errors.NotFound:
+                pass
+        return {"dispatched": False, "confirmed": True}

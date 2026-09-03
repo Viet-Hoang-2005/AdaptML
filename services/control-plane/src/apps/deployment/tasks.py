@@ -11,6 +11,7 @@ from infrastructure.storage import S3Storage
 from infrastructure.storage.paths import build_prefix
 
 from apps.deployment.models import Build, Deployment, Endpoint
+from apps.deployment.services.cache import invalidate_model_server_cache
 from apps.deployment.services.logs import append_deployment_log, reset_deployment_logs
 from apps.observability.services.outbox import enqueue_event
 from apps.registry.services.versions import register_successful_build
@@ -26,6 +27,7 @@ def _mark_deployment_healthy(deployment):
     Endpoint.objects.filter(deployment=deployment).update(
         health_status="healthy", last_checked_at=timezone.now()
     )
+    invalidate_model_server_cache(str(deployment.version.public_id))
     append_deployment_log(deployment, "Endpoint passed health checks; deployment is healthy.")
     enqueue_event(
         topic="deployment.events",
@@ -137,12 +139,14 @@ def execute_deployment(self, deployment_id):
         backend.log_sink = lambda message: append_deployment_log(deployment, message)
         endpoint = backend.deploy(deployment)
     except Exception as exc:
+        invalidate_model_server_cache(str(deployment.version.public_id))
         Deployment.objects.filter(pk=deployment.pk).update(status="failed", error_message=str(exc)[:12000])
         append_deployment_log(deployment, f"Deployment failed: {exc}")
         raise
     deployment.version.project.refresh_from_db(fields=["deletion_state"])
     if deployment.version.project.deletion_state != "active":
         backend.stop(deployment)
+        invalidate_model_server_cache(str(deployment.version.public_id))
         Deployment.objects.filter(pk=deployment.pk).update(status="stopped", stopped_at=timezone.now())
         Endpoint = type(endpoint)
         Endpoint.objects.filter(pk=endpoint.pk).update(health_status="stopped")
@@ -170,6 +174,7 @@ def check_deployment_health(self, deployment_id):
         _mark_deployment_healthy(deployment)
         return "healthy"
     if self.request.retries >= self.max_retries:
+        invalidate_model_server_cache(str(deployment.version.public_id))
         Deployment.objects.filter(pk=deployment.pk).update(
             status="unhealthy", error_message="Endpoint health check timed out."
         )
@@ -184,6 +189,7 @@ def stop_deployment(self, deployment_id):
     deployment = Deployment.objects.select_related("version", "build").get(public_id=deployment_id)
     deployment_backend(deployment.backend).stop(deployment)
     Deployment.objects.filter(pk=deployment.pk).update(status="stopped", stopped_at=timezone.now())
+    invalidate_model_server_cache(str(deployment.version.public_id))
     append_deployment_log(deployment, "Deployment stopped.")
     enqueue_event(
         topic="deployment.events",
