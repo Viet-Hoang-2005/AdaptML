@@ -218,6 +218,8 @@ services:
         condition: service_started
     networks:
       - mlops_paas_network
+    volumes:
+      - ./services/model-server:/app
 
   # 3.1 Machine Learning Serving Engine (Base Image)
   machine-learning-serving:

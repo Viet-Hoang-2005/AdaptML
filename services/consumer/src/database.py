@@ -61,6 +61,7 @@ def init_db():
     execute_safe("""
         CREATE TABLE IF NOT EXISTS paas_production_logs (
             id VARCHAR(255) PRIMARY KEY,
+            prediction_id VARCHAR(255),
             tenant_id VARCHAR(255),
             project_id VARCHAR(255),
             model_version_id VARCHAR(255),
@@ -91,6 +92,9 @@ def init_db():
     execute_safe(
         "ALTER TABLE paas_production_logs ADD COLUMN IF NOT EXISTS model_version_id VARCHAR(255);"
     )
+    execute_safe(
+        "ALTER TABLE paas_production_logs ADD COLUMN IF NOT EXISTS prediction_id VARCHAR(255);"
+    )
 
     # 4. Create Indexes
     execute_safe(
@@ -101,7 +105,15 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_model_version "
         "ON paas_production_logs(model_version_id);"
     )
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_prediction_id "
+        "ON paas_production_logs(prediction_id);"
+    )
     execute_safe("CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_timestamp ON paas_production_logs(timestamp);")
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_version_timestamp "
+        "ON paas_production_logs(model_version_id, timestamp DESC);"
+    )
 
     # A production-data batch and its automatic-drift notification must become
     # visible together.  Kafka is acknowledged only after this transaction.

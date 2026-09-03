@@ -20,15 +20,22 @@ class DriftRunWebhookEndpoint(APIView):
     def post(self, request, run_id):
         with transaction.atomic():
             run = DriftRun.objects.select_for_update().get(public_id=run_id)
-            if run.status in {"completed", "failed", "cancelled"}:
+            if run.status == "cancelled":
                 return Response({"status": run.status, "duplicate": True})
             summary = request.data.get("drift_summary") or request.data.get("summary") or {}
+            drift_score = summary.get("drift_score", summary.get("share_of_drifted_columns"))
+            has_drift = summary.get("has_drift", summary.get("dataset_drift"))
+
+            if run.status == "completed" and run.summary and run.drift_score is not None:
+                return Response({"status": run.status, "duplicate": True})
+
             run.summary = summary
-            run.drift_score = summary.get("drift_score", summary.get("share_of_drifted_columns"))
-            run.has_drift = summary.get("has_drift", summary.get("dataset_drift"))
+            run.drift_score = drift_score
+            run.has_drift = has_drift
             run.status = "completed"
-            run.completed_at = timezone.now()
-            run.save(update_fields=["summary", "drift_score", "has_drift", "status", "completed_at"])
+            run.completed_at = run.completed_at or timezone.now()
+            run.error_message = ""
+            run.save(update_fields=["summary", "drift_score", "has_drift", "status", "completed_at", "error_message"])
         return Response({"status": run.status})
 
 

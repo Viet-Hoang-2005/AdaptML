@@ -313,15 +313,50 @@ def filter_column_mapping(column_mapping, common_cols):
 
     return filtered_mapping
 
-# 5. Phân tích Data drift (Evidently 0.4.15)
+# 5. Phân tích Data drift & Data Quality (Evidently 0.4.15)
 def run_drift_analysis(reference_df, production_df, column_mapping):
-    print("[4/4] Running Evidently AI Data Drift analysis...")
+    print("[4/4] Running Evidently AI Data Drift & Data Quality analysis...")
 
-    # Đảm bảo chỉ so sánh các cột đặc trưng chung giữa hai dataset
+    ignore_cols = {
+        "prediction", "target", "Target", "label", "Label", "class", "Class",
+        "timestamp", "created_at", "prediction_id", "id", "model_version_id",
+        "project_id", "tenant_id", "endpoint_url", "request_id", "status_code",
+        "latency_ms", "confidence", "raw_payload",
+    }
+
+    # 1. Xác định tập đặc trưng kỳ vọng từ Reference Data / Column Mapping
+    if column_mapping.numerical_features or column_mapping.categorical_features:
+        expected_features = set((column_mapping.numerical_features or []) + (column_mapping.categorical_features or []))
+    else:
+        expected_features = set(c for c in reference_df.columns if c not in ignore_cols)
+
+    production_features = set(c for c in production_df.columns if c not in ignore_cols)
+
+    # 2. Phát hiện bất thường Schema / Data Quality (Missing Features & Extra Features)
+    missing_features = sorted(list(expected_features - set(production_df.columns)))
+    extra_features = sorted(list(production_features - set(reference_df.columns)))
+
+    if missing_features:
+        print(f"⚠️ [DATA QUALITY ALERT] Missing {len(missing_features)} expected features in production: {missing_features}")
+    if extra_features:
+        print(f"ℹ️ [DATA QUALITY INFO] Found {len(extra_features)} extra features in production: {extra_features}")
+
+    # 3. Lấy các cột chung để chạy kiểm định thống kê Evidently
     common_cols = [col for col in reference_df.columns if col in production_df.columns]
     if len(common_cols) == 0:
         raise ValueError("No common columns found between reference and production datasets.")
-        
+
+    # 4. Kiểm tra tỷ lệ giá trị null bất thường trên các cột chung
+    high_null_features = []
+    for col in common_cols:
+        if col not in ignore_cols and col in production_df.columns:
+            null_rate = float(production_df[col].isnull().mean())
+            if null_rate >= 0.20:
+                high_null_features.append({"feature": col, "null_rate": round(null_rate, 4)})
+
+    if high_null_features:
+        print(f"⚠️ [DATA QUALITY WARNING] High null rate (>20%) detected: {high_null_features}")
+
     ref_clean = reference_df[common_cols]
     prod_clean = production_df[common_cols]
     filtered_mapping = filter_column_mapping(column_mapping, common_cols)
@@ -332,7 +367,7 @@ def run_drift_analysis(reference_df, production_df, column_mapping):
         print("Warning: Evidently DataDriftPreset does not accept drift_share. Applying threshold in summary only.")
         report = Report(metrics=[DataDriftPreset()])
     report.run(reference_data=ref_clean, current_data=prod_clean, column_mapping=filtered_mapping)
-    
+
     result_dict = report.as_dict()
     dataset_drift_metrics = {}
     data_drift_table = {}
@@ -344,36 +379,68 @@ def run_drift_analysis(reference_df, production_df, column_mapping):
         if 'drift_by_columns' in result_data:
             data_drift_table = result_data
 
-    drift_share = dataset_drift_metrics.get('share_of_drifted_columns', 0.0)
-    drifted_count = dataset_drift_metrics.get('number_of_drifted_columns', 0)
-    dataset_drift = drift_share >= DRIFT_THRESHOLD
-    
-    drifted_feature_names = []
     drift_by_columns = data_drift_table.get('drift_by_columns', {})
+    stat_drifted_feature_names = []
     for col_name, col_data in drift_by_columns.items():
         if col_data.get('drift_detected', False):
-            drifted_feature_names.append(col_name)
+            stat_drifted_feature_names.append(col_name)
+
+    # 5. Tổng hợp độ trôi dạt tổng thể (Statistical Drift + Missing Features)
+    all_drifted_features = sorted(list(set(stat_drifted_feature_names) | set(missing_features)))
+    total_expected_count = len(expected_features) if expected_features else len(common_cols)
+    total_drifted_count = len(all_drifted_features)
+    effective_drift_share = (total_drifted_count / total_expected_count) if total_expected_count > 0 else 0.0
+
+    has_schema_mismatch = len(missing_features) > 0
+    dataset_drift = (effective_drift_share >= DRIFT_THRESHOLD) or has_schema_mismatch
+
+    data_quality = {
+        "status": "alert" if has_schema_mismatch else ("warning" if high_null_features else "healthy"),
+        "has_schema_mismatch": has_schema_mismatch,
+        "missing_features": missing_features,
+        "missing_features_count": len(missing_features),
+        "extra_features": extra_features,
+        "extra_features_count": len(extra_features),
+        "high_null_features": high_null_features,
+        "expected_features_count": total_expected_count,
+        "common_features_count": len(common_cols),
+    }
 
     summary = {
         "tenant_id": TENANT_ID,
         "project_id": PROJECT_ID,
         "model_version_id": MODEL_VERSION_ID,
-        "share_drifted_features": drift_share,
+        "share_drifted_features": round(effective_drift_share, 4),
+        "drift_score": round(effective_drift_share, 4),
         "dataset_drift": dataset_drift,
+        "has_drift": dataset_drift,
         "drift_threshold": DRIFT_THRESHOLD,
-        "number_of_drifted_features": drifted_count,
-        "number_of_features": len(common_cols),
-        "drifted_feature_names": drifted_feature_names,
+        "number_of_drifted_features": total_drifted_count,
+        "number_of_features": total_expected_count,
+        "drifted_feature_names": all_drifted_features,
+        "statistical_drifted_features": stat_drifted_feature_names,
+        "missing_features": missing_features,
+        "extra_features": extra_features,
+        "data_quality": data_quality,
     }
     summary["report_artifacts"] = save_drift_report(report, result_dict, summary)
 
-    print("SUMMARY OF DATA DRIFT RESULTS")
-    print("-" * 60)
-    print(f"Total features: {summary['number_of_features']}")
-    print(f"Drifted features: {summary['number_of_drifted_features']}")
-    print(f"Drift rate: {summary['share_drifted_features']:.2%}")
-    drift_status = "DETECTED" if summary["dataset_drift"] else "NOT DETECTED"
-    print(f"Dataset drift: {drift_status}")
+    print("=" * 60)
+    print("SUMMARY OF DATA DRIFT & DATA QUALITY RESULTS")
+    print("=" * 60)
+    print(f"Total Expected Features      : {total_expected_count}")
+    print(f"Common Features Analyzed     : {len(common_cols)}")
+    print(f"Statistical Drifted Features : {len(stat_drifted_feature_names)} -> {stat_drifted_feature_names}")
+    if missing_features:
+        print(f"⚠️ Missing Features (ALERT)  : {len(missing_features)} -> {missing_features}")
+    if extra_features:
+        print(f"ℹ️ Extra Features            : {len(extra_features)} -> {extra_features}")
+    if high_null_features:
+        print(f"⚠️ High Null Features        : {[x['feature'] for x in high_null_features]}")
+    print(f"Effective Drift Rate         : {effective_drift_share:.2%} (Threshold: {DRIFT_THRESHOLD:.2%})")
+    print(f"Dataset Drift Status         : {'DRIFT DETECTED' if dataset_drift else 'NOT DETECTED'}")
+    print(f"Data Quality Status          : {data_quality['status'].upper()}")
+    print("=" * 60)
 
     return summary
 

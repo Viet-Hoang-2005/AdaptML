@@ -168,11 +168,19 @@ def test_serving_engine_is_derived_from_version_flavor():
 def test_send_to_redpanda_payload_and_failure(monkeypatch):
     producer = Mock()
     monkeypatch.setattr(index, "kafka_producer", producer)
-    index.send_to_redpanda("t", "p", "v", {"x": 1}, "safe")
+    index.send_to_redpanda(
+        "t", "p", "v", {"x": 1}, "safe",
+        prediction_id="pred-123", confidence=91.0, latency_ms=12.5, status_code=200, request_id="req-1"
+    )
     value = json.loads(producer.produce.call_args.kwargs["value"])
     assert value["tenant_id"] == "t" and value["prediction"] == "safe"
     assert value["project_id"] == "p" and value["model_version_id"] == "v"
-    uuid.UUID(value["id"])
+    assert value["id"] == "pred-123"
+    assert value["prediction_id"] == "pred-123"
+    assert value["confidence"] == 91.0
+    assert value["latency_ms"] == 12.5
+    assert value["status_code"] == 200
+    assert value["request_id"] == "req-1"
     producer.produce.side_effect = RuntimeError("down")
     index.send_to_redpanda("t", "p", "v", {}, None)
 
@@ -204,7 +212,10 @@ async def test_predict_proxy_success_and_background_event(monkeypatch):
     })))
     tasks = BackgroundTasks()
     response = await index.predict("v", Mock(), index.InferenceRequest(features={"x": 1}), tasks, {"model_record": record})
-    assert json.loads(response.body)["prediction"] == "attack"
+    body = json.loads(response.body)
+    assert body["prediction"] == "attack"
+    assert "prediction_id" in body
+    uuid.UUID(body["prediction_id"])
     assert len(tasks.tasks) == 1
 
 

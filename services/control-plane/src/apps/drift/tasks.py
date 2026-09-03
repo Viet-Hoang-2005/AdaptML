@@ -1,7 +1,10 @@
+import json
+
 from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 from infrastructure.execution import drift_backend
+from infrastructure.storage import S3Storage
 
 
 @shared_task(
@@ -37,9 +40,26 @@ def execute_drift_run(self, run_id):
         raise
     if isinstance(result, dict) and result.get("dispatched"):
         return "running"
-    DriftRun.objects.filter(pk=run.pk).update(
-        status="completed",
-        completed_at=timezone.now(),
-        error_message="",
-    )
+
+    with transaction.atomic():
+        run = DriftRun.objects.select_for_update().get(pk=run.pk)
+        if run.status == "cancelled":
+            return "cancelled"
+
+        if not run.summary and run.summary_uri:
+            try:
+                storage = S3Storage()
+                bucket, key = storage.parse_uri(run.summary_uri)
+                obj = storage.client.get_object(Bucket=bucket, Key=key)
+                summary = json.loads(obj["Body"].read().decode("utf-8"))
+                run.summary = summary
+                run.drift_score = summary.get("drift_score", summary.get("share_of_drifted_columns"))
+                run.has_drift = summary.get("has_drift", summary.get("dataset_drift"))
+            except Exception:
+                pass
+
+        run.status = "completed"
+        run.completed_at = run.completed_at or timezone.now()
+        run.error_message = ""
+        run.save(update_fields=["status", "completed_at", "error_message", "summary", "drift_score", "has_drift"])
     return "completed"

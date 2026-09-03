@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 import httpx
@@ -180,24 +180,35 @@ def send_to_redpanda(
     model_version_id: str,
     features_dict: dict,
     prediction_result: Any,
+    prediction_id: str | None = None,
+    confidence: float | None = None,
+    latency_ms: float | None = None,
+    status_code: int = 200,
+    request_id: str | None = None,
 ):
     if kafka_producer is None:
         return
 
     try:
+        record_id = prediction_id or str(uuid.uuid4())
         payload = {
-            "id": str(uuid.uuid4()),
+            "id": record_id,
+            "prediction_id": record_id,
             "tenant_id": tenant_id,
             "project_id": project_id,
             "model_version_id": model_version_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "features": features_dict,
             "prediction": prediction_result,
+            "confidence": confidence,
+            "latency_ms": latency_ms,
+            "status_code": status_code,
+            "request_id": request_id,
         }
 
         kafka_producer.produce(
             topic=KAFKA_TOPIC,
-            key=payload["id"].encode("utf-8"),
+            key=record_id.encode("utf-8"),
             value=json.dumps(payload).encode("utf-8"),
         )
         kafka_producer.poll(0)
@@ -278,6 +289,8 @@ async def predict(
     tenant_id = model_record["tenant_id"]
     project_id = str(model_record["project_id"])
     resolved_model_version_id = str(model_record["id"])
+    prediction_id = str(uuid.uuid4())
+    request_id = request.headers.get("x-request-id") if hasattr(request, "headers") else None
     start_time = time.perf_counter()
 
     try:
@@ -287,6 +300,7 @@ async def predict(
                 "model_version_id": resolved_model_version_id,
             }
             response = await client.post(worker_url, json=worker_payload)
+            latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
             
             if response.status_code != 200:
                 paas_predictions_counter.labels(
@@ -328,11 +342,18 @@ async def predict(
                 resolved_model_version_id,
                 features_dict,
                 prediction_result,
+                prediction_id=prediction_id,
+                confidence=confidence,
+                latency_ms=latency_ms,
+                status_code=200,
+                request_id=request_id,
             )
 
             return JSONResponse(
                 content={
                     "success": True,
+                    "prediction_id": prediction_id,
+                    "id": prediction_id,
                     "prediction": prediction_result,
                     "confidence": confidence,
                     "tenant_id": tenant_id,
