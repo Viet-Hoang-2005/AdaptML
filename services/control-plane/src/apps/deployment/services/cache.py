@@ -1,4 +1,6 @@
 import logging
+from typing import Optional
+
 from django.conf import settings
 from redis import Redis
 from redis.exceptions import RedisError
@@ -6,7 +8,7 @@ from redis.exceptions import RedisError
 logger = logging.getLogger(__name__)
 
 
-def invalidate_model_server_cache(version_public_id: str) -> bool:
+def invalidate_model_server_cache(version_public_id: Optional[str]) -> bool:
     """Invalidate the model-server routing cache in Redis (database 1).
     
     This ensures that when a deployment becomes healthy, is stopped, or fails,

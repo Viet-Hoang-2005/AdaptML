@@ -3,6 +3,7 @@ import os
 import time
 
 import docker
+import docker.errors
 from apps.deployment.models import Endpoint
 from apps.training.services.capabilities import issue_capability
 from apps.training.services.storage_scope import validate_training_uri

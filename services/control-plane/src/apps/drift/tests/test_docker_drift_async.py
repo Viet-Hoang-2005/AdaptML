@@ -37,7 +37,7 @@ def _create_drift_fixtures():
 
 class DockerDriftAsyncTests(TestCase):
     def setUp(self):
-        self.owner, self.project, self.version, self.monitor, self.run = _create_drift_fixtures()
+        self.owner, self.project, self.version, self.monitor, self.drift_run = _create_drift_fixtures()
 
     def test_docker_drift_run_dispatches_without_blocking(self):
         fake_container = SimpleNamespace(id="drift-container-123")
@@ -51,15 +51,15 @@ class DockerDriftAsyncTests(TestCase):
         )
         backend = DockerDriftBackend(docker_client=docker_client, storage=storage)
 
-        result = backend.run(self.run)
+        result = backend.run(self.drift_run)
 
         self.assertEqual(result, {"dispatched": True, "container_id": "drift-container-123"})
-        self.run.refresh_from_db()
-        self.assertEqual(self.run.external_run_id, "drift-container-123")
+        self.drift_run.refresh_from_db()
+        self.assertEqual(self.drift_run.external_run_id, "drift-container-123")
         docker_client.run.assert_called_once()
         call_kwargs = docker_client.run.call_args[1]
         self.assertEqual(call_kwargs["image"], "mlops-paas-evidently")
-        self.assertEqual(call_kwargs["name"], f"drift-{self.run.public_id}")
+        self.assertEqual(call_kwargs["name"], f"drift-{self.drift_run.public_id}")
 
     def test_docker_drift_poll_running(self):
         container_mock = Mock()
@@ -69,8 +69,8 @@ class DockerDriftAsyncTests(TestCase):
         )
         backend = DockerDriftBackend(docker_client=docker_client, storage=SimpleNamespace())
 
-        self.run.external_run_id = "running-drift-id"
-        result = backend.poll(self.run)
+        self.drift_run.external_run_id = "running-drift-id"
+        result = backend.poll(self.drift_run)
 
         self.assertEqual(result, {"status": "running"})
         container_mock.reload.assert_called_once()
@@ -85,8 +85,8 @@ class DockerDriftAsyncTests(TestCase):
         )
         backend = DockerDriftBackend(docker_client=docker_client, storage=SimpleNamespace())
 
-        self.run.external_run_id = "completed-drift-id"
-        result = backend.poll(self.run)
+        self.drift_run.external_run_id = "completed-drift-id"
+        result = backend.poll(self.drift_run)
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["exit_code"], 0)
@@ -101,8 +101,8 @@ class DockerDriftAsyncTests(TestCase):
         )
         backend = DockerDriftBackend(docker_client=docker_client, storage=SimpleNamespace())
 
-        self.run.external_run_id = "failed-drift-id"
-        result = backend.poll(self.run)
+        self.drift_run.external_run_id = "failed-drift-id"
+        result = backend.poll(self.drift_run)
 
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["exit_code"], 1)
@@ -116,19 +116,19 @@ class DockerDriftAsyncTests(TestCase):
 
         with patch("apps.drift.tasks.drift_backend", return_value=fake_backend), \
              patch("apps.drift.tasks.poll_drift_run_status.apply_async") as mock_apply_async:
-            status = execute_drift_run(str(self.run.public_id))
+            status = execute_drift_run(str(self.drift_run.public_id))
 
         self.assertEqual(status, "running")
-        mock_apply_async.assert_called_once_with(args=[str(self.run.public_id)], countdown=5)
-        self.run.refresh_from_db()
-        self.assertEqual(self.run.status, "running")
+        mock_apply_async.assert_called_once_with(args=[str(self.drift_run.public_id)], countdown=5)
+        self.drift_run.refresh_from_db()
+        self.assertEqual(self.drift_run.status, "running")
 
     def test_poll_drift_run_status_completes_and_triggers_ct_hook(self):
-        self.run.status = "running"
-        self.run.summary = {"drift_score": 0.35, "has_drift": True}
-        self.run.drift_score = 0.35
-        self.run.has_drift = True
-        self.run.save(update_fields=["status", "summary", "drift_score", "has_drift"])
+        self.drift_run.status = "running"
+        self.drift_run.summary = {"drift_score": 0.35, "has_drift": True}
+        self.drift_run.drift_score = 0.35
+        self.drift_run.has_drift = True
+        self.drift_run.save(update_fields=["status", "summary", "drift_score", "has_drift"])
 
         fake_backend = Mock()
         fake_backend.poll.return_value = {"status": "completed", "logs": "Done", "exit_code": 0}
@@ -136,25 +136,25 @@ class DockerDriftAsyncTests(TestCase):
         with patch("apps.drift.tasks.drift_backend", return_value=fake_backend), \
              patch("apps.drift.tasks.handle_drift_detected.delay") as mock_ct_delay, \
              self.captureOnCommitCallbacks(execute=True):
-            result = poll_drift_run_status(str(self.run.public_id))
+            result = poll_drift_run_status(str(self.drift_run.public_id))
 
         self.assertEqual(result, "completed")
-        self.run.refresh_from_db()
-        self.assertEqual(self.run.status, "completed")
-        mock_ct_delay.assert_called_once_with(str(self.run.public_id))
+        self.drift_run.refresh_from_db()
+        self.assertEqual(self.drift_run.status, "completed")
+        mock_ct_delay.assert_called_once_with(str(self.drift_run.public_id))
 
     def test_handle_drift_detected_prepares_evidence_payload(self):
-        self.run.status = "completed"
-        self.run.drift_score = 0.45
-        self.run.has_drift = True
-        self.run.summary = {
+        self.drift_run.status = "completed"
+        self.drift_run.drift_score = 0.45
+        self.drift_run.has_drift = True
+        self.drift_run.summary = {
             "drift_score": 0.45,
             "has_drift": True,
             "drifted_features": ["age", "income"],
         }
-        self.run.save(update_fields=["status", "drift_score", "has_drift", "summary"])
+        self.drift_run.save(update_fields=["status", "drift_score", "has_drift", "summary"])
 
-        result = handle_drift_detected(str(self.run.public_id))
+        result = handle_drift_detected(str(self.drift_run.public_id))
 
         self.assertEqual(result["status"], "drift_handled")
         self.assertEqual(result["model_version_id"], str(self.version.public_id))
@@ -165,7 +165,7 @@ class DockerDriftAsyncTests(TestCase):
 @override_settings(CONTROL_PLANE_WEBHOOK_SECRET="test-secret")
 class DriftWebhookContinuousTrainingHookTests(TestCase):
     def setUp(self):
-        self.owner, self.project, self.version, self.monitor, self.run = _create_drift_fixtures()
+        self.owner, self.project, self.version, self.monitor, self.drift_run = _create_drift_fixtures()
         self.client = APIClient()
         self.headers = {"HTTP_X_CONTROL_PLANE_SECRET": "test-secret"}
 
@@ -181,16 +181,16 @@ class DriftWebhookContinuousTrainingHookTests(TestCase):
         with patch("apps.drift.tasks.handle_drift_detected.delay") as mock_ct_delay, \
              self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
-                f"/internal/webhooks/drift-runs/{self.run.public_id}/",
+                f"/internal/webhooks/drift-runs/{self.drift_run.public_id}/",
                 payload,
                 format="json",
                 **self.headers,
             )
 
         self.assertEqual(response.status_code, 200)
-        self.run.refresh_from_db()
-        self.assertTrue(self.run.has_drift)
-        mock_ct_delay.assert_called_once_with(str(self.run.public_id))
+        self.drift_run.refresh_from_db()
+        self.assertTrue(self.drift_run.has_drift)
+        mock_ct_delay.assert_called_once_with(str(self.drift_run.public_id))
 
     def test_webhook_does_not_trigger_ct_hook_when_no_drift(self):
         payload = {
@@ -203,13 +203,13 @@ class DriftWebhookContinuousTrainingHookTests(TestCase):
         }
         with patch("apps.drift.tasks.handle_drift_detected.delay") as mock_ct_delay:
             response = self.client.post(
-                f"/internal/webhooks/drift-runs/{self.run.public_id}/",
+                f"/internal/webhooks/drift-runs/{self.drift_run.public_id}/",
                 payload,
                 format="json",
                 **self.headers,
             )
 
         self.assertEqual(response.status_code, 200)
-        self.run.refresh_from_db()
-        self.assertFalse(self.run.has_drift)
+        self.drift_run.refresh_from_db()
+        self.assertFalse(self.drift_run.has_drift)
         mock_ct_delay.assert_not_called()
