@@ -1,6 +1,6 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:pyenv",
-    "python-envs.terminal.autoActivationType": "off",
+    "python-envs.terminal.autoActivationType": "on",
     "python.terminal.activateEnvironment": false,
     "latex-workshop.latex.tools": [
         {
