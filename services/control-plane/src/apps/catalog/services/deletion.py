@@ -51,7 +51,7 @@ def project_cleanup_manifest(project):
     )
     container_names = sorted(
         {
-            getattr(deployment, "endpoint", None).runtime_name # type: ignore[attr-defined]
+            getattr(deployment, "endpoint", None).runtime_name
             if getattr(deployment, "endpoint", None) and deployment.endpoint.runtime_name
             else f"deploy-{deployment.build.public_id}"
             for deployment in deployments

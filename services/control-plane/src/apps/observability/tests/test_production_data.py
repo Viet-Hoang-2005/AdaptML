@@ -66,8 +66,8 @@ def test_latest_production_data_returns_empty_when_consumer_table_is_missing():
 
 @pytest.mark.django_db
 def test_production_data_endpoint_requires_project_owner_and_validates_limit(monkeypatch):
-    owner = get_user_model().objects.create_user("production-owner@example.com", "password123")  # type: ignore[attr-defined]
-    stranger = get_user_model().objects.create_user("production-stranger@example.com", "password123")  # type: ignore[attr-defined]
+    owner = get_user_model().objects.create_user("production-owner@example.com", "password123")  
+    stranger = get_user_model().objects.create_user("production-stranger@example.com", "password123")  
     project = ModelProject.objects.create(owner=owner, name="Production model")
     captured = []
 
