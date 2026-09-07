@@ -1,0 +1,64 @@
+\section{Thiết kế thực nghiệm và tiêu chí đánh giá}
+\subsection{Dữ liệu, kịch bản và chống rò rỉ}
+Chọn hai dataset tabular nhị phân có nguồn/giấy phép rõ ràng, đủ số mẫu và cả hai lớp ở các cửa sổ; ưu tiên ít nhất một dataset có thời gian hoặc nhóm miền tự nhiên. Bộ sinh dữ liệu có nhãn phục vụ kiểm soát cơ chế drift. Dùng một model family có xác suất lớp; đề xuất bắt đầu từ logistic regression. Một model phi tuyến chỉ là kiểm tra độ nhạy nếu còn thời gian.
+
+Chia riêng initial training/calibration/reference, development episodes để chọn cấu hình và test episodes để báo cáo. Nếu có thời gian/entity, chia theo chúng trước khi tạo batch; không đưa cùng thực thể vào hai phía trái với mục tiêu đánh giá. Giữ bộ seed test riêng. Future labels và cơ chế tạo drift chỉ thuộc evaluator, không thuộc estimator/policy.
+
+\begin{table}[ht]
+\centering
+\caption{Kịch bản và vai trò trong thực nghiệm.}\label{tab:scenarios}
+\begin{tabularx}{\linewidth}{@{}L{3.8cm} Y@{}}
+\toprule\textbf{Kịch bản} & \textbf{Mục đích} \\
+\midrule
+Ổn định & Đo false-alarm, chi phí giám sát và việc tiêu ngân sách khi không có suy giảm. \\
+Covariate shift với nhiều mức tác động & Đo drift có/không đi kèm suy giảm và khả năng phục hồi. Tạo shift bằng lấy mẫu theo $X$ trong khi giữ cơ chế sinh nhãn; không tùy ý sửa $X$ rồi giữ nhãn cũ. \\
+Phân phối quay lại & Đo tác động giữ dữ liệu lịch sử trong recipe cố định và chất lượng xuyên nhiều đợt cập nhật. \\
+Concept drift, calibration không còn phù hợp & Kiểm tra giới hạn estimator; audit định kỳ có phát hiện suy giảm bị tín hiệu không nhãn bỏ sót không. \\
+Nhãn quan sát có thiên lệch & Stress test khi mẫu nhãn không còn đại diện; báo cáo sai số và không suy rộng bảo đảm của mẫu ngẫu nhiên. \\
+Không lấy thêm được nhãn & Đo giới hạn ước lượng/HOLD; không xem là bài toán supervised retraining đã được giải quyết. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Ba hàng đầu là kịch bản chính; ba hàng sau kiểm tra giới hạn với số cấu hình gọn. Độ có hại được đo trên champion của từng policy, không gán cứng từ tên drift. Trên dữ liệu thực, không tuyên bố suy giảm có nguyên nhân nhân quả đã biết. Không lọc test episodes theo việc phương pháp đề xuất thắng.
+
+\subsection{Các phương pháp đối chứng}
+\begin{xltabular}{\linewidth}{@{}L{0.7cm} L{3.2cm} Y@{}}
+\caption{Baseline dùng cùng recipe và gate, trừ đối chứng không cập nhật.}\label{tab:baselines}\\
+\toprule\textbf{Mã} & \textbf{Phương pháp} & \textbf{Vai trò} \\
+\midrule\endfirsthead
+\toprule\textbf{Mã} & \textbf{Phương pháp} & \textbf{Vai trò} \\
+\midrule\endhead
+B0 & Giữ nguyên mô hình & Đường chất lượng và chi phí khi không retrain. \\
+B1 & Drift-only trigger & Cảnh báo Evidently đủ để thử retrain, không audit trước trigger; gate vẫn dùng nhãn riêng. \\
+B2 & Estimator-only trigger & CBPE hoặc ATC nghi suy giảm thì thử retrain; đo hậu quả của không kiểm chứng trước trigger. \\
+B3 & Audit theo lịch cố định & Lấy nhãn ngẫu nhiên theo lịch, quyết định từ chất lượng đo được; không dùng drift/estimator để phân bổ nhãn. \\
+B4 & Policy đề xuất & Audit định kỳ kết hợp kiểm chứng theo tín hiệu và một lượt bổ sung; quyết định theo Mục 4. \\
+B5 & Đối chứng đầy đủ nhãn & Có mọi nhãn ở pool kiểm chứng; giữ cùng training pool và recipe để đo khoảng cách thông tin. Báo cáo chi phí nhãn riêng, không coi là baseline cùng ngân sách. \\
+\bottomrule
+\end{xltabular}
+B1--B4 cùng giới hạn ngân sách tổng, quota theo mục đích, giới hạn compute, lịch nhãn training và điều kiện gate. Ngân sách bằng nhau không có nghĩa số nhãn thực dùng bằng nhau: báo cáo cả quota và chi tiêu, kèm đường chất lượng theo chi phí thực. Không cấp nhãn gate miễn phí cho B1/B2. B3 là đối chứng performance-only quan trọng vì nhãn có thể đủ hữu ích ngay cả khi không dùng drift.
+
+Thực nghiệm estimator CBPE/ATC được đánh giá riêng trên cùng prediction stream. Để kiểm tra quyết định B3/B4, trước hết dùng cùng champion cố định; sau đó chạy replay có retraining để đo hiệu quả toàn vòng. Ablation chính của B4 lần lượt bỏ tín hiệu drift, bỏ audit định kỳ và bỏ lượt nhãn bổ sung; giữ các yếu tố khác tương đương. Policy kế thừa MLDemon hoặc estimator PAPE có thể thêm sau khi tái hiện được, nhưng không gọi bản đơn giản hóa là thuật toán gốc và không tuyên bố vượt state of the art nếu chưa so sánh.
+
+\subsection{Chỉ số và cách đo đánh đổi}
+\begin{xltabular}{\linewidth}{@{}L{3.4cm} Y@{}}
+\caption{Định nghĩa chỉ số dùng trong báo cáo.}\label{tab:metrics}\\
+\toprule\textbf{Nhóm} & \textbf{Cách đo} \\
+\midrule\endfirsthead
+\toprule\textbf{Nhóm} & \textbf{Cách đo} \\
+\midrule\endhead
+Ước lượng chất lượng & MAE giữa tỷ lệ lỗi ước lượng và tỷ lệ lỗi đầy đủ của batch; độ phủ/độ rộng khoảng nếu phương pháp cung cấp khoảng hợp lệ. \\
+Sai quyết định & Tỷ lệ trigger khi $\Delta_t$ đầy đủ không vượt biên có hại; tỷ lệ episode suy giảm không được kích hoạt trong deadline đã định. Tách HOLD, thiếu training data và hết ngân sách khỏi KEEP có bằng chứng. \\
+Chất lượng hệ thống & Tỷ lệ lỗi theo batch và tổng lỗi theo số prediction; F1/recall bổ sung; thời gian đến lúc chất lượng trở lại biên chấp nhận. Episode chưa phục hồi khi hết test được ghi chưa phục hồi. \\
+Chi phí nhãn & Số ID được tiết lộ theo verify/train/gate, tỷ lệ trên production và số request. Nhãn ẩn dùng riêng chấm benchmark không thuộc thông tin online. \\
+Chi phí tính toán & Thời gian/CPU-hours cho estimator, chọn mẫu, training, build và gate; số mẫu học, số job và số candidate bị loại. Tách phép đo thật khỏi độ trễ mô phỏng. \\
+Lợi ích retraining & Chênh lệch chất lượng candidate--champion trên cùng gate và trên batch tương lai; chất lượng historical holdout. Phân biệt trigger hợp lý với candidate thực sự cải thiện. \\
+\bottomrule
+\end{xltabular}
+
+Để đo đánh đổi KEEP/RETRAIN, trên một tập thời điểm được chọn trước khi xem nhãn test, clone cùng checkpoint thành hai nhánh: giữ mô hình và chạy recipe với cùng nhãn training được phép. So sánh trên cùng các batch tương lai; thông tin này chỉ để phân tích hồi cứu, không quay lại policy. Chi phí các nhánh phân tích được báo cáo riêng, không trộn với chi phí vận hành của phương pháp.
+
+\subsection{Protocol thống kê và điều kiện kết luận}
+Thử một số mức ngân sách, chẳng hạn 5\%, 10\%, 20\% số mẫu production và đối chứng đầy đủ nhãn; đây là lưới pilot, chỉ giữ cấu hình đủ mẫu kiểm chứng/huấn luyện/gate. Cố định ngưỡng, phân bổ quota, batch size, số lượt audit, recipe, seed và thời hạn phục hồi trước test. Ưu tiên 10 seed độc lập nếu pilot xác nhận đủ tài nguyên; chốt số lần lặp trước chạy chính thức.
+
+So sánh theo cặp trên cùng dataset/episode/seed, bootstrap ở cấp episode hoặc block thời gian, không coi các batch phụ thuộc là mẫu độc lập. Báo cáo khoảng tin cậy và mức khác biệt thực tiễn; hiệu chỉnh khi kiểm định nhiều so sánh chính. Kết luận tiết kiệm phải đi kèm chất lượng nằm trong biên non-inferiority đã chốt; $p>0.05$ không chứng minh tương đương. Trình bày riêng giới hạn do lớp hiếm, selection bias, calibration sai và repeated testing. Không hứa tỷ lệ tiết kiệm hoặc mức accuracy cải thiện trước khi thực nghiệm.

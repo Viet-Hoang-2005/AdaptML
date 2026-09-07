@@ -9,24 +9,22 @@
 \usepackage{xltabular}
 \usepackage{tabularx}
 \usepackage{array}
-\usepackage{graphicx}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{hyperref}
+\usepackage{xurl}
 \usepackage{titlesec}
+\usepackage{needspace}
 \usepackage{caption}
 \usepackage{amsmath}
 \usepackage{amssymb}
-\usepackage{tcolorbox}
 
 \hypersetup{
   colorlinks=true,
   linkcolor=blue!45!black,
   urlcolor=blue!55!black,
   citecolor=blue!45!black,
-  pdftitle={Đề cương Khoá luận tốt nghiệp - Đánh giá kiến trúc MLOps và Lộ trình Degradation-Aware CT},
+  pdftitle={Kiểm chứng suy giảm và kích hoạt tái huấn luyện dưới data drift với ngân sách nhãn hạn chế},
   pdfauthor={Trần Nguyễn Việt Hoàng, Bùi Ngọc Thái}
 }
 
@@ -34,6 +32,11 @@
 \setlength{\parskip}{0.35em plus 0.1em minus 0.05em}
 \setlength{\parindent}{0pt}
 \setlength{\emergencystretch}{2em}
+\raggedbottom
+\clubpenalty=10000
+\widowpenalty=10000
+\AddToHook{cmd/section/before}{\Needspace{6\baselineskip}}
+\AddToHook{cmd/subsection/before}{\Needspace{5\baselineskip}}
 
 \captionsetup{font=small,labelfont=bf,skip=4pt}
 \setlength{\textfloatsep}{9pt plus 2pt minus 2pt}
@@ -53,16 +56,6 @@
 % List Spacing
 \setlist[itemize]{leftmargin=1.4em,itemsep=0.12em,topsep=0.18em,partopsep=0pt,parsep=0pt}
 \setlist[enumerate]{leftmargin=1.5em,itemsep=0.15em,topsep=0.18em,partopsep=0pt,parsep=0pt}
-
-% Full-width Abstract with matching large title
-\renewenvironment{abstract}{%
-  \par\vspace{0.2em}
-  {\centering\textbf{\large Abstract}\par\vspace{0.4em}}
-  \normalsize
-  \noindent\ignorespaces
-}{%
-  \par\vspace{0.8em}
-}
 
 % Centered References with matching large title and identical spacing
 \makeatletter
@@ -97,30 +90,29 @@
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 
-% TikZ Styles
-\tikzset{
-  component/.style={draw, rounded corners=3pt, align=center, font=\footnotesize,
-    text width=4.3cm, minimum height=2.25cm, inner sep=4pt, line width=0.6pt},
-  flowbox/.style={draw, rounded corners=2pt, align=center, font=\footnotesize,
-    text width=2.7cm, minimum height=0.72cm, inner sep=3pt},
-  flowdecision/.style={draw, diamond, aspect=2.1, align=center, font=\footnotesize,
-    text width=2.35cm, inner sep=2pt},
-  flowarrow/.style={-{Latex[length=2.2mm]}, thick},
-  legendbox/.style={draw, rounded corners=2pt, font=\footnotesize, inner sep=2pt}
-}
-
 % Status indicators
-\newcommand{\statusyes}{\textcolor{green!45!black}{\textbf{Có}}}
+\newcommand{\statusyes}{\textcolor{green!45!black}{\textbf{Đầy đủ}}}
 \newcommand{\statuspartial}{\textcolor{orange!75!black}{\textbf{Một phần}}}
 \newcommand{\statusno}{\textcolor{red!60!black}{\textbf{Thiếu}}}
-\newcommand{\cmark}{\textcolor{green!45!black}{\textbf{\checkmark}}}
-\newcommand{\pmark}{\textcolor{orange!75!black}{\textbf{$\sim$}}}
-\newcommand{\xmark}{\textcolor{red!60!black}{\textbf{$\times$}}}
-\newcommand{\codepath}[1]{\texttt{\small #1}}
+% Permit source paths and contract names to wrap at separators.
+\ExplSyntaxOn
+\NewDocumentCommand{\codepath}{m}{
+  \group_begin:
+  \small\ttfamily
+  \tl_set:Nn \l_tmpa_tl {#1}
+  \tl_replace_all:Nnn \l_tmpa_tl {/} {/\allowbreak}
+  \tl_replace_all:Nnn \l_tmpa_tl {\_} {\textunderscore\allowbreak}
+  \tl_use:N \l_tmpa_tl
+  \group_end:
+}
+\ExplSyntaxOff
 
-\title{\vspace{-1.2cm}\textbf{\Large Đánh giá kiến trúc MLOps và lộ trình Degradation-Aware CT}\\[0.3em]
-\large Hiện trạng, khoảng trống và lộ trình Degradation-Aware Continuous Training\\[0.35em]
-\normalsize\textit{\today}}
+\renewcommand{\tablename}{Bảng}
+\renewcommand{\figurename}{Hình}
+\renewcommand{\refname}{Tài liệu tham khảo}
+\title{\vspace{-1.2cm}\textbf{\Large Kiểm chứng suy giảm và kích hoạt tái huấn luyện\\dưới data drift với ngân sách nhãn hạn chế}\\[0.5em]
+\normalsize Đề cương khóa luận tốt nghiệp -- phạm vi thực hiện 5 tháng\\
+\textit{Cập nhật ngày 07/09/2026}}
 \author{}
 \date{}
 
@@ -130,17 +122,13 @@
 
 % --- Modular Section Inclusions ---
 \input{sections/00_abstract.tex}
-\input{sections/01_scope_methodology.tex}
-\input{sections/02_executive_summary.tex}
-\input{sections/03_component_mapping.tex}
-\input{sections/04_lifecycle_process.tex}
-\input{sections/05_degradation_aware_ct.tex}
-\input{sections/06_safety_boundaries_promotion.tex}
-\input{sections/07_roadmap.tex}
-\input{sections/08_empirical_benchmark.tex}
-\input{sections/09_risk_management.tex}
-\input{sections/10_related_work.tex}
-\input{sections/11_conclusion.tex}
-\input{sections/12_references.tex}
+\input{sections/01_problem_scope.tex}
+\input{sections/02_related_work.tex}
+\input{sections/03_system_readiness.tex}
+\input{sections/04_proposed_method.tex}
+\input{sections/05_implementation.tex}
+\input{sections/06_experiments.tex}
+\input{sections/07_schedule.tex}
+\input{sections/08_references.tex}
 
 \end{document}

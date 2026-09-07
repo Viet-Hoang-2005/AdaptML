@@ -1,0 +1,26 @@
+\section{Thiết kế tích hợp vào repo}
+\subsection{Phân công trách nhiệm}
+Consumer tiếp tục sở hữu ingestion và bảng prediction; Evidently giữ chức năng tạo drift report. Control Plane điều phối cửa sổ, yêu cầu nhãn, ngân sách và quyết định. Calculation của CBPE/ATC, khoảng kiểm chứng và policy được tách thành thư viện thuần, dùng chung trong replay và worker để tránh hai implementation khác nhau.
+
+\begin{table}[ht]
+\centering
+\caption{Các đối tượng tối thiểu cần bổ sung.}\label{tab:contracts}
+\begin{tabularx}{\linewidth}{@{}L{3.6cm} Y@{}}
+\toprule\textbf{Đối tượng} & \textbf{Thông tin và ràng buộc chính} \\
+\midrule
+PredictionRecord mở rộng & Prediction ID, tenant/project/version, event time, features, predicted class, xác suất lớp dương, class mapping và calibration version. Giữ tương thích trường confidence cũ. \\
+LabelRequest / Feedback & ID mẫu, mục đích verify/train/gate, seed, thời điểm yêu cầu/nhận nhãn, trạng thái và chi phí. Chỉ nối feedback khi identity khớp. \\
+BudgetLedger & Quota và khoản đã giữ/chốt theo episode, mục đích và request; retry không chi hai lần, không vượt ngân sách khi có request đồng thời. \\
+EvidenceWindow & Danh sách ID và reference snapshot, champion, kết quả drift/estimator/audit, số nhãn và thời điểm chốt. Nhãn chưa được cấp không xuất hiện trong view của policy. \\
+MaintenanceDecision & Action, reason, phiên bản policy, evidence snapshot, các chi phí liên quan và TrainingJob nếu có; lưu cả KEEP/HOLD. \\
+DatasetSnapshot / EvaluationGate & Manifest train/calibration/gate, recipe và hash dữ liệu; kết quả so sánh theo cặp, trạng thái pass/fail/hold và candidate version. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Luồng triển khai tối thiểu và kiểm tra}
+Luồng tích hợp: \textbf{Prediction $\rightarrow$ EvidenceWindow $\rightarrow$ LabelRequest/Feedback $\rightarrow$ MaintenanceDecision $\rightarrow$ TrainingJob $\rightarrow$ Build/Register $\rightarrow$ EvaluationGate}. Tác vụ qua service, transaction commit, Celery và execution backend hiện có; không để Consumer gọi training trực tiếp.
+
+Mỗi request có idempotency key; giữ ngân sách trong transaction trước khi phát tác vụ. Tại một thời điểm chỉ có một maintenance job cho cùng champion; callback lặp hoặc đến muộn không khởi động lại quyết định đã kết thúc. Feedback và truy vấn evidence luôn giới hạn theo tenant/project/version. Không thay đổi quyền truy cập chung hay topology hạ tầng trong phạm vi đề tài.
+
+Kiểm tra bắt buộc gồm: dự đoán trước khi có nhãn; không đọc nhãn ẩn; không trùng mẫu giữa train/gate/audit; retry không nhân đôi nhãn/job; HOLD khi thiếu lớp hoặc ngân sách; candidate fail không đổi champion. Demo tối thiểu thể hiện một lần KEEP, một lần yêu cầu nhãn bổ sung và một candidate đi qua training/gate. Nếu dùng giao diện, chỉ cần trang trạng thái và bằng chứng; dashboard nâng cao không phải đầu ra nghiên cứu.

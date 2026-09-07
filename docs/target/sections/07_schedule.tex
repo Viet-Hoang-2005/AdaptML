@@ -1,0 +1,26 @@
+\section{Kế hoạch 5 tháng, đầu ra và giới hạn}
+\begin{xltabular}{\linewidth}{@{}L{1.1cm} Y Y@{}}
+\caption{Các mốc triển khai và tiêu chí nghiệm thu.}\label{tab:schedule}\\
+\toprule\textbf{Tháng} & \textbf{Công việc trọng tâm} & \textbf{Đầu ra kiểm chứng được} \\
+\midrule\endfirsthead
+\toprule\textbf{Tháng} & \textbf{Công việc trọng tâm} & \textbf{Đầu ra kiểm chứng được} \\
+\midrule\endhead
+1 & Đối chiếu paper gần nhất, chọn dataset/model, tái hiện CBPE/ATC và pilot ngân sách & Protocol version 1: split, metric, cỡ mẫu, ngưỡng, quota ba mục đích, recipe và seed; xác nhận chạy được trên tài nguyên hiện có \\
+2 & Replay che nhãn, audit, ledger, B0--B4 và khoảng kiểm chứng & Unit tests không rò rỉ nhãn/không vượt quota; replay tái lập; báo cáo pilot chưa dùng final test \\
+3 & Mở rộng xác suất, feedback/window, nối policy với TrainingJob và gate & Demo cục bộ KEEP, yêu cầu bổ sung nhãn, candidate pass/fail/hold; kiểm tra retry và snapshot \\
+4 & Chạy benchmark chính, B5, ablation và các stress test đã chốt & Kết quả RQ1/RQ2, khoảng tin cậy, bảng chi phí và phân tích thất bại \\
+5 & Hoàn thiện phân tích, báo cáo và demo; dự phòng sửa lỗi & Mã nguồn, manifest dữ liệu/cấu hình, script chạy lại, kết quả và giới hạn có thể kiểm tra \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Đầu ra bắt buộc:} Một policy kiểm chứng trong ngân sách; luồng tích hợp thử nghiệm; benchmark hai dataset với baseline và ablation; báo cáo trả lời hai RQ. PAPE, model family thứ hai và giao diện nâng cao chỉ làm nếu các đầu ra này đã hoàn thành.
+
+\textbf{Rủi ro trọng yếu và xử lý:}
+\begin{itemize}
+  \item \textbf{Nhãn quá ít:} Pilot kiểm tra cỡ mẫu và độ rộng khoảng trước khi chốt ngân sách. Chấp nhận HOLD và báo cáo giới hạn, không thu hẹp khoảng bằng cách bỏ bất định.
+  \item \textbf{Estimator mất calibration:} Audit định kỳ không phụ thuộc cảnh báo; fit estimator theo version và kiểm tra concept drift như trường hợp giới hạn.
+  \item \textbf{Tiết kiệm giả do bỏ sót chi phí hoặc leakage:} Ledger tính đủ ba mục đích; tách train/calibration/gate, khóa nhãn ẩn và ghi chi phí candidate bị loại.
+  \item \textbf{Phạm vi vượt thời gian:} Giữ một recipe, một model family, mô phỏng gán nhãn và triển khai cục bộ; cắt đối chứng mở rộng trước baseline/ablation cốt lõi.
+  \item \textbf{Policy không tốt hơn baseline:} Báo cáo điều kiện thất bại và đánh đổi quan sát được. Không sửa ngưỡng theo final test hay mở rộng tuyên bố từ hai dataset.
+\end{itemize}
+Đề tài đánh giá khả năng ra quyết định dưới bằng chứng nhãn hạn chế. Hoàn thành khóa luận không đồng nghĩa hệ thống đã tự động chẩn đoán mọi nguyên nhân suy giảm hoặc đủ điều kiện vận hành tự trị trong production.
