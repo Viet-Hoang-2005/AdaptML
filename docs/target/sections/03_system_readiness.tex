@@ -1,6 +1,6 @@
 \section{Mức đáp ứng của hệ thống hiện tại}
 \subsection{Cách đánh giá và phạm vi bằng chứng}
-Đánh giá bằng đọc mã nguồn tại commit \texttt{cde7dcb}, ngày 07/09/2026; không suy ra trạng thái vận hành của cluster. Đơn vị đánh giá là \textbf{năng lực cần cho đề tài}, không dùng bộ thành phần hay thang trưởng thành của một khung kiến trúc MLOps.
+Các năng lực ứng dụng E1--E8 được đối chiếu tại commit \texttt{cde7dcb}; phần hạ tầng/thực thi E9--E11 bổ sung tại \texttt{1022cff}, ngày 07/09/2026. Đây là bằng chứng từ repo, không phải xác nhận trạng thái cluster. Đơn vị đánh giá là \textbf{năng lực cần cho đề tài}, không dùng thang trưởng thành của một khung kiến trúc MLOps.
 \begin{itemize}
   \item \statusyes: Có implementation đáp ứng năng lực được mô tả ở hàng tương ứng; có thể kế thừa sau kiểm tra tích hợp.
   \item \statuspartial: Có phần nền nhưng còn thiếu dữ liệu, contract hoặc xử lý cần cho thí nghiệm.
@@ -8,7 +8,7 @@
 \end{itemize}
 Mức “Đầy đủ” chỉ áp dụng cho yêu cầu hẹp trong bảng, không có nghĩa toàn bộ pipeline đã sẵn sàng hay được kiểm chứng production.
 
-\begin{xltabular}{\linewidth}{@{}L{3.3cm} L{1.5cm} Y@{}}
+\begin{xltabular}{\linewidth}{@{}L{3.5cm} L{2cm} Y@{}}
 \caption{Hiện trạng repo đối với đề tài đã chốt.}\label{tab:readiness}\\
 \toprule
 \textbf{Năng lực cần có} & \textbf{Mức độ} & \textbf{Bằng chứng hiện tại và phần cần bổ sung} \\
@@ -29,6 +29,11 @@ Tạo training set từ production & \statuspartial & E6 nhận file training da
 Đăng ký candidate sau build & \statusyes & E7 tạo ModelVersion và lưu artifact/metrics khi build thành công. Kế thừa lưu vết candidate. \\
 Đánh giá candidate độc lập & \statusno & Metrics được ingest chưa thay thế evaluator tin cậy. Cần holdout riêng, so sánh champion và quyết định pass/fail/hold. \\
 Benchmark ngân sách nhãn & \statusno & Chưa có replay che nhãn, policy đối chứng và thống kê chi phí/chất lượng của đề tài. \\
+Phát tác vụ và lưu vết điều phối & \statuspartial & E5/E6 có khóa, trạng thái và dispatch sau commit; E8 có EventOutbox. Cần liên kết vào vòng maintenance, đối soát bước chưa hoàn tất và kiểm chứng khi worker lỗi. \\
+Truy vết quyết định đến cập nhật & \statuspartial & E6/E7 có snapshot, job và version; thiếu liên kết evidence--policy--budget--gate--champion cho một quyết định end-to-end. \\
+Tự động hóa triển khai AWS/K3s & \statuspartial & E9 có Terraform, Ansible và cây GitOps. Cần chốt cấu hình thực nghiệm, kiểm tra bootstrap và triển khai vòng CT mới; chưa xác nhận cluster từ mã nguồn. \\
+Điều phối và huấn luyện production & \statuspartial & E10 chọn backend Argo, có WorkflowTemplate tạo PyTorchJob qua Training Operator. Cần nối policy, gate và đối soát retry vào vòng CT. \\
+Giám sát vận hành vòng CT & \statuspartial & E11 có Prometheus/Grafana, ServiceMonitor và rule nền. Cần metrics, dashboard và cảnh báo cho ngân sách, tiến trình và lỗi maintenance. \\
 \bottomrule
 \end{xltabular}
 
@@ -42,5 +47,9 @@ Các đường dẫn tính từ gốc repo, chỉ dẫn tới chức năng đã 
   \item \textbf{E5:} \codepath{services/control-plane/src/apps/drift/services/automatic.py}, tạo DriftRun.
   \item \textbf{E6:} \codepath{services/control-plane/src/apps/training/services/jobs.py}, tạo/submit job và snapshot.
   \item \textbf{E7:} \codepath{services/control-plane/src/apps/registry/services/versions.py}, đăng ký version.
+  \item \textbf{E8:} \codepath{services/control-plane/src/apps/observability/services/outbox.py}, lưu sự kiện rồi yêu cầu phát sau commit; không tự chứng minh khả năng phục hồi của vòng maintenance mới.
+  \item \textbf{E9:} \codepath{infra/main.tf}, \codepath{ansible/site.yml}, \codepath{ansible/roles/platform\_core/tasks/main.yml}, \codepath{k8s/gitops/production/}; cấp phát AWS, bootstrap K3s/Argo CD và bàn giao GitOps.
+  \item \textbf{E10:} \codepath{k8s/apps/base/control-plane/configmap.yaml} chọn backend Argo; template training tại \codepath{k8s/argo/workflows/}; operator tại \codepath{k8s/addons/kubeflow-training/}.
+  \item \textbf{E11:} Application monitoring tại \codepath{k8s/gitops/production/applications/addons/}; ServiceMonitor và PrometheusRule tại \codepath{k8s/platform/observability/}.
 \end{itemize}
-Nền tảng có các khối suy luận, drift report, chạy training và lưu candidate. Khối cần xây nằm ở \textbf{feedback, ngân sách, kiểm chứng và quyết định}; không cần phát triển thêm hạ tầng AWS/Kubernetes để bắt đầu thực nghiệm.
+Nền tảng có các khối suy luận, drift report, training, lưu candidate và cấu hình triển khai production. Khối cần xây nằm ở \textbf{feedback, ngân sách và vòng điều phối có kiểm chứng}, tích hợp vào backend Argo/Kubeflow và monitoring hiện có. Kế thừa hạ tầng giúp giới hạn phạm vi, nhưng vẫn phải kiểm chứng triển khai AWS/K3s và luồng end-to-end; không suy ra bảo đảm phục hồi chỉ từ manifest, khóa hay outbox riêng lẻ.

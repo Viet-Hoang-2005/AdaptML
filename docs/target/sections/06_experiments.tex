@@ -1,4 +1,5 @@
 \section{Thiết kế thực nghiệm và tiêu chí đánh giá}
+Thiết kế gồm hai phần: \textbf{RQ1} dùng replay có đối chứng để đo chất lượng--chi phí; \textbf{RQ2} chạy luồng tích hợp Argo/Kubeflow trên AWS/K3s và chủ động gây lỗi để kiểm tra bất biến, phục hồi và truy vết. Docker dùng kiểm thử local trước triển khai. Notebook/replay không thay thế bằng chứng thực thi trên backend production.
 \subsection{Dữ liệu, kịch bản và chống rò rỉ}
 Chọn hai dataset tabular nhị phân có nguồn/giấy phép rõ ràng, đủ số mẫu và cả hai lớp ở các cửa sổ; ưu tiên ít nhất một dataset có thời gian hoặc nhóm miền tự nhiên. Bộ sinh dữ liệu có nhãn phục vụ kiểm soát cơ chế drift. Dùng một model family có xác suất lớp; đề xuất bắt đầu từ logistic regression. Một model phi tuyến chỉ là kiểm tra độ nhạy nếu còn thời gian.
 
@@ -19,8 +20,9 @@ Không lấy thêm được nhãn & Đo giới hạn ước lượng/HOLD; khôn
 \bottomrule
 \end{tabularx}
 \end{table}
-Ba hàng đầu là kịch bản chính; ba hàng sau kiểm tra giới hạn với số cấu hình gọn. Độ có hại được đo trên champion của từng policy, không gán cứng từ tên drift. Trên dữ liệu thực, không tuyên bố suy giảm có nguyên nhân nhân quả đã biết. Không lọc test episodes theo việc phương pháp đề xuất thắng.
+Ba hàng đầu là kịch bản chính. Trong ba hàng sau, ưu tiên một kịch bản estimator mất tin cậy và một kịch bản không có nhãn; nhãn thiên lệch là mở rộng. Không chạy tích Descartes của mọi drift, lỗi hệ thống và ngân sách. Độ có hại được đo trên champion của từng policy, không gán cứng từ tên drift. Trên dữ liệu thực, không tuyên bố suy giảm có nguyên nhân nhân quả đã biết. Không lọc test episodes theo việc phương pháp đề xuất thắng.
 
+\Needspace{9\baselineskip}
 \subsection{Các phương pháp đối chứng}
 \begin{xltabular}{\linewidth}{@{}L{0.7cm} L{3.2cm} Y@{}}
 \caption{Baseline dùng cùng recipe và gate, trừ đối chứng không cập nhật.}\label{tab:baselines}\\
@@ -38,7 +40,7 @@ B5 & Đối chứng đầy đủ nhãn & Có mọi nhãn ở pool kiểm chứng
 \end{xltabular}
 B1--B4 cùng giới hạn ngân sách tổng, quota theo mục đích, giới hạn compute, lịch nhãn training và điều kiện gate. Ngân sách bằng nhau không có nghĩa số nhãn thực dùng bằng nhau: báo cáo cả quota và chi tiêu, kèm đường chất lượng theo chi phí thực. Không cấp nhãn gate miễn phí cho B1/B2. B3 là đối chứng performance-only quan trọng vì nhãn có thể đủ hữu ích ngay cả khi không dùng drift.
 
-Thực nghiệm estimator CBPE/ATC được đánh giá riêng trên cùng prediction stream. Để kiểm tra quyết định B3/B4, trước hết dùng cùng champion cố định; sau đó chạy replay có retraining để đo hiệu quả toàn vòng. Ablation chính của B4 lần lượt bỏ tín hiệu drift, bỏ audit định kỳ và bỏ lượt nhãn bổ sung; giữ các yếu tố khác tương đương. Policy kế thừa MLDemon hoặc estimator PAPE có thể thêm sau khi tái hiện được, nhưng không gọi bản đơn giản hóa là thuật toán gốc và không tuyên bố vượt state of the art nếu chưa so sánh.
+Thực nghiệm estimator CBPE/ATC được đánh giá gọn trên cùng prediction stream để giải thích sai quyết định. Với B3/B4, trước hết dùng cùng champion cố định; sau đó chạy replay có retraining để đo hiệu quả toàn vòng. Ablation chính của B4 lần lượt bỏ tín hiệu drift, bỏ audit định kỳ và bỏ lượt nhãn bổ sung; giữ các yếu tố khác tương đương. Tái hiện thêm MLDemon hoặc PAPE chỉ làm sau các kiểm thử vận hành bắt buộc; không gọi bản đơn giản hóa là thuật toán gốc và không tuyên bố vượt state of the art nếu chưa so sánh.
 
 \subsection{Chỉ số và cách đo đánh đổi}
 \begin{xltabular}{\linewidth}{@{}L{3.4cm} Y@{}}
@@ -62,3 +64,30 @@ Lợi ích retraining & Chênh lệch chất lượng candidate--champion trên 
 Thử một số mức ngân sách, chẳng hạn 5\%, 10\%, 20\% số mẫu production và đối chứng đầy đủ nhãn; đây là lưới pilot, chỉ giữ cấu hình đủ mẫu kiểm chứng/huấn luyện/gate. Cố định ngưỡng, phân bổ quota, batch size, số lượt audit, recipe, seed và thời hạn phục hồi trước test. Ưu tiên 10 seed độc lập nếu pilot xác nhận đủ tài nguyên; chốt số lần lặp trước chạy chính thức.
 
 So sánh theo cặp trên cùng dataset/episode/seed, bootstrap ở cấp episode hoặc block thời gian, không coi các batch phụ thuộc là mẫu độc lập. Báo cáo khoảng tin cậy và mức khác biệt thực tiễn; hiệu chỉnh khi kiểm định nhiều so sánh chính. Kết luận tiết kiệm phải đi kèm chất lượng nằm trong biên non-inferiority đã chốt; $p>0.05$ không chứng minh tương đương. Trình bày riêng giới hạn do lớp hiếm, selection bias, calibration sai và repeated testing. Không hứa tỷ lệ tiết kiệm hoặc mức accuracy cải thiện trước khi thực nghiệm.
+
+\subsection{Kiểm thử độ tin cậy của vòng điều phối}
+\label{sec:operational-tests}
+Kiểm thử hai tầng, dùng một dataset nhỏ cố định cho RQ2. \textbf{Local:} unit tests và integration tests trên Docker kiểm tra policy, khóa, persistence, ngân sách và callback bằng dependency mô phỏng hoặc dịch vụ local. \textbf{AWS/K3s:} chạy end-to-end thật qua Argo Events/Workflows, Kubeflow Training Operator, S3 và monitoring. Dùng môi trường thực nghiệm riêng cùng kiến trúc production, không gây lỗi trên dịch vụ đang phục vụ người dùng.
+
+Chèn lỗi tại các mốc trước/sau commit, dispatch và ghi kết quả; lặp lại với cùng dữ liệu và so sánh lượt không lỗi. Toàn bộ nhóm tình huống ở Bảng~\ref{tab:fault-tests} cần có kiểm thử tích hợp trên AWS/K3s: restart pod worker theo điểm kiểm soát, trì hoãn/lặp callback bằng test harness và dùng job lỗi chủ đích. Không cần dừng node, phá storage hoặc gián đoạn controller dùng chung. Khóa cấu hình CPU/RAM, số replica, image, WorkflowTemplate và phiên bản operator; lưu commit Terraform/Ansible/GitOps để tái lập.
+
+\begin{xltabular}{\linewidth}{@{}L{3.6cm} Y@{}}
+\caption{Tình huống lỗi và kết quả vận hành cần kiểm chứng.}\label{tab:fault-tests}\\
+\toprule\textbf{Tình huống} & \textbf{Kết quả kỳ vọng} \\
+\midrule\endfirsthead
+\toprule\textbf{Tình huống} & \textbf{Kết quả kỳ vọng} \\
+\midrule\endhead
+Nhãn gửi trùng; yêu cầu đồng thời gần hết quota & Mỗi ID được ghi chi một lần; tổng đã chi và đang giữ không vượt trần; yêu cầu thiếu quota có lý do từ chối/HOLD. \\
+Worker/pod dừng sau commit hoặc sau dispatch & Đối soát DB với Workflow/PyTorchJob; không tạo logical job trùng; attempt chưa rõ kết quả không được chạy lại mù quáng. \\
+Callback trùng, đảo thứ tự hoặc quá hạn & Không vượt bước, không ghi thêm candidate/cập nhật cho cùng kết quả và không khôi phục trạng thái đã kết thúc. \\
+Training, build hoặc gate lỗi/timeout & Retry có giới hạn; trường hợp không phục hồi kết thúc với lý do; champion cũ vẫn phục vụ. Gate fail/hold không được tự chuyển thành pass. \\
+Workspace hoặc champion đổi giữa các bước & Job vẫn dùng snapshot đã chốt; candidate dựa trên champion cũ bị chặn cập nhật và được ghi là bị thay thế. \\
+Candidate không đạt gate hoặc không khởi động được & Không ghi cập nhật thành công; truy vết được nguyên nhân và phiên bản thực tế vẫn là champion cũ. \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Chỉ số RQ2:} Số vi phạm ngân sách; số logical job/cập nhật trùng; số chuyển trạng thái sai hoặc cập nhật khi gate chưa pass; tỷ lệ decision có đủ chuỗi truy vết; số lượt phục hồi và số lượt kết thúc lỗi có lý do. Đo thời gian từ khi dependency hoạt động trở lại đến khi lượt tiếp tục hoặc kết thúc có kiểm soát, báo cáo median, p95 và số mẫu. Nếu mất sự kiện không phát hiện được, phải ghi là lỗi thay vì loại khỏi mẫu.
+
+\textbf{Chi phí điều phối:} Tách thời gian tính estimator/huấn luyện khỏi thời gian tạo cửa sổ, ghi ledger, chờ dispatch/scheduling, gate và áp dụng phiên bản. So sánh cùng workflow có/không chèn lỗi để đo chi phí retry, độ trễ tăng thêm và khả năng tiếp tục phục vụ của champion. Lấy timestamp từ DB/Workflow và metrics Prometheus; Grafana dùng quan sát, không là nguồn duy nhất của kết quả. Báo cáo tài nguyên pod, cấu hình node, thời gian sử dụng và chi phí AWS; tách chi phí nền cluster/storage khỏi chi phí job, đánh dấu khoản ước tính. Không suy rộng cấu hình thực nghiệm nhỏ thành SLA production hay benchmark thông lượng lớn.
+
+\textbf{Nghiệm thu:} Có bằng chứng triển khai Terraform/Ansible/GitOps và luồng training--gate--cập nhật chạy trên AWS/K3s; dashboard/cảnh báo nhận được metrics thực. Các trường hợp bắt buộc phải không có vi phạm bất biến trong số lượt đã chạy; mọi decision có lineage đầy đủ hoặc được ghi rõ artifact thiếu, và mọi lượt lỗi có trạng thái/lý do tra cứu được. Cố định số lần lặp, timeout và retry cap qua pilot; báo cáo toàn bộ lỗi phát hiện, kể cả đã sửa. Local pass không thay thế nghiệm thu production backend. Đây là bằng chứng trên tập kiểm thử hữu hạn, không phải chứng minh độ tin cậy tuyệt đối.
