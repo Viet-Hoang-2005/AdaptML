@@ -386,7 +386,7 @@ deactivate
 `ARGO_EVENTS_WEBHOOK_TOKEN` phải là token ngẫu nhiên tối thiểu 32 ký tự và
 không được tái sử dụng `CONTROL_PLANE_WEBHOOK_SECRET`. Khi rotate, cập nhật
 `mlops/production-secrets`, chờ `control-plane-api-secret-sync`,
-`control-plane-worker-secret-sync` và `argo-events-webhook-server-sync` Ready,
+`celery-worker-secret-sync` và `argo-events-webhook-server-sync` Ready,
 rồi rolling restart Control Plane API/worker và EventSource; xác minh token mới
 hoạt động trước khi kết thúc cửa sổ rotation.
 

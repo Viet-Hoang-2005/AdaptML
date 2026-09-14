@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mlops-paas-control-plane-worker
+  name: mlops-paas-celery-worker
   labels:
-    app: mlops-paas-control-plane-worker
+    app: mlops-paas-celery-worker
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: mlops-paas-control-plane-worker
+      app: mlops-paas-celery-worker
   template:
     metadata:
       labels:
-        app: mlops-paas-control-plane-worker
+        app: mlops-paas-celery-worker
     spec:
       automountServiceAccountToken: false
       nodeSelector:
@@ -27,47 +27,47 @@ spec:
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: control-plane-worker-secret
+                  name: celery-worker-secret
                   key: DB_USER
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: control-plane-worker-secret
+                  name: celery-worker-secret
                   key: DB_PASSWORD
             - name: DJANGO_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: control-plane-worker-secret
+                  name: celery-worker-secret
                   key: DJANGO_SECRET_KEY
             - name: JWT_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: control-plane-worker-secret
+                  name: celery-worker-secret
                   key: JWT_PRIVATE_KEY
             - name: JWT_PUBLIC_KEY
               valueFrom:
                 secretKeyRef:
-                  name: control-plane-worker-secret
+                  name: celery-worker-secret
                   key: JWT_PUBLIC_KEY
             - name: CONTROL_PLANE_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: control-plane-worker-secret
+                  name: celery-worker-secret
                   key: CONTROL_PLANE_WEBHOOK_SECRET
             - name: ARGO_EVENTS_WEBHOOK_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: control-plane-worker-secret
+                  name: celery-worker-secret
                   key: ARGO_EVENTS_WEBHOOK_TOKEN
             - name: HARBOR_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: control-plane-worker-secret
+                  name: celery-worker-secret
                   key: HARBOR_USERNAME
             - name: HARBOR_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: control-plane-worker-secret
+                  name: celery-worker-secret
                   key: HARBOR_PASSWORD
           envFrom:
             - configMapRef:
