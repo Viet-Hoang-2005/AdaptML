@@ -1,12 +1,22 @@
-import logging
 import os
 import bentoml
 import mlflow.pyfunc
 import pandas as pd
 from typing import Any, Dict
+from src.logging_utils import configure, current_context, get_logger, log_event
+from src.logging_utils import RequestLoggingMiddleware
 from src.loading import download_model_artifact, resolve_mlflow_model_dir
 
-logger = logging.getLogger("bentoml.paas_service")
+logger = get_logger(__name__)
+
+
+def _keep_bentoml_operational_log(record):
+    # BentoML 1.4 also emits one exception log per failed API request. The
+    # local middleware owns these failures, including their retry summaries.
+    return not (
+        record.msg == "Exception on %s [%s]"
+        and current_context().get("request_id")
+    )
 
 
 def load_runtime_model(model_version_id: str, model_uri: str | None):
@@ -16,15 +26,19 @@ def load_runtime_model(model_version_id: str, model_uri: str | None):
         model_dir = str(resolve_mlflow_model_dir(source_dir))
     elif not os.path.exists(model_dir):
         model_dir = "."
-    logger.info("Loading Deep Learning model from %s...", model_dir)
+    log_event(logger, "INFO", "model_load_started", "Loading deep learning model")
     return mlflow.pyfunc.load_model(model_dir)
 
 @bentoml.service(
     resources={"cpu": "2"},
     traffic={"timeout": 60},
+    logging={"access": {"enabled": False}},
 )
 class DeepLearningModelService:
     def __init__(self):
+        # BentoML configures logging again when each worker starts.
+        configure("deep-learning-serving")
+        get_logger("bentoml._internal.server.http_app").addFilter(_keep_bentoml_operational_log)
         model_version_id_str = os.environ.get("MODEL_VERSION_ID")
         model_uri = os.environ.get("MODEL_URI")
         model_version_id = (
@@ -32,9 +46,9 @@ class DeepLearningModelService:
         )
         try:
             self.model = load_runtime_model(model_version_id, model_uri)
-            logger.info("Model loaded successfully via mlflow.pyfunc!")
+            log_event(logger, "INFO", "model_loaded", "Deep learning model loaded")
         except Exception as exc:
-            logger.error("Error loading DL model version %s: %s", model_version_id, exc)
+            log_event(logger, "ERROR", "model_load_failed", "Deep learning model load failed", error_type=type(exc).__name__)
             self.model = None
 
     @bentoml.api(route="/predict", batchable=False)
@@ -86,3 +100,8 @@ class DeepLearningModelService:
             "model_version_id": os.environ.get("MODEL_VERSION_ID", "unknown"),
             "engine": "deep-learning-serving",
         }
+
+
+DeepLearningModelService.add_asgi_middleware(
+    RequestLoggingMiddleware, service="deep-learning-serving"
+)

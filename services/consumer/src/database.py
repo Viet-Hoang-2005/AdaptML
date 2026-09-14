@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from urllib.parse import quote_plus
 
 import pandas as pd
@@ -8,6 +9,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.dialects.postgresql import JSONB
+from src.logging_utils import Summary, get_logger, log_event
+
+logger = get_logger(__name__)
+persistence_summary = Summary(logger, "production_persistence_summary")
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(dotenv_path=os.path.join(ROOT_DIR, '.env'))
@@ -34,10 +39,10 @@ def create_engine_safe(host: str, label: str):
             pool_pre_ping=True,
             pool_recycle=1800,
         )
-        print(f"[{label}] Connected to PostgreSQL at {host}:{DB_PORT}/{DB_NAME}")
+        log_event(logger, "INFO", "database_engine_initialized", "Database engine initialized", operation=label)
         return eng
     except Exception as e:
-        print(f"[{label}] Database connection failed: {e}")
+        log_event(logger, "ERROR", "database_engine_failed", "Database engine initialization failed", operation=label, error_type=type(e).__name__)
         return None
         
 engine_rw = create_engine_safe(DB_HOST_RW, "Read Write")
@@ -53,7 +58,7 @@ def init_db():
                 conn.execute(text(sql))
         except Exception as e:
             if not ignore_error:
-                print(f"[RW] SQL execution failed: {e}")
+                log_event(logger, "ERROR", "database_schema_statement_failed", "Database schema statement failed", error_type=type(e).__name__)
             else:
                 pass
 
@@ -135,7 +140,7 @@ def init_db():
         f"ON {AUTOMATIC_DRIFT_OUTBOX_TABLE}(published_at, available_at, created_at);"
     )
     
-    print("[RW] Initialized 'paas_production_logs' schema.")
+    log_event(logger, "INFO", "database_schema_initialization_finished", "Database schema initialization finished")
 
 
 def insert_on_conflict_do_nothing(table, conn, keys, data_iter):
@@ -172,23 +177,24 @@ def _save_dataframe(conn, df: pd.DataFrame, table_name: str) -> None:
 
 
 def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
+    started = time.perf_counter()
     if engine_rw is None:
-        print("[RW Engine] No database engine available for writing.")
+        persistence_summary.record(success=False)
+        persistence_summary.failure("write", "Database engine unavailable for persistence")
         return False
 
     try:
         with engine_rw.begin() as conn:
             _save_dataframe(conn, df, table_name)
 
-        record_count = len(df)
-        if record_count == 1 and 'id' in df.columns:
-            print(f"[RW] Inserted 1 record (ID: {df['id'].iloc[0]}) -> '{table_name}'")
-        else:
-            print(f"[RW] Inserted {record_count} records -> '{table_name}'")
+        # Replays may conflict; count processed records, not newly inserted rows.
+        persistence_summary.record(duration_ms=(time.perf_counter() - started) * 1000, records=len(df), batches=1)
+        persistence_summary.recovery("write")
         return True
 
     except Exception as e:
-        print(f"[RW] Error saving to '{table_name}': {e}")
+        persistence_summary.record(success=False, duration_ms=(time.perf_counter() - started) * 1000)
+        persistence_summary.failure("write", "Production data persistence failed", error_type=type(e).__name__)
         return False
 
 def save_dataframe_and_automatic_drift_signals(
@@ -199,8 +205,10 @@ def save_dataframe_and_automatic_drift_signals(
     The caller may safely replay a Kafka batch: production events conflict on
     their event id and signals conflict on their deterministic batch key.
     """
+    started = time.perf_counter()
     if engine_rw is None:
-        print("[RW Engine] No database engine available for writing.")
+        persistence_summary.record(success=False)
+        persistence_summary.failure("write", "Database engine unavailable for persistence")
         return False
 
     try:
@@ -218,9 +226,15 @@ def save_dataframe_and_automatic_drift_signals(
                     ),
                     signals,
                 )
+        persistence_summary.record(
+            duration_ms=(time.perf_counter() - started) * 1000,
+            records=len(df), batches=1,
+        )
+        persistence_summary.recovery("write")
         return True
     except Exception as exc:
-        print(f"[RW] Error saving production data and automatic drift signals: {exc}")
+        persistence_summary.record(success=False, duration_ms=(time.perf_counter() - started) * 1000)
+        persistence_summary.failure("write", "Production data and drift signal transaction failed", error_type=type(exc).__name__)
         return False
 
 

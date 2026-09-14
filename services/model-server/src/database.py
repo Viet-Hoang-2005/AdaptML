@@ -5,6 +5,9 @@ import re
 from typing import Any, Dict
 from urllib.parse import quote_plus
 from sqlalchemy import create_engine, text
+from src.logging_utils import Summary, get_logger
+
+cache_summary = Summary(get_logger(__name__), "registry_cache_summary")
 
 MODEL_RECORD_CACHE_TTL = int(os.environ.get("MODEL_RECORD_CACHE_TTL_SECONDS", "30"))
 
@@ -103,9 +106,10 @@ def invalidate_model_version_cache(version_id: str, redis_client=None) -> bool:
     try:
         cache_key = f"model-version:{version_id}"
         deleted = redis_client.delete(cache_key)
+        cache_summary.recovery("invalidate")
         return bool(deleted)
     except Exception as exc:
-        print(f"Warning: Failed to invalidate cache for version {version_id}: {exc}")
+        cache_summary.failure("invalidate", "Model registry cache invalidation failed", error_type=type(exc).__name__)
         return False
 
 

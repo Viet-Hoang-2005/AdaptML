@@ -7,8 +7,20 @@ from dataclasses import dataclass
 from typing import Any
 import pandas as pd
 from confluent_kafka import Consumer, KafkaError, TopicPartition
+from src.logging_utils import Summary, configure, get_logger, log_event
+
+if __name__ == "__main__":
+    # Database engine construction can fail while importing src.database.
+    configure("consumer")
+
+logger = get_logger(__name__)
+commit_summary = Summary(logger, "offset_commit_summary")
+retry_summary = Summary(logger, "partition_retry_summary")
+broker_summary = Summary(logger, "broker_poll_summary")
+
 from src.database import (
     init_db,
+    persistence_summary,
     save_dataframe_and_automatic_drift_signals,
 )
 from src.drift_outbox import OUTBOX_POLL_SECONDS, REQUEST_TIMEOUT_SECONDS, run_dispatcher
@@ -48,14 +60,23 @@ class RetryState:
 # Hàm xử lý tín hiệu dừng
 def handle_sigterm(*args):
     global RUNNING
-    print("Received SIGTERM. Shutting down gracefully...")
+    log_event(logger, "INFO", "shutdown_requested", "Consumer shutdown requested")
     RUNNING = False
+
+
+def _run_outbox_dispatcher(stop_event: threading.Event) -> None:
+    try:
+        run_dispatcher(stop_event)
+    except Exception as exc:
+        # Let supervision detect the stopped thread without threading's raw
+        # exception output, which can contain SQL parameters or HTTP details.
+        log_event(logger, "ERROR", "drift_dispatcher_failed", "Automatic drift dispatcher stopped unexpectedly", error_type=type(exc).__name__)
 
 
 def start_outbox_dispatcher() -> tuple[threading.Event, threading.Thread]:
     stop_event = threading.Event()
     dispatcher = threading.Thread(
-        target=run_dispatcher,
+        target=_run_outbox_dispatcher,
         args=(stop_event,),
         name="automatic-drift-outbox",
         daemon=True,
@@ -99,22 +120,22 @@ def build_automatic_drift_signals(records: list[KafkaRecord]) -> list[dict[str, 
 def _commit_batch_offset(consumer, record: KafkaRecord) -> bool:
     """Synchronously commit exactly one processed partition position."""
     next_offset = TopicPartition(record.topic, record.partition, record.offset + 1)
+    started = time.perf_counter()
+    failure_key = f"{record.topic}:{record.partition}"
     try:
         committed_offsets = consumer.commit(offsets=[next_offset], asynchronous=False)
     except Exception as exc:
-        print(
-            f"[{record.topic}/{record.partition}] Kafka offset commit failed at "
-            f"{record.offset + 1}: {exc}"
-        )
+        commit_summary.record(success=False, duration_ms=(time.perf_counter() - started) * 1000)
+        commit_summary.failure(failure_key, "Kafka offset commit failed", error_type=type(exc).__name__, partition=record.partition, offset=record.offset + 1)
         return False
 
     failures = [offset for offset in committed_offsets or [] if getattr(offset, "error", None)]
     if failures:
-        print(
-            f"[{record.topic}/{record.partition}] Kafka offset commit returned errors: "
-            f"{failures}"
-        )
+        commit_summary.record(success=False, duration_ms=(time.perf_counter() - started) * 1000)
+        commit_summary.failure(failure_key, "Kafka offset commit returned errors", partition=record.partition, offset=record.offset + 1, count=len(failures))
         return False
+    commit_summary.record(duration_ms=(time.perf_counter() - started) * 1000, committed=1)
+    commit_summary.recovery(failure_key, partition=record.partition)
     return True
 
 
@@ -153,10 +174,8 @@ def _schedule_retry(consumer, key: tuple[str, int], retries: dict[tuple[str, int
     retry.next_retry_at = time.monotonic() + delay
     if retry.attempts == 1:
         consumer.pause([_partition_handle(key)])
-    print(
-        f"[{key[0]}/{key[1]}] Database or offset commit failed; partition paused. "
-        f"Retrying batch in {delay}s (attempt {retry.attempts})."
-    )
+    retry_summary.record(success=False)
+    retry_summary.failure(f"{key[0]}:{key[1]}", "Partition batch retained for retry", partition=key[1], retry_seconds=delay, attempt=retry.attempts)
 
 
 def flush_pending_batch(
@@ -176,10 +195,12 @@ def flush_pending_batch(
     was_paused = retries.pop(key, None)
     if was_paused:
         consumer.resume([_partition_handle(key)])
+        retry_summary.recovery(f"{key[0]}:{key[1]}", partition=key[1])
     return True
 
 # Hàm main để chạy Consumer liên tục lắng nghe Redpanda và xử lý dữ liệu
 def main():
+    configure("consumer")
     # Đăng ký handler cho SIGTERM và SIGINT
     signal.signal(signal.SIGTERM, handle_sigterm)
     signal.signal(signal.SIGINT, handle_sigterm)
@@ -203,7 +224,7 @@ def main():
         # Khởi tạo Consumer và subscribe vào topic
         consumer = Consumer(conf)
         consumer.subscribe([KAFKA_TOPIC])
-        print(f"Consumer listening to the topic '{KAFKA_TOPIC}' at {REDPANDA_BROKERS}")
+        log_event(logger, "INFO", "consumer_started", "Consumer subscribed and listening")
 
         while RUNNING:
             ensure_outbox_dispatcher_running(dispatcher)
@@ -223,10 +244,7 @@ def main():
                 for key in list(pending_batches):
                     if key in retries:
                         continue
-                    batch_size = len(pending_batches[key])
-                    saved = flush_pending_batch(consumer, pending_batches, retries, key)
-                    if saved:
-                        print(f"Flushed {batch_size} records to DB due to idle time.")
+                    flush_pending_batch(consumer, pending_batches, retries, key)
                 continue
                 
             # Xử lý lỗi Kafka
@@ -234,14 +252,12 @@ def main():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
                     continue
                 if msg.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART or msg.error().retriable():
-                    print(
-                        f"Kafka topic '{KAFKA_TOPIC}' is temporarily unavailable; "
-                        f"retrying in {KAFKA_TOPIC_RETRY_SECONDS}s: {msg.error()}"
-                    )
+                    broker_summary.failure("poll", "Kafka temporarily unavailable", error_code=msg.error().code(), retry_seconds=KAFKA_TOPIC_RETRY_SECONDS)
                     time.sleep(KAFKA_TOPIC_RETRY_SECONDS)
                     continue
                 raise RuntimeError(f"Kafka consumer error: {msg.error()}")
                     
+            broker_summary.recovery("poll")
             try:
                 # Đọc payload từ API và parse lại thành Dictionary
                 val_json = msg.value().decode('utf-8')
@@ -259,19 +275,17 @@ def main():
                 # Gom đủ một partition batch thì mang đi ghi. A failed batch
                 # pauses that partition, so its later offsets cannot overtake it.
                 if key not in retries and len(current_batch) >= KAFKA_BATCH_SIZE:
-                    batch_size = len(current_batch)
-                    saved = flush_pending_batch(consumer, pending_batches, retries, key)
-                    if saved:
-                        print(f"Completed batch delivery: {batch_size} records to DB.")
+                    flush_pending_batch(consumer, pending_batches, retries, key)
                     
             except Exception as parse_e:
+                log_event(logger, "DEBUG", "consumer_record_processing_failed", "Kafka record processing failed; offset retained", error_type=type(parse_e).__name__)
                 # Never allow a later offset to skip an invalid message. The
                 # process exits without committing this position; Compose will
                 # restart it and preserve the event for operator remediation.
                 raise RuntimeError(f"Error parsing Kafka payload: {parse_e}") from parse_e
                 
     except KeyboardInterrupt:
-        print("Received shutdown command...")
+        log_event(logger, "INFO", "shutdown_requested", "Consumer shutdown requested")
     finally:
         try:
             if consumer is not None:
@@ -283,16 +297,28 @@ def main():
             dispatcher_stop.set()
             dispatcher.join(timeout=DISPATCHER_JOIN_TIMEOUT_SECONDS)
             if dispatcher.is_alive():
-                print(
-                    "Automatic drift outbox dispatcher did not stop before the shutdown timeout; "
-                    "leased rows will be retried after their lease expires."
-                )
-            if consumer is not None:
-                consumer.close()
-        print("Consumer cleaned up safely.")
+                log_event(logger, "WARNING", "dispatcher_shutdown_timeout", "Drift dispatcher shutdown timed out; leased rows remain retryable")
+            try:
+                if consumer is not None:
+                    consumer.close()
+            finally:
+                for summary in (persistence_summary, commit_summary, retry_summary, broker_summary):
+                    summary.close()
+        log_event(logger, "INFO", "consumer_stopped", "Consumer cleanup finished")
+
+def run():
+    """Process entry point with one safe diagnostic for terminal failures."""
+    configure("consumer")
+    # Đợi Redpanda khởi động hoàn tất trước khi Consumer nhảy vào kết nối
+    log_event(logger, "INFO", "consumer_starting", "Waiting for broker startup")
+    time.sleep(5)
+    try:
+        main()
+    except Exception as exc:
+        log_event(logger, "ERROR", "consumer_failed", "Consumer stopped after an unrecoverable error", error_type=type(exc).__name__, exc_info=True)
+        # Replace the raw payload traceback while retaining a failing exit code.
+        raise SystemExit(1) from None
+
 
 if __name__ == '__main__':
-    # Đợi Redpanda khởi động hoàn tất trước khi Consumer nhảy vào kết nối
-    print("Waiting for Redpanda Broker to start...")
-    time.sleep(5)
-    main()
+    run()

@@ -1,6 +1,7 @@
 import io
 import json
 import logging
+import subprocess
 import tarfile
 import zipfile
 import pytest
@@ -270,7 +271,7 @@ def configure_zip_task(monkeypatch, tmp_path, kaniko=False):
             archive.writestr("model/requirements.txt", "numpy==1.26.4\n")
 
     monkeypatch.setattr(cli, "download_presigned_file", download)
-    monkeypatch.setattr(cli.subprocess, "run", Mock())
+    monkeypatch.setattr(cli.subprocess, "run", Mock(return_value=subprocess.CompletedProcess([], 0, "", "")))
     monkeypatch.setattr(cli.mlflow.pyfunc, "load_model", Mock(return_value=object()))
 
 

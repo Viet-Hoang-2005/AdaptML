@@ -104,7 +104,7 @@ services/training-runner/
 ## Build Local
 
 ```bash
-docker build -t mlops-paas-training-runner ./services/training-runner
+docker build -f services/training-runner/Dockerfile -t mlops-paas-training-runner ./services/training-runner
 ```
 
 ---

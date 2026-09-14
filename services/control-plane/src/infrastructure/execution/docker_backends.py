@@ -18,6 +18,14 @@ from infrastructure.storage.paths import build_prefix, drift_run_prefix
 from .image_references import build_image_tag, image_repository, immutable_image_reference
 
 
+def _logging_environment():
+    # Forward only common logging controls; each child configures its own service name.
+    return {
+        "LOG_LEVEL": os.environ.get("LOG_LEVEL") or "INFO",
+        "LOG_SUMMARY_INTERVAL_SECONDS": os.environ.get("LOG_SUMMARY_INTERVAL_SECONDS") or "60",
+    }
+
+
 def _wait_and_cleanup(container):
     result = container.wait()
     logs = container.logs(stdout=True, stderr=True).decode("utf-8", errors="replace")
@@ -53,6 +61,7 @@ class DockerBuildBackend:
         webhook = f"{settings.CONTROL_PLANE_INTERNAL_URL}/internal/webhooks/builds/{build.public_id}/"
         task_type = "TEST_ZIP" if build.artifact_format == "mlflow_zip" else "BUILD"
         environment = {
+            **_logging_environment(),
             "TASK_TYPE": task_type,
             "BUILD_ID": str(build.public_id),
             "PROJECT_ID": str(project.public_id),
@@ -107,6 +116,7 @@ class DockerTrainingBackend:
         validate_training_uri(job, self.storage.bucket, "output", job.output_uri)
         output_upload_capability = issue_capability(job, "output_upload")
         environment = {
+            **_logging_environment(),
             "S3_SOURCE_URI": self.storage.presigned_get(
                 job.code_snapshot_uri, settings.TRAINING_PRESIGNED_URL_TTL_SECONDS
             ),
@@ -216,6 +226,7 @@ class DockerDeploymentBackend:
             image=image,
             name=container_name,
             environment={
+                **_logging_environment(),
                 "PROJECT_ID": str(project.public_id),
                 "MODEL_VERSION_ID": str(deployment.version.public_id),
                 "MODEL_VERSION": deployment.version.version,
@@ -301,6 +312,7 @@ class DockerDriftBackend:
         }
         source = monitor.version.artifacts.filter(kind__in=("source", "training_output")).first()
         environment = {
+            **_logging_environment(),
             "JOB_ID": str(drift_run.public_id),
             "TENANT_ID": project.owner.tenant_id,
             "PROJECT_ID": str(project.public_id),

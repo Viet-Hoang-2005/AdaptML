@@ -1,4 +1,5 @@
 from celery import shared_task
+from common.logging import record_transition
 from django.db import transaction
 from infrastructure.execution import training_backend
 from infrastructure.storage import S3Storage
@@ -25,6 +26,7 @@ def execute_training_job(self, job_id):
         job.error_message = ""
         job.save(update_fields=["status", "started_at", "celery_task_id", "error_message", "updated_at"])
         TrainingJobEvent.objects.create(job=job, event_type="started", message="Training execution started.")
+        record_transition(job, "running")
     append_training_log(job.public_id, "[SYSTEM] Training execution started.")
     with transaction.atomic():
         job = (
@@ -54,9 +56,13 @@ def execute_training_job(self, job_id):
             TrainingJobEvent.objects.create(
                 job=job, event_type="failed", message="Training execution failed.", metadata={"error": str(exc)[:1000]}
             )
+        record_transition(
+            job, "failed", reason="Training backend execution failed", error_type=type(exc).__name__, exc_info=True,
+        )
         append_training_log(job.public_id, f"[ERROR] Training failed: {exc}")
         raise
     if isinstance(result, dict) and result.get("dispatched"):
+        record_transition(job, "running", phase="dispatched")
         append_training_log(job.public_id, f"[SYSTEM] Training workload dispatched ({job.backend}).")
         if hasattr(training_backend(job.backend), "poll"):
             poll_training_job_status.apply_async(args=[str(job.public_id)], countdown=3)
@@ -76,6 +82,7 @@ def execute_training_job(self, job_id):
             defaults={"kind": "model", "s3_uri": job.output_uri, "content_type": "application/gzip"},
         )
         TrainingJobEvent.objects.create(job=job, event_type="completed", message="Training execution completed.")
+        record_transition(job, "completed")
     for line in str(result).splitlines()[-500:]:
         append_training_log(job.public_id, line)
     append_training_log(job.public_id, "[SYSTEM] Training completed successfully.")
@@ -119,6 +126,7 @@ def poll_training_job_status(self, job_id):
                 defaults={"kind": "model", "s3_uri": job.output_uri, "content_type": "application/gzip"},
             )
             TrainingJobEvent.objects.create(job=job, event_type="completed", message="Training execution completed.")
+            record_transition(job, "completed")
         for line in logs.splitlines()[-500:]:
             append_training_log(job.public_id, line)
         append_training_log(job.public_id, "[SYSTEM] Training completed successfully.")
@@ -137,6 +145,7 @@ def poll_training_job_status(self, job_id):
             TrainingJobEvent.objects.create(
                 job=job, event_type="failed", message="Training execution failed.", metadata={"error": error_msg[:1000]}
             )
+            record_transition(job, "failed", reason="Training runtime reported failure")
         for line in logs.splitlines()[-500:]:
             append_training_log(job.public_id, line)
         append_training_log(job.public_id, f"[ERROR] Training failed: {error_msg}")
@@ -153,6 +162,7 @@ def poll_training_job_status(self, job_id):
             TrainingJobEvent.objects.create(
                 job=job, event_type="failed", message="Training runtime disappeared or errored."
             )
+            record_transition(job, "failed", reason="Training runtime disappeared or errored")
         append_training_log(job.public_id, f"[ERROR] {job.error_message}")
         return "failed"
 
@@ -189,6 +199,7 @@ def cancel_training_job(self, job_id):
                 or "Training runtime is not registered yet; cancellation will be retried."
             )
         if result.get("dispatched"):
+            record_transition(job, "cancelling", phase="cancellation_dispatched")
             append_training_log(
                 job.public_id,
                 "[SYSTEM] Runtime cancellation dispatched; waiting for confirmation.",
@@ -224,6 +235,7 @@ def confirm_training_cancellation(job_id):
                 event_type="cancelled",
                 message="Training runtime cancellation confirmed.",
             )
+            record_transition(job, "cancelled")
         should_delete = bool(job.deletion_requested_at)
         if should_delete:
             transaction.on_commit(lambda: delete_training_job.delay(str(job.public_id)))
@@ -278,6 +290,7 @@ def delete_training_job(self, job_id):
         )
         delete_training_logs(job.public_id)
         job.delete()
+        record_transition(job, "deleted")
     except Exception as exc:
         TrainingJob.objects.filter(pk=job.pk).update(deletion_error=str(exc)[:12000])
         raise
@@ -308,4 +321,5 @@ def purge_training_job_outputs(self, job_id):
             event_type="outputs_purged",
             message="Training outputs were deleted.",
         )
+        record_transition(job, job.status, phase="outputs_purged")
     return "purged"

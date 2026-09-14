@@ -1,4 +1,7 @@
 import os
+import logging
+from contextvars import copy_context
+from src.logging_utils import RuntimeLog, bind_context, configure, get_logger, reset_context, sanitize
 import hashlib
 import json
 import shutil
@@ -35,27 +38,33 @@ INSIGHTS_INPUT_FILES = (
 MAX_MODEL_INSIGHT_ITEMS = 500
 
 
-def log_to_redis(message: str) -> None:
+logger = get_logger("training-runner")
+
+
+def log_to_redis(message: str) -> bool:
     job_id = os.environ.get("TRAINING_JOB_ID", "").strip()
     redis_url = os.environ.get("REDIS_URL", "").strip()
     if not job_id or not redis_url:
-        return
+        return False
     try:
         r = redis.from_url(redis_url)
-        r.rpush(f"training_logs:{job_id}", message)
+        r.rpush(f"training_logs:{job_id}", sanitize(message))
         r.expire(f"training_logs:{job_id}", 86400 * 7)
+        return True
     except Exception:
-        pass
+        return False
+
+
+# Resolve the writer at call time; no global stdout/stderr replacement.
+runtime_log = RuntimeLog(logger, writer=lambda line: log_to_redis(line))
 
 
 def log(message: str) -> None:
-    formatted = f"[training-runner] {message}"
-    print(formatted, flush=True)
-    log_to_redis(formatted)
+    runtime_log.detail(message)
 
 
 def metric_log(payload: dict) -> None:
-    print(f"METRIC_JSON {json.dumps(payload, separators=(',', ':'))}", flush=True)
+    runtime_log.protocol(f"METRIC_JSON {json.dumps(payload, separators=(',', ':'))}")
 
 
 def warn(warnings: list[dict], code: str, message: str, **extra) -> None:
@@ -344,10 +353,12 @@ def log_to_mlflow(
                 try:
                     mlflow.log_artifacts(str(model_dir), artifact_path="model")
                 except Exception as exc:
-                    log(f"Warning logging artifacts to MLflow: {exc}")
+                    runtime_log.event(logging.WARNING, "training_mlflow_artifacts_failed",
+                                      "Could not log training artifacts to MLflow", reason=sanitize(str(exc)))
         log("Successfully logged training job parameters, metrics, and artifacts to MLflow")
     except Exception as exc:
-        log(f"Warning: MLflow logging encountered an error: {exc}")
+        runtime_log.event(logging.WARNING, "training_mlflow_failed",
+                          "MLflow logging encountered an error", reason=sanitize(str(exc)))
 
 
 def mlflow_proxy_artifact_uri(artifact_root: str) -> str:
@@ -447,7 +458,7 @@ def upload_presigned_url(source: Path, uri: str) -> None:
         response = requests.put(uri, data=handle, timeout=300)
     if response.status_code not in (200, 201, 204):
         raise RuntimeError(
-            f"Presigned PUT upload failed with HTTP status {response.status_code}: {response.text}"
+            f"Presigned PUT upload failed with HTTP status {response.status_code}"
         )
 
 
@@ -490,12 +501,10 @@ def install_requirements(requirements_path: Path) -> None:
     )
     if res.stdout:
         for line in res.stdout.splitlines():
-            print(line, flush=True)
-            log_to_redis(line)
+            runtime_log.detail(line)
     if res.stderr:
         for line in res.stderr.splitlines():
-            print(line, file=sys.stderr, flush=True)
-            log_to_redis(line)
+            runtime_log.detail(line)
     if res.returncode != 0:
         raise RuntimeError(f"pip install -r requirements.txt failed with exit code {res.returncode}")
 
@@ -661,9 +670,24 @@ def start_metric_emitter(stop_event: threading.Event, interval_seconds: int = 5)
             )
             stop_event.wait(interval_seconds)
 
-    thread = threading.Thread(target=emit_loop, name="training-metrics", daemon=True)
+    thread = threading.Thread(target=copy_context().run, args=(emit_loop,), name="training-metrics", daemon=True)
     thread.start()
     return thread
+
+
+def is_metric_protocol_line(message: str) -> bool:
+    """Only single-line JSON objects enter the sanitized metric protocol."""
+    if "\n" in message or "\r" in message or len(message) > 16384:
+        return False
+    stripped = message.lstrip()
+    for prefix in ("METRIC_JSON:", "METRIC_JSON "):
+        if stripped.startswith(prefix):
+            try:
+                payload = json.loads(stripped[len(prefix):])
+            except (ValueError, RecursionError):
+                return False
+            return isinstance(payload, dict)
+    return False
 
 
 def run_training(entry_point: str, model_version: str) -> subprocess.CompletedProcess:
@@ -691,13 +715,17 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
 
-    def stream_lines(stream, output, lines):
+    def stream_lines(stream, lines, protocol=False):
         if stream is None:
             return
         for line in iter(stream.readline, ""):
-            print(line, end="", file=output, flush=True)
-            log_to_redis(line.rstrip("\n"))
+            # Keep parser/bundle input verbatim; sanitize only the display copy.
             lines.append(line)
+            message = line.rstrip("\n")
+            if protocol and is_metric_protocol_line(message):
+                runtime_log.protocol(message)
+            else:
+                runtime_log.detail(message)
 
     try:
         process = subprocess.Popen(
@@ -710,13 +738,13 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
             bufsize=1,
         )
         stdout_thread = threading.Thread(
-            target=stream_lines,
-            args=(process.stdout, sys.stdout, stdout_lines),
+            target=copy_context().run,
+            args=(stream_lines, process.stdout, stdout_lines, True),
             name="training-stdout",
         )
         stderr_thread = threading.Thread(
-            target=stream_lines,
-            args=(process.stderr, sys.stderr, stderr_lines),
+            target=copy_context().run,
+            args=(stream_lines, process.stderr, stderr_lines),
             name="training-stderr",
         )
         stdout_thread.start()
@@ -750,7 +778,7 @@ def create_model_archive(archive_path: Path) -> None:
                 archive.add(item, arcname=item.relative_to(MODEL_DIR))
 
 
-def main() -> None:
+def _run() -> None:
     source_uri = require_env("S3_SOURCE_URI")
     training_data_uri = require_env("S3_TRAINING_DATA_URI")
     output_upload_endpoint = require_env("S3_OUTPUT_UPLOAD_URL")
@@ -812,8 +840,30 @@ def main() -> None:
         model_archive_path,
         request_output_upload_url(output_upload_endpoint, output_upload_capability),
     )
-    log("Training job completed successfully")
+
+
+def main() -> None:
+    started = time.monotonic()
+    configure("training-runner")
+    tokens = bind_context(training_job_id=os.environ.get("TRAINING_JOB_ID"),
+                          tenant_id=os.environ.get("TENANT_ID"))
+    try:
+        runtime_log.event(logging.INFO, "training_execution_started", "Training runner execution started", duration_ms=0)
+        _run()
+        runtime_log.event(logging.INFO, "training_execution_succeeded", "Training runner execution completed",
+                          duration_ms=round((time.monotonic() - started) * 1000, 3))
+    except Exception as exc:
+        runtime_log.event(logging.ERROR, "training_execution_failed", "Training runner execution failed",
+                          reason=sanitize(str(exc)), exc_info=True,
+                          duration_ms=round((time.monotonic() - started) * 1000, 3))
+        raise
+    finally:
+        reset_context(tokens)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # main already emitted a sanitized error; avoid a raw exception dump.
+        sys.exit(1)

@@ -1,4 +1,5 @@
 from common.api.permissions import HasInternalWebhookSecret
+from common.logging import record_transition
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
@@ -29,6 +30,7 @@ class DriftRunWebhookEndpoint(APIView):
             if run.status == "completed" and run.summary and run.drift_score is not None:
                 return Response({"status": run.status, "duplicate": True})
 
+            already_completed = run.status == "completed"
             run.summary = summary
             run.drift_score = drift_score
             run.has_drift = has_drift
@@ -36,6 +38,9 @@ class DriftRunWebhookEndpoint(APIView):
             run.completed_at = run.completed_at or timezone.now()
             run.error_message = ""
             run.save(update_fields=["summary", "drift_score", "has_drift", "status", "completed_at", "error_message"])
+            record_transition(
+                run, "completed", phase="summary_updated" if already_completed else None, source="webhook",
+            )
             if run.has_drift:
                 from apps.drift.tasks import handle_drift_detected
                 transaction.on_commit(lambda: handle_drift_detected.delay(str(run.public_id)))

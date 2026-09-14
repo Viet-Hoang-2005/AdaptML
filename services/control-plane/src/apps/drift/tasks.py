@@ -1,6 +1,7 @@
 import json
 
 from celery import shared_task
+from common.logging import record_transition
 from django.db import transaction
 from django.utils import timezone
 from infrastructure.execution import drift_backend
@@ -31,14 +32,19 @@ def execute_drift_run(self, run_id):
         run.started_at = run.started_at or timezone.now()
         run.celery_task_id = self.request.id or run.celery_task_id
         run.save(update_fields=["status", "started_at", "celery_task_id"])
+        record_transition(run, "running")
     try:
         result = drift_backend(run.monitor.backend).run(run)
     except Exception as exc:
         DriftRun.objects.filter(pk=run.pk).update(
             status="failed", error_message=str(exc)[:12000], completed_at=timezone.now()
         )
+        record_transition(
+            run, "failed", reason="Drift backend execution failed", error_type=type(exc).__name__, exc_info=True,
+        )
         raise
     if isinstance(result, dict) and result.get("dispatched"):
+        record_transition(run, "running", phase="dispatched")
         if hasattr(drift_backend(run.monitor.backend), "poll"):
             poll_drift_run_status.apply_async(args=[str(run.public_id)], countdown=5)
         return "running"
@@ -60,10 +66,13 @@ def execute_drift_run(self, run_id):
             except Exception:
                 pass
 
+        already_completed = run.status == "completed"
         run.status = "completed"
         run.completed_at = run.completed_at or timezone.now()
         run.error_message = ""
         run.save(update_fields=["status", "completed_at", "error_message", "summary", "drift_score", "has_drift"])
+        if not already_completed:
+            record_transition(run, "completed")
         if run.has_drift:
             transaction.on_commit(lambda: handle_drift_detected.delay(str(run.public_id)))
     return "completed"
@@ -111,6 +120,7 @@ def poll_drift_run_status(self, run_id):
             run.completed_at = run.completed_at or timezone.now()
             run.error_message = ""
             run.save(update_fields=["status", "completed_at", "error_message", "summary", "drift_score", "has_drift"])
+            record_transition(run, "completed")
             if run.has_drift:
                 transaction.on_commit(lambda: handle_drift_detected.delay(str(run.public_id)))
         return "completed"
@@ -125,6 +135,7 @@ def poll_drift_run_status(self, run_id):
             run.error_message = error_msg[:12000]
             run.completed_at = run.completed_at or timezone.now()
             run.save(update_fields=["status", "error_message", "completed_at"])
+            record_transition(run, "failed", reason="Drift runtime reported failure")
         return "failed"
 
     if current_status in {"not_found", "error"}:
@@ -136,6 +147,7 @@ def poll_drift_run_status(self, run_id):
             run.error_message = f"Drift container error: {result.get('error') or 'Container not found'}"
             run.completed_at = run.completed_at or timezone.now()
             run.save(update_fields=["status", "error_message", "completed_at"])
+            record_transition(run, "failed", reason="Drift runtime disappeared or errored")
         return "failed"
 
     return run.status
@@ -150,6 +162,7 @@ def handle_drift_detected(self, run_id):
     Multi-Evidence Diagnosis Engine and Retraining Decision Policy.
     """
     import logging
+
     from .models import DriftRun
 
     logger = logging.getLogger("apps.drift.tasks")

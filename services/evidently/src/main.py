@@ -3,10 +3,12 @@ import os
 import sys
 import json
 import logging
+from src.logging_utils import RuntimeLog, bind_context, configure, get_logger, log_event, reset_context, sanitize
 import mlflow
 import zipfile
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -56,8 +58,12 @@ MIN_SAMPLES = int(os.getenv("MIN_SAMPLES", "100"))
 TEMP_ROOT = Path(os.getenv("MLOPS_TEMP_DIR", tempfile.gettempdir()))
 
 
+logger = get_logger("evidently")
+runtime_log = RuntimeLog(logger)
+
+
 class RedisLogHandler(logging.Handler):
-    """Mirror Evidently stdout/stderr into the per-run Redis log stream."""
+    """Write sanitized details into the per-run Redis log stream."""
 
     def __init__(self, redis_url: str, run_id: str):
         super().__init__()
@@ -65,48 +71,32 @@ class RedisLogHandler(logging.Handler):
         self.log_key = f"drift_logs:{run_id}"
         self.redis_client.delete(self.log_key)
 
+    def write(self, message: str) -> bool:
+        try:
+            self.redis_client.rpush(self.log_key, sanitize(message))
+            self.redis_client.expire(self.log_key, 3600)
+            return True
+        except Exception:
+            return False
+
     def emit(self, record):
         try:
-            self.redis_client.rpush(self.log_key, self.format(record))
-            self.redis_client.expire(self.log_key, 3600)
+            self.write(self.format(record))
         except Exception:
-            # Logging must never stop a drift run when Redis is unavailable.
             pass
 
 
 def setup_logger(run_id: str):
-    if not run_id or not REDIS_URL:
-        return None
-
-    logger = logging.getLogger(f"drift-{run_id}")
-    logger.handlers.clear()
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(stdout_handler)
-    try:
-        redis_handler = RedisLogHandler(REDIS_URL, run_id)
-        redis_handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(redis_handler)
-    except Exception as exc:
-        logger.warning("Could not connect to Redis for drift log streaming: %s", exc)
-
-    class StreamToLogger:
-        def __init__(self, target, level):
-            self.target = target
-            self.level = level
-
-        def write(self, buffer):
-            for line in buffer.splitlines():
-                if line := line.rstrip():
-                    self.target.log(self.level, line)
-
-        def flush(self):
-            pass
-
-    sys.stdout = StreamToLogger(logger, logging.INFO)
-    sys.stderr = StreamToLogger(logger, logging.ERROR)
+    global runtime_log
+    configure("evidently")
+    writer = None
+    if run_id and REDIS_URL:
+        try:
+            writer = RedisLogHandler(REDIS_URL, run_id).write
+        except Exception as exc:
+            log_event(logger, logging.WARNING, "runtime_log_unavailable",
+                      "Could not connect to Redis for drift log streaming", reason=sanitize(str(exc)))
+    runtime_log = RuntimeLog(logger, writer=writer)
     return logger
 
 def validate_runtime_config():
@@ -132,10 +122,10 @@ def load_reference_data():
     )
 
     if REFERENCE_DATA_URL.startswith("http"):
-        print("[2/4] Downloading reference data from presigned URL...")
+        runtime_log.detail("[2/4] Downloading reference data from presigned URL...")
         response = requests.get(REFERENCE_DATA_URL)
         if response.status_code != 200:
-            raise FileNotFoundError(f"Storage returned HTTP {response.status_code}: {response.text[:150]}")
+            raise FileNotFoundError(f"Storage returned HTTP {response.status_code}")
         with open(local_filename, "wb") as f:
             f.write(response.content)
     else:
@@ -146,12 +136,12 @@ def load_reference_data():
     else:
         reference_df = pd.read_parquet(local_filename)
 
-    print(f"-> Reference data loaded: {len(reference_df)} rows")
+    runtime_log.detail(f"-> Reference data loaded: {len(reference_df)} rows")
     return reference_df
 
 # 2. Truy vấn dữ liệu Production Data
 def load_production_data():
-    print(f"[1/4] Fetching Production Logs for Model Version ID: {MODEL_VERSION_ID}")
+    runtime_log.detail(f"[1/4] Fetching Production Logs for Model Version ID: {MODEL_VERSION_ID}")
     
     # Connect to Read-Only Replica
     engine = create_engine(f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST_RO}:{DB_PORT}/{DB_NAME}")
@@ -171,7 +161,7 @@ def load_production_data():
         )
 
     if len(raw_df) < MIN_SAMPLES:
-        print(f"Skipping Drift Analysis: Not enough production samples ({len(raw_df)} < {MIN_SAMPLES})")
+        runtime_log.detail(f"Skipping Drift Analysis: Not enough production samples ({len(raw_df)} < {MIN_SAMPLES})")
         return pd.DataFrame()
 
     # Schema Drift Defense: Flatten JSONB
@@ -184,7 +174,7 @@ def load_production_data():
         if "prediction" in raw_df.columns:
             production_df["prediction"] = raw_df["prediction"].values
         del raw_df
-        print(f"-> Production data loaded and JSON normalized: {len(production_df)} rows")
+        runtime_log.detail(f"-> Production data loaded and JSON normalized: {len(production_df)} rows")
         return production_df
     return pd.DataFrame()
 
@@ -236,7 +226,7 @@ def safe_extract_zip(zip_path, destination):
 
 # 3. Trích xuất column mapping từ MLFlow
 def get_column_mapping(reference_df, production_df):
-    print(f"[3/4] Extracting Model Signature from MLflow: {MODEL_URI}")
+    runtime_log.detail(f"[3/4] Extracting Model Signature from MLflow: {MODEL_URI}")
     column_mapping = ColumnMapping()
     has_signature = False
 
@@ -244,7 +234,7 @@ def get_column_mapping(reference_df, production_df):
         try:
             resolved_uri = resolve_model_dir(MODEL_URI)
             if resolved_uri:
-                print(f"Resolved model directory: {resolved_uri}")
+                runtime_log.detail(f"Resolved model directory: {resolved_uri}")
                 model_info = mlflow.models.get_model_info(resolved_uri)
                 signature = model_info.signature
                 if signature and signature.inputs:
@@ -258,13 +248,13 @@ def get_column_mapping(reference_df, production_df):
                     column_mapping.numerical_features = num_cols
                     column_mapping.categorical_features = cat_cols
                     has_signature = True
-                    print(f"-> MLflow Signature: {len(num_cols)} numerical, {len(cat_cols)} categorical.")
+                    runtime_log.detail(f"-> MLflow Signature: {len(num_cols)} numerical, {len(cat_cols)} categorical.")
         except Exception as e:
-            print(f"MLflow signature extraction note: {e}")
+            runtime_log.event(logging.WARNING, "model_signature_unavailable", "MLflow signature extraction failed", reason=sanitize(str(e)))
 
     # Fallback: Auto-infer feature types from actual DataFrame structure
     if not has_signature:
-        print("-> Fallback: Auto-infer feature types from actual DataFrame structure...")
+        runtime_log.detail("-> Fallback: Auto-infer feature types from actual DataFrame structure...")
         ignore_cols = {
             "prediction", "target", "Target", "label", "Label", "class", "Class",
             "timestamp", "model_version_id", "project_id", "tenant_id",
@@ -274,14 +264,14 @@ def get_column_mapping(reference_df, production_df):
         cat_cols = production_df[feature_cols].select_dtypes(include=["object", "category", "bool"]).columns.tolist()
         column_mapping.numerical_features = num_cols
         column_mapping.categorical_features = cat_cols
-        print(f"Column: {len(num_cols)} numerical, {len(cat_cols)} categorical.")
+        runtime_log.detail(f"Column: {len(num_cols)} numerical, {len(cat_cols)} categorical.")
 
     if "prediction" in production_df.columns:
         if "prediction" not in reference_df.columns:
             for cand in ["target", "Target", "label", "Label", "class", "Class"]:
                 if cand in reference_df.columns:
                     reference_df["prediction"] = reference_df[cand].values
-                    print(f"Mapped column '{cand}' of Reference to 'prediction'.")
+                    runtime_log.detail(f"Mapped column '{cand}' of Reference to 'prediction'.")
                     break
         if "prediction" in reference_df.columns:
             column_mapping.prediction = "prediction"
@@ -315,7 +305,7 @@ def filter_column_mapping(column_mapping, common_cols):
 
 # 5. Phân tích Data drift & Data Quality (Evidently 0.4.15)
 def run_drift_analysis(reference_df, production_df, column_mapping):
-    print("[4/4] Running Evidently AI Data Drift & Data Quality analysis...")
+    runtime_log.detail("[4/4] Running Evidently AI Data Drift & Data Quality analysis...")
 
     ignore_cols = {
         "prediction", "target", "Target", "label", "Label", "class", "Class",
@@ -337,9 +327,9 @@ def run_drift_analysis(reference_df, production_df, column_mapping):
     extra_features = sorted(list(production_features - set(reference_df.columns)))
 
     if missing_features:
-        print(f"⚠️ [DATA QUALITY ALERT] Missing {len(missing_features)} expected features in production: {missing_features}")
+        runtime_log.event(logging.WARNING, "drift_missing_features", "Production data is missing expected features", count=len(missing_features))
     if extra_features:
-        print(f"ℹ️ [DATA QUALITY INFO] Found {len(extra_features)} extra features in production: {extra_features}")
+        runtime_log.detail(f"Production data contains {len(extra_features)} extra features")
 
     # 3. Lấy các cột chung để chạy kiểm định thống kê Evidently
     common_cols = [col for col in reference_df.columns if col in production_df.columns]
@@ -355,7 +345,7 @@ def run_drift_analysis(reference_df, production_df, column_mapping):
                 high_null_features.append({"feature": col, "null_rate": round(null_rate, 4)})
 
     if high_null_features:
-        print(f"⚠️ [DATA QUALITY WARNING] High null rate (>20%) detected: {high_null_features}")
+        runtime_log.event(logging.WARNING, "drift_high_null_features", "High null rates detected", count=len(high_null_features))
 
     ref_clean = reference_df[common_cols]
     prod_clean = production_df[common_cols]
@@ -364,7 +354,7 @@ def run_drift_analysis(reference_df, production_df, column_mapping):
     try:
         report = Report(metrics=[DataDriftPreset(drift_share=DRIFT_THRESHOLD)])
     except TypeError:
-        print("Warning: Evidently DataDriftPreset does not accept drift_share. Applying threshold in summary only.")
+        runtime_log.event(logging.WARNING, "drift_threshold_compatibility", "Evidently DataDriftPreset does not accept drift_share. Applying threshold in summary only.")
         report = Report(metrics=[DataDriftPreset()])
     report.run(reference_data=ref_clean, current_data=prod_clean, column_mapping=filtered_mapping)
 
@@ -425,22 +415,19 @@ def run_drift_analysis(reference_df, production_df, column_mapping):
     }
     summary["report_artifacts"] = save_drift_report(report, result_dict, summary)
 
-    print("=" * 60)
-    print("SUMMARY OF DATA DRIFT & DATA QUALITY RESULTS")
-    print("=" * 60)
-    print(f"Total Expected Features      : {total_expected_count}")
-    print(f"Common Features Analyzed     : {len(common_cols)}")
-    print(f"Statistical Drifted Features : {len(stat_drifted_feature_names)} -> {stat_drifted_feature_names}")
-    if missing_features:
-        print(f"⚠️ Missing Features (ALERT)  : {len(missing_features)} -> {missing_features}")
-    if extra_features:
-        print(f"ℹ️ Extra Features            : {len(extra_features)} -> {extra_features}")
-    if high_null_features:
-        print(f"⚠️ High Null Features        : {[x['feature'] for x in high_null_features]}")
-    print(f"Effective Drift Rate         : {effective_drift_share:.2%} (Threshold: {DRIFT_THRESHOLD:.2%})")
-    print(f"Dataset Drift Status         : {'DRIFT DETECTED' if dataset_drift else 'NOT DETECTED'}")
-    print(f"Data Quality Status          : {data_quality['status'].upper()}")
-    print("=" * 60)
+    runtime_log.event(
+        logging.INFO, "drift_analysis_summary",
+        (f"Data drift analysis completed: drift={dataset_drift}, "
+         f"share={effective_drift_share:.2%}, features={total_drifted_count}/{total_expected_count}, "
+         f"quality={data_quality['status']}"),
+        drift_detected=dataset_drift, drift_share=round(effective_drift_share, 4),
+        features_count=total_expected_count, count=total_drifted_count,
+        reference_samples=len(reference_df), production_samples=len(production_df),
+        status=data_quality["status"],
+        reason=(f"threshold={DRIFT_THRESHOLD}; common={len(common_cols)}; "
+                f"missing={len(missing_features)}; extra={len(extra_features)}; "
+                f"high_null={len(high_null_features)}"),
+    )
 
     return summary
 
@@ -467,7 +454,7 @@ def save_drift_report(report, result_dict, summary):
     }
 
     if not HTML_UPLOAD_URL:
-        print("Warning: Upload URLs not provided. Skipping upload.")
+        runtime_log.event(logging.WARNING, "drift_report_upload_skipped", "Upload URLs not provided. Skipping upload.")
         return artifacts
 
     uploads = [
@@ -476,14 +463,16 @@ def save_drift_report(report, result_dict, summary):
         (summary_json_path, SUMMARY_JSON_UPLOAD_URL, "application/json"),
     ]
 
+    uploaded_count = 0
     for local_path, upload_url, content_type in uploads:
         if upload_url:
             try:
                 with open(local_path, "rb") as f:
                     resp = requests.put(upload_url, data=f, headers={"Content-Type": content_type})
                     resp.raise_for_status()
+                uploaded_count += 1
             except Exception as e:
-                print(f"Failed to upload {local_path}: {e}")
+                runtime_log.event(logging.ERROR, "drift_report_upload_failed", "Failed to upload drift report", reason=sanitize(str(e)))
 
     artifacts.update({
         "s3_report_prefix": "",
@@ -492,7 +481,7 @@ def save_drift_report(report, result_dict, summary):
         "summary_json_s3_uri": SUMMARY_JSON_S3_URI,
         "html_url": HTML_PUBLIC_URL,
     })
-    print("Drift report uploaded.")
+    runtime_log.detail(f"Drift report upload attempts finished: {uploaded_count}/{len(uploads)} files uploaded.")
 
     summary_with_artifacts = {**summary, "report_artifacts": artifacts}
     with open(summary_json_path, "w", encoding="utf-8") as fp:
@@ -505,14 +494,14 @@ def save_drift_report(report, result_dict, summary):
                 resp = requests.put(SUMMARY_JSON_UPLOAD_URL, data=f, headers={"Content-Type": "application/json"})
                 resp.raise_for_status()
         except Exception as e:
-            print(f"Failed to refresh summary report: {e}")
+            runtime_log.event(logging.ERROR, "drift_summary_upload_failed", "Failed to refresh summary report", reason=sanitize(str(e)))
 
     return artifacts
 
 
 # 7. Gửi kết quả về Django Webhook
 def trigger_django_webhook(drift_summary):
-    print("Triggering Django Webhook...")
+    runtime_log.detail("Triggering Django Webhook...")
 
     session = requests.Session()
     retry_strategy = Retry(
@@ -539,35 +528,35 @@ def trigger_django_webhook(drift_summary):
     try:
         response = session.post(CONTROL_PLANE_WEBHOOK_URL, headers=headers, json=payload, timeout=15)
         if response.status_code in [200, 201, 204]:
-            print("Webhook sent successfully to Django Control Plane.")
+            runtime_log.detail("Webhook sent successfully to Django Control Plane.")
         else:
-            print(f"Webhook failed! HTTP {response.status_code}: {response.text}")
+            runtime_log.event(logging.ERROR, "drift_callback_failed", "Drift callback failed", status_code=response.status_code)
     except Exception as e:
-        print(f"Failed to send webhook: {e}")
+        runtime_log.event(logging.ERROR, "drift_callback_failed", "Failed to send drift callback", reason=sanitize(str(e)))
 
 
-def main():
-    setup_logger(DRIFT_RUN_ID)
+def _run():
     try:
         validate_runtime_config()
     except ValueError as exc:
-        print(f"CRITICAL ERROR: {exc}")
+        runtime_log.event(logging.ERROR, "drift_config_invalid", "Invalid drift runtime configuration", reason=sanitize(str(exc)))
         return 1
 
     try:
         production_df = load_production_data()
     except Exception as e:
-        print(f"Failed to load Production Data: {e}")
+        runtime_log.event(logging.ERROR, "drift_production_data_failed", "Failed to load production data", reason=sanitize(str(e)), exc_info=True)
         return 1
 
     if len(production_df) < MIN_SAMPLES:
-        print(f"Only {len(production_df)} production samples available. Skipping drift analysis.")
+        runtime_log.event(logging.INFO, "drift_analysis_skipped", "Insufficient production samples",
+                          samples=len(production_df), reason=f"minimum_samples={MIN_SAMPLES}")
         return 0
 
     try:
         reference_df = load_reference_data()
     except Exception as e:
-        print(f"Warning: Reference Data unavailable ({e}). Auto-generating reference baseline from oldest 50% of production data...")
+        runtime_log.event(logging.WARNING, "drift_reference_fallback", "Reference data unavailable. Generating baseline from oldest 50% of production data", reason=sanitize(str(e)))
         half_idx = len(production_df) // 2
         reference_df = production_df.iloc[half_idx:].copy()
         production_df = production_df.iloc[:half_idx].copy()  
@@ -577,12 +566,38 @@ def main():
     try:
         drift_summary = run_drift_analysis(reference_df, production_df, column_mapping)
     except Exception as e:
-        print(f"Drift analysis failed: {e}")
+        runtime_log.event(logging.ERROR, "drift_analysis_failed", "Drift analysis failed", reason=sanitize(str(e)), exc_info=True)
         return 1
 
     trigger_django_webhook(drift_summary)
     return 0
 
 
+def main():
+    started = time.monotonic()
+    setup_logger(DRIFT_RUN_ID)
+    tokens = bind_context(drift_run_id=DRIFT_RUN_ID, project_id=PROJECT_ID,
+                          model_version_id=MODEL_VERSION_ID, tenant_id=TENANT_ID)
+    try:
+        runtime_log.event(logging.INFO, "drift_execution_started", "Drift runner execution started", duration_ms=0)
+        result = _run()
+        runtime_log.event(
+            logging.INFO, "drift.execution.exited", "Drift runner exited", exit_code=result,
+            duration_ms=round((time.monotonic() - started) * 1000, 3),
+        )
+        return result
+    except Exception as exc:
+        runtime_log.event(logging.ERROR, "drift_execution_failed", "Drift runner execution failed",
+                          reason=sanitize(str(exc)), exc_info=True,
+                          duration_ms=round((time.monotonic() - started) * 1000, 3))
+        raise
+    finally:
+        reset_context(tokens)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception:
+        # main already emitted a sanitized error; avoid a raw exception dump.
+        sys.exit(1)

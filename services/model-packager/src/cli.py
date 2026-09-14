@@ -7,15 +7,20 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import traceback
+import time
 import zipfile
 import docker
 import redis
 import requests
 import mlflow.pyfunc
 
+from src.logging_utils import RuntimeLog, bind_context, configure, get_logger, log_event, reset_context, sanitize
+
 from pathlib import Path
 from src.core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
+
+logger = get_logger("model-packager")
+runtime_log = RuntimeLog(logger)
 
 SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
 PREFERRED_MODEL_FILENAMES = ("model.pkl", "model.joblib", "model.xgb")
@@ -27,19 +32,27 @@ class RedisLogHandler(logging.Handler):
         self.log_key = f"build_logs:{build_id}"
         self.redis_client.delete(self.log_key)
 
+    def write(self, message: str) -> bool:
+        try:
+            self.redis_client.rpush(self.log_key, sanitize(message))
+            self.redis_client.expire(self.log_key, 3600)
+            return True
+        except Exception:
+            # RuntimeLog emits a sanitized container fallback on delivery failure.
+            return False
+
     def emit(self, record):
         try:
-            msg = self.format(record)
-            self.redis_client.rpush(self.log_key, msg)
-            self.redis_client.expire(self.log_key, 3600)
+            self.write(self.format(record))
         except Exception:
-            self.handleError(record)
+            # Never use handleError: it dumps the unsanitized record to stderr.
+            pass
 
 def download_presigned_file(download_url: str, destination: Path) -> None:
     if not download_url:
         raise ValueError("Missing presigned download URL.")
 
-    print(f"Downloading artifact to {destination.name}...")
+    runtime_log.detail(f"Downloading artifact to {destination.name}...")
     destination.parent.mkdir(parents=True, exist_ok=True)
     with requests.get(download_url, stream=True, timeout=(10, 600)) as response:
         response.raise_for_status()
@@ -47,18 +60,18 @@ def download_presigned_file(download_url: str, destination: Path) -> None:
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 if chunk:
                     destination_file.write(chunk)
-    print("Download completed.")
+    runtime_log.detail("Download completed.")
 
 
 def upload_presigned_file(upload_url: str, source: Path) -> None:
     if not upload_url:
         raise ValueError("Missing presigned upload URL.")
 
-    print(f"Uploading {source.name}...")
+    runtime_log.detail(f"Uploading {source.name}...")
     with source.open("rb") as source_file:
         response = requests.put(upload_url, data=source_file, timeout=(10, 600))
     response.raise_for_status()
-    print("Upload completed.")
+    runtime_log.detail("Upload completed.")
 
 def safe_extract_tar(archive_path: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
@@ -91,12 +104,12 @@ def find_supported_model_file(root: Path) -> Path:
     for preferred in PREFERRED_MODEL_FILENAMES:
         if preferred in by_name:
             if len(files) > 1:
-                print(f"Warning: multiple model files found; using {preferred}.")
+                runtime_log.event(logging.WARNING, "multiple_model_files", f"Warning: multiple model files found; using {preferred}.")
             return by_name[preferred]
 
     selected = sorted(files, key=lambda item: item.as_posix())[0]
     if len(files) > 1:
-        print(f"Warning: multiple model files found; using {selected.relative_to(root).as_posix()}.")
+        runtime_log.event(logging.WARNING, "multiple_model_files", f"Warning: multiple model files found; using {selected.relative_to(root).as_posix()}.")
     return selected
 
 def find_label_mapping_file(root: Path) -> Path | None:
@@ -118,7 +131,7 @@ def post_webhook(webhook_url: str, payload: dict) -> None:
         return
     response = requests.post(webhook_url, json=payload, headers=webhook_headers(), timeout=10)
     if response.status_code >= 400:
-        raise RuntimeError(f"Build webhook failed with HTTP {response.status_code}: {response.text[:500]}")
+        raise RuntimeError(f"Build webhook failed with HTTP {response.status_code}")
 
 
 def configured_image_reference(build_id: str = "") -> str:
@@ -153,7 +166,7 @@ def build_custom_image(workspace: Path, build_id: str, tenant_id: str, requireme
 
     # Login to Harbor first so the FROM base image can be pulled
     if harbor_url and harbor_user and harbor_pass:
-        print(f"Logging into Harbor registry at {harbor_url}...")
+        runtime_log.detail(f"Logging into Harbor registry at {harbor_url}...")
         docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
 
     # Use fully-qualified base image so Docker can pull it from Harbor
@@ -170,22 +183,22 @@ COPY model /app/model_artifact
 
     image_tag = configured_image_reference(build_id)
 
-    print(f"Building Docker image {image_tag} from workspace {workspace}...")
+    runtime_log.detail(f"Building Docker image {image_tag} from workspace {workspace}...")
     for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
         if "stream" in line:
-            print(line["stream"].strip())
+            runtime_log.detail(line["stream"].strip())
         elif "errorDetail" in line:
             raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
-    print(f"Docker image {image_tag} built successfully!")
+    runtime_log.detail(f"Docker image {image_tag} built successfully!")
 
     if harbor_url and harbor_user and harbor_pass and image_tag.startswith(f"{harbor_url}/"):
-        print(f"Pushing image {image_tag} to Harbor...")
+        runtime_log.detail(f"Pushing image {image_tag} to Harbor...")
         for line in docker_client.images.push(image_tag, stream=True, decode=True):
             if "status" in line:
-                print(line.get("status", ""))
+                runtime_log.detail(line.get("status", ""))
             elif "errorDetail" in line:
                 raise RuntimeError(line["errorDetail"].get("message", "Failed to push image to Harbor"))
-        print("Image successfully pushed to Harbor!")
+        runtime_log.detail("Image successfully pushed to Harbor!")
 
 def build_bento_image(workspace: Path, build_id: str, tenant_id: str, requirements_text: str) -> None:
     docker_client = docker.from_env()
@@ -194,7 +207,7 @@ def build_bento_image(workspace: Path, build_id: str, tenant_id: str, requiremen
     harbor_pass = os.environ.get("HARBOR_PASSWORD", "").strip()
 
     if harbor_url and harbor_user and harbor_pass:
-        print(f"Logging into Harbor registry at {harbor_url}...")
+        runtime_log.detail(f"Logging into Harbor registry at {harbor_url}...")
         docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
 
     base_image = f"{harbor_url}/mlops-paas/deep-learning-serving:latest" if harbor_url else "mlops-paas-deep-learning-serving:latest"
@@ -210,22 +223,22 @@ COPY model /app/model_artifact
 
     image_tag = configured_image_reference(build_id)
 
-    print(f"Building BentoML Docker image {image_tag} from workspace {workspace}...")
+    runtime_log.detail(f"Building BentoML Docker image {image_tag} from workspace {workspace}...")
     for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
         if "stream" in line:
-            print(line["stream"].strip())
+            runtime_log.detail(line["stream"].strip())
         elif "errorDetail" in line:
             raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
-    print(f"BentoML Docker image {image_tag} built successfully!")
+    runtime_log.detail(f"BentoML Docker image {image_tag} built successfully!")
 
     if harbor_url and harbor_user and harbor_pass and image_tag.startswith(f"{harbor_url}/"):
-        print(f"Pushing BentoML image {image_tag} to Harbor...")
+        runtime_log.detail(f"Pushing BentoML image {image_tag} to Harbor...")
         for line in docker_client.images.push(image_tag, stream=True, decode=True):
             if "status" in line:
-                print(line.get("status", ""))
+                runtime_log.detail(line.get("status", ""))
             elif "errorDetail" in line:
                 raise RuntimeError(line["errorDetail"].get("message", "Failed to push image to Harbor"))
-        print("BentoML image successfully pushed to Harbor!")
+        runtime_log.detail("BentoML image successfully pushed to Harbor!")
 
 
 def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
@@ -255,7 +268,7 @@ def read_training_summaries(extracted_dir: Path) -> tuple[dict[str, dict], Path 
         try:
             value = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            print(f"Ignoring invalid training metadata file: {filename}")
+            runtime_log.event(logging.WARNING, "training_metadata_invalid", f"Ignoring invalid training metadata file: {filename}")
             continue
         if isinstance(value, dict):
             summaries[key] = value
@@ -282,7 +295,7 @@ def run_build_task(build_id: str, webhook_url: str) -> None:
     if workspace_dir:
         workspace = Path(workspace_dir)
         workspace.mkdir(parents=True, exist_ok=True)
-        print(f"Using shared workspace directory: {workspace}")
+        runtime_log.detail(f"Using shared workspace directory: {workspace}")
     else:
         workspace = Path(tempfile.mkdtemp(prefix=f"build-{build_id}-"))
     try:
@@ -295,7 +308,7 @@ def run_build_task(build_id: str, webhook_url: str) -> None:
             training_archive_path = workspace / "training-model.tar.gz"
             extracted_dir = workspace / "training-artifact"
             download_presigned_file(source_download_url, training_archive_path)
-            print("Extracting training artifact safely...")
+            runtime_log.detail("Extracting training artifact safely...")
             safe_extract_tar(training_archive_path, extracted_dir)
             artifact_path = find_supported_model_file(extracted_dir)
             artifact_name = artifact_path.name
@@ -305,23 +318,23 @@ def run_build_task(build_id: str, webhook_url: str) -> None:
                 requirements_file = next(iter(sorted(extracted_dir.rglob("requirements.txt"))), None)
                 if requirements_file:
                     requirements_text = requirements_file.read_text(encoding="utf-8").strip()
-                    print("Using requirements.txt from training artifact.")
+                    runtime_log.detail("Using requirements.txt from training artifact.")
 
             extracted_label_mapping_path = find_label_mapping_file(extracted_dir)
             if extracted_label_mapping_path:
-                print(f"Using label mapping from training artifact: {extracted_label_mapping_path.name}")
+                runtime_log.detail(f"Using label mapping from training artifact: {extracted_label_mapping_path.name}")
         else:
             artifact_name = Path(source_artifact_name).name
             artifact_path = workspace / artifact_name
             download_presigned_file(source_download_url, artifact_path)
 
-        print(f"Loading {flavor} model...")
+        runtime_log.detail(f"Loading {flavor} model...")
         model = load_model(artifact_path, flavor)
         package_name = "model"
         package_dir = workspace / package_name
         requirements = parse_requirements(requirements_text)
 
-        print("Saving MLflow model format...")
+        runtime_log.detail("Saving MLflow model format...")
         save_mlflow_model(model, flavor, package_dir, requirements)
 
         if requirements_text.strip():
@@ -345,16 +358,16 @@ def run_build_task(build_id: str, webhook_url: str) -> None:
         }
 
         zip_path = workspace / "model-package.zip"
-        print("Compressing package to zip...")
+        runtime_log.detail("Compressing package to zip...")
         make_zip(package_dir, zip_path)
 
         upload_presigned_file(output_upload_url, zip_path)
 
         if os.environ.get("BUILD_ENGINE", "").lower() == "kaniko":
-            print("Kaniko build engine detected. Preparing build context without Docker daemon...")
+            runtime_log.detail("Kaniko build engine detected. Preparing build context without Docker daemon...")
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
             if flavor in ["pytorch", "tensorflow", "keras"]:
-                print("Detected Deep Learning flavor. Generating BentoML Dockerfile...")
+                runtime_log.detail("Detected Deep Learning flavor. Generating BentoML Dockerfile...")
                 base_image = f"{harbor_url}/mlops-paas/deep-learning-serving:latest" if harbor_url else "mlops-paas-deep-learning-serving:latest"
                 dockerfile_content = f"""FROM {base_image}
 USER root
@@ -364,7 +377,7 @@ RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requi
 COPY model /app/model_artifact
 """
             else:
-                print("Generating custom lightweight Dockerfile...")
+                runtime_log.detail("Generating custom lightweight Dockerfile...")
                 base_image = f"{harbor_url}/mlops-paas/machine-learning-serving:latest" if harbor_url else "mlops-paas-machine-learning-serving:latest"
                 dockerfile_content = f"""FROM {base_image}
 USER root
@@ -385,15 +398,15 @@ COPY model /app/model_artifact
                 **training_summaries,
             }
             (workspace / "webhook_payload.json").write_text(json.dumps(payload), encoding="utf-8")
-            print("Build context prepared successfully for Kaniko! BUILD_PREPARE_SUCCESS")
+            runtime_log.protocol("Build context prepared successfully for Kaniko! BUILD_PREPARE_SUCCESS")
             return
         elif flavor in ["pytorch", "tensorflow", "keras"]:
-            print("Detected Deep Learning flavor. Building BentoML container image...")
+            runtime_log.detail("Detected Deep Learning flavor. Building BentoML container image...")
             build_bento_image(workspace, build_id, tenant_id, requirements_text)
         else:
-            print("Building custom lightweight Docker image...")
+            runtime_log.detail("Building custom lightweight Docker image...")
             build_custom_image(workspace, build_id, tenant_id, requirements_text)
-        print("Build completed successfully!")
+        runtime_log.detail("Build completed successfully!")
 
         post_webhook(
             webhook_url,
@@ -407,7 +420,7 @@ COPY model /app/model_artifact
                 **built_image_metadata(),
             },
         )
-        print("BUILD_EOF_SUCCESS")
+        runtime_log.protocol("BUILD_EOF_SUCCESS")
     finally:
         if not os.environ.get("BUILD_WORKSPACE_DIR"):
             shutil.rmtree(workspace, ignore_errors=True)
@@ -424,7 +437,7 @@ def run_test_zip_task(build_id: str, webhook_url: str) -> None:
     if workspace_dir:
         workspace = Path(workspace_dir)
         workspace.mkdir(parents=True, exist_ok=True)
-        print(f"Using shared workspace directory: {workspace}")
+        runtime_log.detail(f"Using shared workspace directory: {workspace}")
     else:
         workspace = Path(tempfile.mkdtemp(prefix=f"test-{build_id}-"))
     try:
@@ -434,7 +447,7 @@ def run_test_zip_task(build_id: str, webhook_url: str) -> None:
         download_presigned_file(source_download_url, zip_path)
 
         extract_dir = workspace / "extracted"
-        print("Extracting ZIP archive safely...")
+        runtime_log.detail("Extracting ZIP archive safely...")
         safe_extract_zip(zip_path, extract_dir)
 
         mlmodel_paths = list(extract_dir.rglob("MLmodel"))
@@ -442,7 +455,7 @@ def run_test_zip_task(build_id: str, webhook_url: str) -> None:
             raise ValueError("No MLmodel file found in the ZIP archive.")
 
         package_dir = mlmodel_paths[0].parent
-        print(f"Found MLmodel at {package_dir.relative_to(extract_dir)}")
+        runtime_log.detail(f"Found MLmodel at {package_dir.relative_to(extract_dir)}")
         shutil.copytree(package_dir, workspace / "model", dirs_exist_ok=True)
 
         requirements_text = ""
@@ -450,25 +463,37 @@ def run_test_zip_task(build_id: str, webhook_url: str) -> None:
         conda_file = package_dir / "conda.yaml"
         if req_file.exists():
             requirements_text = req_file.read_text(encoding="utf-8").strip()
-            print("Found requirements.txt.")
+            runtime_log.detail("Found requirements.txt.")
         elif conda_file.exists():
             pip_requirements = parse_conda_pip_requirements(conda_file)
             if pip_requirements:
                 requirements_text = "\n".join(pip_requirements)
-                print("Extracted pip requirements from conda.yaml.")
+                runtime_log.detail("Extracted pip requirements from conda.yaml.")
         else:
-            print("No requirements.txt or conda.yaml found. Proceeding with default environment.")
+            runtime_log.detail("No requirements.txt or conda.yaml found. Proceeding with default environment.")
 
         if requirements_text.strip():
-            print("Installing package requirements for validation...")
+            runtime_log.detail("Installing package requirements for validation...")
             temp_req = workspace / "validation-requirements.txt"
             temp_req.write_text(requirements_text + "\n", encoding="utf-8")
-            subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(temp_req)], check=True)
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-r", str(temp_req)],
+                    check=True, capture_output=True, text=True,
+                )
+            except subprocess.CalledProcessError as exc:
+                for output in (exc.stdout, exc.stderr):
+                    for line in (output or "").splitlines():
+                        runtime_log.detail(line)
+                raise
+            for output in (result.stdout, result.stderr):
+                for line in (output or "").splitlines():
+                    runtime_log.detail(line)
 
-        print("Validating model load via mlflow.pyfunc...")
+        runtime_log.detail("Validating model load via mlflow.pyfunc...")
 
         mlflow.pyfunc.load_model(str(package_dir))
-        print("Model loaded successfully!")
+        runtime_log.detail("Model loaded successfully!")
 
         preview_tree = build_preview_tree(extract_dir)
         manifest = {
@@ -478,9 +503,9 @@ def run_test_zip_task(build_id: str, webhook_url: str) -> None:
             "package_root": package_dir.name,
         }
 
-        print("Building custom Docker image...")
+        runtime_log.detail("Building custom Docker image...")
         if os.environ.get("BUILD_ENGINE", "").lower() == "kaniko":
-            print("Kaniko build engine detected. Preparing build context for TEST_ZIP...")
+            runtime_log.detail("Kaniko build engine detected. Preparing build context for TEST_ZIP...")
             harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
             is_deep_learning = flavor in ["pytorch", "tensorflow", "keras"]
             base_image = (
@@ -509,14 +534,14 @@ COPY model /app/model_artifact
                 "task_type": "TEST_ZIP",
             }
             (workspace / "webhook_payload.json").write_text(json.dumps(payload), encoding="utf-8")
-            print("TEST_ZIP context prepared successfully for Kaniko! BUILD_PREPARE_SUCCESS")
+            runtime_log.protocol("TEST_ZIP context prepared successfully for Kaniko! BUILD_PREPARE_SUCCESS")
             return
         else:
             if flavor in ["pytorch", "tensorflow", "keras"]:
                 build_bento_image(workspace, build_id, tenant_id, requirements_text)
             else:
                 build_custom_image(workspace, build_id, tenant_id, requirements_text)
-        print("Test and build completed successfully!")
+        runtime_log.detail("Test and build completed successfully!")
 
         post_webhook(
             webhook_url,
@@ -529,7 +554,7 @@ COPY model /app/model_artifact
                 **built_image_metadata(),
             },
         )
-        print("BUILD_EOF_SUCCESS")
+        runtime_log.protocol("BUILD_EOF_SUCCESS")
     finally:
         if not os.environ.get("BUILD_WORKSPACE_DIR"):
             shutil.rmtree(workspace, ignore_errors=True)
@@ -546,57 +571,40 @@ def run_notify_task(workspace_dir: str, webhook_url: str) -> None:
         payload["image_uri"] = image_uri
     if digest_file.exists():
         payload["image_digest"] = digest_file.read_text(encoding="utf-8").strip()
-    print(f"Sending post-build notification for build {payload.get('build_id')}...")
+    runtime_log.detail(f"Sending post-build notification for build {payload.get('build_id')}...")
     post_webhook(webhook_url, payload)
-    print("NOTIFY_EOF_SUCCESS")
+    runtime_log.protocol("NOTIFY_EOF_SUCCESS")
 
 def setup_logger(build_id: str):
+    global runtime_log
+    configure("model-packager")
+    writer = None
     redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/1")
-    logger = logging.getLogger(f"build-{build_id}")
-    logger.setLevel(logging.INFO)
-
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(stdout_handler)
-
-    class StreamToLogger:
-        def __init__(self, log, level):
-            self.logger = log
-            self.level = level
-
-        def write(self, buf):
-            for line in buf.splitlines():
-                line = line.rstrip()
-                if line:
-                    self.logger.log(self.level, line)
-
-        def flush(self):
-            pass
-
-    sys.stdout = StreamToLogger(logger, logging.INFO)
-    sys.stderr = StreamToLogger(logger, logging.ERROR)
-
-    try:
-        redis_handler = RedisLogHandler(redis_url, build_id)
-        redis_handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(redis_handler)
-    except Exception as exc:
-        logger.warning("Could not connect to Redis for log streaming: %s", exc)
-
+    if redis_url and build_id:
+        try:
+            writer = RedisLogHandler(redis_url, build_id).write
+        except Exception as exc:
+            log_event(logger, logging.WARNING, "runtime_log_unavailable",
+                      "Could not connect to Redis for build log streaming", reason=sanitize(str(exc)))
+    runtime_log = RuntimeLog(logger, writer=writer)
     return logger
 
 def main():
+    started = time.monotonic()
     build_id = os.environ.get("BUILD_ID")
+    setup_logger(build_id or "")
     if not build_id:
-        print("Missing BUILD_ID")
+        runtime_log.event(logging.ERROR, "build_execution_failed", "Missing BUILD_ID",
+                          duration_ms=round((time.monotonic() - started) * 1000, 3))
         sys.exit(1)
 
-    logger = setup_logger(build_id)
     webhook_url = os.environ.get("CONTROL_PLANE_WEBHOOK_URL")
 
+    task_type = os.environ.get("TASK_TYPE", "BUILD")
+    tokens = bind_context(build_id=build_id, project_id=os.environ.get("PROJECT_ID"),
+                          tenant_id=os.environ.get("TENANT_ID"), operation=task_type)
     try:
-        task_type = os.environ.get("TASK_TYPE", "BUILD")
-        print(f"Starting {task_type} process for build {build_id}...")
+        runtime_log.event(logging.INFO, "build_execution_started", f"Starting {task_type} process", duration_ms=0)
 
         if task_type == "NOTIFY_BUILD":
             workspace_dir = os.environ.get("BUILD_WORKSPACE_DIR", "/workspace")
@@ -605,23 +613,36 @@ def main():
             run_test_zip_task(build_id, webhook_url)
         else:
             run_build_task(build_id, webhook_url)
+        if task_type == "NOTIFY_BUILD":
+            runtime_log.event(logging.INFO, "build.notification.completed", "Build notification execution completed",
+                              duration_ms=round((time.monotonic() - started) * 1000, 3))
+        elif os.environ.get("BUILD_ENGINE", "").lower() == "kaniko":
+            runtime_log.event(logging.INFO, "build.preparation.completed", "Build context preparation completed",
+                              duration_ms=round((time.monotonic() - started) * 1000, 3))
+        else:
+            runtime_log.event(logging.INFO, "build_execution_succeeded", "Build runner execution completed",
+                              duration_ms=round((time.monotonic() - started) * 1000, 3))
     except Exception as exc:
-        logger.error("Build failed with error: %s", exc)
-        logger.error(traceback.format_exc())
+        runtime_log.event(logging.ERROR, "build_execution_failed", "Build runner execution failed",
+                          reason=sanitize(str(exc)), exc_info=True,
+                          duration_ms=round((time.monotonic() - started) * 1000, 3))
         try:
             post_webhook(
                 webhook_url,
                 {
                     "build_id": build_id,
                     "status": "error",
-                    "error_message": str(exc),
+                    "error_message": sanitize(str(exc)),
                 },
             )
         except Exception as webhook_exc:
-            logger.error("Failed to notify Control Plane failure webhook: %s", webhook_exc)
+            runtime_log.event(logging.ERROR, "build_failure_callback_failed",
+                              "Failed to notify Control Plane failure webhook", reason=sanitize(str(webhook_exc)))
 
-        logger.info("BUILD_EOF_ERROR")
+        runtime_log.protocol("BUILD_EOF_ERROR")
         sys.exit(1)
+    finally:
+        reset_context(tokens)
 
 if __name__ == "__main__":
     main()

@@ -37,6 +37,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "common.middleware.RequestContextMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -44,7 +45,6 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "common.middleware.RequestContextMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -211,10 +211,6 @@ GITHUB_OAUTH2_CLIENT_ID = env("GITHUB_OAUTH2_CLIENT_ID", "")
 GITHUB_OAUTH2_CLIENT_SECRET = env("GITHUB_OAUTH2_CLIENT_SECRET", "")
 GITHUB_OAUTH_REDIRECT_URI = env("GITHUB_OAUTH_REDIRECT_URI", "http://localhost:5173/oauth/github/callback")
 
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {"json": {"()": "common.logging.JsonFormatter"}},
-    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "json"}},
-    "root": {"handlers": ["console"], "level": env("LOG_LEVEL", "INFO")},
-}
+LOGGING_CONFIG = "common.logging.configure_logging"
+LOGGING = {"version": 1}
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False

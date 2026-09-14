@@ -1,3 +1,4 @@
+from common.logging import record_transition
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -85,6 +86,10 @@ class TrainingJobWebhookEndpoint(APIView):
                 metadata={"workflow_status": str(request.data.get("workflow_status", ""))},
                 idempotency_key=key,
             )
+            record_transition(
+                job, job.status, source="webhook",
+                reason="Training reporter confirmed failure" if job.status == "failed" else None,
+            )
         append_training_log(job.public_id, f"[SYSTEM] Training reached terminal status: {job.status}.")
         return Response({"status": job.status})
 
@@ -148,6 +153,11 @@ class TrainingCancellationWebhookEndpoint(APIView):
             )
         if succeeded:
             confirm_training_cancellation(str(job.public_id))
+        else:
+            record_transition(
+                job, job.status, phase="cancellation_failed", source="webhook",
+                reason="Cancellation reporter confirmed failure",
+            )
         return Response(
             {
                 "status": "cancelled" if succeeded else "cancelling",

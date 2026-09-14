@@ -1,3 +1,4 @@
+from common.logging import record_transition
 from django.db import transaction
 from django.utils import timezone
 from infrastructure.execution.cleanup_backends import project_cleanup_backend
@@ -101,6 +102,7 @@ def finalize_project_deletion(project, *, storage=None):
                 "updated_at",
             ]
         )
+        record_transition(project, "deleted")
     return project
 
 
@@ -108,4 +110,9 @@ def mark_project_deletion_failed(project, error):
     project.deletion_state = "delete_failed"
     project.deletion_error = str(error)[:12000]
     project.save(update_fields=["deletion_state", "deletion_error", "updated_at"])
+    record_transition(
+        project, "delete_failed", reason="Project cleanup failed",
+        error_type=type(error).__name__ if isinstance(error, Exception) else None,
+        exc_info=(type(error), error, error.__traceback__) if isinstance(error, Exception) else None,
+    )
     return project

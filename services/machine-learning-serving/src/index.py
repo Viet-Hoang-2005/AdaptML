@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 import numpy as np
 import pandas as pd
 from typing import Any, Dict
@@ -6,12 +7,25 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from src.loading import load_model_from_uri, MODEL_CACHE
+from src.logging_utils import configure
+from src.logging_utils import RequestLoggingMiddleware
+
+from src.loading import load_model_from_uri, MODEL_CACHE, load_summary
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    configure("machine-learning-serving")
+    try:
+        yield
+    finally:
+        load_summary.close()
 
 app = FastAPI(
     title="AI PaaS Machine Learning Serving Engine",
     description="Dedicated stateless worker engine for Sklearn/XGBoost models.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -21,6 +35,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestLoggingMiddleware)
 
 class InferenceRequest(BaseModel):
     features: Dict[str, Any]

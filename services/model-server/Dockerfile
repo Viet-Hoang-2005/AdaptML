@@ -18,6 +18,9 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+ENV LOG_LEVEL=INFO \
+    LOG_SUMMARY_INTERVAL_SECONDS=60
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
@@ -30,4 +33,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["uvicorn", "src.index:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "2"]
+CMD ["python", "-m", "src.uvicorn_entrypoint", "src.index:app", "--service", "model-server", "--port", "5000", "--workers", "2"]

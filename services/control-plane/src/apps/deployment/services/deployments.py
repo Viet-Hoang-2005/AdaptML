@@ -1,3 +1,4 @@
+from common.logging import runtime_line
 from django.db import transaction
 from infrastructure.execution import deployment_backend
 from rest_framework.exceptions import ValidationError
@@ -29,4 +30,5 @@ def request_stop(deployment):
 
 
 def endpoint_logs(endpoint):
-    return deployment_backend(endpoint.deployment.backend).logs(endpoint.deployment)
+    output = deployment_backend(endpoint.deployment.backend).logs(endpoint.deployment)
+    return "\n".join(runtime_line(line) for line in output.splitlines())

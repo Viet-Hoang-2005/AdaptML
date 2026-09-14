@@ -18,8 +18,19 @@ from jwt.algorithms import RSAAlgorithm
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
+from src.logging_utils import (
+    Summary, bind_context, configure, current_context, get_logger, log_event,
+    request_id as validated_request_id, reset_context,
+)
+from src.logging_utils import RequestLoggingMiddleware
+
+logger = get_logger(__name__)
+publication_summary = Summary(logger, "inference_enqueue_summary")
+jwks_summary = Summary(logger, "jwks_fetch_summary")
+
 from src.database import (
     _fetch_model_version_from_db,
+    cache_summary,
     get_model_version_record,
     invalidate_model_version_cache,
     model_registry_engine,
@@ -37,10 +48,10 @@ def create_redis_client():
     try:
         client = redis.from_url(REDIS_URL)
         client.ping()
-        print(f"Redis Connected: {REDIS_URL}")
+        log_event(logger, "INFO", "redis_connected", "Redis connection established")
         return client
     except Exception as exc:
-        print(f"Failed to connect to Redis: {exc}")
+        log_event(logger, "ERROR", "redis_connection_failed", "Redis connection failed", error_type=type(exc).__name__)
         return None
 
 
@@ -51,10 +62,10 @@ def create_kafka_producer():
             "client.id": "central-model-server",
             "linger.ms": 5,
         })
-        print(f"Redpanda Connected: {REDPANDA_BROKERS} - Topic: {KAFKA_TOPIC}")
+        log_event(logger, "INFO", "producer_initialized", "Inference event producer initialized")
         return producer
     except Exception as exc:
-        print(f"Failed to setup Redpanda producer: {exc}")
+        log_event(logger, "ERROR", "producer_initialization_failed", "Inference event producer initialization failed", error_type=type(exc).__name__)
         return None
 
 
@@ -65,11 +76,19 @@ kafka_producer = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global redis_client, kafka_producer
+    configure("model-server")
     redis_client = create_redis_client()
     kafka_producer = create_kafka_producer()
-    yield
-    if kafka_producer:
-        kafka_producer.flush(timeout=5.0)
+    try:
+        yield
+    finally:
+        try:
+            if kafka_producer:
+                kafka_producer.flush(timeout=5.0)
+        finally:
+            publication_summary.close()
+            jwks_summary.close()
+            cache_summary.close()
 
 app = FastAPI(
     title="AI PaaS Model Server Gateway",
@@ -85,6 +104,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestLoggingMiddleware)
 
 paas_predictions_counter = Counter(
     "paas_predictions_total",
@@ -117,9 +137,11 @@ async def get_public_key(kid: str):
                     if key_data.get("kid") == kid:
                         public_key = RSAAlgorithm.from_jwk(json.dumps(key_data))
                         JWKS_CACHE[kid] = public_key
+                        jwks_summary.recovery("fetch")
                         return public_key
+                jwks_summary.recovery("fetch")
         except Exception as exc:
-            print(f"Failed to fetch or parse JWKS: {exc}")
+            jwks_summary.failure("fetch", "JWKS fetch or parse failed", error_type=type(exc).__name__)
             return None
     return JWKS_CACHE.get(kid)
 
@@ -193,8 +215,11 @@ def send_to_redpanda(
     request_id: str | None = None,
 ):
     if kafka_producer is None:
+        publication_summary.record(success=False)
+        publication_summary.failure("publish", "Inference event producer unavailable")
         return
 
+    started = time.perf_counter()
     try:
         record_id = prediction_id or str(uuid.uuid4())
         payload = {
@@ -218,8 +243,12 @@ def send_to_redpanda(
             value=json.dumps(payload).encode("utf-8"),
         )
         kafka_producer.poll(0)
+        # Enqueued locally; this does not claim broker acknowledgement.
+        publication_summary.record(duration_ms=(time.perf_counter() - started) * 1000, records=1)
+        publication_summary.recovery("publish")
     except Exception as exc:
-        print(f"Error sending log to Redpanda: {exc}")
+        publication_summary.record(success=False, duration_ms=(time.perf_counter() - started) * 1000)
+        publication_summary.failure("publish", "Inference event enqueue failed", error_type=type(exc).__name__)
 
 def serving_engine_for_flavor(flavor: Any) -> str:
     normalized_flavor = str(flavor or "").strip().lower()
@@ -301,13 +330,39 @@ async def predict(
     token_payload: dict = Depends(verify_model_access),
 ):
     model_record = token_payload["model_record"]
+    raw_request_id = request.headers.get("x-request-id") if hasattr(request, "headers") else None
+    context = {
+        "request_id": validated_request_id(current_context().get("request_id") or raw_request_id),
+        "tenant_id": str(model_record["tenant_id"]),
+        "project_id": str(model_record["project_id"]),
+        "model_version_id": str(model_record["id"]),
+    }
+    # Only IDs from the authorized registry record enter resource log context.
+    # State survives this handler's reset for the outer request middleware.
+    if isinstance(getattr(request, "scope", None), dict):
+        request.scope.setdefault("state", {})["mlops_log_context"] = context
+    token = bind_context(**context)
+    try:
+        return await _predict(version_id, request, payload, background_tasks, token_payload)
+    finally:
+        reset_context(token)
+
+
+async def _predict(
+    version_id: str,
+    request: Request,
+    payload: InferenceRequest,
+    background_tasks: BackgroundTasks,
+    token_payload: dict,
+):
+    model_record = token_payload["model_record"]
     worker_url = resolve_worker_url(model_record, "/predict")
     features_dict = payload.features
     tenant_id = model_record["tenant_id"]
     project_id = str(model_record["project_id"])
     resolved_model_version_id = str(model_record["id"])
     prediction_id = str(uuid.uuid4())
-    request_id = request.headers.get("x-request-id") if hasattr(request, "headers") else None
+    request_id = current_context()["request_id"]
     start_time = time.perf_counter()
 
     try:
@@ -316,7 +371,7 @@ async def predict(
                 "features": features_dict,
                 "model_version_id": resolved_model_version_id,
             }
-            response = await client.post(worker_url, json=worker_payload)
+            response = await client.post(worker_url, json=worker_payload, headers={"X-Request-ID": request_id})
             latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
             
             if response.status_code != 200:
