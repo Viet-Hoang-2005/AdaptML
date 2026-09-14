@@ -1,5 +1,3 @@
-"""Control Plane boundaries; formatting and redaction live in common.logging_utils."""
-
 import contextvars
 import logging
 import sys
@@ -30,8 +28,33 @@ def configure_logging(_config=None):
         handler.addFilter(FrameworkLogFilter())
 
 
+def _lifecycle_message(event):
+    resource, _, transition = event.partition(".")
+    resource_name = resource.replace("_", " ").capitalize()
+    phrases = {
+        "building": "started",
+        "deploying": "started",
+        "running": "started",
+        "ready": "completed successfully",
+        "completed": "completed successfully",
+        "healthy": "is healthy",
+        "unhealthy": "is unhealthy",
+        "failed": "failed",
+        "cancelled": "was cancelled",
+        "cancelling": "cancellation started",
+        "dispatched": "dispatched; waiting for completion",
+        "cancellation_dispatched": "cancellation dispatched",
+        "deletion_dispatched": "deletion dispatched",
+        "completion_enqueued": "completion queued",
+        "deleted": "was deleted",
+        "outputs_purged": "outputs were purged",
+    }
+    fallback = f"changed to {transition or 'a new state'}"
+    return f"{resource_name} {phrases.get(transition, fallback)}"
+
+
 def _emit_lifecycle(level, event, payload):
-    log_event(get_logger("control_plane.lifecycle"), level, event, "Lifecycle transition committed", **payload)
+    log_event(get_logger("control_plane.lifecycle"), level, event, _lifecycle_message(event), **payload)
     if level == "ERROR":
         failure_reported.set(True)
 

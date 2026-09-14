@@ -25,7 +25,8 @@ Redis log streams are keyed by resource type and UUID and support cursor polling
 
 Application-owned container logs use service-owned `src/logging_utils.py`
 (`src/common/logging_utils.py` in Control Plane), using only the standard library
-and single-line logfmt (`key=value`). No cross-service imports or shared logging
+and either a concise single-line console format (default) or one-line JSON when
+`LOG_FORMAT=json`. No cross-service imports or shared logging
 installation are required. Keep the contract aligned through local tests. Default INFO; high-frequency activity
 is summarized per process every 60 seconds. Emit lifecycle transitions after commit,
 distinguish dispatch from completion, and keep request/resource IDs separate. Use

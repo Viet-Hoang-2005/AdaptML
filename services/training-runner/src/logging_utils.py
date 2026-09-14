@@ -1,11 +1,7 @@
-"""Service-owned logfmt utilities; logs are not lifecycle authority.
-
-Keep the format contract aligned with docs/backend-logging.md and local tests.
-"""
-
 import contextvars
 import json
 import logging
+import math
 import os
 import re
 import sys
@@ -193,49 +189,106 @@ def _encode(value):
     return encoded
 
 
-class LogfmtFormatter(logging.Formatter):
+def _record_fields(record, service):
+    fields = {
+        "ts": datetime.fromtimestamp(record.created, timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z"),
+        "level": record.levelname,
+        "service": service or _service,
+        "event": getattr(record, "event", "application.log"),
+        "instance": os.environ.get("HOSTNAME", "local"),
+        "pid": os.getpid(),
+    }
+    context = current_context()
+    for env_key in (
+        "PROJECT_ID",
+        "MODEL_VERSION_ID",
+        "BUILD_ID",
+        "TRAINING_JOB_ID",
+        "DRIFT_RUN_ID",
+    ):
+        if os.environ.get(env_key):
+            context.setdefault(env_key.lower(), os.environ[env_key])
+    for key in sorted(_FIELDS):
+        value = getattr(record, key, context.get(key))
+        if value is not None and value != "":
+            fields[key] = value
+    fields["msg"] = sanitize(record.getMessage())
+    if record.exc_info:
+        error_type, _, tb = record.exc_info
+        fields["error_type"] = error_type.__name__ if error_type else "Exception"
+        locations = []
+        while tb is not None:
+            code = tb.tb_frame.f_code
+            locations.append(f"{os.path.basename(code.co_filename)}:{tb.tb_lineno}:{code.co_name}")
+            tb = tb.tb_next
+        fields["traceback"] = " <- ".join(locations[-30:])
+    return fields
+
+
+def _display(value):
+    """Render text safely as a single, human-readable physical log line."""
+    encoded = json.dumps(sanitize(value), ensure_ascii=False)[1:-1]
+    for separator in ("\x85", "\u2028", "\u2029"):
+        encoded = encoded.replace(separator, "\\u%04x" % ord(separator))
+    return encoded
+
+
+def _json_value(value):
+    if value is None or isinstance(value, (bool, int)):
+        return value
+    if isinstance(value, float) and math.isfinite(value):
+        return value
+    return sanitize(value)
+
+
+def log_format():
+    """Return the supported container formatter, defaulting safely to console."""
+    return "json" if os.environ.get("LOG_FORMAT", "console").strip().lower() == "json" else "console"
+
+
+class ConsoleFormatter(logging.Formatter):
     def __init__(self, service=None):
         super().__init__()
         self.service = service
 
     def format(self, record):
-        fields = {
-            "ts": datetime.fromtimestamp(record.created, timezone.utc)
-            .isoformat(timespec="milliseconds")
-            .replace("+00:00", "Z"),
-            "level": record.levelname,
-            "service": self.service or _service,
-            "event": getattr(record, "event", "application.log"),
-            "instance": os.environ.get("HOSTNAME", "local"),
-            "pid": os.getpid(),
-        }
-        context = current_context()
-        for env_key in (
-            "PROJECT_ID",
-            "MODEL_VERSION_ID",
-            "BUILD_ID",
-            "TRAINING_JOB_ID",
-            "DRIFT_RUN_ID",
-        ):
-            if os.environ.get(env_key):
-                context.setdefault(env_key.lower(), os.environ[env_key])
-        for key in sorted(_FIELDS):
-            value = getattr(record, key, context.get(key))
-            if value is not None and value != "":
-                fields[key] = value
-        fields["msg"] = record.getMessage()
-        if record.exc_info:
-            error_type, _, tb = record.exc_info
-            fields["error_type"] = error_type.__name__ if error_type else "Exception"
-            locations = []
-            while tb is not None:
-                code = tb.tb_frame.f_code
-                locations.append(
-                    f"{os.path.basename(code.co_filename)}:{tb.tb_lineno}:{code.co_name}"
-                )
-                tb = tb.tb_next
-            fields["traceback"] = " <- ".join(locations[-30:])
-        return " ".join(f"{key}={_encode(value)}" for key, value in fields.items())
+        fields = _record_fields(record, self.service)
+        details = []
+        if fields.get("error_type"):
+            details.append(f"error={_display(fields['error_type'])}")
+        if fields.get("reason"):
+            details.append(_display(fields["reason"]))
+        if fields.get("status_code"):
+            details.append(f"HTTP {fields['status_code']}")
+        if fields.get("retry_seconds") is not None:
+            attempt = fields.get("attempt")
+            prefix = f"retry {attempt} in" if attempt is not None else "retry in"
+            details.append(f"{prefix} {_display(fields['retry_seconds'])}s")
+        if fields.get("traceback"):
+            details.append(f"traceback: {_display(fields['traceback'])}")
+        suffix = f" — {'; '.join(details)}" if details else ""
+        return f"{fields['ts']} [{fields['level']}]: {_display(fields['msg'])}{suffix}"
+
+
+class JsonFormatter(logging.Formatter):
+    def __init__(self, service=None):
+        super().__init__()
+        self.service = service
+
+    def format(self, record):
+        fields = _record_fields(record, self.service)
+        return json.dumps(
+            {key: _json_value(value) for key, value in fields.items()},
+            ensure_ascii=False,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+
+
+def formatter_for(service=None):
+    return JsonFormatter(service) if log_format() == "json" else ConsoleFormatter(service)
 
 
 class SafeStreamHandler(logging.StreamHandler):
@@ -268,7 +321,7 @@ def configure(service, level=None):
     )
     root = logging.getLogger()
     handler = SafeStreamHandler(sys.stdout)
-    handler.setFormatter(LogfmtFormatter(service))
+    handler.setFormatter(formatter_for(service))
     handler.addFilter(FrameworkFilter())
     root.handlers[:] = [handler]
     root.setLevel(selected)

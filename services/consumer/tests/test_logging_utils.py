@@ -11,7 +11,8 @@ import unittest
 from unittest.mock import patch
 
 from src.logging_utils import (
-    LogfmtFormatter,
+    ConsoleFormatter,
+    JsonFormatter,
     Summary,
     bind_context,
     configure,
@@ -28,7 +29,7 @@ class LoggingTests(unittest.TestCase):
         self.output = io.StringIO()
         self.logger = logging.Logger("test", logging.DEBUG)
         handler = logging.StreamHandler(self.output)
-        handler.setFormatter(LogfmtFormatter("test"))
+        handler.setFormatter(ConsoleFormatter("test"))
         self.logger.addHandler(handler)
 
     def test_format_context_escaping_and_allowlist(self):
@@ -46,19 +47,33 @@ class LoggingTests(unittest.TestCase):
             reset_context(token)
         line = self.output.getvalue()
         self.assertEqual(len(line.splitlines()), 1)
-        for part in (
-            "ts=",
-            "Z level=INFO",
-            "service=test",
-            "event=job.completed",
-            "request_id=req-1",
-            "duration_ms=12",
-            "\\n",
-            "\\u0000",
-        ):
-            self.assertIn(part, line)
+        self.assertRegex(line, r"^\d{4}-\d{2}-\d{2}T.*Z \[INFO\]: ")
+        self.assertIn("\\n", line)
+        self.assertIn("\\u0000", line)
+        self.assertNotIn("request_id=", line)
         self.assertNotIn("features", line)
         self.assertEqual(current_context(), {})
+
+    def test_json_format_keeps_metadata_and_numeric_fields(self):
+        output = io.StringIO()
+        logger = logging.Logger("json-test", logging.DEBUG)
+        handler = logging.StreamHandler(output)
+        handler.setFormatter(JsonFormatter("test"))
+        logger.addHandler(handler)
+        token = bind_context(request_id="request-1", project_id="project-1")
+        try:
+            log_event(logger, "WARNING", "job.retrying", "Job retry scheduled", attempt=2, duration_ms=12)
+        finally:
+            reset_context(token)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["service"], "test")
+        self.assertEqual(payload["event"], "job.retrying")
+        self.assertEqual(payload["request_id"], "request-1")
+        self.assertEqual(payload["project_id"], "project-1")
+        self.assertEqual(payload["attempt"], 2)
+        self.assertEqual(payload["duration_ms"], 12)
+        self.assertTrue(payload["ts"].endswith("Z"))
+        self.assertNotIn("features", payload)
 
     def test_credentials_and_payloads_are_redacted(self):
         fake = "test-" + "credential-123"
@@ -106,14 +121,14 @@ class LoggingTests(unittest.TestCase):
             for n in range(65):
                 summary.failure(f"client-{n}", "Client rejected")
             summary.failure("new-server", "Server failed", level="ERROR")
-            self.assertIn("error_key=other.ERROR", self.output.getvalue())
-            before = self.output.getvalue().count("error_key=other.ERROR")
+            self.assertIn("Server failed", self.output.getvalue())
+            before = self.output.getvalue().count("Server failed")
             with patch(
                 "src.logging_utils.time.monotonic", return_value=time.monotonic() + 120
             ):
                 summary.failure("another-server", "Server failed", level="ERROR")
             self.assertEqual(
-                self.output.getvalue().count("error_key=other.ERROR"), before + 1
+                self.output.getvalue().count("Server failed"), before + 1
             )
             self.assertLessEqual(len(summary.last_error), 66)
         finally:
@@ -126,8 +141,8 @@ class LoggingTests(unittest.TestCase):
             summary.recovery("database")
         self.assertEqual(len(self.output.getvalue().splitlines()), 2)
         summary.close()
-        self.assertIn("error_count=1000", self.output.getvalue())
-        self.assertIn("suppressed=999", self.output.getvalue())
+        self.assertIn("1000 errors", self.output.getvalue())
+        self.assertIn("999 repeated errors suppressed", self.output.getvalue())
 
     def test_summary_multithread_counts(self):
         summary = Summary(self.logger, "parallel", interval=3600)
@@ -142,7 +157,7 @@ class LoggingTests(unittest.TestCase):
         for thread in threads:
             thread.join()
         summary.close()
-        self.assertIn("records=400", self.output.getvalue())
+        self.assertIn("400 records", self.output.getvalue())
 
     def test_traceback_contains_locations_not_source_or_locals(self):
         try:
@@ -150,8 +165,8 @@ class LoggingTests(unittest.TestCase):
         except ValueError:
             log_event(self.logger, "ERROR", "job.failed", "Job failed", exc_info=True)
         value = self.output.getvalue()
-        self.assertIn("error_type=ValueError", value)
-        self.assertIn("traceback=", value)
+        self.assertIn("error=ValueError", value)
+        self.assertIn("traceback:", value)
         self.assertNotIn("private-payload", value)
         self.assertEqual(len(value.splitlines()), 1)
 
@@ -167,13 +182,13 @@ class LoggingTests(unittest.TestCase):
             summary.failure("database", "Database unavailable")
         self.assertEqual(len(self.output.getvalue().splitlines()), 1)
         summary.flush()
-        self.assertIn("records=2000", self.output.getvalue())
-        self.assertIn("successes=1000", self.output.getvalue())
-        self.assertIn("suppressed=9", self.output.getvalue())
+        self.assertIn("2000 records", self.output.getvalue())
+        self.assertIn("1000 succeeded", self.output.getvalue())
+        self.assertIn("9 repeated errors suppressed", self.output.getvalue())
         summary.recovery("database")
         summary.recovery("database")
         self.assertEqual(
-            self.output.getvalue().count("event=ingestion.summary.recovered"), 1
+            self.output.getvalue().count("Ingestion summary recovered"), 1
         )
         summary.close()
         summary.close()
@@ -199,7 +214,7 @@ class LoggingTests(unittest.TestCase):
                 log_event(logging.getLogger("test"), "INFO", "service.ready", "Ready")
             self.assertEqual(root.level, logging.INFO)
             self.assertEqual(len(root.handlers), 1)
-            self.assertEqual(self.output.getvalue().count("event=service.ready"), 1)
+            self.assertEqual(self.output.getvalue().count("Ready"), 1)
         finally:
             root.handlers[:], root.level = previous, level
 

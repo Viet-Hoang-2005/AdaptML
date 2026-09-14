@@ -3,6 +3,8 @@
 import argparse
 import os
 
+from src.logging_utils import log_format
+
 
 def server_log_config(service):
     level = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -12,14 +14,19 @@ def server_log_config(service):
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
-            "logfmt": {"()": "src.logging_utils.LogfmtFormatter", "service": service}
+            "application": {
+                "()": "src.logging_utils.JsonFormatter"
+                if log_format() == "json"
+                else "src.logging_utils.ConsoleFormatter",
+                "service": service,
+            }
         },
         "filters": {"framework": {"()": "src.logging_utils.FrameworkFilter"}},
         "handlers": {
             "console": {
                 "class": "src.logging_utils.SafeStreamHandler",
                 "stream": "ext://sys.stdout",
-                "formatter": "logfmt",
+                "formatter": "application",
                 "filters": ["framework"],
             }
         },

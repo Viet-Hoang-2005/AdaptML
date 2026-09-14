@@ -6,6 +6,7 @@ metadata:
     app: mlops-paas-control-plane
 data:
   LOG_LEVEL: "INFO"
+  LOG_FORMAT: "console"
   LOG_SUMMARY_INTERVAL_SECONDS: "60"
   PYTHONUNBUFFERED: "1"
   PYTHONPATH: "/app/src"

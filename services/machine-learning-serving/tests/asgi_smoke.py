@@ -1,5 +1,5 @@
-"""Offline container smoke: two real Uvicorn workers, then graceful shutdown."""
-
+import json
+import os
 import signal
 import subprocess
 import sys
@@ -22,7 +22,7 @@ async def app(scope, receive, send):
         await send({"type": "http.response.body", "body": b"ready"})
 
 
-def smoke():
+def smoke(log_format="console", port=8050):
     process = subprocess.Popen(
         [
             sys.executable,
@@ -32,20 +32,21 @@ def smoke():
             "--service",
             "logging-smoke",
             "--port",
-            "8050",
+            str(port),
             "--workers",
             "2",
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        env={**os.environ, "LOG_FORMAT": log_format},
     )
     try:
         deadline = time.monotonic() + 15
         while True:
             try:
                 with urllib.request.urlopen(
-                    "http://127.0.0.1:8050/health", timeout=0.5
+                    f"http://127.0.0.1:{port}/health", timeout=0.5
                 ) as response:
                     assert response.read() == b"ready"
                 break
@@ -63,14 +64,17 @@ def smoke():
             raise AssertionError("Smoke server did not stop")
     assert process.returncode == 0, output
     lines = [line for line in output.splitlines() if line]
-    assert lines and all(
-        line.startswith("ts=") and "service=logging-smoke" in line for line in lines
-    ), output
+    if log_format == "json":
+        payloads = [json.loads(line) for line in lines]
+        assert all(item["service"] == "logging-smoke" for item in payloads), output
+    else:
+        assert lines and all(" [INFO]: " in line for line in lines), output
     assert not any("GET /health" in line for line in lines), output
     print(
-        f"Uvicorn smoke passed: {len(lines)} logfmt lifecycle lines, no health access log"
+        f"Uvicorn smoke passed: {len(lines)} {log_format} lifecycle lines, no health access log"
     )
 
 
 if __name__ == "__main__":
     smoke()
+    smoke("json", 8051)

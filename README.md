@@ -87,7 +87,7 @@ Control Plane là modular monolith theo capability: `auth`, `access`, `catalog`,
 
 > 💡 **Tài liệu Kỹ thuật Chuyên sâu:** Xem giải thích chi tiết về luồng dữ liệu, sơ đồ tuần tự (Sequence Diagrams), cơ chế bảo mật Zero-Trust và lược đồ cơ sở dữ liệu tại [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**Log backend:** Mỗi service tự chứa `logging_utils.py` và build image từ thư mục riêng; không phụ thuộc package logging dùng chung. Các service ứng dụng dùng format `key=value` thống nhất, mặc định `INFO` và tổng hợp lưu lượng mỗi 60 giây. Log chi tiết từng job được giữ riêng hoặc fallback về container nếu chưa có đường lưu phù hợp. Xem [quy ước logging, cấu hình và kiểm thử](docs/backend-logging.md).
+**Log backend:** Mỗi service tự chứa `logging_utils.py` và build image từ thư mục riêng; không phụ thuộc package logging dùng chung. Mặc định container in một dòng console dễ đọc, còn `LOG_FORMAT=json` cung cấp metadata đầy đủ khi điều tra sự cố. Mức mặc định là `INFO`, lưu lượng được tổng hợp mỗi 60 giây; log chi tiết từng job được giữ riêng hoặc fallback về container nếu chưa có đường lưu phù hợp. Xem [quy ước logging, cấu hình và kiểm thử](docs/backend-logging.md).
 
 ---
 

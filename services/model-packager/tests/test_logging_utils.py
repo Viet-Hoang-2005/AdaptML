@@ -10,7 +10,8 @@ import unittest
 from unittest.mock import patch
 
 from src.logging_utils import (
-    LogfmtFormatter,
+    ConsoleFormatter,
+    JsonFormatter,
     RuntimeLog,
     bind_context,
     configure,
@@ -27,7 +28,7 @@ class LoggingTests(unittest.TestCase):
         self.output = io.StringIO()
         self.logger = logging.Logger("test", logging.DEBUG)
         handler = logging.StreamHandler(self.output)
-        handler.setFormatter(LogfmtFormatter("test"))
+        handler.setFormatter(ConsoleFormatter("test"))
         self.logger.addHandler(handler)
 
     def test_format_context_escaping_and_allowlist(self):
@@ -45,19 +46,33 @@ class LoggingTests(unittest.TestCase):
             reset_context(token)
         line = self.output.getvalue()
         self.assertEqual(len(line.splitlines()), 1)
-        for part in (
-            "ts=",
-            "Z level=INFO",
-            "service=test",
-            "event=job.completed",
-            "request_id=req-1",
-            "duration_ms=12",
-            "\\n",
-            "\\u0000",
-        ):
-            self.assertIn(part, line)
+        self.assertRegex(line, r"^\d{4}-\d{2}-\d{2}T.*Z \[INFO\]: ")
+        self.assertIn("\\n", line)
+        self.assertIn("\\u0000", line)
+        self.assertNotIn("request_id=", line)
         self.assertNotIn("features", line)
         self.assertEqual(current_context(), {})
+
+    def test_json_format_keeps_metadata_and_numeric_fields(self):
+        output = io.StringIO()
+        logger = logging.Logger("json-test", logging.DEBUG)
+        handler = logging.StreamHandler(output)
+        handler.setFormatter(JsonFormatter("test"))
+        logger.addHandler(handler)
+        token = bind_context(request_id="request-1", project_id="project-1")
+        try:
+            log_event(logger, "WARNING", "job.retrying", "Job retry scheduled", attempt=2, duration_ms=12)
+        finally:
+            reset_context(token)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["service"], "test")
+        self.assertEqual(payload["event"], "job.retrying")
+        self.assertEqual(payload["request_id"], "request-1")
+        self.assertEqual(payload["project_id"], "project-1")
+        self.assertEqual(payload["attempt"], 2)
+        self.assertEqual(payload["duration_ms"], 12)
+        self.assertTrue(payload["ts"].endswith("Z"))
+        self.assertNotIn("features", payload)
 
     def test_credentials_and_payloads_are_redacted(self):
         fake = "test-" + "credential-123"
@@ -143,8 +158,8 @@ class LoggingTests(unittest.TestCase):
         except ValueError:
             log_event(self.logger, "ERROR", "job.failed", "Job failed", exc_info=True)
         value = self.output.getvalue()
-        self.assertIn("error_type=ValueError", value)
-        self.assertIn("traceback=", value)
+        self.assertIn("error=ValueError", value)
+        self.assertIn("traceback:", value)
         self.assertNotIn("private-payload", value)
         self.assertEqual(len(value.splitlines()), 1)
 
@@ -158,7 +173,7 @@ class LoggingTests(unittest.TestCase):
         runtime = RuntimeLog(self.logger, writer)
         runtime.detail('password="unsafe-value"')
         self.assertNotIn("unsafe-value", saved[0])
-        self.assertIn("level=DEBUG", self.output.getvalue())
+        self.assertIn("[DEBUG]:", self.output.getvalue())
         self.output.truncate(0)
         self.output.seek(0)
 
@@ -167,7 +182,7 @@ class LoggingTests(unittest.TestCase):
 
         runtime.writer = broken
         runtime.detail("epoch 1 completed")
-        self.assertIn("level=INFO", self.output.getvalue())
+        self.assertIn("[INFO]:", self.output.getvalue())
         with patch("sys.stdout", new_callable=io.StringIO) as output:
             runtime.protocol("BUILD_EOF_SUCCESS")
             runtime.protocol('METRIC_JSON {"cpu_percent":1.0}')
@@ -186,7 +201,7 @@ class LoggingTests(unittest.TestCase):
                 log_event(logging.getLogger("test"), "INFO", "service.ready", "Ready")
             self.assertEqual(root.level, logging.INFO)
             self.assertEqual(len(root.handlers), 1)
-            self.assertEqual(self.output.getvalue().count("event=service.ready"), 1)
+            self.assertEqual(self.output.getvalue().count("Ready"), 1)
         finally:
             root.handlers[:], root.level = previous, level
 

@@ -22,6 +22,7 @@ def _logging_environment():
     # Forward only common logging controls; each child configures its own service name.
     return {
         "LOG_LEVEL": os.environ.get("LOG_LEVEL") or "INFO",
+        "LOG_FORMAT": os.environ.get("LOG_FORMAT") or "console",
         "LOG_SUMMARY_INTERVAL_SECONDS": os.environ.get("LOG_SUMMARY_INTERVAL_SECONDS") or "60",
     }
 

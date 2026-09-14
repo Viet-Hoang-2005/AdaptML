@@ -1,5 +1,3 @@
-"""Logging tests use the service-owned utilities and isolated DB/transport fakes."""
-
 import logging
 import uuid
 from types import SimpleNamespace
@@ -141,7 +139,7 @@ def test_publish_propagates_only_bounded_correlation():
 def test_retry_signal_emits_one_safe_warning_with_context(caplog):
     from celery.exceptions import Retry
     from celery.signals import task_retry
-    from common.logging_utils import LogfmtFormatter
+    from common.logging_utils import JsonFormatter
 
     task = Mock()
     task.name = "apps.training.tasks.execute_training_job"
@@ -165,10 +163,10 @@ def test_retry_signal_emits_one_safe_warning_with_context(caplog):
             assert warning.event == "celery.task.retry"
             assert warning.attempt == 3
             assert warning.retry_seconds == 12
-            rendered = LogfmtFormatter("control-plane").format(warning)
-            assert f"training_job_id={job_id}" in rendered
-            assert "request_id=retry-request" in rendered
-            assert "celery_task_id=retry-task" in rendered
+            rendered = JsonFormatter("control-plane").format(warning)
+            assert f'"training_job_id":"{job_id}"' in rendered
+            assert '"request_id":"retry-request"' in rendered
+            assert '"celery_task_id":"retry-task"' in rendered
             assert "private" not in rendered
         finally:
             celery_logging.task_finish(task=task, state="RETRY", retval="private-result")
@@ -339,7 +337,7 @@ def test_task_failure_emits_one_safe_error(handled, monkeypatch):
         errors = [call for call in emitted.call_args_list if call.args[1] == "ERROR"]
         assert len(errors) == (0 if handled else 1)
         if errors:
-            from common.logging_utils import LogfmtFormatter
+            from common.logging_utils import JsonFormatter
 
             fields = dict(errors[0].kwargs)
             record = logging.LogRecord(
@@ -347,7 +345,7 @@ def test_task_failure_emits_one_safe_error(handled, monkeypatch):
             )
             for name, value in fields.items():
                 setattr(record, name, value)
-            rendered = LogfmtFormatter("control-plane").format(record)
+            rendered = JsonFormatter("control-plane").format(record)
             assert "RuntimeError" in rendered
             assert "private" not in rendered
     finally:

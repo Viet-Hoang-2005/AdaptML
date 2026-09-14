@@ -95,6 +95,9 @@ spec:
           - name: LOG_LEVEL
             valueFrom:
               configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_LEVEL}
+          - name: LOG_FORMAT
+            valueFrom:
+              configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_FORMAT}
           - name: LOG_SUMMARY_INTERVAL_SECONDS
             valueFrom:
               configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_SUMMARY_INTERVAL_SECONDS}
@@ -150,6 +153,9 @@ spec:
           - name: LOG_LEVEL
             valueFrom:
               configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_LEVEL}
+          - name: LOG_FORMAT
+            valueFrom:
+              configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_FORMAT}
           - name: LOG_SUMMARY_INTERVAL_SECONDS
             valueFrom:
               configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_SUMMARY_INTERVAL_SECONDS}

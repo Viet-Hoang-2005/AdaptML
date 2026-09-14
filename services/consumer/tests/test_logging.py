@@ -8,7 +8,7 @@ from unittest.mock import Mock
 
 import pandas as pd
 import pytest
-from src.logging_utils import LogfmtFormatter, Summary
+from src.logging_utils import ConsoleFormatter, JsonFormatter, Summary
 
 from src import database, drift_outbox, main
 
@@ -89,7 +89,7 @@ def test_commit_retries_emit_first_error_counts_and_recovery(monkeypatch):
     output = io.StringIO()
     logger = logging.Logger("consumer-commit-test")
     handler = logging.StreamHandler(output)
-    handler.setFormatter(LogfmtFormatter("consumer"))
+    handler.setFormatter(JsonFormatter("consumer"))
     logger.addHandler(handler)
     summary = Summary(logger, "offset_commit_summary", interval=3600)
     monkeypatch.setattr(main, "commit_summary", summary)
@@ -103,12 +103,12 @@ def test_commit_retries_emit_first_error_counts_and_recovery(monkeypatch):
     finally:
         summary.close()
     logs = output.getvalue()
-    assert logs.count("event=offset_commit_summary.error ") == 1
-    assert logs.count("event=offset_commit_summary.recovered ") == 1
-    assert "count=2" in logs
-    assert "failures=2" in logs
-    assert "committed=1" in logs
-    assert "suppressed=1" in logs
+    assert logs.count('"event":"offset_commit_summary.error"') == 1
+    assert logs.count('"event":"offset_commit_summary.recovered"') == 1
+    assert '"count":2' in logs
+    assert '"failures":2' in logs
+    assert '"committed":1' in logs
+    assert '"suppressed":1' in logs
     assert "feature-payload" not in logs
     assert "https://" not in logs
 
@@ -134,7 +134,7 @@ def test_malformed_record_has_one_error_with_safe_traceback(monkeypatch):
     output = io.StringIO()
     logger = logging.Logger("consumer-malformed-test")
     handler = logging.StreamHandler(output)
-    handler.setFormatter(LogfmtFormatter("consumer"))
+    handler.setFormatter(ConsoleFormatter("consumer"))
     logger.addHandler(handler)
     monkeypatch.setattr(main, "logger", logger)
     monkeypatch.setattr(main, "configure", Mock())
@@ -149,12 +149,12 @@ def test_malformed_record_has_one_error_with_safe_traceback(monkeypatch):
         main.run()
     assert exc.value.code == 1
     lines = output.getvalue().splitlines()
-    errors = [line for line in lines if "level=ERROR " in line]
+    errors = [line for line in lines if "[ERROR]:" in line]
     assert len(errors) == 1
-    assert "event=consumer_failed " in errors[0]
-    assert "traceback=" in errors[0]
+    assert "Consumer stopped after an unrecoverable error" in errors[0]
+    assert "traceback:" in errors[0]
     assert "main.py:" in errors[0]
-    assert any("level=DEBUG " in line and "event=consumer_record_processing_failed " in line for line in lines)
+    assert any("[DEBUG]:" in line and "Kafka record processing failed" in line for line in lines)
     assert "private-feature-payload" not in output.getvalue()
     assert consumer.closed
     assert consumer.commits == 0

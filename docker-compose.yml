@@ -12,6 +12,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
       PYTHONPATH: /app/src
       DJANGO_SETTINGS_MODULE: config.settings.local
@@ -92,6 +93,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
       PYTHONPATH: /app/src
       DJANGO_SETTINGS_MODULE: config.settings.local
@@ -156,6 +158,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
       DB_HOST_RO: postgres
       DB_PORT: 5432
@@ -195,6 +198,7 @@ services:
     container_name: mlops_paas_machine_learning_serving
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     restart: "no"
     command:
@@ -215,6 +219,7 @@ services:
     container_name: mlops_paas_deep_learning_serving
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     restart: "no"
     command:
@@ -261,6 +266,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     networks:
       - mlops_paas_network
@@ -282,6 +288,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     networks:
       - mlops_paas_network
@@ -301,6 +308,7 @@ services:
         log_event(configure('training-runner'), 'INFO', 'image.ready', 'Runtime image ready for dynamic execution')
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     networks:
       - mlops_paas_network
@@ -407,6 +415,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
       DB_HOST_RW: postgres
       DB_HOST_RO: postgres

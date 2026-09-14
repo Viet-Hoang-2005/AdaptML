@@ -33,6 +33,8 @@ Never copy real values into skills or source. Do not assume example values are c
 Each application owns its logging utilities (`src/logging_utils.py`, or
 `src/common/logging_utils.py` for Control Plane). Docker build context is
 `services/<service>` with its own `.dockerignore`; no shared logging installation.
+Set `LOG_FORMAT=console` (the default) for readable container output, or
+`LOG_FORMAT=json` before reproducing an incident to retain structured metadata.
 Compose selects `Dockerfile` within that context; CI/CD use `matrix.target.context`
 and the explicit repository-relative Dockerfile path. Per-service path changes
 select only that service. Gateway/ML-serving use `src.uvicorn_entrypoint`; Django,
