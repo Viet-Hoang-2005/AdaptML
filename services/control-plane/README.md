@@ -35,7 +35,7 @@ S3, Argo, Harbor, Redis, or external HTTP clients directly.
 From the repository root:
 
 ```bash
-docker compose up --build control-plane control-plane-worker
+docker compose up --build control-plane celery-worker
 ```
 
 Without Docker:

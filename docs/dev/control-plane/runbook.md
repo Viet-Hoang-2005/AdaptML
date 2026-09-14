@@ -4,7 +4,7 @@
 
 ```bash
 docker compose config
-docker compose up --build control-plane control-plane-worker model-server traefik
+docker compose up --build control-plane celery-worker model-server traefik
 ```
 
 The local model gateway is `http://localhost:5002`. PostgreSQL, Redis, S3
