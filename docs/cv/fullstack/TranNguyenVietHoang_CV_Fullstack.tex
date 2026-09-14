@@ -74,7 +74,7 @@
 %-----------SUMMARY-----------
 \section{Summary}
 \begin{itemize}[leftmargin=0.15in, label={}]
-  \small{\item{Final-year Computer Networks student at UIT-VNU seeking a \textbf{Fullstack Intern} role. Experienced in developing React/TypeScript frontends and Django + FastAPI microservices backends; skilled in containerizing with Docker, deploying to AWS/GCP and Kubernetes via CI/CD pipelines.}}
+  \small{\item{Final-year Computer Networks student at UIT-VNU seeking a \textbf{Fullstack Intern} role. Hands-on experience building web applications with React/TypeScript and REST APIs with Spring Boot, Django, and FastAPI, from user workflows to deployment on AWS/GCP using Docker, Kubernetes, and CI/CD.}}
 \end{itemize}
 
 %-----------EDUCATION-----------
@@ -105,24 +105,24 @@
 \resumeSubHeadingListStart
 
 \resumeProjectHeading
-{\textbf{MLOps PaaS System} $|$ \href{https://github.com/Viet-Hoang-2005/mlops-paas-system}{GitHub} $|$ \emph{React, TypeScript, Django, FastAPI, Redpanda, PostgreSQL, Docker, AWS, Kubernetes, GitHub Actions, Argo CD}}
+{\textbf{MLOps PaaS System} $|$ \href{https://github.com/Viet-Hoang-2005/mlops-paas-system}{GitHub} $|$ \emph{React, TypeScript, Django, FastAPI, Redpanda, PostgreSQL, Redis, Docker, AWS, Kubernetes, GitHub Actions, Argo CD}}
 {3/2026 -- Present}
 \resumeItemListStart
-\resumeItem{Architected an end-to-end MLOps platform featuring a modular React/TypeScript dashboard backed by a Django REST control plane and FastAPI serving engines, orchestrating multi-tenant model training, versioning, and real-time drift tracking.}
-\resumeItem{Developed dynamic multi-step training/deployment workflows, data-dense tables, and responsive forms using Tailwind CSS, Radix UI primitives, React Hook Form, and Zod; leveraged TanStack Query for server-state caching, mutations, and automatic background sync.}
-\resumeItem{Built the Django REST Control Plane modular monolith to manage tenant isolation, project catalogs, and immutable registries, dispatching async training, packaging, and drift jobs via Celery and Redis.}
-\resumeItem{Engineered the FastAPI Data Plane inference gateway to route predictions to isolated model workers, streaming inference telemetry into Redpanda topics for real-time Evidently AI drift detection.}
-\resumeItem{Enforced role-based access control (RBAC) and dual-token JWT authentication with Axios auto-refresh interceptors; containerized services with Docker and deployed resilient workloads to Kubernetes on AWS with GitHub Actions and Argo CD.}
+\resumeItem{Built a React/TypeScript dashboard with Django REST APIs for project creation, S3 artifact uploads, and model deployment; validated multi-step forms with React Hook Form and Zod.}
+\resumeItem{Connected training and build workflows to Celery/Redis background jobs, displaying runtime logs, metrics, and artifacts through API polling for deployment decisions.}
+\resumeItem{Secured tenant-scoped projects with JWT authentication and automatic token refresh; integrated FastAPI inference endpoints for testing deployed model versions from the dashboard.}
+\resumeItem{Published prediction events to Redpanda for Evidently drift analysis, enabling users to configure monitors and compare production inputs against reference data.}
+\resumeItem{Deployed Docker services to Kubernetes on AWS, automating image builds and deployment updates with GitHub Actions and Argo CD.}
 \resumeItemListEnd
 
 \resumeProjectHeading
-{\textbf{SageLMS} $|$ \href{https://github.com/daithang59/sagelms}{GitHub} $|$ \emph{React, TypeScript, Spring Boot, FastAPI, LangChain, PostgreSQL, Redis, Docker, GCP, Kubernetes, FluxCD}}
+{\textbf{SageLMS} $|$ \href{https://github.com/daithang59/sagelms}{GitHub} $|$ \emph{React, TypeScript, Spring Boot, FastAPI, LangChain, PostgreSQL, Redis, Docker, GCP, Kubernetes, GitHub Actions, FluxCD}}
 {4/2026 -- 6/2026}
 \resumeItemListStart
-\resumeItem{Developed Spring Boot microservices for course management; built RESTful APIs via Spring MVC, handled PostgreSQL persistence with Spring Data JPA, and secured services using Spring Security JWT and RBAC propagated through Spring Cloud Gateway.}
-\resumeItem{Built the client-facing exam and challenge interface in React/TypeScript, implementing countdown timers with automatic submission, local-storage draft autosave to prevent data loss, instant question review, and dynamic leaderboards.}
-\resumeItem{Engineered an AI Tutor microservice with FastAPI, LangChain, and Google Gemini; orchestrated inter-service REST calls to dynamically inject course/challenge context into prompts, paired with a multi-session chat UI supporting full conversation history.}
-\resumeItem{Ensured code reliability with unit and integration tests across Vitest, JUnit, and pytest; containerized services with Docker and automated GitOps deployments to GKE using GitHub Actions and FluxCD with strict security quality gates.}
+\resumeItem{Connected React/TypeScript screens to Spring Boot APIs and PostgreSQL for course creation, lesson management, and enrollment, with JWT authentication through Spring Cloud Gateway.}
+\resumeItem{Built React assessment workflows with countdown timers, localStorage draft autosave, and automatic submission; connected results to question review and instructor gradebooks.}
+\resumeItem{Integrated FastAPI, LangChain, and Gemini for AI tutoring with access-checked course/challenge context, paired with a React chat UI and persistent conversation history.}
+\resumeItem{Deployed Docker services to GKE with FluxCD; automated tests, Trivy vulnerability scans, and Cosign image signing in GitHub Actions pipelines.}
 \resumeItemListEnd
 
 \resumeSubHeadingListEnd
@@ -145,8 +145,7 @@
     \textbf{Frontend:} ReactJS, Tailwind CSS, Radix UI, Ant Design \\
     \textbf{Backend \& APIs:} RESTful APIs, Django, FastAPI, Spring Boot, Celery \\
     \textbf{Databases \& Storage:} PostgreSQL, MongoDB, Redis, Redpanda/Kafka, S3/MinIO \\
-    \textbf{Cloud \& DevOps:} Linux, AWS, GCP, Docker, Terraform, Ansible, Kubernetes, Helm, GitHub Actions, Argo CD\\
-    \textbf{Core Concepts:} Git, OOP, TCP/IP, RBAC, JWT/OAuth, Microservices Architecture
+    \textbf{Cloud \& DevOps:} Linux, AWS, GCP, Docker, Terraform, Ansible, Kubernetes, Helm, Git/GitHub, Argo CD\\
   }}
 \end{itemize}
 
