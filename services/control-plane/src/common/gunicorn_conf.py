@@ -1,14 +1,12 @@
-"""Gunicorn logging configuration; HTTP summaries belong to Django middleware."""
+"""Gunicorn logging configuration; HTTP access logs belong to Django middleware."""
 
 import logging
-import os
 
 from common.logging import configure_logging
 from common.logging_utils import get_logger, log_event
 
 accesslog = None
 errorlog = "-"
-loglevel = os.getenv("LOG_LEVEL", "INFO").lower()
 
 
 def _configure():

@@ -104,7 +104,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(RequestLoggingMiddleware, routes=app.router.routes)
 
 paas_predictions_counter = Counter(
     "paas_predictions_total",

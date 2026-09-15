@@ -37,23 +37,17 @@ def test_request_context_roundtrip_and_cleanup(status):
         return HttpResponse(status=status)
 
     middleware = RequestContextMiddleware(respond)
-    middleware.summary = Mock()
     response = middleware(request)
     assert seen == ["request-123"]
     assert response["X-Request-ID"] == "request-123"
     assert current_context() == before
     assert request_id_context.get() == ""
-    if status >= 400:
-        fields = middleware.summary.failure.call_args.kwargs
-        assert fields["route"] == "api/example/"
-        assert "never-log-this" not in str(fields)
 
 
 @pytest.mark.parametrize("value", ["x" * 129, "header\nforged=true", "Bearer hidden-value"])
 def test_invalid_request_ids_are_replaced(value):
     request = RequestFactory().get("/api/example/", HTTP_X_REQUEST_ID=value)
     middleware = RequestContextMiddleware(lambda req: HttpResponse())
-    middleware.summary = Mock()
     response = middleware(request)
     assert str(uuid.UUID(response["X-Request-ID"])) == response["X-Request-ID"]
 
@@ -61,45 +55,61 @@ def test_invalid_request_ids_are_replaced(value):
 def test_exception_resets_request_context():
     before = current_context()
     middleware = RequestContextMiddleware(Mock(side_effect=RuntimeError("failed")))
-    middleware.summary = Mock()
     with pytest.raises(RuntimeError):
         middleware(RequestFactory().get("/api/example/"))
     assert current_context() == before
     assert request_id_context.get() == ""
-    assert middleware.summary.failure.call_args.kwargs["level"] == "ERROR"
 
 
 @pytest.mark.parametrize("path", ["/health/live", "/health/ready", "/health/metrics"])
-def test_successful_probes_do_not_create_log_summary(path):
+def test_successful_probes_do_not_create_access_log(path, caplog):
     middleware = RequestContextMiddleware(lambda req: HttpResponse())
-    middleware.summary = Mock()
-    middleware(RequestFactory().get(path))
-    middleware.summary.record.assert_not_called()
-    middleware.summary.failure.assert_not_called()
+    with caplog.at_level(logging.INFO):
+        middleware(RequestFactory().get(path))
+    assert not [record for record in caplog.records if getattr(record, "event", "").startswith("http.request")]
 
 
-def test_failed_probe_is_reported_and_repeated_failures_are_summarized(caplog):
+def test_successful_request_emits_info_access_log_without_summary(caplog):
+    request = RequestFactory().get("/api/models/version-1/predict/?token=never-log-this")
+    request.resolver_match = ResolverMatch(
+        lambda req: HttpResponse(), (), {}, route="api/models/{version_id}/predict/"
+    )
+    middleware = RequestContextMiddleware(lambda req: HttpResponse())
+
+    with caplog.at_level(logging.INFO):
+        response = middleware(request)
+
+    assert response.status_code == 200
+    access_logs = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", "") == "http.request.finished"
+    ]
+    assert len(access_logs) == 1
+    assert access_logs[0].method == "GET"
+    assert access_logs[0].route == "api/models/{version_id}/predict/"
+    assert access_logs[0].status_code == 200
+    assert access_logs[0].duration_ms >= 0
+    assert "never-log-this" not in caplog.text
+
+
+def test_failed_probe_is_reported_immediately_each_time(caplog):
     middleware = RequestContextMiddleware(lambda req: HttpResponse(status=503))
-    try:
-        with caplog.at_level(logging.INFO):
-            for _ in range(3):
-                middleware(RequestFactory().get("/health/ready"))
-            middleware.summary.flush()
-        failures = [r for r in caplog.records if getattr(r, "event", "") == "http.request.summary.error"]
-        summaries = [r for r in caplog.records if getattr(r, "event", "") == "http.request.summary"]
-        assert len(failures) == 1
-        assert failures[0].levelno == logging.ERROR
-        assert summaries[-1].failures == 3
-        assert summaries[-1].suppressed == 2
-    finally:
-        middleware.summary.close()
+    with caplog.at_level(logging.INFO):
+        for _ in range(3):
+            middleware(RequestFactory().get("/health/ready"))
+    failures = [r for r in caplog.records if getattr(r, "event", "") == "http.request.failed"]
+    assert len(failures) == 3
+    assert all(record.levelno == logging.ERROR for record in failures)
 
 
 @pytest.mark.parametrize("state", ["SUCCESS", "FAILURE", "RETRY", "REVOKED"])
 def test_task_context_is_scoped_and_never_logs_arguments_or_results(state, monkeypatch):
     outer = bind_context(request_id="outer-request", tenant_id="outer-tenant")
     emitted = Mock()
+    summary = Mock()
     monkeypatch.setattr(celery_logging, "log_event", emitted)
+    monkeypatch.setattr(celery_logging, "task_summary", summary)
     task = SimpleNamespace(
         name="apps.training.tasks.execute_training_job",
         request=SimpleNamespace(
@@ -117,8 +127,10 @@ def test_task_context_is_scoped_and_never_logs_arguments_or_results(state, monke
         celery_logging.task_finish(task=task, state=state, retval={"token": "private-result"})
         assert current_context()["request_id"] == "outer-request"
         assert "private" not in str(emitted.call_args_list)
-        assert emitted.call_args.kwargs["status"] == state
-        assert emitted.call_args.args[2] == "celery.task.finished"
+        assert "private" not in str(summary.mock_calls)
+        assert summary.record.call_args.kwargs["success"] is (state == "SUCCESS")
+        assert summary.record.call_args.kwargs["tasks"] == 1
+        assert summary.record.call_args.kwargs["retries"] == (1 if state == "RETRY" else 0)
     finally:
         reset_context(outer)
 
@@ -146,6 +158,8 @@ def test_retry_signal_emits_one_safe_warning_with_context(caplog):
     task.request = SimpleNamespace(headers={"mlops_context": {"request_id": "retry-request"}}, retries=2)
     job_id = str(uuid.uuid4())
     before = current_context()
+    task_summary = Mock()
+    monkeypatch.setattr(celery_logging, "task_summary", task_summary)
     with caplog.at_level(logging.DEBUG):
         celery_logging.task_start(task_id="retry-task", task=task, args=[job_id, "private-argument"])
         try:
@@ -172,6 +186,7 @@ def test_retry_signal_emits_one_safe_warning_with_context(caplog):
             celery_logging.task_finish(task=task, state="RETRY", retval="private-result")
     assert current_context() == before
     assert len([record for record in caplog.records if record.levelno >= logging.WARNING]) == 1
+    assert task_summary.record.call_args.kwargs["retries"] == 1
 
 
 @pytest.mark.django_db
@@ -319,6 +334,7 @@ def test_gunicorn_uses_local_logging_without_access_handlers(monkeypatch):
 def test_task_failure_emits_one_safe_error(handled, monkeypatch):
     emitted = Mock()
     monkeypatch.setattr(celery_logging, "log_event", emitted)
+    monkeypatch.setattr(celery_logging, "task_summary", Mock())
     task = SimpleNamespace(name="test.task", request=SimpleNamespace(headers={}))
     celery_logging.task_start(task_id="task-1", task=task)
     try:
@@ -365,18 +381,15 @@ def test_unsafe_celery_trace_and_duplicate_django_request_are_filtered():
     assert filter_.filter(request) is False
 
 
-def test_unrelated_success_does_not_reset_failure_suppression(caplog):
+def test_http_failures_are_not_suppressed_after_success(caplog):
     middleware = RequestContextMiddleware(lambda req: HttpResponse(status=200 if req.path == "/ok/" else 503))
-    try:
-        with caplog.at_level(logging.INFO):
-            for path in ("/fail/", "/ok/", "/fail/"):
-                request = RequestFactory().get(path)
-                request.resolver_match = ResolverMatch(lambda req: HttpResponse(), (), {}, route=path)
-                middleware(request)
-        errors = [r for r in caplog.records if getattr(r, "event", "") == "http.request.summary.error"]
-        assert len(errors) == 1
-    finally:
-        middleware.summary.close()
+    with caplog.at_level(logging.INFO):
+        for path in ("/fail/", "/ok/", "/fail/"):
+            request = RequestFactory().get(path)
+            request.resolver_match = ResolverMatch(lambda req: HttpResponse(), (), {}, route=path)
+            middleware(request)
+    errors = [r for r in caplog.records if getattr(r, "event", "") == "http.request.failed"]
+    assert len(errors) == 2
 
 
 def test_build_task_does_not_repeat_callback_ready(project, monkeypatch, django_capture_on_commit_callbacks):

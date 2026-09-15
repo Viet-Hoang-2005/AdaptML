@@ -57,6 +57,15 @@ class RetryState:
     attempts: int = 0
     next_retry_at: float = 0.0
 
+
+class KafkaRecordProcessingError(RuntimeError):
+    """Safe terminal error that retains the parser's type without its payload."""
+
+    def __init__(self, error_type: str):
+        super().__init__("Kafka record processing failed")
+        self.error_type = error_type
+
+
 # Hàm xử lý tín hiệu dừng
 def handle_sigterm(*args):
     global RUNNING
@@ -278,11 +287,10 @@ def main():
                     flush_pending_batch(consumer, pending_batches, retries, key)
                     
             except Exception as parse_e:
-                log_event(logger, "DEBUG", "consumer_record_processing_failed", "Kafka record processing failed; offset retained", error_type=type(parse_e).__name__)
                 # Never allow a later offset to skip an invalid message. The
                 # process exits without committing this position; Compose will
                 # restart it and preserve the event for operator remediation.
-                raise RuntimeError(f"Error parsing Kafka payload: {parse_e}") from parse_e
+                raise KafkaRecordProcessingError(type(parse_e).__name__) from None
                 
     except KeyboardInterrupt:
         log_event(logger, "INFO", "shutdown_requested", "Consumer shutdown requested")
@@ -314,6 +322,16 @@ def run():
     time.sleep(5)
     try:
         main()
+    except KafkaRecordProcessingError as exc:
+        log_event(
+            logger,
+            "ERROR",
+            "consumer_record_processing_failed",
+            "Kafka record processing failed; offset retained",
+            operation="record_parse",
+            error_type=exc.error_type,
+        )
+        raise SystemExit(1) from None
     except Exception as exc:
         log_event(logger, "ERROR", "consumer_failed", "Consumer stopped after an unrecoverable error", error_type=type(exc).__name__, exc_info=True)
         # Replace the raw payload traceback while retaining a failing exit code.

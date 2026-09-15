@@ -14,7 +14,8 @@ Local Control Plane keeps Daphne, with access output disabled via verbosity 0;
 Django installs its service-owned operational handler. Production keeps Gunicorn.
 Gateway and ML-serving launch `python -m src.uvicorn_entrypoint`; spawned Uvicorn
 workers install the local formatter before startup, not only at lifespan. BentoML
-uses local middleware and formatting; successful access logs remain disabled.
+uses local middleware and formatting. Successful non-probe access logs are emitted
+at `INFO`; framework access logs remain disabled to avoid duplicates.
 
 ```text
 ts=2026-09-14T08:30:00.123Z level=INFO service=evidently event=drift.analysis.completed instance=pod-name pid=1 drift_run_id=... duration_ms=1250 msg="Drift analysis completed"
@@ -22,8 +23,8 @@ ts=2026-09-14T08:30:00.123Z level=INFO service=evidently event=drift.analysis.co
 
 ## Defaults and event ownership
 
-- `LOG_LEVEL=INFO`; set `DEBUG` temporarily on the affected service/job for internal
-  steps. Do not enable globally to debug one job.
+- Application-owned logging is fixed at `INFO`; individual events carry the
+  metadata needed for operational debugging without enabling framework debug logs.
 - `LOG_SUMMARY_INTERVAL_SECONDS=60`. Summaries are per process, with `instance` and
   `pid`; empty windows are silent and normal shutdown flushes outstanding counts.
   They are best-effort diagnostics, not a replacement for Prometheus or audit data.
@@ -36,11 +37,14 @@ ts=2026-09-14T08:30:00.123Z level=INFO service=evidently event=drift.analysis.co
   completion is not authoritative business completion; callback replay must not
   emit a second transition. Abrupt SIGKILL/OOM cannot promise a final application
   log; diagnose those using existing runtime/controller status.
-- HTTP successes, production ingestion and event delivery are summarized, not
-  printed per record. Successful probes/scrapes are silent. First dependency/error
-  occurrence is immediate, repeats are counted, recovery is explicit. Flapping
-  failure/recovery messages share the same 60-second cooldown; they cannot bypass
-  suppression by alternating on each request.
+- Every non-probe HTTP request is printed immediately at `INFO`, `WARNING`, or
+  `ERROR` with method, matched route, status and duration. HTTP requests are never
+  summarized or suppressed. Production ingestion and event delivery remain
+  summarized. Successful probes/scrapes are silent.
+- Celery task completion is summarized per worker; task failures and retries are
+  emitted immediately. A malformed Kafka record emits one immediate, sanitized
+  `consumer_record_processing_failed` event before the Consumer exits without
+  committing its offset.
 - Keep persistence and offset commits distinct. Do not describe an enqueued Kafka
   event as acknowledged delivery, or an Argo dispatch as a completed job.
 - Expected client rejection is not an unexpected server exception. A successful

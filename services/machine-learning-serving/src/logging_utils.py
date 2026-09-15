@@ -262,12 +262,22 @@ class ConsoleFormatter(logging.Formatter):
     def format(self, record):
         fields = _record_fields(record, self.service)
         details = []
+        method = fields.get("method")
+        route = fields.get("route")
+        if method and route:
+            details.append(f"{_display(method)} {_display(route)}")
+        elif method:
+            details.append(_display(method))
+        elif route:
+            details.append(_display(route))
         if fields.get("error_type"):
             details.append(f"error={_display(fields['error_type'])}")
         if fields.get("reason"):
             details.append(_display(fields["reason"]))
         if fields.get("status_code"):
             details.append(f"HTTP {fields['status_code']}")
+        if (method or route) and fields.get("duration_ms") is not None:
+            details.append(f"duration={_display(fields['duration_ms'])}ms")
         if fields.get("retry_seconds") is not None:
             attempt = fields.get("attempt")
             prefix = f"retry {attempt} in" if attempt is not None else "retry in"
@@ -316,21 +326,15 @@ class FrameworkFilter(logging.Filter):
         )
 
 
-def configure(service, level=None):
+def configure(service):
     global _service
     _service = service
-    selected = str(level or os.environ.get("LOG_LEVEL", "INFO")).upper()
-    selected = (
-        selected
-        if selected in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
-        else "INFO"
-    )
     root = logging.getLogger()
     handler = SafeStreamHandler(sys.stdout)
     handler.setFormatter(formatter_for(service))
     handler.addFilter(FrameworkFilter())
     root.handlers[:] = [handler]
-    root.setLevel(selected)
+    root.setLevel(logging.INFO)
     for name in (
         "gunicorn.error",
         "uvicorn",
@@ -533,23 +537,31 @@ class Summary:
 
 
 class RequestLoggingMiddleware:
-    def __init__(self, app, service=None):
+    def __init__(self, app, service=None, routes=None):
         self.app = app
-        self.summary = Summary(get_logger(service or "http"), "http.summary")
+        self.logger = get_logger(service or "http")
+        self.routes = routes if routes is not None else ()
+
+    def _route(self, scope):
+        route = getattr(scope.get("route"), "path", None)
+        if route:
+            return route
+        for candidate in self.routes:
+            matches = getattr(candidate, "matches", None)
+            if matches is None:
+                continue
+            try:
+                match, _ = matches(scope)
+            except Exception:
+                continue
+            if getattr(match, "name", None) == "FULL":
+                route = getattr(candidate, "path", None)
+                if route:
+                    return route
+        return "unmatched"
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
-            if scope["type"] == "lifespan":
-
-                async def lifespan_send(message):
-                    if message["type"] in (
-                        "lifespan.shutdown.complete",
-                        "lifespan.shutdown.failed",
-                    ):
-                        self.summary.close()
-                    await send(message)
-
-                return await self.app(scope, receive, lifespan_send)
             return await self.app(scope, receive, send)
         headers = dict(scope.get("headers", []))
         token = bind_context(
@@ -557,11 +569,7 @@ class RequestLoggingMiddleware:
         )
         status, raised = 500, False
         started = time.monotonic()
-
-        def error_key(category):
-            # Matched route templates, never URLs/UUIDs supplied by the caller.
-            route = getattr(scope.get("route"), "path", "unmatched")
-            return f"{scope.get('method', 'HTTP')}:{route}:{category}"
+        route = self._route(scope)
 
         def resource_context():
             # Set by trusted route handlers, never copied from request payloads.
@@ -582,12 +590,17 @@ class RequestLoggingMiddleware:
             await self.app(scope, receive, response_send)
         except Exception as exc:
             raised = True
-            self.summary.failure(
-                error_key("server_exception"),
+            log_event(
+                self.logger,
+                "ERROR",
+                "http.request.failed",
                 "Request raised an exception",
-                level="ERROR",
                 error_type=type(exc).__name__,
                 exc_info=True,
+                status_code=status,
+                method=scope.get("method"),
+                route=route,
+                duration_ms=(time.monotonic() - started) * 1000,
                 **resource_context(),
             )
             raise
@@ -601,27 +614,29 @@ class RequestLoggingMiddleware:
                 "livez",
                 "metrics",
             }
-            route = getattr(scope.get("route"), "path", "unmatched")
-            if status >= 400 or not probe:
-                self.summary.record(
-                    success=status < 400 and not raised,
-                    duration_ms=(time.monotonic() - started) * 1000,
-                )
+            duration_ms = (time.monotonic() - started) * 1000
             if status >= 400 and not raised:
-                category = "server_error" if status >= 500 else "client_error"
-                self.summary.failure(
-                    error_key(category),
+                log_event(
+                    self.logger,
+                    "ERROR" if status >= 500 else "WARNING",
+                    "http.request.failed",
                     "HTTP request failed",
-                    level="ERROR" if status >= 500 else "WARNING",
                     status_code=status,
                     method=scope.get("method"),
                     route=route,
+                    duration_ms=duration_ms,
                     **resource_context(),
                 )
             elif not probe and not raised:
-                self.summary.recovery(
-                    error_key("server_exception"), **resource_context()
+                log_event(
+                    self.logger,
+                    "INFO",
+                    "http.request.finished",
+                    "HTTP request finished",
+                    status_code=status,
+                    method=scope.get("method"),
+                    route=route,
+                    duration_ms=duration_ms,
+                    **resource_context(),
                 )
-                self.summary.recovery(error_key("server_error"), **resource_context())
-                self.summary.recovery(error_key("client_error"), **resource_context())
             reset_context(token)

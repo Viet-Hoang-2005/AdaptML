@@ -30,7 +30,7 @@
 
 ## 1. Tổng quan ⭐
 
-Hệ thống này là một **nền tảng AI Platform-as-a-Service MLOps phục vụ đa mô hình ML/DL**, tự động hóa từ đóng gói mô hình, triển khai dịch vụ suy luận động, quản lý phiên bản, giám sát drift đến huấn luyện mô hình. Nền tảng core chạy trên K3s; Kubeflow Training Operator và Karpenter là phase mở rộng tùy chọn, chỉ được bật sau khi core platform ổn định.
+Hệ thống này là một **nền tảng AI Platform-as-a-Service MLOps phục vụ đa mô hình ML/DL**, tự động hóa từ đóng gói mô hình, triển khai dịch vụ suy luận động, quản lý phiên bản, giám sát drift đến huấn luyện mô hình.
 
 ---
 
@@ -55,24 +55,6 @@ Hệ thống này là một **nền tảng AI Platform-as-a-Service MLOps phục
 
 ## 3. Kiến trúc Hệ thống 🏛️
 
-```text
-React Dashboard / API Client
-        │
-        ▼
-Django DRF modular monolith
-        │  service + transaction.on_commit
-        ▼
-Celery task ──► Docker backend (local)
-        └─────► Argo webhook (production) ──► Kaniko / Kubeflow / Evidently
-
-S3: workspace, snapshots, version artifacts, reports
-PostgreSQL: domain state             Redis: Celery + runtime logs
-MLflow: experiment tracking          Redpanda: inference events/outbox
-Traefik ──► model-server gateway ──► version-specific model worker
-```
-
-Control Plane là modular monolith theo capability: `auth`, `access`, `catalog`, `registry`, `training`, `deployment`, `drift` và `observability`. API chỉ nhận UUID public; integer primary key là chi tiết nội bộ. Cross-domain read đi qua selector, cross-domain write đi qua service.
-
 **1. Quy trình Đóng gói & Triển khai Mô hình (Build & Deploy Workflow)**
 
 ![Build and Deploy Workflow](paper/assets/build-deploy-workflow-dark.png)
@@ -87,7 +69,7 @@ Control Plane là modular monolith theo capability: `auth`, `access`, `catalog`,
 
 > 💡 **Tài liệu Kỹ thuật Chuyên sâu:** Xem giải thích chi tiết về luồng dữ liệu, sơ đồ tuần tự (Sequence Diagrams), cơ chế bảo mật Zero-Trust và lược đồ cơ sở dữ liệu tại [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**Log backend:** Mỗi service tự chứa `logging_utils.py` và build image từ thư mục riêng; không phụ thuộc package logging dùng chung. Mặc định container in một dòng console dễ đọc, còn `LOG_FORMAT=json` cung cấp metadata đầy đủ khi điều tra sự cố. Mức mặc định là `INFO`, lưu lượng được tổng hợp mỗi 60 giây; log chi tiết từng job được giữ riêng hoặc fallback về container nếu chưa có đường lưu phù hợp. Xem [quy ước logging, cấu hình và kiểm thử](docs/backend-logging.md).
+**Log backend:** Mỗi service tự chứa `logging_utils.py` và build image từ thư mục riêng; không phụ thuộc package logging dùng chung. Ứng dụng luôn ghi log tại mức `INFO`; `LOG_FORMAT=json` vẫn cung cấp metadata đầy đủ khi điều tra sự cố. Web service in từng request không phải probe ngay lập tức, gồm method, route, status và thời gian xử lý; tổng hợp 60 giây chỉ còn dùng cho tác vụ lưu lượng cao không phải HTTP. Log chi tiết từng job được giữ riêng hoặc fallback về container nếu chưa có đường lưu phù hợp. Xem [quy ước logging, cấu hình và kiểm thử](docs/dev/backend-logging.md).
 
 ---
 
@@ -289,12 +271,6 @@ Production được triển khai theo ba lớp ownership rõ ràng:
 - **Ansible** chuẩn bị Ubuntu, cài K3s, publish K3s agent token và bootstrap Argo CD.
 - **Argo CD** cài core/training operators và quản lý toàn bộ Kubernetes resource của Karpenter, gồm `EC2NodeClass` và `NodePool`.
 
-Core platform dùng một K3s server và hai static worker. Server chạy embedded etcd, secrets encryption và snapshot định kỳ; đây vẫn là **single control-plane**, chưa phải HA. Bộ policy tổng quát trong `k8s/security` vẫn được chủ động hoãn, nhưng các NetworkPolicy tối thiểu bảo vệ Argo EventSource/EventBus nằm trong `k8s/argo` và được production GitOps reconcile.
-
-Sau `platform-core`, root Application để Argo CD reconcile core add-ons, cluster configuration và shared platform services theo lifecycle wave. Ansible chỉ chạy smoke verification trong phase `platform-training`. Dù các training add-on được cài, tenant training vẫn đóng: `TRAINING_ENABLED=false`, API submit trả HTTP 503 và UI không hiển thị thao tác submit/GPU.
-
-Ở production, Celery giữ lifecycle state trong PostgreSQL và dispatch side effect sau transaction commit. Build, deployment và drift đi qua Argo Events/Workflows. Sáu webhook nội bộ dùng bearer token riêng, EventBus dùng token authentication, NetworkPolicy chỉ cho Control Plane worker gọi EventSource và mỗi Workflow chạy bằng service account tối thiểu theo chức năng. Training controllers có thể được cài nhưng tenant training vẫn chỉ được mở sau một rollout cô lập workload riêng.
-
 #### Bước 1: Khởi tạo hạ tầng AWS bằng Terraform
 
 Sau khi destroy **toàn bộ** AWS, chuẩn bị trước khi apply:
@@ -367,7 +343,7 @@ cp .env.example .env
 ```bash
 cd ..
 
-# Dùng virtual environment riêng để không sửa Python hệ thống của WSL.
+# Dùng virtual environment riêng để không sửa Python hệ thống
 python3 -m venv .venv-secrets
 source .venv-secrets/bin/activate
 python -m pip install boto3 python-dotenv

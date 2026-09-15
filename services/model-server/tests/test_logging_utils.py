@@ -80,6 +80,23 @@ class LoggingTests(unittest.TestCase):
         self.assertNotIn("features", line)
         self.assertEqual(current_context(), {})
 
+    def test_console_format_includes_http_access_metadata(self):
+        log_event(
+            self.logger,
+            "DEBUG",
+            "http.request.finished",
+            "HTTP request finished",
+            method="GET",
+            route="/models/{version_id}/predict",
+            status_code=200,
+            duration_ms=12.5,
+        )
+        line = self.output.getvalue()
+        self.assertIn(
+            "GET /models/{version_id}/predict; HTTP 200; duration=12.5ms", line
+        )
+        self.assertEqual(len(line.splitlines()), 1)
+
     def test_json_format_keeps_metadata_and_numeric_fields(self):
         output = io.StringIO()
         logger = logging.Logger("json-test", logging.DEBUG)
@@ -244,13 +261,13 @@ class LoggingTests(unittest.TestCase):
         self.assertIsNone(summary.thread)
         summary.close()
 
-    def test_configuration_is_idempotent_and_bad_level_falls_back(self):
+    def test_configuration_is_idempotent_and_uses_info(self):
         root = logging.getLogger()
         previous, level = root.handlers[:], root.level
         try:
             with patch("sys.stdout", self.output):
-                configure("test", "invalid")
-                configure("test", "invalid")
+                configure("test")
+                configure("test")
                 log_event(logging.getLogger("test"), "INFO", "service.ready", "Ready")
             self.assertEqual(root.level, logging.INFO)
             self.assertEqual(len(root.handlers), 1)
@@ -290,18 +307,45 @@ class LoggingTests(unittest.TestCase):
             pass
 
         middleware = RequestLoggingMiddleware(app)
-        middleware.summary.logger = self.logger
+        middleware.logger = self.logger
+        predict_route = type("Route", (), {"path": "/predict"})()
+        health_route = type("Route", (), {"path": "/health"})()
 
         async def run():
-            await middleware({"type": "http", "path": "/health"}, noop, noop)
-            self.assertFalse(middleware.summary.counts)
             await middleware(
-                {"type": "http", "path": "/health", "test_status": 500}, noop, noop
+                {"type": "http", "path": "/health", "method": "GET", "route": health_route},
+                noop,
+                noop,
             )
-            await middleware({"type": "http", "path": "/predict"}, noop, noop)
+            await middleware(
+                {"type": "http", "path": "/health", "method": "GET", "route": health_route, "test_status": 500},
+                noop,
+                noop,
+            )
+            await middleware(
+                {"type": "http", "path": "/predict", "method": "GET", "route": predict_route},
+                noop,
+                noop,
+            )
 
         asyncio.run(run())
-        middleware.summary.close()
-        self.assertIn("HTTP 500", self.output.getvalue())
-        self.assertNotIn("request_id=", self.output.getvalue())
+        output = self.output.getvalue()
+        self.assertIn("GET /health; HTTP 500; duration=", output)
+        self.assertIn("GET /predict; HTTP 200; duration=", output)
+        self.assertNotIn("GET /health; HTTP 200", output)
+        self.assertNotIn("request_id=", output)
         self.assertEqual(current_context(), {})
+
+    def test_asgi_route_resolver_uses_template(self):
+        class Candidate:
+            path = "/models/{version_id}/predict"
+
+            @staticmethod
+            def matches(scope):
+                return type("Match", (), {"name": "FULL"})(), {}
+
+        middleware = RequestLoggingMiddleware(lambda *_: None, routes=[Candidate()])
+        self.assertEqual(
+            middleware._route({"type": "http", "path": "/models/private-id/predict"}),
+            "/models/{version_id}/predict",
+        )

@@ -5,7 +5,6 @@ metadata:
   labels:
     app: mlops-paas-model-server
 data:
-  LOG_LEVEL: "INFO"
   LOG_FORMAT: "console"
   LOG_SUMMARY_INTERVAL_SECONDS: "60"
   DB_HOST_RO: "mlops-paas-postgres-ro.mlops-postgres.svc.cluster.local"

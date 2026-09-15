@@ -234,7 +234,7 @@ def test_main_disables_automatic_offset_storage(monkeypatch):
     assert captured_conf["enable.auto.offset.store"] is False
 
 
-def test_main_ignores_malformed_message(monkeypatch):
+def test_main_raises_safe_error_for_malformed_message(monkeypatch):
     bad = FakeMessage()
     bad.value = lambda: b"not-json"
     fake = FakeConsumer([bad])
@@ -243,8 +243,10 @@ def test_main_ignores_malformed_message(monkeypatch):
     monkeypatch.setattr(main, "init_db", Mock())
     install_fake_dispatcher(monkeypatch)
     main.RUNNING = True
-    with pytest.raises(RuntimeError, match="Error parsing Kafka payload"):
+    with pytest.raises(main.KafkaRecordProcessingError) as exc:
         main.main()
+    assert exc.value.error_type == "JSONDecodeError"
+    assert "not-json" not in str(exc.value)
     assert fake.commits == 0 and fake.closed
 
 

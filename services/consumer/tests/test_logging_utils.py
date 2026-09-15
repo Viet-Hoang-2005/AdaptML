@@ -204,13 +204,13 @@ class LoggingTests(unittest.TestCase):
         self.assertIsNone(summary.thread)
         summary.close()
 
-    def test_configuration_is_idempotent_and_bad_level_falls_back(self):
+    def test_configuration_is_idempotent_and_uses_info(self):
         root = logging.getLogger()
         previous, level = root.handlers[:], root.level
         try:
             with patch("sys.stdout", self.output):
-                configure("test", "invalid")
-                configure("test", "invalid")
+                configure("test")
+                configure("test")
                 log_event(logging.getLogger("test"), "INFO", "service.ready", "Ready")
             self.assertEqual(root.level, logging.INFO)
             self.assertEqual(len(root.handlers), 1)

@@ -1,13 +1,9 @@
 import argparse
-import os
 
 from src.logging_utils import log_format
 
 
 def server_log_config(service):
-    level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    if level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
-        level = "INFO"
     return {
         "version": 1,
         "disable_existing_loggers": False,
@@ -28,7 +24,7 @@ def server_log_config(service):
                 "filters": ["framework"],
             }
         },
-        "root": {"handlers": ["console"], "level": level},
+        "root": {"handlers": ["console"], "level": "INFO"},
         "loggers": {
             "uvicorn": {"handlers": [], "propagate": True},
             "uvicorn.error": {"handlers": [], "propagate": True},

@@ -10,7 +10,10 @@ from src import index, loading
 
 
 def test_worker_installs_request_logging():
-    assert sum(item.cls is RequestLoggingMiddleware for item in index.app.user_middleware) == 1
+    middleware = next(
+        item for item in index.app.user_middleware if item.cls is RequestLoggingMiddleware
+    )
+    assert middleware.kwargs["routes"] is index.app.router.routes
 
 
 def test_model_load_failure_and_recovery_omit_artifact_and_features(monkeypatch, tmp_path):

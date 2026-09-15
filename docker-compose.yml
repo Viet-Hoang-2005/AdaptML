@@ -11,7 +11,6 @@ services:
       - "8000:8000"
     environment:
       PYTHONUNBUFFERED: 1
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
       PYTHONPATH: /app/src
@@ -92,7 +91,6 @@ services:
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: 1
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
       PYTHONPATH: /app/src
@@ -136,7 +134,7 @@ services:
     volumes:
       - ./services/control-plane:/app
       - /var/run/docker.sock:/var/run/docker.sock
-    command: celery -A config worker --loglevel=${LOG_LEVEL:-INFO} --concurrency=2
+    command: celery -A config worker --concurrency=2
     depends_on:
       control-plane:
         condition: service_started
@@ -157,7 +155,6 @@ services:
       - "5001:5000"
     environment:
       PYTHONUNBUFFERED: 1
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
       DB_HOST_RO: postgres
@@ -197,7 +194,6 @@ services:
     image: mlops-paas-machine-learning-serving:latest
     container_name: mlops_paas_machine_learning_serving
     environment:
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     restart: "no"
@@ -218,9 +214,7 @@ services:
     image: mlops-paas-deep-learning-serving:latest
     container_name: mlops_paas_deep_learning_serving
     environment:
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-console}
-      LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     restart: "no"
     command:
       - python
@@ -265,9 +259,7 @@ services:
         log_event(configure('model-packager'), 'INFO', 'image.ready', 'Runtime image ready for dynamic execution')
     environment:
       PYTHONUNBUFFERED: 1
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-console}
-      LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     networks:
       - mlops_paas_network
 
@@ -287,9 +279,7 @@ services:
         log_event(configure('evidently'), 'INFO', 'image.ready', 'Runtime image ready for dynamic execution')
     environment:
       PYTHONUNBUFFERED: 1
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-console}
-      LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     networks:
       - mlops_paas_network
 
@@ -307,9 +297,7 @@ services:
         from src.logging_utils import configure, log_event;
         log_event(configure('training-runner'), 'INFO', 'image.ready', 'Runtime image ready for dynamic execution')
     environment:
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-console}
-      LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
     networks:
       - mlops_paas_network
 
@@ -404,7 +392,7 @@ services:
     networks:
       - mlops_paas_network
 
-  # 7.2 Kafka Consumer
+  # 7.2 Redpanda Consumer
   consumer:
     build:
       context: ./services/consumer
@@ -414,7 +402,6 @@ services:
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: 1
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-console}
       LOG_SUMMARY_INTERVAL_SECONDS: ${LOG_SUMMARY_INTERVAL_SECONDS:-60}
       DB_HOST_RW: postgres

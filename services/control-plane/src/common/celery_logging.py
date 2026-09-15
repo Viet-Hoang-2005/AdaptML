@@ -7,9 +7,10 @@ import uuid
 from celery.signals import before_task_publish, setup_logging, task_failure, task_postrun, task_prerun, task_retry
 
 from common.logging import configure_logging, failure_reported
-from common.logging_utils import bind_context, current_context, get_logger, log_event, reset_context
+from common.logging_utils import Summary, bind_context, current_context, get_logger, log_event, reset_context
 
 logger = get_logger(__name__)
+task_summary = Summary(logger, "celery_task_summary")
 CONTEXT_FIELDS = (
     "request_id",
     "tenant_id",
@@ -107,7 +108,6 @@ def task_start(task_id=None, task=None, args=None, kwargs=None, **extra):
     )
     task.request._logging_started_at = time.monotonic()
     task.request._logging_failure_token = failure_reported.set(False)
-    log_event(logger, "DEBUG", "celery.task.started", "Celery task started")
 
 
 @task_failure.connect(dispatch_uid="control_plane.logging.failure")
@@ -150,13 +150,11 @@ def task_finish(task_id=None, task=None, state=None, **kwargs):
         if state == "FAILURE" and not failure_reported.get():
             task_failed(sender=task)
         started = getattr(task.request, "_logging_started_at", time.monotonic())
-        log_event(
-            logger,
-            "DEBUG",
-            "celery.task.finished",
-            "Celery invocation finished",
-            status=state or "UNKNOWN",
+        task_summary.record(
+            success=state == "SUCCESS",
             duration_ms=(time.monotonic() - started) * 1000,
+            tasks=1,
+            retries=1 if state == "RETRY" else 0,
         )
     finally:
         if token is not None:

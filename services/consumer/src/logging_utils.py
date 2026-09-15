@@ -316,21 +316,15 @@ class FrameworkFilter(logging.Filter):
         )
 
 
-def configure(service, level=None):
+def configure(service):
     global _service
     _service = service
-    selected = str(level or os.environ.get("LOG_LEVEL", "INFO")).upper()
-    selected = (
-        selected
-        if selected in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
-        else "INFO"
-    )
     root = logging.getLogger()
     handler = SafeStreamHandler(sys.stdout)
     handler.setFormatter(formatter_for(service))
     handler.addFilter(FrameworkFilter())
     root.handlers[:] = [handler]
-    root.setLevel(selected)
+    root.setLevel(logging.INFO)
     for name in (
         "gunicorn.error",
         "uvicorn",

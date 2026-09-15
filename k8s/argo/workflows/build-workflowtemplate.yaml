@@ -92,9 +92,6 @@ spec:
         volumeMounts:
           - {name: workspace, mountPath: /workspace}
         env:
-          - name: LOG_LEVEL
-            valueFrom:
-              configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_LEVEL}
           - name: LOG_FORMAT
             valueFrom:
               configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_FORMAT}
@@ -150,9 +147,6 @@ spec:
         volumeMounts:
           - {name: workspace, mountPath: /workspace}
         env:
-          - name: LOG_LEVEL
-            valueFrom:
-              configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_LEVEL}
           - name: LOG_FORMAT
             valueFrom:
               configMapKeyRef: {name: mlops-paas-execution-config, key: LOG_FORMAT}

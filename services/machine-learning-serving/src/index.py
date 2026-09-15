@@ -35,7 +35,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(RequestLoggingMiddleware, routes=app.router.routes)
 
 class InferenceRequest(BaseModel):
     features: Dict[str, Any]

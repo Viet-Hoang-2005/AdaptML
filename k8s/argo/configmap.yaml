@@ -4,7 +4,6 @@ metadata:
   name: mlops-paas-execution-config
   namespace: mlops-execution
 data:
-  LOG_LEVEL: "INFO"
   LOG_FORMAT: "console"
   LOG_SUMMARY_INTERVAL_SECONDS: "60"
   AWS_DEFAULT_REGION: "ap-southeast-1"

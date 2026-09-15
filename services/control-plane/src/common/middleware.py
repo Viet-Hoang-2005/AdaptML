@@ -1,7 +1,7 @@
 import contextvars
 import time
 
-from common.logging_utils import Summary, bind_context, get_logger, log_event, reset_context
+from common.logging_utils import bind_context, get_logger, log_event, reset_context
 from common.logging_utils import request_id as correlation_id
 from common.metrics import API_DURATION, API_REQUESTS
 
@@ -12,7 +12,6 @@ logger = get_logger(__name__)
 class RequestContextMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
-        self.summary = Summary(logger, "http.request.summary")
 
     def __call__(self, request):
         request._mlops_request_logging = True
@@ -47,8 +46,6 @@ class RequestContextMiddleware:
                     "healthz",
                     "metrics",
                 }
-                if status_code >= 400 or not probe:
-                    self.summary.record(success=status_code < 400, duration_ms=duration_ms)
                 fields = {
                     "method": request.method,
                     "route": route,
@@ -56,21 +53,19 @@ class RequestContextMiddleware:
                     "duration_ms": duration_ms,
                     "tenant_id": str(tenant_id) if tenant_id else None,
                 }
-                operation = f"{request.method}:{route}"
                 if status_code >= 400:
                     exc_info = getattr(request, "_mlops_exception", None)
-                    self.summary.failure(
-                        f"{operation}:{'server_error' if status_code >= 500 else 'client_error'}",
+                    log_event(
+                        logger,
+                        "ERROR" if status_code >= 500 else "WARNING",
+                        "http.request.failed",
                         "HTTP request failed",
-                        level="ERROR" if status_code >= 500 else "WARNING",
                         error_type=exc_info[0].__name__ if exc_info else None,
                         exc_info=exc_info,
                         **fields,
                     )
                 elif not probe:
-                    self.summary.recovery(f"{operation}:server_error")
-                    self.summary.recovery(f"{operation}:client_error")
-                    log_event(logger, "DEBUG", "http.request.finished", "HTTP request finished", **fields)
+                    log_event(logger, "INFO", "http.request.finished", "HTTP request finished", **fields)
             finally:
                 request.__dict__.pop("_mlops_exception", None)
                 reset_context(logging_token)

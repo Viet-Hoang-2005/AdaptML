@@ -124,7 +124,7 @@ def test_dispatcher_thread_failure_remains_observable_without_raw_traceback(monk
     assert "feature-payload" not in capsys.readouterr().err
 
 
-def test_malformed_record_has_one_error_with_safe_traceback(monkeypatch):
+def test_malformed_record_has_one_immediate_safe_error(monkeypatch):
     from test_consumer import FakeConsumer, FakeMessage, install_fake_dispatcher
 
     class MalformedMessage(FakeMessage):
@@ -151,10 +151,9 @@ def test_malformed_record_has_one_error_with_safe_traceback(monkeypatch):
     lines = output.getvalue().splitlines()
     errors = [line for line in lines if "[ERROR]:" in line]
     assert len(errors) == 1
-    assert "Consumer stopped after an unrecoverable error" in errors[0]
-    assert "traceback:" in errors[0]
-    assert "main.py:" in errors[0]
-    assert any("[DEBUG]:" in line and "Kafka record processing failed" in line for line in lines)
+    assert "Kafka record processing failed; offset retained" in errors[0]
+    assert "error=JSONDecodeError" in errors[0]
+    assert not any("[DEBUG]:" in line and "Kafka record processing failed" in line for line in lines)
     assert "private-feature-payload" not in output.getvalue()
     assert consumer.closed
     assert consumer.commits == 0

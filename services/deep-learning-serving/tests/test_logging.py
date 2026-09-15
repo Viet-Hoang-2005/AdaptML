@@ -46,7 +46,7 @@ def test_only_duplicate_bentoml_request_exceptions_are_filtered():
         reset_context(token)
 
 
-def test_bentoml_http_failure_is_summarized_without_framework_duplicate(monkeypatch, caplog):
+def test_bentoml_http_failure_is_logged_without_framework_duplicate(monkeypatch, caplog):
     from starlette.testclient import TestClient
 
     model = Mock()
@@ -59,7 +59,7 @@ def test_bentoml_http_failure_is_summarized_without_framework_duplicate(monkeypa
             response = client.post("/predict", json={"payload": {"features": {"x": "feature-payload"}}})
             assert response.status_code == 500
         assert client.post("/health", json={}).status_code == 200
-    errors = [record for record in caplog.records if getattr(record, "event", "") == "http.summary.error"]
-    assert len(errors) == 1
+    errors = [record for record in caplog.records if getattr(record, "event", "") == "http.request.failed"]
+    assert len(errors) == 2
     assert not any(record.msg == "Exception on %s [%s]" for record in caplog.records)
     assert "feature-payload" not in caplog.text

@@ -5,7 +5,6 @@ metadata:
   labels:
     app: mlops-paas-consumer
 data:
-  LOG_LEVEL: "INFO"
   LOG_FORMAT: "console"
   LOG_SUMMARY_INTERVAL_SECONDS: "60"
   KAFKA_TOPIC: "mlops_paas_production_data"

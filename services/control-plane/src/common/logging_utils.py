@@ -58,6 +58,7 @@ _FIELDS = frozenset(
         "offset",
         "count",
         "records",
+        "tasks",
         "batches",
         "published",
         "persisted",
@@ -246,12 +247,22 @@ class ConsoleFormatter(logging.Formatter):
     def format(self, record):
         fields = _record_fields(record, self.service)
         details = []
+        method = fields.get("method")
+        route = fields.get("route")
+        if method and route:
+            details.append(f"{_display(method)} {_display(route)}")
+        elif method:
+            details.append(_display(method))
+        elif route:
+            details.append(_display(route))
         if fields.get("error_type"):
             details.append(f"error={_display(fields['error_type'])}")
         if fields.get("reason"):
             details.append(_display(fields["reason"]))
         if fields.get("status_code"):
             details.append(f"HTTP {fields['status_code']}")
+        if (method or route) and fields.get("duration_ms") is not None:
+            details.append(f"duration={_display(fields['duration_ms'])}ms")
         if fields.get("retry_seconds") is not None:
             attempt = fields.get("attempt")
             prefix = f"retry {attempt} in" if attempt is not None else "retry in"
@@ -297,17 +308,15 @@ class FrameworkFilter(logging.Filter):
         return not (record.name == "uvicorn.error" and record.getMessage().startswith("Exception in ASGI application"))
 
 
-def configure(service, level=None):
+def configure(service):
     global _service
     _service = service
-    selected = str(level or os.environ.get("LOG_LEVEL", "INFO")).upper()
-    selected = selected if selected in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL") else "INFO"
     root = logging.getLogger()
     handler = SafeStreamHandler(sys.stdout)
     handler.setFormatter(formatter_for(service))
     handler.addFilter(FrameworkFilter())
     root.handlers[:] = [handler]
-    root.setLevel(selected)
+    root.setLevel(logging.INFO)
     for name in (
         "gunicorn.error",
         "uvicorn",
@@ -363,6 +372,7 @@ def _summary_message(event, counts, elapsed):
         ("successes", "succeeded"),
         ("failures", "failed"),
         ("records", "records"),
+        ("tasks", "tasks"),
         ("batches", "batches"),
         ("published", "published"),
         ("persisted", "persisted"),

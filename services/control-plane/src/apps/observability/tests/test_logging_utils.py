@@ -54,6 +54,23 @@ class LoggingTests(unittest.TestCase):
         self.assertNotIn("features", line)
         self.assertEqual(current_context(), {})
 
+    def test_console_format_includes_http_access_metadata(self):
+        log_event(
+            self.logger,
+            "DEBUG",
+            "http.request.finished",
+            "HTTP request finished",
+            method="GET",
+            route="api/models/{version_id}/predict/",
+            status_code=200,
+            duration_ms=12.5,
+        )
+        line = self.output.getvalue()
+        self.assertIn(
+            "GET api/models/{version_id}/predict/; HTTP 200; duration=12.5ms", line
+        )
+        self.assertEqual(len(line.splitlines()), 1)
+
     def test_json_format_keeps_metadata_and_numeric_fields(self):
         output = io.StringIO()
         logger = logging.Logger("json-test", logging.DEBUG)
@@ -198,19 +215,27 @@ class LoggingTests(unittest.TestCase):
         self.assertIsNone(summary.thread)
         summary.close()
 
-    def test_configuration_is_idempotent_and_bad_level_falls_back(self):
+    def test_configuration_is_idempotent_and_uses_info(self):
         root = logging.getLogger()
         previous, level = root.handlers[:], root.level
         try:
             with patch("sys.stdout", self.output):
-                configure("test", "invalid")
-                configure("test", "invalid")
+                configure("test")
+                configure("test")
                 log_event(logging.getLogger("test"), "INFO", "service.ready", "Ready")
             self.assertEqual(root.level, logging.INFO)
             self.assertEqual(len(root.handlers), 1)
             self.assertEqual(self.output.getvalue().count("Ready"), 1)
         finally:
             root.handlers[:], root.level = previous, level
+
+    def test_task_summary_includes_task_count(self):
+        summary = Summary(self.logger, "celery_task_summary", interval=3600)
+        try:
+            summary.record(tasks=3, duration_ms=12)
+        finally:
+            summary.close()
+        self.assertIn("3 tasks", self.output.getvalue())
 
     def test_log_format_accepts_only_console_or_json(self):
         with patch.dict(os.environ, {"LOG_FORMAT": "json"}):

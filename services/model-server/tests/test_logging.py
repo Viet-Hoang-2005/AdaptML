@@ -10,7 +10,10 @@ from src import database, index
 
 
 def test_gateway_installs_request_logging():
-    assert sum(item.cls is RequestLoggingMiddleware for item in index.app.user_middleware) == 1
+    middleware = next(
+        item for item in index.app.user_middleware if item.cls is RequestLoggingMiddleware
+    )
+    assert middleware.kwargs["routes"] is index.app.router.routes
 
 
 def test_publication_summarizes_enqueue_failure_and_recovery_without_payload(monkeypatch):
@@ -148,7 +151,7 @@ def test_http_failure_keeps_resource_context_after_handler_reset(monkeypatch, ca
     with TestClient(app) as client:
         response = client.post("/models/request-version/predict", json={"features": {"project_id": "untrusted"}}, headers={"X-Request-ID": "request-1"})
     assert response.status_code == 503
-    errors = [record for record in caplog.records if getattr(record, "event", "") == "http.summary.error"]
+    errors = [record for record in caplog.records if getattr(record, "event", "") == "http.request.failed"]
     assert len(errors) == 1
     assert errors[0].tenant_id == "trusted-tenant"
     assert errors[0].project_id == "trusted-project"

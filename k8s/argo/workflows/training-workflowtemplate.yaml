@@ -130,7 +130,6 @@ spec:
                             cpu: "{{inputs.parameters.vcpu}}"
                             memory: "{{inputs.parameters.memory}}Mi"
                         env:
-                          - {name: LOG_LEVEL, value: "INFO"}
                           - {name: LOG_FORMAT, value: "console"}
                           - {name: LOG_SUMMARY_INTERVAL_SECONDS, value: "60"}
                           - {name: S3_SOURCE_URI, value: {{=toJson(inputs.parameters.s3_source_uri)}}}
@@ -215,7 +214,6 @@ spec:
                             memory: "{{inputs.parameters.memory}}Mi"
                             nvidia.com/gpu: "{{inputs.parameters.accelerator_count}}"
                         env:
-                          - {name: LOG_LEVEL, value: "INFO"}
                           - {name: LOG_FORMAT, value: "console"}
                           - {name: LOG_SUMMARY_INTERVAL_SECONDS, value: "60"}
                           - {name: S3_SOURCE_URI, value: {{=toJson(inputs.parameters.s3_source_uri)}}}
