@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 from src.logging_utils import ConsoleFormatter, JsonFormatter, Summary
 
-from src import database, drift_outbox, main
+from src import database, drift_outbox, kafka_runtime as main
 
 
 def test_persistence_and_offset_commit_are_summarized_separately(monkeypatch):
@@ -43,10 +43,12 @@ def test_database_rollback_reports_failure_without_counting_persisted_records(mo
     monkeypatch.setattr(database, "engine_rw", engine)
     monkeypatch.setattr(database, "persistence_summary", summary)
     monkeypatch.setattr(database, "_save_dataframe", Mock(side_effect=RuntimeError("SQL parameters: feature-payload")))
-    assert not database.save_dataframe_and_automatic_drift_signals(pd.DataFrame({"id": ["1"]}), "logs", [])
+    assert not database.save_inference_events_and_production_data_and_automatic_drift_signals(
+        pd.DataFrame({"id": ["1"]}), pd.DataFrame(), [],
+    )
     assert summary.record.call_args.kwargs["success"] is False
     assert "records" not in summary.record.call_args.kwargs
-    summary.failure.assert_called_once_with("write", "Production data and drift signal transaction failed", error_type="RuntimeError")
+    summary.failure.assert_called_once_with("write", "Inference telemetry and production data transaction failed", error_type="RuntimeError")
 
 
 def test_offset_error_objects_are_not_logged(monkeypatch):

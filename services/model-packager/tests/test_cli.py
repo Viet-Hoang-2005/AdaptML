@@ -8,7 +8,7 @@ import pytest
 
 from types import SimpleNamespace
 from unittest.mock import Mock
-from src import cli
+from src import tasks as cli
 
 class StreamResponse:
     def __init__(self, chunks=None, status_code=200, text=""):

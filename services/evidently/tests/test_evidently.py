@@ -7,7 +7,7 @@ import pytest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
-from src import main
+from src import application as main
 
 
 class Context:

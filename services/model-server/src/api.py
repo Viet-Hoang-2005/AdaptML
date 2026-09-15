@@ -23,6 +23,11 @@ from src.logging_utils import (
     request_id as validated_request_id, reset_context,
 )
 from src.logging_utils import RequestLoggingMiddleware
+from src import auth as auth_service
+from src.events import publish_inference_event
+from src.inference import parse_worker_prediction
+from src.routing import resolve_worker_url, serving_engine_for_flavor
+from src.schemas import InferenceRequest
 
 logger = get_logger(__name__)
 publication_summary = Summary(logger, "inference_enqueue_summary")
@@ -41,7 +46,6 @@ JWKS_URL = os.environ.get("JWKS_URL", "http://control-plane:8000/api/auth/.well-
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "redpanda:9092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "mlops_paas_production_data")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/1")
-DEEP_LEARNING_FLAVORS = frozenset({"pytorch", "tensorflow"})
 
 
 def create_redis_client():
@@ -123,84 +127,33 @@ Instrumentator().instrument(app).expose(app)
 JWKS_CACHE: Dict[str, Any] = {}
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-class InferenceRequest(BaseModel):
-    features: Dict[str, Any]
-
 async def get_public_key(kid: str):
-    if kid not in JWKS_CACHE:
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(JWKS_URL, timeout=5.0)
-                response.raise_for_status()
-                jwks = response.json()
-                for key_data in jwks.get("keys", []):
-                    if key_data.get("kid") == kid:
-                        public_key = RSAAlgorithm.from_jwk(json.dumps(key_data))
-                        JWKS_CACHE[kid] = public_key
-                        jwks_summary.recovery("fetch")
-                        return public_key
-                jwks_summary.recovery("fetch")
-        except Exception as exc:
-            jwks_summary.failure("fetch", "JWKS fetch or parse failed", error_type=type(exc).__name__)
-            return None
-    return JWKS_CACHE.get(kid)
+    return await auth_service.fetch_public_key(
+        kid,
+        cache=JWKS_CACHE,
+        jwks_url=JWKS_URL,
+        summary=jwks_summary,
+        http_client_factory=httpx.AsyncClient,
+        rsa_algorithm=RSAAlgorithm,
+    )
+
 
 async def verify_model_access(
     version_id: str,
     api_key: str = Security(api_key_header),
     authorization: str = Header(None),
 ):
-    try:
-        uuid.UUID(version_id)
-        model_record = get_model_version_record(version_id, redis_client=redis_client)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-        
-    if not model_record:
-        raise HTTPException(status_code=404, detail="Model version not found.")
-        
-    model_tenant_id = model_record["tenant_id"]
+    return await auth_service.authorize_model_access(
+        version_id,
+        api_key,
+        authorization,
+        redis_client=redis_client,
+        get_model_version_record=get_model_version_record,
+        verify_project_api_key=verify_project_api_key,
+        get_public_key=get_public_key,
+        jwt_module=jwt,
+    )
 
-    if model_record["access_mode"] == "public":
-        return {"tenant_id": model_tenant_id, "auth_type": "public", "model_record": model_record}
-
-    if api_key:
-        key_record = verify_project_api_key(api_key, model_record["project_pk"])
-        if not key_record:
-            raise HTTPException(status_code=401, detail="Unauthorized: Invalid or revoked API Key")
-        cached_tenant_id = key_record["tenant_id"]
-        if cached_tenant_id != model_tenant_id:
-            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to access this model.")
-            
-        return {"tenant_id": cached_tenant_id, "auth_type": "api_key", "model_record": model_record}
-
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Unauthorized: Missing API Key or Bearer Token")
-
-    token = authorization.split(" ")[1]
-
-    try:
-        unverified_header = jwt.get_unverified_header(token)
-        kid = unverified_header.get("kid")
-        if not kid:
-            raise HTTPException(status_code=401, detail="Unauthorized: JWT missing 'kid' header")
-
-        public_key = await get_public_key(kid)
-        if not public_key:
-            raise HTTPException(status_code=401, detail="Unauthorized: Unable to verify token signature")
-
-        payload = jwt.decode(token, public_key, algorithms=["RS256"], audience="mlops-paas")
-        token_tenant_id = payload.get("tenant_id")
-        if token_tenant_id != model_tenant_id:
-            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to access this model.")
-
-        payload["auth_type"] = "jwt"
-        payload["model_record"] = model_record
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Unauthorized: Token has expired")
-    except jwt.InvalidTokenError as exc:
-        raise HTTPException(status_code=401, detail=f"Unauthorized: Invalid token ({exc})")
 
 def send_to_redpanda(
     tenant_id: str,
@@ -214,82 +167,22 @@ def send_to_redpanda(
     status_code: int = 200,
     request_id: str | None = None,
 ):
-    if kafka_producer is None:
-        publication_summary.record(success=False)
-        publication_summary.failure("publish", "Inference event producer unavailable")
-        return
+    return publish_inference_event(
+        kafka_producer,
+        publication_summary,
+        KAFKA_TOPIC,
+        tenant_id,
+        project_id,
+        model_version_id,
+        features_dict,
+        prediction_result,
+        prediction_id=prediction_id,
+        confidence=confidence,
+        latency_ms=latency_ms,
+        status_code=status_code,
+        request_id=request_id,
+    )
 
-    started = time.perf_counter()
-    try:
-        record_id = prediction_id or str(uuid.uuid4())
-        payload = {
-            "id": record_id,
-            "prediction_id": record_id,
-            "tenant_id": tenant_id,
-            "project_id": project_id,
-            "model_version_id": model_version_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "features": features_dict,
-            "prediction": prediction_result,
-            "confidence": confidence,
-            "latency_ms": latency_ms,
-            "status_code": status_code,
-            "request_id": request_id,
-        }
-
-        kafka_producer.produce(
-            topic=KAFKA_TOPIC,
-            key=record_id.encode("utf-8"),
-            value=json.dumps(payload).encode("utf-8"),
-        )
-        kafka_producer.poll(0)
-        # Enqueued locally; this does not claim broker acknowledgement.
-        publication_summary.record(duration_ms=(time.perf_counter() - started) * 1000, records=1)
-        publication_summary.recovery("publish")
-    except Exception as exc:
-        publication_summary.record(success=False, duration_ms=(time.perf_counter() - started) * 1000)
-        publication_summary.failure("publish", "Inference event enqueue failed", error_type=type(exc).__name__)
-
-def serving_engine_for_flavor(flavor: Any) -> str:
-    normalized_flavor = str(flavor or "").strip().lower()
-    return "dl" if normalized_flavor in DEEP_LEARNING_FLAVORS else "ml"
-
-
-def resolve_worker_url(model_record: Dict[str, Any], endpoint_path: str) -> str:
-    serving_engine = serving_engine_for_flavor(model_record.get("flavor"))
-    target_port = 5001 if serving_engine == "ml" else 5002
-    container_name = model_record.get("endpoint_container_name")
-    deployment_status = model_record.get("deployment_status")
-
-    if not container_name:
-        if deployment_status in {"stopped", "failed", "unhealthy"}:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Model deployment is not active (current status: '{deployment_status}'). "
-                    "Please deploy the model from the Control Plane first."
-                ),
-            )
-        if os.environ.get("KUBERNETES_SERVICE_HOST"):
-            # On K8s there is no shared fallback pod — fail clearly.
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Model endpoint is not deployed yet. "
-                    "Please trigger a deployment from the Control Plane first."
-                ),
-            )
-        # Docker Compose local-dev: fall back to named service so images can be tested individually without a full deploy cycle.
-        fallback_host = "machine-learning-serving" if serving_engine == "ml" else "deep-learning-serving"
-        return f"http://{fallback_host}:{target_port}{endpoint_path}"
-
-    if os.environ.get("KUBERNETES_SERVICE_HOST"):
-        service_name = f"{container_name}-svc" if not container_name.endswith("-svc") else container_name
-        runtime_namespace = os.environ.get("MODEL_RUNTIME_NAMESPACE", "mlops-model-runtimes").strip()
-        host = f"{service_name}.{runtime_namespace}.svc.cluster.local"
-    else:
-        host = container_name
-    return f"http://{host}:{target_port}{endpoint_path}"
 
 @app.get("/")
 async def health_check():
@@ -387,19 +280,10 @@ async def _predict(
                     error_detail = response.text
                 return JSONResponse(status_code=response.status_code, content=error_detail)
                 
-            data = response.json()
-            if isinstance(data, dict):
-                prediction_result = data.get("prediction")
-                confidence = data.get("confidence")
-                engine = data.get("engine", serving_engine_for_flavor(model_record.get("flavor")))
-            elif isinstance(data, list):
-                prediction_result = data
-                confidence = None
-                engine = "deep-learning-serving"
-            else:
-                prediction_result = data
-                confidence = None
-                engine = serving_engine_for_flavor(model_record.get("flavor"))
+            prediction_result, confidence, engine = parse_worker_prediction(
+                response.json(),
+                model_record.get("flavor"),
+            )
 
             paas_predictions_counter.labels(
                 tenant_id=tenant_id,

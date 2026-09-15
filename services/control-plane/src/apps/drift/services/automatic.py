@@ -7,14 +7,19 @@ from apps.drift.services.runs import request_run
 
 
 def production_data_count_for_version(model_version_id: str) -> int:
-    """Read production data from the table owned by the Consumer."""
-    if "paas_production_logs" not in connection.introspection.table_names():
+    """Count eligible monitoring samples from the Consumer-owned CT dataset."""
+    if "mlops_production_data" not in connection.introspection.table_names():
         return 0
 
-    table = '"public"."paas_production_logs"' if connection.vendor == "postgresql" else '"paas_production_logs"'
+    table = '"public"."mlops_production_data"' if connection.vendor == "postgresql" else '"mlops_production_data"'
     with connection.cursor() as cursor:
         cursor.execute(
-            f"SELECT COUNT(*) FROM {table} WHERE model_version_id = %s",
+            f"""
+            SELECT COUNT(*)
+            FROM {table}
+            WHERE model_version_id = %s
+              AND data_quality_status <> 'rejected'
+            """,
             [model_version_id],
         )
         return int(cursor.fetchone()[0])

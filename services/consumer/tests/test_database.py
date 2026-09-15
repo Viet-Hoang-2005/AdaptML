@@ -62,7 +62,7 @@ def test_insert_on_conflict_do_nothing_uses_event_id(monkeypatch):
     result = Mock(rowcount=2)
     connection = Mock()
     connection.execute.return_value = result
-    table = type("PandasTable", (), {"table": "paas_production_logs"})()
+    table = type("PandasTable", (), {"table": "mlops_inference_events"})()
 
     assert database.insert_on_conflict_do_nothing(
         table, connection, ["id", "prediction"], [("event-1", "ok"), ("event-2", "bad")]
@@ -70,7 +70,7 @@ def test_insert_on_conflict_do_nothing_uses_event_id(monkeypatch):
     statement.on_conflict_do_nothing.assert_called_once_with(index_elements=["id"])
 
 
-def test_save_dataframe_and_signals_share_one_transaction(monkeypatch):
+def test_save_inference_events_production_data_and_signals_share_one_transaction(monkeypatch):
     connection = Mock()
     engine = Mock()
     engine.begin.return_value = Context(connection)
@@ -78,13 +78,13 @@ def test_save_dataframe_and_signals_share_one_transaction(monkeypatch):
     save = Mock()
     monkeypatch.setattr(database, "_save_dataframe", save)
 
-    assert database.save_dataframe_and_automatic_drift_signals(
+    assert database.save_inference_events_and_production_data_and_automatic_drift_signals(
         pd.DataFrame({"id": ["event-1"]}),
-        "paas_production_logs",
+        pd.DataFrame({"id": ["event-1"]}),
         [{"model_version_id": "version-1", "idempotency_key": "signal-1"}],
     )
 
-    save.assert_called_once()
+    assert save.call_count == 2
     assert connection.execute.call_args.args[1] == [
         {"model_version_id": "version-1", "idempotency_key": "signal-1"}
     ]
@@ -93,8 +93,8 @@ def test_save_dataframe_and_signals_share_one_transaction(monkeypatch):
 def test_save_dataframe_and_signals_handles_no_engine(monkeypatch):
     monkeypatch.setattr(database, "engine_ro", None)
     monkeypatch.setattr(database, "engine_rw", None)
-    assert not database.save_dataframe_and_automatic_drift_signals(
-        pd.DataFrame({"id": ["event-1"]}), "paas_production_logs", []
+    assert not database.save_inference_events_and_production_data_and_automatic_drift_signals(
+        pd.DataFrame({"id": ["event-1"]}), pd.DataFrame(), []
     )
 
 
@@ -131,7 +131,7 @@ def test_claim_signal_uses_skip_locked_and_expiring_lease(monkeypatch):
     assert connection.execute.call_args.args[1] == {"limit": 25, "lease_seconds": 90}
 
 
-def test_init_db_creates_model_version_count_index(monkeypatch):
+def test_init_db_creates_inference_and_continuous_training_indexes(monkeypatch):
     connection = Mock()
     engine = Mock()
     engine.begin.return_value = Context(connection)
@@ -140,6 +140,7 @@ def test_init_db_creates_model_version_count_index(monkeypatch):
     database.init_db()
 
     statements = [str(call.args[0]) for call in connection.execute.call_args_list]
-    assert any("idx_paas_prod_logs_model_version" in statement for statement in statements)
-    assert any("idx_paas_prod_logs_version_timestamp" in statement for statement in statements)
-    assert any("idx_paas_prod_logs_prediction_id" in statement for statement in statements)
+    assert any("idx_mlops_inference_events_model_version" in statement for statement in statements)
+    assert any("idx_mlops_inference_events_version_timestamp" in statement for statement in statements)
+    assert any("idx_mlops_inference_events_prediction_id" in statement for statement in statements)
+    assert any("idx_mlops_production_data_training_eligible" in statement for statement in statements)

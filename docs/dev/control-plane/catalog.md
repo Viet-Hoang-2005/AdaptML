@@ -26,7 +26,7 @@ tenant ownership before services mutate state. API key secrets are returned only
 on creation or regeneration and can be scoped only to projects owned by the user.
 
 Production data is private to the project owner. The production-data route validates
-the authenticated user's ownership before reading `public.paas_production_logs`, filters
+the authenticated user's ownership before reading `public.mlops_production_data`, filters
 by both tenant and project UUID, returns all matching rows when `limit` is omitted, and
 requires a positive integer when `limit` is provided.
 

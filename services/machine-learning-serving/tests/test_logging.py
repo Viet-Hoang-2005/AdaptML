@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from src.logging_utils import RequestLoggingMiddleware
 from src.logging_utils import current_context
 
-from src import index, loading
+from src import api as index, loading
 
 
 def test_worker_installs_request_logging():

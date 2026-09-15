@@ -153,8 +153,8 @@ Kiểm tra sáu nhóm lỗi: nhãn trùng/request đồng thời gần hết quo
 \setlength{\parskip}{0pt}
 \renewcommand{\codepath}[1]{\path{#1}}
 \begin{description}[font=\normalfont\bfseries,leftmargin=2.5em,labelwidth=2em,itemsep=0pt,topsep=0pt]
-  \item[E1] \codepath{services/model-server/src/index.py}; \codepath{services/consumer/src/main.py}, \codepath{services/consumer/src/database.py}: event, persistence, offset và automatic-drift outbox.
-  \item[E2] \codepath{services/machine-learning-serving/src/index.py}: predict và max confidence.
+  \item[E1] \codepath{services/model-server/src/api.py}; \codepath{services/consumer/src/kafka_runtime.py}, \codepath{services/consumer/src/database.py}: event, persistence, offset và automatic-drift outbox.
+  \item[E2] \codepath{services/machine-learning-serving/src/api.py}: predict và max confidence.
   \item[E3] \codepath{services/evidently/src/main.py}; \codepath{apps/drift/services/automatic.py}; \codepath{apps/drift/tasks.py}: drift, watermark và hook CT.
   \item[E4] \codepath{apps/training/services/jobs.py}; \codepath{apps/training/tests/test_argo_backend.py}: snapshot/submit, tests backend dùng dependency mô phỏng.
   \item[E5] \codepath{apps/registry/models.py}; \codepath{apps/registry/services/versions.py}; \codepath{apps/registry/services/routing.py}: version, metrics, alias và endpoint healthy.

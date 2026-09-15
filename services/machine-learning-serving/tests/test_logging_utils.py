@@ -33,7 +33,7 @@ class LoggingTests(unittest.TestCase):
             "sys.argv",
             [
                 "uvicorn_entrypoint",
-                "src.index:app",
+                "src.main:app",
                 "--service",
                 "machine-learning-serving",
                 "--port",
@@ -43,7 +43,7 @@ class LoggingTests(unittest.TestCase):
             ],
         ), patch("uvicorn.run") as run:
             main()
-        self.assertEqual(run.call_args.args, ("src.index:app",))
+        self.assertEqual(run.call_args.args, ("src.main:app",))
         self.assertEqual(run.call_args.kwargs["workers"], 2)
         self.assertFalse(run.call_args.kwargs["access_log"])
         self.assertEqual(

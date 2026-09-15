@@ -40,9 +40,9 @@ Giám sát vận hành vòng CT & \statuspartial & E11 có Prometheus/Grafana, S
 \subsection{Các điểm mã nguồn làm căn cứ}
 Các đường dẫn tính từ gốc repo, chỉ dẫn tới chức năng đã kiểm tra:
 \begin{itemize}
-  \item \textbf{E1:} \codepath{services/model-server/src/index.py}, gửi event và endpoint predict.
+  \item \textbf{E1:} \codepath{services/model-server/src/api.py}, gửi event và endpoint predict.
   \item \textbf{E2:} \codepath{services/consumer/src/database.py}, production logs và automatic-drift outbox.
-  \item \textbf{E3:} \codepath{services/machine-learning-serving/src/index.py}, xử lý \codepath{predict\_proba}.
+  \item \textbf{E3:} \codepath{services/machine-learning-serving/src/api.py}, xử lý \codepath{predict\_proba}.
   \item \textbf{E4:} \codepath{services/evidently/src/main.py}, \codepath{load\_production\_data} và \codepath{run\_drift\_analysis}.
   \item \textbf{E5:} \codepath{services/control-plane/src/apps/drift/services/automatic.py}, tạo DriftRun.
   \item \textbf{E6:} \codepath{services/control-plane/src/apps/training/services/jobs.py}, tạo/submit job và snapshot.

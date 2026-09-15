@@ -41,4 +41,4 @@ COPY --chown=app:app . .
 
 USER app
 
-CMD ["python", "-u", "-m", "src.runner"]
+CMD ["python", "-u", "-m", "src.main"]

@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import pytest
 from src.logging_utils import RuntimeLog
 
-from src import runner
+from src import application as runner
 
 
 @pytest.fixture

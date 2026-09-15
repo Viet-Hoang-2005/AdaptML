@@ -6,7 +6,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from src.logging_utils import current_context
 from src.logging_utils import RequestLoggingMiddleware
 
-from src import database, index
+from src import api as index, database
 
 
 def test_gateway_installs_request_logging():

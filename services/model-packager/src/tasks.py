@@ -18,6 +18,7 @@ from src.logging_utils import RuntimeLog, bind_context, configure, get_logger, l
 
 from pathlib import Path
 from src.core import build_preview_tree, load_model, make_zip, parse_requirements, save_mlflow_model
+from src import config, image_build, io
 
 logger = get_logger("model-packager")
 runtime_log = RuntimeLog(logger)
@@ -49,51 +50,17 @@ class RedisLogHandler(logging.Handler):
             pass
 
 def download_presigned_file(download_url: str, destination: Path) -> None:
-    if not download_url:
-        raise ValueError("Missing presigned download URL.")
-
-    runtime_log.detail(f"Downloading artifact to {destination.name}...")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with requests.get(download_url, stream=True, timeout=(10, 600)) as response:
-        response.raise_for_status()
-        with destination.open("wb") as destination_file:
-            for chunk in response.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    destination_file.write(chunk)
-    runtime_log.detail("Download completed.")
+    io.download_presigned_file(download_url, destination, requests, runtime_log.detail)
 
 
 def upload_presigned_file(upload_url: str, source: Path) -> None:
-    if not upload_url:
-        raise ValueError("Missing presigned upload URL.")
-
-    runtime_log.detail(f"Uploading {source.name}...")
-    with source.open("rb") as source_file:
-        response = requests.put(upload_url, data=source_file, timeout=(10, 600))
-    response.raise_for_status()
-    runtime_log.detail("Upload completed.")
+    io.upload_presigned_file(upload_url, source, requests, runtime_log.detail)
 
 def safe_extract_tar(archive_path: Path, destination: Path) -> None:
-    destination.mkdir(parents=True, exist_ok=True)
-    destination_root = destination.resolve()
-    with tarfile.open(archive_path, "r:gz") as archive:
-        for member in archive.getmembers():
-            resolved = (destination / member.name).resolve()
-            if not resolved.is_relative_to(destination_root):
-                raise ValueError("Training artifact contains an unsafe path.")
-            if member.islnk() or member.issym():
-                raise ValueError("Training artifact contains links, which are not supported.")
-        archive.extractall(destination)
+    io.safe_extract_tar(archive_path, destination)
 
 def safe_extract_zip(archive_path: Path, destination: Path) -> None:
-    destination.mkdir(parents=True, exist_ok=True)
-    destination_root = destination.resolve()
-    with zipfile.ZipFile(archive_path, "r") as archive:
-        for member in archive.infolist():
-            resolved = (destination / member.filename).resolve()
-            if not resolved.is_relative_to(destination_root):
-                raise ValueError("Model package contains an unsafe path.")
-        archive.extractall(destination)
+    io.safe_extract_zip(archive_path, destination)
 
 def find_supported_model_file(root: Path) -> Path:
     files = [item for item in root.rglob("*") if item.is_file() and item.suffix.lower() in SUPPORTED_MODEL_EXTENSIONS]
@@ -127,25 +94,11 @@ def webhook_headers() -> dict[str, str]:
     return {"X-Control-Plane-Secret": secret} if secret else {}
 
 def post_webhook(webhook_url: str, payload: dict) -> None:
-    if not webhook_url:
-        return
-    response = requests.post(webhook_url, json=payload, headers=webhook_headers(), timeout=10)
-    if response.status_code >= 400:
-        raise RuntimeError(f"Build webhook failed with HTTP {response.status_code}")
+    io.post_webhook(webhook_url, payload, requests, webhook_headers())
 
 
 def configured_image_reference(build_id: str = "") -> str:
-    build_id = os.environ.get("BUILD_ID", "").strip().lower() or build_id.lower()
-    project_id = os.environ.get("PROJECT_ID", "").strip().lower() or build_id
-    repository = os.environ.get("IMAGE_REPOSITORY", "").strip().rstrip("/")
-    tag = os.environ.get("IMAGE_TAG", "").strip() or f"build-{build_id}"
-    if not repository:
-        repository = f"image-{project_id}"
-        harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
-        harbor_project = os.environ.get("HARBOR_USER_PROJECT", "user-images").strip().strip("/")
-        if harbor_url:
-            repository = f"{harbor_url}/{harbor_project}/{repository}"
-    return f"{repository}:{tag}"
+    return config.image_reference(os.environ, build_id)
 
 
 def built_image_metadata() -> dict[str, str]:
@@ -159,86 +112,20 @@ def built_image_metadata() -> dict[str, str]:
     return {"image_uri": image_uri, "image_digest": digest}
 
 def build_custom_image(workspace: Path, build_id: str, tenant_id: str, requirements_text: str) -> None:
-    docker_client = docker.from_env()
-    harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
-    harbor_user = os.environ.get("HARBOR_USERNAME", "").strip()
-    harbor_pass = os.environ.get("HARBOR_PASSWORD", "").strip()
-
-    # Login to Harbor first so the FROM base image can be pulled
-    if harbor_url and harbor_user and harbor_pass:
-        runtime_log.detail(f"Logging into Harbor registry at {harbor_url}...")
-        docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
-
-    # Use fully-qualified base image so Docker can pull it from Harbor
-    base_image = f"{harbor_url}/mlops-paas/machine-learning-serving:latest" if harbor_url else "mlops-paas-machine-learning-serving:latest"
-    dockerfile_content = f"""FROM {base_image}
-USER root
-COPY requirements.txt /tmp/custom_requirements.txt
-RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
-RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
-COPY model /app/model_artifact
-"""
-    (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
-    (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
-
-    image_tag = configured_image_reference(build_id)
-
-    runtime_log.detail(f"Building Docker image {image_tag} from workspace {workspace}...")
-    for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
-        if "stream" in line:
-            runtime_log.detail(line["stream"].strip())
-        elif "errorDetail" in line:
-            raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
-    runtime_log.detail(f"Docker image {image_tag} built successfully!")
-
-    if harbor_url and harbor_user and harbor_pass and image_tag.startswith(f"{harbor_url}/"):
-        runtime_log.detail(f"Pushing image {image_tag} to Harbor...")
-        for line in docker_client.images.push(image_tag, stream=True, decode=True):
-            if "status" in line:
-                runtime_log.detail(line.get("status", ""))
-            elif "errorDetail" in line:
-                raise RuntimeError(line["errorDetail"].get("message", "Failed to push image to Harbor"))
-        runtime_log.detail("Image successfully pushed to Harbor!")
+    image_build.build_image(
+        workspace=workspace, build_id=build_id, requirements_text=requirements_text,
+        serving_image="machine-learning-serving", image_label="", docker_module=docker,
+        environment=os.environ, image_reference=configured_image_reference,
+        detail=runtime_log.detail,
+    )
 
 def build_bento_image(workspace: Path, build_id: str, tenant_id: str, requirements_text: str) -> None:
-    docker_client = docker.from_env()
-    harbor_url = os.environ.get("HARBOR_REGISTRY_URL", "").strip().rstrip("/")
-    harbor_user = os.environ.get("HARBOR_USERNAME", "").strip()
-    harbor_pass = os.environ.get("HARBOR_PASSWORD", "").strip()
-
-    if harbor_url and harbor_user and harbor_pass:
-        runtime_log.detail(f"Logging into Harbor registry at {harbor_url}...")
-        docker_client.login(username=harbor_user, password=harbor_pass, registry=harbor_url)
-
-    base_image = f"{harbor_url}/mlops-paas/deep-learning-serving:latest" if harbor_url else "mlops-paas-deep-learning-serving:latest"
-    dockerfile_content = f"""FROM {base_image}
-USER root
-COPY requirements.txt /tmp/custom_requirements.txt
-RUN grep -i -v -E '^(fastapi|uvicorn|starlette|pydantic|bentoml|httpx)([[:space:]=<>~!]*)?$' /tmp/custom_requirements.txt > /tmp/safe_requirements.txt || touch /tmp/safe_requirements.txt
-RUN pip install --no-cache-dir -r /tmp/safe_requirements.txt || echo 'Some requirements failed to install, continuing...'
-COPY model /app/model_artifact
-"""
-    (workspace / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
-    (workspace / "requirements.txt").write_text((requirements_text.strip() + "\n") if requirements_text.strip() else "\n", encoding="utf-8")
-
-    image_tag = configured_image_reference(build_id)
-
-    runtime_log.detail(f"Building BentoML Docker image {image_tag} from workspace {workspace}...")
-    for line in docker_client.api.build(path=str(workspace), tag=image_tag, rm=True, decode=True):
-        if "stream" in line:
-            runtime_log.detail(line["stream"].strip())
-        elif "errorDetail" in line:
-            raise RuntimeError(line["errorDetail"].get("message", "Unknown Docker build error"))
-    runtime_log.detail(f"BentoML Docker image {image_tag} built successfully!")
-
-    if harbor_url and harbor_user and harbor_pass and image_tag.startswith(f"{harbor_url}/"):
-        runtime_log.detail(f"Pushing BentoML image {image_tag} to Harbor...")
-        for line in docker_client.images.push(image_tag, stream=True, decode=True):
-            if "status" in line:
-                runtime_log.detail(line.get("status", ""))
-            elif "errorDetail" in line:
-                raise RuntimeError(line["errorDetail"].get("message", "Failed to push image to Harbor"))
-        runtime_log.detail("BentoML image successfully pushed to Harbor!")
+    image_build.build_image(
+        workspace=workspace, build_id=build_id, requirements_text=requirements_text,
+        serving_image="deep-learning-serving", image_label="BentoML ", docker_module=docker,
+        environment=os.environ, image_reference=configured_image_reference,
+        detail=runtime_log.detail,
+    )
 
 
 def parse_conda_pip_requirements(conda_file: Path) -> list[str]:
@@ -643,6 +530,3 @@ def main():
         sys.exit(1)
     finally:
         reset_context(tokens)
-
-if __name__ == "__main__":
-    main()

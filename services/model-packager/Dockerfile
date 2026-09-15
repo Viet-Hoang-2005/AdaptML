@@ -30,4 +30,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /install /usr/local
 COPY . .
 
-CMD ["python", "-u", "-m", "src.cli"]
+CMD ["python", "-u", "-m", "src.main"]

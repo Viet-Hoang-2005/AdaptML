@@ -35,4 +35,4 @@ ENV PYTHONPATH=/app/libs:/app
 ENV BENTOML_PORT=5002
 EXPOSE 5002
 
-CMD ["bentoml", "serve", "src.index:DeepLearningModelService", "--port", "5002", "--host", "0.0.0.0"]
+CMD ["bentoml", "serve", "src.main:DeepLearningModelService", "--port", "5002", "--host", "0.0.0.0"]

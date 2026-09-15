@@ -6,7 +6,7 @@ import pytest
 
 from unittest.mock import AsyncMock, Mock
 from fastapi import BackgroundTasks, HTTPException
-from src import database, index
+from src import api as index, database
 
 
 class FakeResponse:

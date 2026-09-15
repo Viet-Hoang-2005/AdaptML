@@ -29,23 +29,28 @@ def test_latest_production_data_scopes_query_and_applies_optional_limit():
         [
             (
                 "event-1",
+                "event-1",
                 "project-uuid",
                 "version-uuid",
                 None,
                 '{"feature": 1}',
                 "safe",
+                None,
+                "unlabeled",
+                "unchecked",
+                False,
             )
         ]
     )
     connection = Mock(vendor="postgresql")
-    connection.introspection.table_names.return_value = ["paas_production_logs"]
+    connection.introspection.table_names.return_value = ["mlops_production_data"]
     connection.cursor.return_value = cursor
 
     results = selectors.latest_production_data(project, limit=100, db_connection=connection)
 
     assert results[0]["features"] == {"feature": 1}
     sql, params = cursor.execute.call_args.args
-    assert 'FROM "public"."paas_production_logs"' in sql
+    assert 'FROM "public"."mlops_production_data"' in sql
     assert "LIMIT %s" in sql
     assert params == ["tenant-uuid", "project-uuid", 100]
 

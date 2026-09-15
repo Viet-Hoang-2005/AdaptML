@@ -1,3 +1,5 @@
+"""Database helpers for consumer services."""
+
 import os
 import json
 import time
@@ -26,6 +28,8 @@ DB_HOST_RW = os.environ.get("DB_HOST_RW", "postgres")
 DB_HOST_RO = os.environ.get("DB_HOST_RO", "postgres")
 
 AUTOMATIC_DRIFT_OUTBOX_TABLE = "paas_automatic_drift_outbox"
+INFERENCE_EVENTS_TABLE = "mlops_inference_events"
+PRODUCTION_DATA_TABLE = "mlops_production_data"
 
 def create_engine_safe(host: str, label: str):
     db_password_encoded = quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
@@ -62,9 +66,8 @@ def init_db():
             else:
                 pass
 
-    # 1. Create table if missing
     execute_safe("""
-        CREATE TABLE IF NOT EXISTS paas_production_logs (
+        CREATE TABLE IF NOT EXISTS mlops_inference_events (
             id VARCHAR(255) PRIMARY KEY,
             prediction_id VARCHAR(255),
             tenant_id VARCHAR(255),
@@ -74,54 +77,81 @@ def init_db():
             endpoint_url TEXT,
             request_id VARCHAR(255),
             timestamp TIMESTAMPTZ,
-            features JSONB,
             prediction TEXT,
             confidence DOUBLE PRECISION,
             latency_ms DOUBLE PRECISION,
             status_code INTEGER,
-            raw_payload JSONB,
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
     """)
 
-    # 2. Add created_at column if the table was previously created by pandas to_sql
-    execute_safe("ALTER TABLE paas_production_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();", ignore_error=True)
+    execute_safe("ALTER TABLE mlops_inference_events ADD COLUMN IF NOT EXISTS project_id VARCHAR(255);")
+    execute_safe("ALTER TABLE mlops_inference_events ADD COLUMN IF NOT EXISTS model_version_id VARCHAR(255);")
+    execute_safe("ALTER TABLE mlops_inference_events ADD COLUMN IF NOT EXISTS prediction_id VARCHAR(255);")
+    execute_safe("ALTER TABLE mlops_inference_events ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();")
 
-    # 3. Migrate text columns to JSONB safely
-    execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN features TYPE JSONB USING features::JSONB;", ignore_error=True)
-    execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN raw_payload TYPE JSONB USING raw_payload::JSONB;", ignore_error=True)
-    execute_safe("ALTER TABLE paas_production_logs ALTER COLUMN prediction TYPE TEXT USING prediction::TEXT;", ignore_error=True)
+    execute_safe("""
+        CREATE TABLE IF NOT EXISTS mlops_production_data (
+            id VARCHAR(255) PRIMARY KEY,
+            inference_event_id VARCHAR(255) NOT NULL,
+            tenant_id VARCHAR(255) NOT NULL,
+            project_id VARCHAR(255) NOT NULL,
+            model_version_id VARCHAR(255) NOT NULL,
+            observed_at TIMESTAMPTZ NOT NULL,
+            features JSONB NOT NULL,
+            prediction TEXT,
+            ground_truth TEXT,
+            label_status VARCHAR(32) NOT NULL DEFAULT 'unlabeled'
+                CHECK (label_status IN ('unlabeled', 'pending', 'labeled', 'rejected')),
+            labeled_at TIMESTAMPTZ,
+            data_quality_status VARCHAR(32) NOT NULL DEFAULT 'unchecked'
+                CHECK (data_quality_status IN ('unchecked', 'accepted', 'rejected')),
+            training_eligibility BOOLEAN NOT NULL DEFAULT FALSE,
+            exclusion_reason TEXT,
+            drift_run_id VARCHAR(255),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+
     execute_safe(
-        "ALTER TABLE paas_production_logs ADD COLUMN IF NOT EXISTS project_id VARCHAR(255);"
+        "CREATE INDEX IF NOT EXISTS idx_mlops_inference_events_tenant_model_version "
+        "ON mlops_inference_events(tenant_id, project_id, model_version_id);"
     )
     execute_safe(
-        "ALTER TABLE paas_production_logs ADD COLUMN IF NOT EXISTS model_version_id VARCHAR(255);"
+        "CREATE INDEX IF NOT EXISTS idx_mlops_inference_events_model_version "
+        "ON mlops_inference_events(model_version_id);"
     )
     execute_safe(
-        "ALTER TABLE paas_production_logs ADD COLUMN IF NOT EXISTS prediction_id VARCHAR(255);"
+        "CREATE INDEX IF NOT EXISTS idx_mlops_inference_events_prediction_id "
+        "ON mlops_inference_events(prediction_id);"
+    )
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_mlops_inference_events_timestamp "
+        "ON mlops_inference_events(timestamp);"
+    )
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_mlops_inference_events_version_timestamp "
+        "ON mlops_inference_events(model_version_id, timestamp DESC);"
+    )
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_mlops_production_data_tenant_project_version_observed "
+        "ON mlops_production_data(tenant_id, project_id, model_version_id, observed_at DESC);"
+    )
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_mlops_production_data_version_observed "
+        "ON mlops_production_data(model_version_id, observed_at DESC);"
+    )
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_mlops_production_data_training_eligible "
+        "ON mlops_production_data(model_version_id, observed_at DESC) "
+        "WHERE training_eligibility IS TRUE;"
+    )
+    execute_safe(
+        "CREATE INDEX IF NOT EXISTS idx_mlops_production_data_pending_labels "
+        "ON mlops_production_data(tenant_id, project_id, observed_at DESC) "
+        "WHERE label_status IN ('unlabeled', 'pending');"
     )
 
-    # 4. Create Indexes
-    execute_safe(
-        "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_tenant_model_version "
-        "ON paas_production_logs(tenant_id, project_id, model_version_id);"
-    )
-    execute_safe(
-        "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_model_version "
-        "ON paas_production_logs(model_version_id);"
-    )
-    execute_safe(
-        "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_prediction_id "
-        "ON paas_production_logs(prediction_id);"
-    )
-    execute_safe("CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_timestamp ON paas_production_logs(timestamp);")
-    execute_safe(
-        "CREATE INDEX IF NOT EXISTS idx_paas_prod_logs_version_timestamp "
-        "ON paas_production_logs(model_version_id, timestamp DESC);"
-    )
-
-    # A production-data batch and its automatic-drift notification must become
-    # visible together.  Kafka is acknowledged only after this transaction.
     execute_safe(f"""
         CREATE TABLE IF NOT EXISTS {AUTOMATIC_DRIFT_OUTBOX_TABLE} (
             id BIGSERIAL PRIMARY KEY,
@@ -160,8 +190,6 @@ def _save_dataframe(conn, df: pd.DataFrame, table_name: str) -> None:
     dtypes = {}
     for col in df.columns:
         if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
-            # Let the JSONB dtype serialize dict/list once; json.dumps here would
-            # double-encode (JSONB then stores a JSON string instead of an object).
             df[col] = df[col].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
             dtypes[col] = JSONB
 
@@ -187,7 +215,6 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
         with engine_rw.begin() as conn:
             _save_dataframe(conn, df, table_name)
 
-        # Replays may conflict; count processed records, not newly inserted rows.
         persistence_summary.record(duration_ms=(time.perf_counter() - started) * 1000, records=len(df), batches=1)
         persistence_summary.recovery("write")
         return True
@@ -197,13 +224,16 @@ def save_dataframe_to_db(df: pd.DataFrame, table_name: str) -> bool:
         persistence_summary.failure("write", "Production data persistence failed", error_type=type(e).__name__)
         return False
 
-def save_dataframe_and_automatic_drift_signals(
-    df: pd.DataFrame, table_name: str, signals: list[dict[str, str]]
+def save_inference_events_and_production_data_and_automatic_drift_signals(
+    inference_events: pd.DataFrame,
+    production_data: pd.DataFrame,
+    signals: list[dict[str, str]],
 ) -> bool:
-    """Persist production data and one idempotent signal per affected model.
+    """Persist telemetry, CT candidates, and automatic-drift signals atomically.
 
-    The caller may safely replay a Kafka batch: production events conflict on
-    their event id and signals conflict on their deterministic batch key.
+    A Kafka replay is safe: both tables conflict on their event id and signals
+    conflict on their deterministic batch key. No foreign key links the tables,
+    so telemetry can use a shorter retention period than production data.
     """
     started = time.perf_counter()
     if engine_rw is None:
@@ -213,7 +243,9 @@ def save_dataframe_and_automatic_drift_signals(
 
     try:
         with engine_rw.begin() as conn:
-            _save_dataframe(conn, df, table_name)
+            _save_dataframe(conn, inference_events, INFERENCE_EVENTS_TABLE)
+            if not production_data.empty:
+                _save_dataframe(conn, production_data, PRODUCTION_DATA_TABLE)
             if signals:
                 conn.execute(
                     text(
@@ -228,13 +260,13 @@ def save_dataframe_and_automatic_drift_signals(
                 )
         persistence_summary.record(
             duration_ms=(time.perf_counter() - started) * 1000,
-            records=len(df), batches=1,
+            records=len(inference_events), production_samples=len(production_data), batches=1,
         )
         persistence_summary.recovery("write")
         return True
     except Exception as exc:
         persistence_summary.record(success=False, duration_ms=(time.perf_counter() - started) * 1000)
-        persistence_summary.failure("write", "Production data and drift signal transaction failed", error_type=type(exc).__name__)
+        persistence_summary.failure("write", "Inference telemetry and production data transaction failed", error_type=type(exc).__name__)
         return False
 
 

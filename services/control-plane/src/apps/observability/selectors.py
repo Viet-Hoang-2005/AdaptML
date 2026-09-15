@@ -6,11 +6,16 @@ from .models import EventOutbox
 
 PRODUCTION_DATA_COLUMNS = (
     "id",
+    "inference_event_id",
     "project_id",
     "model_version_id",
     "timestamp",
     "features",
     "prediction",
+    "ground_truth",
+    "label_status",
+    "data_quality_status",
+    "training_eligibility",
 )
 
 
@@ -20,10 +25,10 @@ def pending_outbox_events(limit=100):
 
 def latest_production_data(project, limit=None, *, db_connection=None):
     connection = db_connection or connections["default"]
-    if "paas_production_logs" not in connection.introspection.table_names():
+    if "mlops_production_data" not in connection.introspection.table_names():
         return []
 
-    table = '"public"."paas_production_logs"' if connection.vendor == "postgresql" else '"paas_production_logs"'
+    table = '"public"."mlops_production_data"' if connection.vendor == "postgresql" else '"mlops_production_data"'
     limit_clause = " LIMIT %s" if limit is not None else ""
     params = [str(project.owner.tenant_id), str(project.public_id)]
     if limit is not None:
@@ -32,10 +37,12 @@ def latest_production_data(project, limit=None, *, db_connection=None):
     with connection.cursor() as cursor:
         cursor.execute(
             f"""
-            SELECT id, project_id, model_version_id, timestamp, features, prediction
+            SELECT id, inference_event_id, project_id, model_version_id,
+                   observed_at AS timestamp, features, prediction, ground_truth,
+                   label_status, data_quality_status, training_eligibility
             FROM {table}
             WHERE tenant_id = %s AND project_id = %s
-            ORDER BY timestamp DESC NULLS LAST, id DESC
+            ORDER BY observed_at DESC NULLS LAST, id DESC
             {limit_clause}
             """,
             params,

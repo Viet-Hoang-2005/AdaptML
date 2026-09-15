@@ -6,7 +6,7 @@ import types
 import zipfile
 import pytest
 
-from src import runner
+from src import application as runner
 from pathlib import Path
 from unittest.mock import Mock
 

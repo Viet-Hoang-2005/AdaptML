@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 from src.logging_utils import RuntimeLog
 
-from src import cli
+from src import tasks as cli
 
 
 @pytest.fixture(autouse=True)

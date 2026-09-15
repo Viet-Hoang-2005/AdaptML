@@ -2,7 +2,7 @@ import sys
 import pytest
 from unittest.mock import Mock
 
-from src import runner
+from src import application as runner
 from pathlib import Path
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]

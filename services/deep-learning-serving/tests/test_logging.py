@@ -4,7 +4,7 @@ import logging
 from src.logging_utils import bind_context, reset_context
 from src.logging_utils import RequestLoggingMiddleware
 
-from src import index
+from src import service as index
 
 
 def test_bentoml_uses_local_middleware_and_disables_duplicate_access_logs():

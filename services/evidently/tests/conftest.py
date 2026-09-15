@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from src import main
+from src import application as main
 
 
 @pytest.fixture(autouse=True)

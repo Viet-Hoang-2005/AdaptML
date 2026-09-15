@@ -18,6 +18,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
+from src import config, execution, io, metadata, resources
 
 WORKSPACE = Path("/workspace")
 SOURCE_DIR = WORKSPACE / "source"
@@ -79,17 +80,11 @@ def write_json(path: Path, payload) -> None:
 
 
 def safe_json_value(value):
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, list):
-        return [safe_json_value(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): safe_json_value(item) for key, item in value.items()}
-    return str(value)
+    return metadata.safe_json_value(value)
 
 
 def is_number(value) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return metadata.is_number(value)
 
 
 def parse_metric_events(stdout_text: str, warnings: list[dict]) -> tuple[list[dict], dict]:
@@ -240,25 +235,13 @@ def read_model_insights(output_dir: Path, warnings: list[dict]) -> dict:
 
 
 def artifact_kind(relative_path: Path) -> str:
-    name = relative_path.name
-    suffix = relative_path.suffix.lower()
-    if name == "MLmodel" or suffix in MODEL_FILE_EXTENSIONS:
-        return "model"
-    if suffix in CHECKPOINT_EXTENSIONS:
-        return "checkpoint"
-    if suffix in METADATA_EXTENSIONS:
-        return "metadata"
-    if suffix == ".log":
-        return "log"
-    return "other"
+    return metadata.artifact_kind(
+        relative_path, MODEL_FILE_EXTENSIONS, CHECKPOINT_EXTENSIONS, METADATA_EXTENSIONS,
+    )
 
 
 def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return metadata.sha256_file(path)
 
 
 def build_artifact_manifest(model_dir: Path) -> list[dict]:
@@ -363,10 +346,7 @@ def log_to_mlflow(
 
 def mlflow_proxy_artifact_uri(artifact_root: str) -> str:
     """Map a job's durable S3 URI to MLflow's server-proxied artifact URI."""
-    parsed = urlparse(artifact_root)
-    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
-        raise RuntimeError(f"Invalid S3 URI for MLflow artifacts: {artifact_root!r}")
-    return f"mlflow-artifacts:/{parsed.path.lstrip('/')}"
+    return metadata.mlflow_proxy_artifact_uri(artifact_root)
 
 
 def write_mlops_bundle(
@@ -427,99 +407,38 @@ def write_mlops_bundle(
 
 
 def require_env(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
+    return config.require_env(os.environ, name)
 
 
 def validate_presigned_url(uri: str) -> None:
-    parsed = urlparse(uri)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise RuntimeError("Training runner requires a presigned HTTP(S) URL.")
+    io.validate_presigned_url(uri)
 
 
 def download_presigned_url(uri: str, destination: Path) -> None:
-    validate_presigned_url(uri)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    log(f"Downloading presigned URL to {destination}")
-    with requests.get(uri, stream=True, timeout=300) as response:
-        response.raise_for_status()
-        with open(destination, "wb") as out_file:
-            for chunk in response.iter_content(chunk_size=8192):
-                out_file.write(chunk)
+    io.download_presigned_url(uri, destination, requests, log)
 
 
 def upload_presigned_url(source: Path, uri: str) -> None:
-    validate_presigned_url(uri)
-    log(f"Uploading {source} via presigned PUT URL")
-
-    with open(source, "rb") as handle:
-        response = requests.put(uri, data=handle, timeout=300)
-    if response.status_code not in (200, 201, 204):
-        raise RuntimeError(
-            f"Presigned PUT upload failed with HTTP status {response.status_code}"
-        )
+    io.upload_presigned_url(source, uri, requests, log)
 
 
 def request_output_upload_url(endpoint: str, capability: str) -> str:
-    validate_presigned_url(endpoint)
-    if not capability:
-        raise RuntimeError("Missing output upload capability.")
-
-    response = requests.post(endpoint, headers={"Authorization": f"Bearer {capability}"}, timeout=30)
-    if response.status_code != 200:
-        raise RuntimeError(f"Output upload URL request failed with HTTP status {response.status_code}.")
-    payload = response.json()
-    upload_url = str(payload.get("upload_url", "")).strip()
-    validate_presigned_url(upload_url)
-    return upload_url
+    return io.request_output_upload_url(endpoint, capability, requests)
 
 
 def safe_extract_zip(zip_path: Path, destination: Path) -> None:
-    destination.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path) as archive:
-        destination_root = destination.resolve()
-        for member in archive.infolist():
-            member_path = (destination / member.filename).resolve()
-            is_symlink = (member.external_attr >> 16) & 0o170000 == 0o120000
-            if not member_path.is_relative_to(destination_root) or is_symlink:
-                raise RuntimeError("Source zip contains an unsafe path.")
-        archive.extractall(destination)
+    io.safe_extract_zip(zip_path, destination)
 
 
 def install_requirements(requirements_path: Path) -> None:
-    if not requirements_path.exists():
-        return
-    log("Installing requirements.txt")
-    res = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-r", str(requirements_path)],
-        cwd=str(SOURCE_DIR),
-        capture_output=True,
-        text=True,
-        check=False,
+    io.install_requirements(
+        requirements_path, subprocess_module=subprocess, python_executable=sys.executable,
+        source_dir=SOURCE_DIR, detail=runtime_log.detail, log=log,
     )
-    if res.stdout:
-        for line in res.stdout.splitlines():
-            runtime_log.detail(line)
-    if res.stderr:
-        for line in res.stderr.splitlines():
-            runtime_log.detail(line)
-    if res.returncode != 0:
-        raise RuntimeError(f"pip install -r requirements.txt failed with exit code {res.returncode}")
 
 
 def _read_int_file(path: str) -> int | None:
-    try:
-        value = Path(path).read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
-    if value in {"", "max"}:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None
+    return resources.read_int_file(path)
 
 
 def _read_cgroup_cpu_usage_seconds() -> float | None:
@@ -677,17 +596,7 @@ def start_metric_emitter(stop_event: threading.Event, interval_seconds: int = 5)
 
 def is_metric_protocol_line(message: str) -> bool:
     """Only single-line JSON objects enter the sanitized metric protocol."""
-    if "\n" in message or "\r" in message or len(message) > 16384:
-        return False
-    stripped = message.lstrip()
-    for prefix in ("METRIC_JSON:", "METRIC_JSON "):
-        if stripped.startswith(prefix):
-            try:
-                payload = json.loads(stripped[len(prefix):])
-            except (ValueError, RecursionError):
-                return False
-            return isinstance(payload, dict)
-    return False
+    return execution.is_metric_protocol_line(message)
 
 
 def run_training(entry_point: str, model_version: str) -> subprocess.CompletedProcess:
@@ -763,19 +672,7 @@ def run_training(entry_point: str, model_version: str) -> subprocess.CompletedPr
 
 
 def create_model_archive(archive_path: Path) -> None:
-    model_files = [
-        item
-        for item in MODEL_DIR.rglob("*")
-        if item.is_file() and MLOPS_DIR_NAME not in item.relative_to(MODEL_DIR).parts
-    ]
-    if not model_files:
-        raise RuntimeError("Training completed but SM_MODEL_DIR does not contain any model files.")
-
-    log(f"Packaging {len(model_files)} model file(s) into model.tar.gz")
-    with tarfile.open(archive_path, "w:gz") as archive:
-        for item in MODEL_DIR.rglob("*"):
-            if item.is_file():
-                archive.add(item, arcname=item.relative_to(MODEL_DIR))
+    execution.create_model_archive(archive_path, MODEL_DIR, MLOPS_DIR_NAME, log)
 
 
 def _run() -> None:
@@ -859,11 +756,3 @@ def main() -> None:
         raise
     finally:
         reset_context(tokens)
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception:
-        # main already emitted a sanitized error; avoid a raw exception dump.
-        sys.exit(1)

@@ -36,4 +36,4 @@ RUN mkdir -p /models /app/libs
 ENV PYTHONPATH=/app/libs:/app
 EXPOSE 5001
 
-CMD ["python", "-m", "src.uvicorn_entrypoint", "src.index:app", "--service", "machine-learning-serving", "--port", "5001", "--workers", "2"]
+CMD ["python", "-m", "src.uvicorn_entrypoint", "src.main:app", "--service", "machine-learning-serving", "--port", "5001", "--workers", "2"]

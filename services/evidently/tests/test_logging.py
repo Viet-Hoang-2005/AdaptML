@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from src.logging_utils import RuntimeLog
 
-from src import main
+from src import application as main
 
 
 @pytest.fixture(autouse=True)

@@ -187,11 +187,11 @@ Tenant-aware access control is enforced before inference. Public models can be i
 
 Online inference should not depend synchronously on database writes. Therefore, the framework decouples prediction from logging through a message broker. After producing a prediction, the model server emits a production log event to Redpanda. A consumer service batches log events and persists them to PostgreSQL. Each log stores the tenant identifier, model identifier, timestamp, feature payload, and prediction result.
 
-This design has two advantages. First, it keeps monitoring writes outside the synchronous prediction path. Second, it creates a unified production data source that can be queried per tenant and per model for drift detection, audit, and evaluation.
+This design has two advantages. First, it keeps monitoring writes outside the synchronous prediction path. Second, it separates minimal inference telemetry from a curated production-data source that can be queried per tenant and per model for drift detection, audit, evaluation, and controlled retraining.
 
 \subsection{Drift Monitoring Layer}
 
-The monitoring layer compares reference data with recent production data. In the prototype, Evidently AI is used to compute feature-level drift and dataset-level drift summaries. Reference data can be stored as object storage artifacts, while production data are reconstructed from PostgreSQL logs. Drift reports can be exported as HTML or JSON artifacts for inspection.
+The monitoring layer compares reference data with recent production data. In the prototype, Evidently AI is used to compute feature-level drift and dataset-level drift summaries. Reference data can be stored as object storage artifacts, while production data are read from a dedicated PostgreSQL production-data table. Drift reports can be exported as HTML or JSON artifacts for inspection.
 
 \subsection{Adaptation Layer}
 

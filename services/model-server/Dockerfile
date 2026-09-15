@@ -33,4 +33,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["python", "-m", "src.uvicorn_entrypoint", "src.index:app", "--service", "model-server", "--port", "5000", "--workers", "2"]
+CMD ["python", "-m", "src.uvicorn_entrypoint", "src.main:app", "--service", "model-server", "--port", "5000", "--workers", "2"]
