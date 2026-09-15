@@ -6,8 +6,7 @@ import threading
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 from src.batching import (
     build_automatic_drift_signals,
-    build_batch_dataframe,
-    build_production_data_dataframe,
+    build_prediction_records_dataframe,
 )
 from src.models import KafkaRecord, KafkaRecordProcessingError, RetryState
 from src.logging_utils import Summary, configure, get_logger, log_event
@@ -20,7 +19,7 @@ if __name__ == "__main__":
 from src.database import (
     init_db,
     persistence_summary,
-    save_inference_events_and_production_data_and_automatic_drift_signals,
+    save_prediction_records_and_automatic_drift_signals,
 )
 from src.drift_outbox import OUTBOX_POLL_SECONDS, REQUEST_TIMEOUT_SECONDS, run_dispatcher
 
@@ -102,12 +101,9 @@ def flush_batch(consumer, records: list[KafkaRecord]) -> bool:
     if len(partitions) != 1:
         raise ValueError("A Kafka batch must contain records from exactly one partition.")
 
-    inference_events = build_batch_dataframe(records)
-    production_data = build_production_data_dataframe(records)
+    predictions = build_prediction_records_dataframe(records)
     signals = build_automatic_drift_signals(records)
-    if not save_inference_events_and_production_data_and_automatic_drift_signals(
-        inference_events, production_data, signals,
-    ):
+    if not save_prediction_records_and_automatic_drift_signals(predictions, signals):
         return False
     if not _commit_batch_offset(consumer, records[-1]):
         return False

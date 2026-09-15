@@ -1,6 +1,6 @@
 # Consumer — Production Data Ingestion Worker
 
-Consumer là một **Background Worker** chạy liên tục, đóng vai trò trung gian giữa Event Stream (Redpanda Kafka) và Cơ sở dữ liệu dài hạn (PostgreSQL). Nó ghi telemetry vào `mlops_inference_events`, sample cho drift/Continuous Training vào `mlops_production_data`, rồi ghi signal automatic-drift vào transactional outbox trong cùng transaction; một dispatcher thread riêng retry gửi signal tới Control Plane mà không chặn Kafka polling. Bảng `paas_production_logs` cũ không còn được hỗ trợ và sẽ bị xóa khi Consumer khởi tạo schema.
+Consumer là một **Background Worker** chạy liên tục giữa Redpanda Kafka và PostgreSQL. Consumer không sở hữu schema và không chạy DDL: nó chờ Control Plane migration tạo `control_plane.production_predictionrecord` và `control_plane.observability_eventoutbox`, xác thực cặp project/model version bằng khóa UUID public rồi ghi prediction và automatic-drift webhook outbox trong cùng transaction. Dispatcher chỉ claim các event `webhook/automatic_drift`, retry gửi signal tới Control Plane mà không chặn Kafka polling.
 
 ---
 

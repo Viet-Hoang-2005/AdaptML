@@ -410,6 +410,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
+      DB_SCHEMA: ${DB_SCHEMA:-control_plane}
       REDPANDA_BROKERS: redpanda:9092
       KAFKA_TOPIC: ${KAFKA_TOPIC:-mlops_paas_production_data}
       KAFKA_TOPIC_RETRY_SECONDS: ${KAFKA_TOPIC_RETRY_SECONDS:-5}

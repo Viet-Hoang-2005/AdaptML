@@ -14,7 +14,8 @@ from infrastructure.storage.paths import (
     bind=True, autoretry_for=(ConnectionError, TimeoutError), retry_backoff=True, retry_jitter=True, max_retries=5
 )
 def execute_training_job(self, job_id):
-    from .models import TrainingJob, TrainingJobEvent
+    from apps.observability.services.lifecycle import record_training_event
+    from .models import TrainingJob
     from .services.logs import append_training_log
 
     with transaction.atomic():
@@ -25,7 +26,7 @@ def execute_training_job(self, job_id):
         job.celery_task_id = self.request.id or job.celery_task_id
         job.error_message = ""
         job.save(update_fields=["status", "started_at", "celery_task_id", "error_message", "updated_at"])
-        TrainingJobEvent.objects.create(job=job, event_type="started", message="Training execution started.")
+        record_training_event(job=job, event_type="started", message="Training execution started.")
         record_transition(job, "running")
     append_training_log(job.public_id, "[SYSTEM] Training execution started.")
     with transaction.atomic():
@@ -53,7 +54,7 @@ def execute_training_job(self, job_id):
             job.mark_finished("failed")
             job.error_message = str(exc)[:12000]
             job.save(update_fields=["status", "completed_at", "runtime_seconds", "error_message", "updated_at"])
-            TrainingJobEvent.objects.create(
+            record_training_event(
                 job=job, event_type="failed", message="Training execution failed.", metadata={"error": str(exc)[:1000]}
             )
         record_transition(
@@ -81,7 +82,7 @@ def execute_training_job(self, job_id):
             relative_path="model.tar.gz",
             defaults={"kind": "model", "s3_uri": job.output_uri, "content_type": "application/gzip"},
         )
-        TrainingJobEvent.objects.create(job=job, event_type="completed", message="Training execution completed.")
+        record_training_event(job=job, event_type="completed", message="Training execution completed.")
         record_transition(job, "completed")
     for line in str(result).splitlines()[-500:]:
         append_training_log(job.public_id, line)
@@ -91,7 +92,8 @@ def execute_training_job(self, job_id):
 
 @shared_task(bind=True, max_retries=7200)
 def poll_training_job_status(self, job_id):
-    from .models import TrainingJob, TrainingJobEvent
+    from apps.observability.services.lifecycle import record_training_event
+    from .models import TrainingJob
     from .services.logs import append_training_log
 
     try:
@@ -125,7 +127,7 @@ def poll_training_job_status(self, job_id):
                 relative_path="model.tar.gz",
                 defaults={"kind": "model", "s3_uri": job.output_uri, "content_type": "application/gzip"},
             )
-            TrainingJobEvent.objects.create(job=job, event_type="completed", message="Training execution completed.")
+            record_training_event(job=job, event_type="completed", message="Training execution completed.")
             record_transition(job, "completed")
         for line in logs.splitlines()[-500:]:
             append_training_log(job.public_id, line)
@@ -142,7 +144,7 @@ def poll_training_job_status(self, job_id):
             job.mark_finished("failed")
             job.error_message = error_msg[:12000]
             job.save(update_fields=["status", "completed_at", "runtime_seconds", "error_message", "updated_at"])
-            TrainingJobEvent.objects.create(
+            record_training_event(
                 job=job, event_type="failed", message="Training execution failed.", metadata={"error": error_msg[:1000]}
             )
             record_transition(job, "failed", reason="Training runtime reported failure")
@@ -159,7 +161,7 @@ def poll_training_job_status(self, job_id):
             job.mark_finished("failed")
             job.error_message = f"Training container error: {result.get('error') or 'Container not found'}"
             job.save(update_fields=["status", "completed_at", "runtime_seconds", "error_message", "updated_at"])
-            TrainingJobEvent.objects.create(
+            record_training_event(
                 job=job, event_type="failed", message="Training runtime disappeared or errored."
             )
             record_transition(job, "failed", reason="Training runtime disappeared or errored")
@@ -210,7 +212,8 @@ def cancel_training_job(self, job_id):
 
 
 def confirm_training_cancellation(job_id):
-    from .models import TrainingJob, TrainingJobEvent
+    from apps.observability.services.lifecycle import record_training_event
+    from .models import TrainingJob
     from .services.logs import append_training_log
 
     with transaction.atomic():
@@ -230,7 +233,7 @@ def confirm_training_cancellation(job_id):
                     "updated_at",
                 ]
             )
-            TrainingJobEvent.objects.create(
+            record_training_event(
                 job=job,
                 event_type="cancelled",
                 message="Training runtime cancellation confirmed.",
@@ -305,7 +308,8 @@ def delete_training_job(self, job_id):
     max_retries=5,
 )
 def purge_training_job_outputs(self, job_id):
-    from .models import TrainingJob, TrainingJobEvent
+    from apps.observability.services.lifecycle import record_training_event
+    from .models import TrainingJob
 
     job = TrainingJob.objects.select_related("project", "project__owner").get(public_id=job_id)
     storage = S3Storage()
@@ -316,7 +320,7 @@ def purge_training_job_outputs(self, job_id):
     with transaction.atomic():
         job = TrainingJob.objects.select_for_update().get(pk=job.pk)
         job.outputs.all().delete()
-        TrainingJobEvent.objects.create(
+        record_training_event(
             job=job,
             event_type="outputs_purged",
             message="Training outputs were deleted.",

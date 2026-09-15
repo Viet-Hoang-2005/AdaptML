@@ -33,6 +33,7 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "mlops_paas_db")
 DB_HOST_RO = os.getenv("DB_HOST_RO", "postgres")
+DB_SCHEMA = os.getenv("DB_SCHEMA", "control_plane")
 
 TENANT_ID = os.getenv("TENANT_ID")
 PROJECT_ID = os.getenv("PROJECT_ID")
@@ -114,7 +115,7 @@ def load_production_data():
     return data.load_production_data(
         connection_url=f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST_RO}:{DB_PORT}/{DB_NAME}",
         model_version_id=MODEL_VERSION_ID, max_samples=MAX_SAMPLES, min_samples=MIN_SAMPLES,
-        create_engine=create_engine, sql_text=text, pandas_module=pd, detail=runtime_log.detail,
+        create_engine=create_engine, sql_text=text, pandas_module=pd, detail=runtime_log.detail, db_schema=DB_SCHEMA,
     )
 
 # Hàm hỗ trợ tải model trên S3

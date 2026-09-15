@@ -34,6 +34,8 @@ INSTALLED_APPS = [
     "apps.deployment.apps.DeploymentConfig",
     "apps.drift.apps.DriftConfig",
     "apps.observability.apps.ObservabilityConfig",
+    "apps.production.apps.ProductionConfig",
+    "apps.ct.apps.ContinuousTrainingConfig",
 ]
 
 MIDDLEWARE = [

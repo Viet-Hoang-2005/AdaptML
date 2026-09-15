@@ -337,6 +337,7 @@ class DockerDriftBackend:
             "DB_PASSWORD": os.environ.get("DB_PASSWORD", ""),
             "DB_NAME": os.environ.get("DB_NAME", "mlops_paas_db"),
             "DB_PORT": os.environ.get("DB_PORT", "5432"),
+            "DB_SCHEMA": settings.DB_SCHEMA,
         }
         container = self.docker.run(
             image="mlops-paas-evidently",

@@ -1,28 +1,15 @@
 """Durable, internal automatic-drift triggering from production data signals."""
 
-from django.db import connection, transaction
+from django.db import transaction
 
 from apps.drift.models import DriftMonitor
 from apps.drift.services.runs import request_run
+from apps.production.models import PredictionRecord
 
 
 def production_data_count_for_version(model_version_id: str) -> int:
     """Count eligible monitoring samples from the Consumer-owned CT dataset."""
-    if "mlops_production_data" not in connection.introspection.table_names():
-        return 0
-
-    table = '"public"."mlops_production_data"' if connection.vendor == "postgresql" else '"mlops_production_data"'
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM {table}
-            WHERE model_version_id = %s
-              AND data_quality_status <> 'rejected'
-            """,
-            [model_version_id],
-        )
-        return int(cursor.fetchone()[0])
+    return PredictionRecord.objects.filter(model_version__public_id=model_version_id).count()
 
 
 def request_automatic_drift_runs(model_version_id: str) -> int:

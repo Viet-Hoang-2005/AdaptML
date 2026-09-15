@@ -25,3 +25,4 @@ data:
   DB_HOST_RO: "mlops-paas-postgres-ro.mlops-postgres.svc.cluster.local"
   DB_PORT: "5432"
   DB_NAME: "mlops_paas_db"
+  DB_SCHEMA: "control_plane"

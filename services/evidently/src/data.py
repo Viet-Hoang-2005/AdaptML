@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import zipfile
 from pathlib import Path
@@ -34,15 +35,19 @@ def load_reference_data(reference_url, model_version_id, temp_root, requests_mod
 
 
 def load_production_data(*, connection_url, model_version_id, max_samples,
-                         min_samples, create_engine, sql_text, pandas_module, detail):
+                         min_samples, create_engine, sql_text, pandas_module, detail,
+                         db_schema="control_plane"):
     detail(f"[1/4] Fetching Production Logs for Model Version ID: {model_version_id}")
     engine = create_engine(connection_url)
-    query = sql_text("""
-        SELECT features, prediction
-        FROM mlops_production_data
-        WHERE model_version_id = :model_version_id
-          AND data_quality_status <> 'rejected'
-        ORDER BY observed_at DESC
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", db_schema):
+        raise ValueError("DB_SCHEMA must be a simple PostgreSQL identifier")
+    query = sql_text(f"""
+        SELECT record.features, record.prediction
+        FROM "{db_schema}"."production_predictionrecord" AS record
+        INNER JOIN "{db_schema}"."registry_modelversion" AS version
+            ON version.id = record.model_version_id
+        WHERE version.public_id = CAST(:model_version_id AS uuid)
+        ORDER BY record.observed_at DESC
         LIMIT :lim
     """)
     with engine.connect() as connection:
