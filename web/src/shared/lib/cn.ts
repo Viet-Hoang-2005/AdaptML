@@ -25,9 +25,9 @@ const mergeClassNames = extendTailwindMerge({
           ],
         },
       ],
-      'rounded': [
+      'rounded': [ // radius-ignore: tailwind-merge configuration
         {
-          'rounded': [
+          'rounded': [ // radius-ignore: tailwind-merge configuration
             'compact',
             'surface',
             'control',
