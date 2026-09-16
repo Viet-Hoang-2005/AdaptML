@@ -57,19 +57,17 @@ Hệ thống này là một **nền tảng AI Platform-as-a-Service MLOps phục
 
 **1. Quy trình Đóng gói & Triển khai Mô hình (Build & Deploy Workflow)**
 
-![Build and Deploy Workflow](paper/assets/build-deploy-workflow-dark.png)
+![Build and Deploy Workflow](docs/paper/assets/build-deploy-workflow-dark.png)
 
 **2. Quy trình Huấn luyện & Điều phối Tài nguyên (Training Workflow)**
 
-![Training Workflow](paper/assets/training-workflow-dark.png)
+![Training Workflow](docs/paper/assets/training-workflow-dark.png)
 
 **3. Quy trình Giám sát & Phát hiện Độ lệch Dữ liệu (Data Drift Workflow)**
 
-![Data Drift Workflow](paper/assets/data-drift-workflow-dark.png)
+![Data Drift Workflow](docs/paper/assets/data-drift-workflow-dark.png)
 
 > 💡 **Tài liệu Kỹ thuật Chuyên sâu:** Xem giải thích chi tiết về luồng dữ liệu, sơ đồ tuần tự (Sequence Diagrams), cơ chế bảo mật Zero-Trust và lược đồ cơ sở dữ liệu tại [ARCHITECTURE.md](ARCHITECTURE.md).
-
-**Log backend:** Mỗi service tự chứa `logging_utils.py` và build image từ thư mục riêng; không phụ thuộc package logging dùng chung. Ứng dụng luôn ghi log tại mức `INFO`; `LOG_FORMAT=json` vẫn cung cấp metadata đầy đủ khi điều tra sự cố. Web service in từng request không phải probe ngay lập tức, gồm method, route, status và thời gian xử lý; tổng hợp 60 giây chỉ còn dùng cho tác vụ lưu lượng cao không phải HTTP. Log chi tiết từng job được giữ riêng hoặc fallback về container nếu chưa có đường lưu phù hợp. Xem [quy ước logging, cấu hình và kiểm thử](docs/dev/backend-logging.md).
 
 ---
 
@@ -144,7 +142,7 @@ MLOps-paas-system/
 │   │   └── repositories/                     # Public Helm/OCI repository descriptors
 │   ├── cluster/                              # Namespace, StorageClass, SecretStore, policy và capacity
 │   ├── addons/                               # Upstream controller/CRD/driver adapter
-  │   ├── platform/                             # Data, registry, MLflow, observability, Cloudflare và routing dùng chung
+│   │   ├── platform/                             # Data, registry, MLflow, observability, Cloudflare và routing dùng chung
 │   ├── argo/                                 # Argo Events/Workflows, templates và RBAC
 │   ├── apps/
 │   │   ├── base/                             # Manifest dùng chung cho bốn workload
@@ -198,9 +196,6 @@ MLOps-paas-system/
 ├── docker-compose.yml                        # Môi trường Local Development hoàn chỉnh
 └── .env.example                              # Template biến môi trường chuẩn
 ```
-
-Production không dùng Kubernetes `default` cho workload hay runtime: mỗi owner
-chạy trong namespace `mlops-*`; `user-jobs` vẫn chỉ dành cho PyTorchJob tenant.
 
 ---
 
@@ -560,7 +555,7 @@ Tenant training cố ý chưa được mở trong production: không gọi submi
 
 ### Giai đoạn 6: Kiểm tra Hệ thống Giám sát (Observability)
 
-1. Truy cập Grafana: `https://grafana.mlops-nids-nt114.id.vn` (hoặc `http://localhost:3000` ở local).
+1. Truy cập Grafana: `https://grafana.mlops-nids-nt114.id.vn`
 2. Kiểm tra các Dashboard chuyên biệt:
    - **MLOps PaaS Model Serving**: Theo dõi Throughput (RPS), Latency (P95/P99), và HTTP Error Rate của từng model pod.
    - **Kafka / Redpanda**: Monitoring Consumer lag và tốc độ xử lý message.
