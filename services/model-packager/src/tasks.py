@@ -23,8 +23,32 @@ from src import config, image_build, io
 logger = get_logger("model-packager")
 runtime_log = RuntimeLog(logger)
 
-SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb"}
-PREFERRED_MODEL_FILENAMES = ("model.pkl", "model.joblib", "model.xgb")
+SUPPORTED_MODEL_EXTENSIONS = {".pkl", ".joblib", ".xgb", ".pt", ".pth", ".h5", ".keras"}
+PREFERRED_MODEL_FILENAMES = (
+    "model.pkl",
+    "model.joblib",
+    "model.xgb",
+    "model.pt",
+    "model.pth",
+    "model.h5",
+    "model.keras",
+)
+
+FLAVOR_MODEL_EXTENSIONS: dict[str, tuple[str, ...]] = {
+    "sklearn": (".pkl", ".joblib"),
+    "xgboost": (".xgb", ".pkl", ".joblib"),
+    "pytorch": (".pt", ".pth"),
+    "tensorflow": (".h5", ".keras"),
+    "keras": (".h5", ".keras"),
+}
+
+FLAVOR_PREFERRED_FILENAMES: dict[str, tuple[str, ...]] = {
+    "sklearn": ("model.pkl", "model.joblib"),
+    "xgboost": ("model.xgb", "model.pkl", "model.joblib"),
+    "pytorch": ("model.pt", "model.pth"),
+    "tensorflow": ("model.h5", "model.keras"),
+    "keras": ("model.h5", "model.keras"),
+}
 
 class RedisLogHandler(logging.Handler):
     def __init__(self, redis_url: str, build_id: str):
@@ -62,13 +86,24 @@ def safe_extract_tar(archive_path: Path, destination: Path) -> None:
 def safe_extract_zip(archive_path: Path, destination: Path) -> None:
     io.safe_extract_zip(archive_path, destination)
 
-def find_supported_model_file(root: Path) -> Path:
-    files = [item for item in root.rglob("*") if item.is_file() and item.suffix.lower() in SUPPORTED_MODEL_EXTENSIONS]
+def find_supported_model_file(root: Path, flavor: str = "") -> Path:
+    normalized_flavor = flavor.strip().lower() if flavor else ""
+    if normalized_flavor and normalized_flavor in FLAVOR_MODEL_EXTENSIONS:
+        allowed_extensions = set(FLAVOR_MODEL_EXTENSIONS[normalized_flavor])
+        preferred_filenames = FLAVOR_PREFERRED_FILENAMES.get(normalized_flavor, PREFERRED_MODEL_FILENAMES)
+    else:
+        allowed_extensions = SUPPORTED_MODEL_EXTENSIONS
+        preferred_filenames = PREFERRED_MODEL_FILENAMES
+
+    files = [item for item in root.rglob("*") if item.is_file() and item.suffix.lower() in allowed_extensions]
     if not files:
-        raise ValueError("Training artifact is not deployable because no .pkl, .joblib, or .xgb file was found.")
+        if normalized_flavor and normalized_flavor in FLAVOR_MODEL_EXTENSIONS:
+            ext_str = ", ".join(sorted(allowed_extensions))
+            raise ValueError(f"Training artifact is not deployable because no {ext_str} file was found for {normalized_flavor}.")
+        raise ValueError("Training artifact is not deployable because no .pkl, .joblib, .xgb, .pt, .pth, .h5, or .keras file was found.")
 
     by_name = {item.name: item for item in sorted(files)}
-    for preferred in PREFERRED_MODEL_FILENAMES:
+    for preferred in preferred_filenames:
         if preferred in by_name:
             if len(files) > 1:
                 runtime_log.event(logging.WARNING, "multiple_model_files", f"Warning: multiple model files found; using {preferred}.")
@@ -197,7 +232,7 @@ def run_build_task(build_id: str, webhook_url: str) -> None:
             download_presigned_file(source_download_url, training_archive_path)
             runtime_log.detail("Extracting training artifact safely...")
             safe_extract_tar(training_archive_path, extracted_dir)
-            artifact_path = find_supported_model_file(extracted_dir)
+            artifact_path = find_supported_model_file(extracted_dir, flavor=flavor)
             artifact_name = artifact_path.name
             training_summaries, extracted_mlops_dir = read_training_summaries(extracted_dir)
 

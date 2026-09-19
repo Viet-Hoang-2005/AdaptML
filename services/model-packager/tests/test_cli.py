@@ -96,6 +96,24 @@ def test_find_model_and_mapping_files(tmp_path):
         cli.find_supported_model_file(empty)
 
 
+def test_find_model_files_pytorch_and_flavor_resolution(tmp_path):
+    torch_dir = tmp_path / "torch_dir"
+    torch_dir.mkdir()
+    (torch_dir / "preprocessor.pkl").write_text("scaler")
+    (torch_dir / "baf_model.pt").write_text("torch_weights")
+    (torch_dir / "model.pt").write_text("torch_preferred")
+
+    assert cli.find_supported_model_file(torch_dir, flavor="pytorch").name == "model.pt"
+
+    (torch_dir / "model.pt").unlink()
+    assert cli.find_supported_model_file(torch_dir, flavor="pytorch").name == "baf_model.pt"
+    assert cli.find_supported_model_file(torch_dir, flavor="sklearn").name == "preprocessor.pkl"
+
+    (torch_dir / "baf_model.pt").unlink()
+    with pytest.raises(ValueError, match="no .pt, .pth file was found for pytorch"):
+        cli.find_supported_model_file(torch_dir, flavor="pytorch")
+
+
 def test_webhook_headers_and_post(monkeypatch):
     monkeypatch.setenv("CONTROL_PLANE_WEBHOOK_SECRET", "secret")
     assert cli.webhook_headers() == {"X-Control-Plane-Secret": "secret"}
@@ -234,6 +252,34 @@ def test_run_build_task_docker_posts_callback(monkeypatch, tmp_path):
     cli.run_build_task("version", "http://callback")
     build.assert_called_once()
     assert webhook.call_args.args[1]["status"] == "success"
+
+
+def test_run_build_task_training_job_pytorch(monkeypatch, tmp_path):
+    configure_build(monkeypatch, tmp_path, flavor="pytorch", source_type="training_job")
+    monkeypatch.setenv("BUILD_ENGINE", "kaniko")
+    stub_package_helpers(monkeypatch)
+
+    def fake_download(url, dest):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(dest, "w:gz") as tar:
+            model_file = tmp_path / "scratch_baf.pt"
+            model_file.write_bytes(b"baf_torch_weights")
+            tar.add(model_file, arcname="baf_model.pt")
+            req_file = tmp_path / "scratch_req.txt"
+            req_file.write_text("torch>=2.0.0\n")
+            tar.add(req_file, arcname="requirements.txt")
+
+    monkeypatch.setattr(cli, "download_presigned_file", fake_download)
+    cli.run_build_task("pytorch-baf-build", "http://callback")
+
+    dockerfile = (tmp_path / "Dockerfile").read_text()
+    assert "deep-learning-serving" in dockerfile
+    assert "torch>=2.0.0" in (tmp_path / "requirements.txt").read_text()
+    payload = json.loads((tmp_path / "webhook_payload.json").read_text())
+    assert payload["status"] == "success"
+    assert payload["build_id"] == "pytorch-baf-build"
+    assert payload["package_manifest"]["flavor"] == "pytorch"
+    assert payload["package_manifest"]["source_artifact"] == "baf_model.pt"
 
 
 def test_run_build_task_validates_environment(monkeypatch):
